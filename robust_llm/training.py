@@ -2,15 +2,13 @@ import dataclasses
 import evaluate
 import numpy as np
 
-from transformers import TrainingArguments, Trainer
+from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
 
 
 @dataclasses.dataclass
-class HParams:
-    pass
+class Training:
+    hparams: dict
 
-
-def train(hparams: HParams):
     metric = evaluate.load("accuracy")
     hf_training_args = TrainingArguments()
 
