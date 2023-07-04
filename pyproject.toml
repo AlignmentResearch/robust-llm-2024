@@ -7,8 +7,11 @@ dependencies = [
     "transformers[accelerate]",
     "huggingface_hub",
     "datasets",
+    "simple_parsing",
 ]
 version="0.0.1"
+
+
 
 [tool.setuptools.packages.find]
 namespaces = false
