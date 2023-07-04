@@ -1,0 +1,14 @@
+[project]
+name = "robust-llm"
+description = "Testing the robustness of LLMs"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "transformers[accelerate]",
+    "huggingface_hub",
+    "datasets",
+]
+version="0.0.1"
+
+[tool.setuptools.packages.find]
+namespaces = false
