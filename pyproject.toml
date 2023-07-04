@@ -8,6 +8,7 @@ dependencies = [
     "huggingface_hub",
     "datasets",
     "simple_parsing",
+    "scikit-learn",
 ]
 version="0.0.1"
 

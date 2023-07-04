@@ -7,13 +7,9 @@ from dataclasses import dataclass
 class Data:
     dataset_name: str
 
-    def prepare_tokenized_dataset(self, tokenizer: PreTrainedTokenizer, seed: int = 42):
-        """Load a dataset and tokenize it with the given tokenizer.
-
-        name_or_path: For a classification dataset with a test and train split.
-        tokenizer: A tokenizer that can be used to tokenize the dataset.
-        """
-
+    def prepare_tokenized_dataset(
+        self, tokenizer: PreTrainedTokenizer, seed: int = 42, mini: bool = False
+    ):
         def tokenize_function(examples):
             return tokenizer(examples["text"], padding="max_length", truncation=True)
 
@@ -22,4 +18,9 @@ class Data:
 
         train_dataset = tokenized_datasets["train"].shuffle(seed=seed)
         eval_dataset = tokenized_datasets["test"].shuffle(seed=seed)
+
+        if mini:
+            train_dataset = train_dataset.select(range(1000))
+            eval_dataset = eval_dataset.select(range(1000))
+
         return train_dataset, eval_dataset

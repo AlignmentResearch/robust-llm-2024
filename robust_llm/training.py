@@ -8,13 +8,29 @@ from transformers import AutoModelForSequenceClassification, TrainingArguments, 
 @dataclasses.dataclass
 class Training:
     hparams: dict
+    train_dataset: np.ndarray
+    eval_dataset: np.ndarray
+    model: AutoModelForSequenceClassification
 
-    metric = evaluate.load("accuracy")
-    hf_training_args = TrainingArguments()
+    def __post_init__(self):
+        self.metric = evaluate.load("accuracy")
 
-    def compute_metrics(eval_pred):
+    def run_trainer(self):
+        hf_training_args = TrainingArguments(
+            output_dir="test_trainer", evaluation_strategy="epoch"
+        )
+        trainer = Trainer(
+            model=self.model,
+            args=hf_training_args,
+            train_dataset=self.train_dataset,
+            eval_dataset=self.eval_dataset,
+            compute_metrics=self.compute_metrics,
+        )
+        trainer.train()
+
+    def compute_metrics(self, eval_pred):
         logits, labels = eval_pred
         predictions = np.argmax(logits, axis=-1)
-        return metric.compute(predictions=predictions, references=labels)
+        return self.metric.compute(predictions=predictions, references=labels)
 
     # TODO finish https://huggingface.co/docs/transformers/training
