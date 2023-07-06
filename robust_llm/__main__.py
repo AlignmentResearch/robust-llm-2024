@@ -1,30 +1,68 @@
-# TODO import stuff
+from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from data_preperation import Data
+from language_generators.tomita1 import Tomita1
 from training import Training
 
 
+def tokenize_dataset(dataset, tokenizer):
+    # Padding seems necessary in order to avoid an error
+    tokenized_data = tokenizer(dataset["text"], padding="max_length", truncation=True)
+    return {"text": dataset["text"], "label": dataset["label"], **tokenized_data}
+
+
 def main():
-    dataset = Data(dataset_name="imdb")
     tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
-    train_dataset, test_dataset = dataset.prepare_tokenized_dataset(
-        tokenizer=tokenizer, mini=True
+
+    # model = AutoModelForSequenceClassification.from_pretrained(
+    #     "bert-base-cased", num_labels=2
+    # )
+
+    # dataset = Data(dataset_name="imdb")
+    # train_dataset, test_dataset = dataset.prepare_tokenized_dataset(
+    #     tokenizer=tokenizer, mini=True
+    # )
+    # print(train_dataset)
+
+    # training = Training(
+    #     hparams={},
+    #     train_dataset=train_dataset,
+    #     eval_dataset=test_dataset,
+    #     model=model,
+    # )
+
+    # raise SystemExit
+
+    tomita1 = Tomita1(20)
+    train_set, val_set, test_set = tomita1.generate_dataset(
+        train_size=10,
+        val_size=2,
+        test_size=2,
     )
 
-    # print(train_dataset.shape, test_dataset.shape)
-    # print(train_dataset[100]['text'])
-    # print(train_dataset[100]['label'])
+    # for i, el in enumerate(train_set):
+    #     print(f"{i}:", el)
+    print("train set", train_set)
+    print("val set", val_set)
+    print("test set", test_set)
+
+    tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
+    tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
+    tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
+
+    print("tokenized train dataset", tokenized_train_dataset)
+    print("tokenized val dataset", tokenized_val_dataset)
+    print("tokenized test dataset", tokenized_test_dataset)
 
     model = AutoModelForSequenceClassification.from_pretrained(
-        "bert-base-cased", num_labels=5
+        "bert-base-cased", num_labels=2
     )
-    # print(model)
 
     training = Training(
         hparams={},
-        train_dataset=train_dataset,
-        eval_dataset=test_dataset,
+        train_dataset=tokenized_train_dataset,
+        eval_dataset=tokenized_val_dataset,
         model=model,
     )
     training.run_trainer()

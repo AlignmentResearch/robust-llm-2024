@@ -2,14 +2,15 @@ import dataclasses
 import evaluate
 import numpy as np
 
+from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
 
 
 @dataclasses.dataclass
 class Training:
     hparams: dict
-    train_dataset: np.ndarray
-    eval_dataset: np.ndarray
+    train_dataset: Dataset
+    eval_dataset: Dataset
     model: AutoModelForSequenceClassification
 
     def __post_init__(self):
