@@ -8,7 +8,7 @@ from transformers import AutoModelForSequenceClassification, TrainingArguments, 
 
 @dataclasses.dataclass
 class Training:
-    hparams: dict
+    hf_training_args: TrainingArguments
     train_dataset: Dataset
     eval_dataset: Dataset
     model: AutoModelForSequenceClassification
@@ -17,17 +17,14 @@ class Training:
         self.metric = evaluate.load("accuracy")
 
     def run_trainer(self):
-        hf_training_args = TrainingArguments(
-            output_dir="test_trainer", evaluation_strategy="epoch",
-            num_train_epochs=5, report_to=["wandb"], logging_steps=1,
-        )
         trainer = Trainer(
             model=self.model,
-            args=hf_training_args,
+            args=self.hf_training_args,
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
         )
+
         trainer.train()
 
     def compute_metrics(self, eval_pred):
@@ -35,4 +32,3 @@ class Training:
         predictions = np.argmax(logits, axis=-1)
         return self.metric.compute(predictions=predictions, references=labels)
 
-    # TODO finish https://huggingface.co/docs/transformers/training
