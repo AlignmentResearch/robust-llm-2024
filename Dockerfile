@@ -16,6 +16,7 @@ RUN [ ${#PYTORCH} -gt 0 ] && VERSION='torch=='$PYTORCH'.*' ||  VERSION='torch'; 
 # the pytpoject.toml file for changes
 
 FROM base as prod
+WORKDIR /src_files
 ADD . .
 RUN python3 -m pip install .
 
