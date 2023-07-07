@@ -19,7 +19,7 @@ class Training:
     def run_trainer(self):
         hf_training_args = TrainingArguments(
             output_dir="test_trainer", evaluation_strategy="epoch",
-            num_train_epochs=1, report_to=["wandb"], logging_steps=1,
+            num_train_epochs=5, report_to=["wandb"], logging_steps=1,
         )
         trainer = Trainer(
             model=self.model,
