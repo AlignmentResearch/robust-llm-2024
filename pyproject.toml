@@ -10,6 +10,8 @@ dependencies = [
     "datasets",
     "simple_parsing",
     "scikit-learn",
+    "wandb",
+    "sentencepiece",
 ]
 version="0.0.1"
 

@@ -1,9 +1,8 @@
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from data_preperation import Data
-from language_generators.tomita1 import Tomita1
-from training import Training
+from robust_llm.language_generators.tomita1 import Tomita1
+from robust_llm.training import Training
 
 
 def tokenize_dataset(dataset, tokenizer):
@@ -13,7 +12,7 @@ def tokenize_dataset(dataset, tokenizer):
 
 
 def main():
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased", use_fast=False)
 
     # model = AutoModelForSequenceClassification.from_pretrained(
     #     "bert-base-cased", num_labels=2
