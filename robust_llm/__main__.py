@@ -33,11 +33,11 @@ def main():
 
     # raise SystemExit
 
-    tomita1 = Tomita1(20)
+    tomita1 = Tomita1(30)
     train_set, val_set, test_set = tomita1.generate_dataset(
-        train_size=10,
-        val_size=2,
-        test_size=2,
+        train_size=1000,
+        val_size=200,
+        test_size=200,
     )
 
     # for i, el in enumerate(train_set):
