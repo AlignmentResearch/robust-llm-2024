@@ -26,4 +26,4 @@ WORKDIR /workspace
 RUN mkdir robust_llm \
     && python3 -m pip install -e "." \
     && python3 -m pip uninstall -y robust_llm \
-    && rmdir robust_llm && rm pyproject.toml setup.cfg
+    && rmdir robust_llm && rm pyproject.toml setup.cfg \
