@@ -6,6 +6,7 @@ from torch.distributed.elastic.multiprocessing.errors import record
 from datasets import Dataset
 from transformers import (
     AutoModelForSequenceClassification,
+    AutoConfig,
     PreTrainedTokenizerFast,
     TrainingArguments,
 )
@@ -49,8 +50,12 @@ def main():
         dataloader_drop_last=True,
     )
 
-    model = AutoModelForSequenceClassification.from_pretrained(
+    config = AutoConfig.from_pretrained(
         hparams.model_name, num_labels=2
+    )
+
+    model = AutoModelForSequenceClassification.from_config(
+        config,
     )
 
     tokenizer = PreTrainedTokenizerFast.from_pretrained(
