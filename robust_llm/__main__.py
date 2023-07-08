@@ -45,9 +45,8 @@ def main():
         hparams.hf_training_args,
         num_train_epochs=5,
         report_to=["wandb"],
-        logging_steps=1,
+        logging_steps=1000,
         dataloader_drop_last=True,
-        evaluation_strategy="epoch",
     )
 
     model = AutoModelForSequenceClassification.from_pretrained(
