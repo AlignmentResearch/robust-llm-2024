@@ -2,6 +2,7 @@ from dataclasses import dataclass, replace
 from typing import Optional
 from functools import partial
 
+from torch.distributed.elastic.multiprocessing.errors import record
 from datasets import Dataset
 from transformers import (
     AutoModelForSequenceClassification,
@@ -34,6 +35,7 @@ def tokenize_dataset(dataset, tokenizer, max_length):
     return Dataset.from_dict({"text": dataset["text"], "label": dataset["label"], **tokenized_data})
 
 
+@record
 def main():
     hparams: HParams = simple_parsing.parse(HParams)
 
@@ -44,10 +46,9 @@ def main():
         num_train_epochs=5,
         report_to=["wandb"],
         logging_steps=1,
+        dataloader_drop_last=True,
         evaluation_strategy="epoch",
     )
-
-    wandb.init(project="robust-llm", config=hparams, mode="offline") # TODO Remove offline flag
 
     model = AutoModelForSequenceClassification.from_pretrained(
         hparams.model_name, num_labels=2
@@ -71,22 +72,18 @@ def main():
         test_size=hparams.test_size,
     )
 
-    print("train set", train_set)
-    print("val set", val_set)
-    print("test set", test_set)
-    
-    
     tokenize = partial(
         tokenize_dataset, 
         tokenizer=tokenizer,
-        max_length=hparams.string_max_len*2 # TODO This is a huristic that will bite us in the ass.
+        max_length=hparams.string_max_len*2 # TODO This is a huristic that will bite us
+        # in the ass.
     )
 
     tokenized_train_dataset = tokenize(train_set)
     tokenized_val_dataset = tokenize(val_set)
     tokenized_test_dataset = tokenize(test_set)
 
-    print("tokenized train dataset", tokenized_train_dataset['input_ids'])
+    print("tokenized train dataset", tokenized_train_dataset)
     print("tokenized val dataset", tokenized_val_dataset)
     print("tokenized test dataset", tokenized_test_dataset)
 
