@@ -20,10 +20,10 @@ class HParams:
     hf_training_args: TrainingArguments
     model_name: str = "EleutherAI/pythia-70m-deduped"
     revision: Optional[str] = None
-    string_max_len = 30
-    train_size=1000
-    val_size=200
-    test_size=200
+    string_max_len: int  = 30
+    train_size: int = 1000
+    val_size: int = 200
+    test_size: int = 200
 
 
 def tokenize_dataset(dataset, tokenizer, max_length):
