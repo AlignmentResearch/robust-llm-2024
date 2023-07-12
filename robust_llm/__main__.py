@@ -22,11 +22,19 @@ def main():
     val_size = 2_000
     test_size = 2_000
 
+    print("train_size", train_size)
+    print("val_size", val_size)
+    print("test_size", test_size)
+
     train_set, val_set, test_set = tomita1.generate_dataset(
         train_size=train_size,
         val_size=val_size,
         test_size=test_size,
     )
+
+    print("First ten train examples:")
+    for i in range(10):
+        print(train_set["text"][i], train_set["label"][i])
 
     # Check the size of the overlap between train set and val set and test set
     train_val_overlap = (
@@ -47,9 +55,9 @@ def main():
     tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
     tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
 
-    # print("tokenized train dataset", tokenized_train_dataset)
-    # print("tokenized val dataset", tokenized_val_dataset)
-    # print("tokenized test dataset", tokenized_test_dataset)
+    print("First ten tokenized train examples:")
+    for i in range(10):
+        print(tokenized_train_dataset["text"][i], tokenized_train_dataset["label"][i])
 
     model = AutoModelForSequenceClassification.from_pretrained(
         "bert-base-cased", num_labels=2
