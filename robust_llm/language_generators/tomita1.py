@@ -45,7 +45,7 @@ class Tomita1:
             num_digits = self.rng.integers(
                 low=1, high=self.max_length + 1
             )  # don't allow empty
-            digits = []
+            digits = [1]
             while is_all_ones(digits):  # this catches the empty list too
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
