@@ -12,12 +12,11 @@ def tokenize_dataset(dataset, tokenizer):
 
 
 def main():
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased", use_fast=False)
+    model_name = "bert-base-cased"
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
-    tomita1 = Tomita1(
-        10_000
-    )  # 1000, 10_000? Go big but stay within the context window of BERT
-    # thought: maybe this doesn't generalize to longer lengths
+    tomita1 = Tomita1(500)  # Need to stay within the context of BERT
+    # thought: maybe this doesn't generalize to longer lengths?
 
     train_size = 10_000
     val_size = 2_000
