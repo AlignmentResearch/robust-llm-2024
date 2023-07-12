@@ -11,7 +11,6 @@ from transformers import (
     TrainingArguments,
 )
 import simple_parsing
-import wandb
 
 from robust_llm.language_generators.tomita1 import Tomita1
 from robust_llm.training import Training
@@ -20,6 +19,7 @@ from robust_llm.training import Training
 class HParams:
     hf_training_args: TrainingArguments
     model_name: str = "EleutherAI/pythia-70m-deduped"
+    randomly_initialize: bool = False
     revision: Optional[str] = None
     string_max_len: int  = 30
     train_size: int = 1000
@@ -50,13 +50,18 @@ def main():
         dataloader_drop_last=True,
     )
 
-    config = AutoConfig.from_pretrained(
-        hparams.model_name, num_labels=2
-    )
+    if hparams.randomly_initialize:
+        config = AutoConfig.from_pretrained( # TODO make this a config option
+            hparams.model_name, num_labels=2
+        )
 
-    model = AutoModelForSequenceClassification.from_config(
-        config,
-    )
+        model = AutoModelForSequenceClassification.from_config(
+            config,
+        )
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            hparams.model_name, num_labels=2
+        )
 
     tokenizer = PreTrainedTokenizerFast.from_pretrained(
         hparams.model_name,
