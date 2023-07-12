@@ -3,12 +3,18 @@ name = "robust-llm"
 description = "Testing the robustness of LLMs"
 requires-python = ">=3.10"
 dependencies = [
+    "evaluate",
     "torch",
     "transformers[accelerate]",
     "huggingface_hub",
     "datasets",
+    "simple_parsing",
+    "scikit-learn",
+    "wandb",
 ]
 version="0.0.1"
+
+
 
 [tool.setuptools.packages.find]
 namespaces = false
