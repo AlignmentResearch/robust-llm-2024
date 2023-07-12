@@ -14,28 +14,35 @@ def tokenize_dataset(dataset, tokenizer):
 def main():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-cased", use_fast=False)
 
-    tomita1 = Tomita1(30)  # 1000, 10_000? Go big but stay within the context window of BERT
+    tomita1 = Tomita1(10_000)  # 1000, 10_000? Go big but stay within the context window of BERT
     # thought: maybe this doesn't generalize to longer lengths
 
+    train_size = 100_000
+    val_size = 20_000
+    test_size = 20_000
+
     train_set, val_set, test_set = tomita1.generate_dataset(
-        train_size=1000,
-        val_size=200,
-        test_size=200,
+        train_size=train_size,
+        val_size=val_size,
+        test_size=test_size,
     )
 
-    # for i, el in enumerate(train_set):
-    #     print(f"{i}:", el)
-    print("train set", train_set)
-    print("val set", val_set)
-    print("test set", test_set)
+    # Check the size of the overlap between train set and val set and test set
+    train_val_overlap = len(set(train_set["text"]).intersection(set(val_set["text"]))) / val_size
+    train_test_overlap = len(set(train_set["text"]).intersection(set(test_set["text"]))) / test_size
+    val_test_overlap = len(set(val_set["text"]).intersection(set(test_set["text"]))) / test_size
+
+    print("train val overlap", train_val_overlap)
+    print("train test overlap", train_test_overlap)
+    print("val test overlap", val_test_overlap)
 
     tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
     tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
     tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
 
-    print("tokenized train dataset", tokenized_train_dataset)
-    print("tokenized val dataset", tokenized_val_dataset)
-    print("tokenized test dataset", tokenized_test_dataset)
+    # print("tokenized train dataset", tokenized_train_dataset)
+    # print("tokenized val dataset", tokenized_val_dataset)
+    # print("tokenized test dataset", tokenized_test_dataset)
 
     model = AutoModelForSequenceClassification.from_pretrained(
         "bert-base-cased", num_labels=2
