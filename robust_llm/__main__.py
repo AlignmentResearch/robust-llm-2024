@@ -14,26 +14,9 @@ def tokenize_dataset(dataset, tokenizer):
 def main():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-cased", use_fast=False)
 
-    # model = AutoModelForSequenceClassification.from_pretrained(
-    #     "bert-base-cased", num_labels=2
-    # )
+    tomita1 = Tomita1(30)  # 1000, 10_000? Go big but stay within the context window of BERT
+    # thought: maybe this doesn't generalize to longer lengths
 
-    # dataset = Data(dataset_name="imdb")
-    # train_dataset, test_dataset = dataset.prepare_tokenized_dataset(
-    #     tokenizer=tokenizer, mini=True
-    # )
-    # print(train_dataset)
-
-    # training = Training(
-    #     hparams={},
-    #     train_dataset=train_dataset,
-    #     eval_dataset=test_dataset,
-    #     model=model,
-    # )
-
-    # raise SystemExit
-
-    tomita1 = Tomita1(30)
     train_set, val_set, test_set = tomita1.generate_dataset(
         train_size=1000,
         val_size=200,

@@ -20,6 +20,7 @@ class Training:
         hf_training_args = TrainingArguments(
             output_dir="test_trainer", evaluation_strategy="epoch",
             num_train_epochs=5, report_to=["wandb"], logging_steps=1,
+            # TODO: record eval loss more than once every 30 epochs, especially at the start
         )
         trainer = Trainer(
             model=self.model,
