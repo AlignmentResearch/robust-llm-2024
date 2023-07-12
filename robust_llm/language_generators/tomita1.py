@@ -30,10 +30,10 @@ class Tomita1:
         assert isinstance(num, int)
 
         num = self.rng.integers(
-            low=1,
+            low=1,  # for simplicity, don't allow empty string
             high=self.max_length + 1,
             size=(num,),
-            dtype=np.int8,  # for simplicity, don't allow empty string
+            dtype=np.int32,
         )
         return ["1" * el for el in num]
 
