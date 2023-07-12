@@ -20,7 +20,7 @@ class Training:
         hf_training_args = TrainingArguments(
             output_dir="test_trainer",
             num_train_epochs=3,
-            eval_steps=1,
+            eval_steps=16,  # how often to do eval (slow)
             evaluation_strategy="steps",
             logging_steps=1,
             report_to=["wandb"],
