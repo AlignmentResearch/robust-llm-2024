@@ -19,9 +19,9 @@ def main():
     )  # 1000, 10_000? Go big but stay within the context window of BERT
     # thought: maybe this doesn't generalize to longer lengths
 
-    train_size = 100_000
-    val_size = 20_000
-    test_size = 20_000
+    train_size = 10_000
+    val_size = 2_000
+    test_size = 2_000
 
     train_set, val_set, test_set = tomita1.generate_dataset(
         train_size=train_size,
