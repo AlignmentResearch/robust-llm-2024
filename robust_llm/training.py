@@ -19,11 +19,11 @@ class Training:
     def run_trainer(self):
         hf_training_args = TrainingArguments(
             output_dir="test_trainer",
-            # evaluation_strategy="epoch",
             num_train_epochs=3,
-            report_to=["wandb"],
+            eval_steps=1,
+            evaluation_strategy="steps",
             logging_steps=1,
-            # TODO: record eval loss more than once every 30 epochs, especially at the start
+            report_to=["wandb"],
         )
         trainer = Trainer(
             model=self.model,
@@ -31,7 +31,6 @@ class Training:
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
-            log_every_n_steps=1,
         )
         trainer.train()
 
