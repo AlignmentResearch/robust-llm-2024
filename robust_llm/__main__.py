@@ -14,7 +14,9 @@ def tokenize_dataset(dataset, tokenizer):
 def main():
     tokenizer = AutoTokenizer.from_pretrained("bert-base-cased", use_fast=False)
 
-    tomita1 = Tomita1(10_000)  # 1000, 10_000? Go big but stay within the context window of BERT
+    tomita1 = Tomita1(
+        10_000
+    )  # 1000, 10_000? Go big but stay within the context window of BERT
     # thought: maybe this doesn't generalize to longer lengths
 
     train_size = 100_000
@@ -28,9 +30,15 @@ def main():
     )
 
     # Check the size of the overlap between train set and val set and test set
-    train_val_overlap = len(set(train_set["text"]).intersection(set(val_set["text"]))) / val_size
-    train_test_overlap = len(set(train_set["text"]).intersection(set(test_set["text"]))) / test_size
-    val_test_overlap = len(set(val_set["text"]).intersection(set(test_set["text"]))) / test_size
+    train_val_overlap = (
+        len(set(train_set["text"]).intersection(set(val_set["text"]))) / val_size
+    )
+    train_test_overlap = (
+        len(set(train_set["text"]).intersection(set(test_set["text"]))) / test_size
+    )
+    val_test_overlap = (
+        len(set(val_set["text"]).intersection(set(test_set["text"]))) / test_size
+    )
 
     print("train val overlap", train_val_overlap)
     print("train test overlap", train_test_overlap)
