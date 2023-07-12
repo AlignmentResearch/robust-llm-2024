@@ -3,8 +3,7 @@ import numpy as np
 
 
 def is_all_ones(the_list: list[int]):
-    assert len(the_list) > 0
-    # We should never get there, but this covers the empty list too
+    assert len(the_list) > 0  # for simplicity don't allow empty
     return all(digit == 1 for digit in the_list)
 
 
@@ -31,7 +30,7 @@ class Tomita1:
         assert isinstance(num, int)
 
         num = self.rng.integers(
-            low=1, high=self.max_length + 1, size=(num,), dtype=np.int8
+            low=1, high=self.max_length + 1, size=(num,), dtype=np.int8  # for simplicity, don't allow empty string
         )
         return ["1" * el for el in num]
 
