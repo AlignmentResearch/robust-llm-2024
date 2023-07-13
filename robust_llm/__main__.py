@@ -28,7 +28,7 @@ def main():
     )  # <= 509 since we need to stay within the context of BERT
     # thought: maybe this doesn't generalize to longer lengths?
 
-    train_size = 1000
+    train_size = 200
     val_size = 1000
     test_size = 200
 
