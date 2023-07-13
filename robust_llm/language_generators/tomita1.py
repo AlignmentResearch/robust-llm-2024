@@ -3,11 +3,11 @@ import numpy as np
 
 
 def is_all_ones(the_list: list[int]):
-    # We should never get here, but this covers the empty list too
+    assert len(the_list) > 0
+    # We should never get there, but this covers the empty list too
     return all(digit == 1 for digit in the_list)
 
 
-# TODO: unit tests
 @dataclasses.dataclass
 class Tomita1:
     # 1*
@@ -17,7 +17,6 @@ class Tomita1:
     def __post_init__(self):
         self.rng = np.random.default_rng(seed=self.seed)
 
-    # TODO: put this in shared utils
     def label_and_shuffle(self, trues: list[str], falses: list[str]):
         labelled_trues = [(el, 1) for el in trues]
         labelled_falses = [(el, 0) for el in falses]
@@ -32,8 +31,8 @@ class Tomita1:
         assert isinstance(num, int)
 
         num = self.rng.integers(
-            low=0, high=self.max_length + 1, size=(num,), dtype=np.int8
-        )  # TODO: don't allow empty?
+            low=1, high=self.max_length + 1, size=(num,), dtype=np.int8
+        )
         return ["1" * el for el in num]
 
     def generate_false(self, num: int = 1):
@@ -46,7 +45,7 @@ class Tomita1:
             num_digits = self.rng.integers(
                 low=1, high=self.max_length + 1
             )  # don't allow empty
-            digits = []
+            digits = [1]
             while is_all_ones(digits):  # this catches the empty list too
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8

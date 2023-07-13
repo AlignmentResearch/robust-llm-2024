@@ -151,3 +151,10 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Wandb
+.wandb/
+robust_llm/wandb/
+
+# PyCharm
+.idea/

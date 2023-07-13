@@ -1,0 +1,23 @@
+1 √
+1*
+
+2 √
+(10)*
+
+3
+odd num of consecutive 1s always followed by even num of consecutive 0s
+
+4 √
+any string not containing "000" as a substring
+
+5
+even num of 0s and even num of 1s
+
+6
+(num 1s) - (num 0s) is divisible by 3
+
+7 √
+0*1*0*1*
+
+LSTM can do all of them, transformer can only do 1, 2, 4, 7
+https://aclanthology.org/2020.emnlp-main.576.pdf
