@@ -49,7 +49,7 @@ class PrintIncorrectClassificationsCallback(TrainerCallback):
 
         if len(incorrectly_predicted_texts) > 20:
             print(
-                f"\nPrinting 20 of the {len(incorrectly_predicted_texts)}) incorrect predictions:"
+                f"\nPrinting 20 (of the {len(incorrectly_predicted_texts)}) incorrect predictions:"
             )
         else:
             print(
