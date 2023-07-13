@@ -29,12 +29,14 @@ def main():
     # thought: maybe this doesn't generalize to longer lengths?
 
     train_size = 1000
-    val_size = 200
+    val_size = 1000
     test_size = 200
 
+    print()
     print("train_size", train_size)
     print("val_size", val_size)
     print("test_size", test_size)
+    print()
 
     train_set, val_set, test_set = tomita1.generate_dataset(
         train_size=train_size,
