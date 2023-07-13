@@ -77,7 +77,7 @@ class Training:
     def run_trainer(self):
         hf_training_args = TrainingArguments(
             output_dir="test_trainer",
-            num_train_epochs=5,
+            num_train_epochs=20,
             eval_steps=32,
             evaluation_strategy="steps",
             logging_steps=1,
