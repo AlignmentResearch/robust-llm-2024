@@ -64,25 +64,26 @@ def main():
     print("val test overlap proportion", len(val_test_overlap) / len(test_set["text"]))
     print()
 
-    # tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
-    # tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
-    # tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
-    #
+    print("Tokenizing datasets...")
+    tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
+    tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
+    tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
+
     # print("First ten tokenized train examples:")
     # for i in range(10):
     #     print(tokenized_train_dataset["text"][i], tokenized_train_dataset["label"][i])
-    #
-    # model = AutoModelForSequenceClassification.from_pretrained(
-    #     "bert-base-cased", num_labels=2
-    # )
-    #
-    # training = Training(
-    #     hparams={},
-    #     train_dataset=tokenized_train_dataset,
-    #     eval_dataset=tokenized_val_dataset,
-    #     model=model,
-    # )
-    # training.run_trainer()
+
+    model = AutoModelForSequenceClassification.from_pretrained(
+        "bert-base-cased", num_labels=2
+    )
+
+    training = Training(
+        hparams={},
+        train_dataset=tokenized_train_dataset,
+        eval_dataset=tokenized_val_dataset,
+        model=model,
+    )
+    training.run_trainer()
 
 
 if __name__ == "__main__":
