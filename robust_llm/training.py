@@ -20,7 +20,7 @@ class Training:
         hf_training_args = TrainingArguments(
             output_dir="test_trainer",
             num_train_epochs=3,
-            eval_steps=16,  # how often to do eval (slow)
+            eval_steps=32,
             evaluation_strategy="steps",
             logging_steps=1,
             report_to=["wandb"],
@@ -32,6 +32,8 @@ class Training:
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
         )
+        # Perform an initial evaluation, then train
+        trainer.evaluate(eval_dataset=self.eval_dataset)
         trainer.train()
 
     def compute_metrics(self, eval_pred):

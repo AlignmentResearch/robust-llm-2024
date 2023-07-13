@@ -15,7 +15,7 @@ def main():
     model_name = "bert-base-cased"
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
-    tomita1 = Tomita1(500)  # Need to stay within the context of BERT
+    tomita1 = Tomita1(500, seed=41)  # Need to stay within the context of BERT
     # thought: maybe this doesn't generalize to longer lengths?
 
     train_size = 10_000
