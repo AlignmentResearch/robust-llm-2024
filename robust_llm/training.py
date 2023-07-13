@@ -2,38 +2,43 @@ import dataclasses
 import evaluate
 import numpy as np
 
+
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer, TrainerCallback
 
 
 class PrintIncorrectClassificationsCallback(TrainerCallback):
 
+    def __init__(self, trainer: Trainer):
+        super().__init__()
+        self.trainer = trainer
+
     def on_evaluate(self, args, state, control, **kwargs):
         print("Printing incorrect eval classifications (or 20 of them if there are too many):")
         model = kwargs["model"]
         eval_dataloader = kwargs["eval_dataloader"]
 
-        # Get the incorrect predictions
-        incorrect_predictions = []
-        batch = eval_dataloader.dataset  # we do this full batch for simplicity
-        batch = {k: v.to(args.device) for k, v in batch.items()}
-        outputs = model(**batch)
-        logits = outputs.logits
-        predictions = np.argmax(logits, axis=-1)
-        incorrect_predictions.append(predictions != batch["labels"])
+        print("loaded model and eval_dataloader")
 
-        # Print up to 20 of them
-        incorrect_predictions = np.concatenate(incorrect_predictions)
-        if incorrect_predictions.sum() > 20:
-            print("Too many incorrect predictions to print. Printing the first 20.")
-            incorrect_predictions = incorrect_predictions[:20]
-        for i, is_incorrect in enumerate(incorrect_predictions):
-            if is_incorrect:
-                print(f"Example {i}:")
-                print(f"Input: {batch['input_ids'][i]}")
-                print(f"Label: {batch['labels'][i]}")
-                print(f"Prediction: {predictions[i]}")
-                print()
+        # Get the incorrect predictions
+        outputs = self.trainer.predict(test_dataset=self.trainer.eval_dataset)
+        print("outputs are ", outputs)
+
+        logits = outputs.predictions
+        predictions = np.argmax(logits, axis=-1)
+        labels = outputs.label_ids
+
+        prediction_outcomes = predictions == labels
+        incorrect_indices = np.where(prediction_outcomes == False)[0].astype(int)
+
+        incorrectly_predicted_texts = [self.trainer.eval_dataset["text"][incorrect_index] for incorrect_index in incorrect_indices]
+        incorrectly_predicted_true_labels = [self.trainer.eval_dataset["label"][incorrect_index] for incorrect_index in incorrect_indices]
+        incorrectly_predicted_predicted_labels = [predictions[incorrect_index] for incorrect_index in incorrect_indices]
+
+        for i in range(min(20, len(incorrectly_predicted_texts))):
+            print("Incorrectly predicted text:", incorrectly_predicted_texts[i])
+            print("True label:", incorrectly_predicted_true_labels[i])
+            print("Predicted label:", incorrectly_predicted_predicted_labels[i])
 
 
 @dataclasses.dataclass
@@ -53,7 +58,7 @@ class Training:
             eval_steps=32,
             evaluation_strategy="steps",
             logging_steps=1,
-            report_to=["wandb"],
+            # report_to=["wandb"],
         )
         trainer = Trainer(
             model=self.model,
@@ -61,15 +66,16 @@ class Training:
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
-            callbacks=[PrintIncorrectClassificationsCallback],
         )
+        # Add a callback to print incorrect classifications (needs trainer so it can predict())
+        trainer.add_callback(PrintIncorrectClassificationsCallback(trainer))
+
         # Perform an initial evaluation, then train
         trainer.evaluate(eval_dataset=self.eval_dataset)
+        raise SystemExit
         trainer.train()
 
     def compute_metrics(self, eval_pred):
         logits, labels = eval_pred
         predictions = np.argmax(logits, axis=-1)
         return self.metric.compute(predictions=predictions, references=labels)
-
-    # TODO finish https://huggingface.co/docs/transformers/training
