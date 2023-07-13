@@ -61,6 +61,7 @@ class Training:
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
+            callbacks=[PrintIncorrectClassificationsCallback],
         )
         # Perform an initial evaluation, then train
         trainer.evaluate(eval_dataset=self.eval_dataset)
