@@ -4,25 +4,25 @@ import numpy as np
 
 
 from datasets import Dataset
-from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer, TrainerCallback
+from transformers import (
+    AutoModelForSequenceClassification,
+    TrainingArguments,
+    Trainer,
+    TrainerCallback,
+)
 
 
 class PrintIncorrectClassificationsCallback(TrainerCallback):
-
     def __init__(self, trainer: Trainer):
         super().__init__()
         self.trainer = trainer
 
     def on_evaluate(self, args, state, control, **kwargs):
-        print("Printing incorrect eval classifications (or 20 of them if there are too many):")
         model = kwargs["model"]
         eval_dataloader = kwargs["eval_dataloader"]
 
-        print("loaded model and eval_dataloader")
-
         # Get the incorrect predictions
         outputs = self.trainer.predict(test_dataset=self.trainer.eval_dataset)
-        print("outputs are ", outputs)
 
         logits = outputs.predictions
         predictions = np.argmax(logits, axis=-1)
@@ -31,12 +31,31 @@ class PrintIncorrectClassificationsCallback(TrainerCallback):
         prediction_outcomes = predictions == labels
         incorrect_indices = np.where(prediction_outcomes == False)[0].astype(int)
 
-        incorrectly_predicted_texts = [self.trainer.eval_dataset["text"][incorrect_index] for incorrect_index in incorrect_indices]
-        incorrectly_predicted_true_labels = [self.trainer.eval_dataset["label"][incorrect_index] for incorrect_index in incorrect_indices]
-        incorrectly_predicted_predicted_labels = [predictions[incorrect_index] for incorrect_index in incorrect_indices]
+        incorrectly_predicted_texts = [
+            self.trainer.eval_dataset["text"][incorrect_index]
+            for incorrect_index in incorrect_indices
+        ]
+        incorrectly_predicted_true_labels = [
+            self.trainer.eval_dataset["label"][incorrect_index]
+            for incorrect_index in incorrect_indices
+        ]
+        incorrectly_predicted_predicted_labels = [
+            predictions[incorrect_index] for incorrect_index in incorrect_indices
+        ]
+
+        if len(incorrectly_predicted_texts) == 0:
+            print("All eval texts predicted correctly.")
+            return
 
         if len(incorrectly_predicted_texts) > 20:
-            print("Too many incorrectly predicted texts, printing 20 of them:")
+            print(
+                f"Printing 20 of the {len(incorrectly_predicted_texts)}) incorrect predictions:"
+            )
+        else:
+            print(
+                f"Printing the {len(incorrectly_predicted_texts)} incorrect predictions:"
+            )
+
         for i in range(min(20, len(incorrectly_predicted_texts))):
             print("Incorrectly predicted text:", incorrectly_predicted_texts[i])
             print("True label:", incorrectly_predicted_true_labels[i])

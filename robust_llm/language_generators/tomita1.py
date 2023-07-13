@@ -35,7 +35,9 @@ class Tomita1:
             size=(num,),
             dtype=np.int32,
         )
-        return [' '.join('1' * el) for el in num]  # put spaces between the digits for more natural tokenization
+        return [
+            " ".join("1" * el) for el in num
+        ]  # put spaces between the digits for more natural tokenization
 
     def generate_false(self, num: int = 1):
         # Generate a random string of 0s and 1s of random length, from zero up to length n,
@@ -52,7 +54,9 @@ class Tomita1:
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
                 )
-            return ' '.join([str(el) for el in digits])  # put spaces between the digits for more natural tokenization
+            return " ".join(
+                [str(el) for el in digits]
+            )  # put spaces between the digits for more natural tokenization
 
         all_strings = []
         for _ in range(num):  # I think this is hard to parallelize efficiently

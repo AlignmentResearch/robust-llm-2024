@@ -4,6 +4,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from robust_llm.language_generators.tomita1 import Tomita1
 from robust_llm.training import Training
 
+
 def tokenize_dataset(dataset, tokenizer):
     # Padding seems necessary in order to avoid an error
     tokenized_data = tokenizer(dataset["text"], padding="max_length", truncation=True)
@@ -14,12 +15,14 @@ def main():
     model_name = "bert-base-cased"
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
-    tomita1 = Tomita1(5000, seed=41)  # Need to stay within the context of BERT
+    tomita1 = Tomita1(
+        500, seed=41
+    )  # <= 509 since we need to stay within the context of BERT
     # thought: maybe this doesn't generalize to longer lengths?
 
-    train_size = 1000
-    val_size = 200
-    test_size = 200
+    train_size = 10000
+    val_size = 2000
+    test_size = 2000
 
     print("train_size", train_size)
     print("val_size", val_size)
