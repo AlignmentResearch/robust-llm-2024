@@ -3,8 +3,12 @@ import evaluate
 import numpy as np
 
 from datasets import Dataset
-from transformers import AutoModelForSequenceClassification, TrainingArguments, Trainer
-
+from transformers import (
+    AutoModelForSequenceClassification,
+    TrainingArguments,
+    Trainer,
+    EvalPrediction,
+)
 
 @dataclasses.dataclass
 class Training:
@@ -27,8 +31,8 @@ class Training:
 
         trainer.train()
 
-    def compute_metrics(self, eval_pred):
-        logits, labels = eval_pred
+    def compute_metrics(self, eval_pred: EvalPrediction):
+        (logits, *_), labels, *_ = eval_pred
         predictions = np.argmax(logits, axis=-1)
         return self.metric.compute(predictions=predictions, references=labels)
 

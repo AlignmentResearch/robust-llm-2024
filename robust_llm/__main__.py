@@ -44,6 +44,7 @@ def main():
         # defualts but there is a weird interaction between huggingface 
         # and simple-parsing
         hparams.hf_training_args,
+        evaluation_strategy="epoch",
         num_train_epochs=5,
         report_to=["wandb"],
         logging_steps=1000,
