@@ -35,6 +35,8 @@ class PrintIncorrectClassificationsCallback(TrainerCallback):
         incorrectly_predicted_true_labels = [self.trainer.eval_dataset["label"][incorrect_index] for incorrect_index in incorrect_indices]
         incorrectly_predicted_predicted_labels = [predictions[incorrect_index] for incorrect_index in incorrect_indices]
 
+        if len(incorrectly_predicted_texts) > 20:
+            print("Too many incorrectly predicted texts, printing 20 of them:")
         for i in range(min(20, len(incorrectly_predicted_texts))):
             print("Incorrectly predicted text:", incorrectly_predicted_texts[i])
             print("True label:", incorrectly_predicted_true_labels[i])

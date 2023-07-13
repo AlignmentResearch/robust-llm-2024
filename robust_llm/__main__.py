@@ -14,12 +14,12 @@ def main():
     model_name = "bert-base-cased"
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
-    tomita1 = Tomita1(500, seed=41)  # Need to stay within the context of BERT
+    tomita1 = Tomita1(5000, seed=41)  # Need to stay within the context of BERT
     # thought: maybe this doesn't generalize to longer lengths?
 
-    train_size = 100
-    val_size = 20
-    test_size = 20
+    train_size = 1000
+    val_size = 200
+    test_size = 200
 
     print("train_size", train_size)
     print("val_size", val_size)
