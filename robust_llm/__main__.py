@@ -18,9 +18,9 @@ def main():
     tomita1 = Tomita1(500, seed=41)  # Need to stay within the context of BERT
     # thought: maybe this doesn't generalize to longer lengths?
 
-    train_size = 10_000
-    val_size = 2_000
-    test_size = 2_000
+    train_size = 1000
+    val_size = 200
+    test_size = 200
 
     print("train_size", train_size)
     print("val_size", val_size)
