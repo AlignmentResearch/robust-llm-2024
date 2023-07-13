@@ -44,22 +44,24 @@ class PrintIncorrectClassificationsCallback(TrainerCallback):
         ]
 
         if len(incorrectly_predicted_texts) == 0:
-            print("All eval texts predicted correctly.")
+            print("\nAll eval texts predicted correctly.\n")
             return
 
         if len(incorrectly_predicted_texts) > 20:
             print(
-                f"Printing 20 of the {len(incorrectly_predicted_texts)}) incorrect predictions:"
+                f"\nPrinting 20 of the {len(incorrectly_predicted_texts)}) incorrect predictions:"
             )
         else:
             print(
-                f"Printing the {len(incorrectly_predicted_texts)} incorrect predictions:"
+                f"\nPrinting the {len(incorrectly_predicted_texts)} incorrect predictions:"
             )
 
         for i in range(min(20, len(incorrectly_predicted_texts))):
             print("Incorrectly predicted text:", incorrectly_predicted_texts[i])
             print("True label:", incorrectly_predicted_true_labels[i])
             print("Predicted label:", incorrectly_predicted_predicted_labels[i])
+            print()
+        print()
 
 
 @dataclasses.dataclass

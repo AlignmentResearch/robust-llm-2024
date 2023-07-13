@@ -20,9 +20,9 @@ def main():
     )  # <= 509 since we need to stay within the context of BERT
     # thought: maybe this doesn't generalize to longer lengths?
 
-    train_size = 10000
-    val_size = 2000
-    test_size = 2000
+    train_size = 100_000
+    val_size = 20_000
+    test_size = 20_000
 
     print("train_size", train_size)
     print("val_size", val_size)
