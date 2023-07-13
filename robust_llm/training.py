@@ -58,7 +58,7 @@ class Training:
             eval_steps=32,
             evaluation_strategy="steps",
             logging_steps=1,
-            # report_to=["wandb"],
+            report_to=["wandb"],
         )
         trainer = Trainer(
             model=self.model,
@@ -72,7 +72,6 @@ class Training:
 
         # Perform an initial evaluation, then train
         trainer.evaluate(eval_dataset=self.eval_dataset)
-        raise SystemExit
         trainer.train()
 
     def compute_metrics(self, eval_pred):
