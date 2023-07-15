@@ -40,9 +40,9 @@ def tokenize_dataset(dataset, tokenizer, max_length):
 def main():
     hparams: HParams = simple_parsing.parse(HParams)
 
-    hparams.hf_training_args = replace(  # TODO it would be better to make this actual
-        # defualts but there is a weird interaction between huggingface 
-        # and simple-parsing
+    # This overrides the arugments passed in by the user on the command line
+    # this is not ideal see issue #5
+    hparams.hf_training_args = replace(
         hparams.hf_training_args,
         evaluation_strategy="epoch",
         num_train_epochs=5,
@@ -52,7 +52,7 @@ def main():
     )
 
     if hparams.randomly_initialize:
-        config = AutoConfig.from_pretrained( # TODO make this a config option
+        config = AutoConfig.from_pretrained(
             hparams.model_name, num_labels=2
         )
 
