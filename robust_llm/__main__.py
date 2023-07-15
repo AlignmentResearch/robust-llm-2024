@@ -76,6 +76,7 @@ def main():
         model.config.pad_token_id = tokenizer.eos_token_id
 
     tomita1 = Tomita1(hparams.string_max_len)
+
     train_set, val_set, test_set = tomita1.generate_dataset(
         train_size=hparams.train_size,
         val_size=hparams.val_size,
