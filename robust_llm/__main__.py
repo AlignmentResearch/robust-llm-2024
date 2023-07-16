@@ -1,8 +1,30 @@
+import dataclasses
+
 from datasets import Dataset
+from simple_parsing import ArgumentParser
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+from robust_llm.language_generators.tomita_base import TomitaBase
 from robust_llm.language_generators.tomita1 import Tomita1
+from robust_llm.language_generators.tomita2 import Tomita2
+from robust_llm.language_generators.tomita4 import Tomita4
+
 from robust_llm.training import Training
+
+BERT_CONTEXT_LENGTH = 512
+BUFFER = 5
+CONTEXT_LENGTH = BERT_CONTEXT_LENGTH - 3 - BUFFER  # 3 for special tokens
+
+
+def make_language_generator_from_args(args):
+    if args.language_generator == "A":
+        language_generator = Tomita1(args.max_length)
+    elif args.language_generator == "B":
+        language_generator = Tomita2(args.max_length)
+    else:
+        language_generator = Tomita4(args.max_length)
+
+    return language_generator
 
 
 def tokenize_dataset(dataset, tokenizer):
@@ -20,16 +42,44 @@ def get_overlap(smaller_set, larger_set):
 
 
 def main():
+    parser = ArgumentParser()
+
+    parser.add_argument(
+        "--language_generator",
+        choices=["Tomita1", "Tomita2", "Tomita4"],
+        default="Tomita1",
+        help="Choose the regular language to use (Tomita1, Tomita2, Tomita4). "
+             "Defaults to Tomita1.",
+    )
+    parser.add_argument(
+        "--max_length",
+        type=int,
+        default=500,
+        help="The maximum length of the strings to generate.",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="The seed to use for the random number generator used to make the dataset.",
+    )
+    parser.add_argument(
+        "--num_train_epochs",
+        type=int,
+        default=3,
+        help="The number of epochs to train for.",
+    )
+
+    # Parse the command-line arguments.
+    args = parser.parse_args()
+
+    language_generator = make_language_generator_from_args(args)
+
     model_name = "bert-base-cased"
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
-    tomita1 = Tomita1(
-        500, seed=41
-    )  # <= 509 since we need to stay within the context of BERT
-    # thought: maybe this doesn't generalize to longer lengths?
-
-    train_size = 2000
-    val_size = 10000
+    train_size = 1000
+    val_size = 1000
     test_size = 200
 
     print()
@@ -38,15 +88,11 @@ def main():
     print("test_size", test_size)
     print()
 
-    train_set, val_set, test_set = tomita1.generate_dataset(
+    train_set, val_set, test_set = language_generator.generate_dataset(
         train_size=train_size,
         val_size=val_size,
         test_size=test_size,
     )
-
-    # print("First ten train examples:")
-    # for i in range(10):
-    #     print(train_set["text"][i], train_set["label"][i])
 
     # How much of val set is in train set?
     train_val_overlap = get_overlap(smaller_set=val_set, larger_set=train_set)
@@ -71,10 +117,6 @@ def main():
     tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
     tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
 
-    # print("First ten tokenized train examples:")
-    # for i in range(10):
-    #     print(tokenized_train_dataset["text"][i], tokenized_train_dataset["label"][i])
-
     model = AutoModelForSequenceClassification.from_pretrained(
         "bert-base-cased", num_labels=2
     )
@@ -84,9 +126,13 @@ def main():
         train_dataset=tokenized_train_dataset,
         eval_dataset=tokenized_val_dataset,
         model=model,
+        train_epochs=args.num_train_epochs,
     )
     training.run_trainer()
 
 
 if __name__ == "__main__":
+    # my_language_generator = Tomita1(
+    #     CONTEXT_LENGTH, seed=41
+    # )
     main()
