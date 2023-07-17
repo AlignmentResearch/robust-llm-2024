@@ -83,7 +83,7 @@ class Training:
             num_train_epochs=self.train_epochs,
             eval_steps=self.eval_steps,
             evaluation_strategy="epoch",
-            # logging_steps=self.logging_steps,
+            logging_steps=self.logging_steps,
             report_to=["wandb"],
         )
         trainer = Trainer(
