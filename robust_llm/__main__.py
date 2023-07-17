@@ -71,6 +71,24 @@ def main():
         default=3,
         help="The number of epochs to train for.",
     )
+    parser.add_argument(
+        "--train_set_size",
+        type=int,
+        default=1000,
+        help="The size of the train set.",
+    )
+    parser.add_argument(
+        "--val_set_size",
+        type=int,
+        default=1000,
+        help="The size of the validation set.",
+    )
+    parser.add_argument(
+        "--test_set_size",
+        type=int,
+        default=200,
+        help="The size of the test set.",
+    )
 
     # Parse the command-line arguments.
     args = parser.parse_args()
@@ -80,9 +98,9 @@ def main():
     model_name = "bert-base-cased"
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
-    train_size = 1000
-    val_size = 1000
-    test_size = 200
+    train_size = args.train_set_size
+    val_size = args.val_set_size
+    test_size = args.test_set_size
 
     print()
     print("train_size", train_size)
