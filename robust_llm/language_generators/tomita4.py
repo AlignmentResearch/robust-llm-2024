@@ -36,7 +36,7 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
             # Generate digits one-by-one, making sure we don't have three consecutive zeros
             digits = []
             for i in range(num_digits):
-                if i < 3:
+                if i < 2:
                     digits.append(self.rng.integers(low=0, high=2))
                 else:
                     # If the last two digits are both 0, then we need to choose 1
@@ -45,6 +45,8 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
                         digits.append(1)
                     else:
                         digits.append(self.rng.integers(low=0, high=2))
+
+            assert not contains_000(digits)
 
             return " ".join(
                 [str(el) for el in digits]
@@ -82,6 +84,8 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
             # Insert the "000" into the digits
             digits = np.insert(digits, zeros_location, [0, 0, 0])
 
+            assert contains_000(list(digits))
+
             return " ".join(
                 [str(el) for el in digits]
             )  # put spaces between the digits for more natural tokenization
@@ -93,7 +97,7 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
 
 
 if __name__ == "__main__":
-    tomita4 = Tomita4(max_length=500)
+    tomita4 = Tomita4(max_length=500, seed=0)
     train, val, test = tomita4.generate_dataset(10, 4, 4)
     print(train)
     print(val)
