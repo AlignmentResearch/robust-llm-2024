@@ -43,6 +43,28 @@ def get_overlap(smaller_set, larger_set):
     return overlap
 
 
+def print_overlaps(train_set, val_set, test_set):
+    # How much of val set is in train set?
+    train_val_overlap = get_overlap(smaller_set=val_set, larger_set=train_set)
+    print("train val overlap size", len(train_val_overlap))
+    print("train val overlap proportion", len(train_val_overlap) / len(val_set["text"]))
+    print()
+
+    # How much of test set is in train set?
+    train_test_overlap = get_overlap(smaller_set=test_set, larger_set=train_set)
+    print("train test overlap size", len(train_test_overlap))
+    print(
+        "train test overlap proportion", len(train_test_overlap) / len(test_set["text"])
+    )
+    print()
+
+    # How much of test set is in val set?
+    val_test_overlap = get_overlap(smaller_set=test_set, larger_set=val_set)
+    print("val test overlap size", len(val_test_overlap))
+    print("val test overlap proportion", len(val_test_overlap) / len(test_set["text"]))
+    print()
+
+
 def main():
     parser = ArgumentParser()
 
@@ -114,25 +136,7 @@ def main():
         test_size=test_size,
     )
 
-    # How much of val set is in train set?
-    train_val_overlap = get_overlap(smaller_set=val_set, larger_set=train_set)
-    print("train val overlap size", len(train_val_overlap))
-    print("train val overlap proportion", len(train_val_overlap) / len(val_set["text"]))
-    print()
-
-    # How much of test set is in train set?
-    train_test_overlap = get_overlap(smaller_set=test_set, larger_set=train_set)
-    print("train test overlap size", len(train_test_overlap))
-    print(
-        "train test overlap proportion", len(train_test_overlap) / len(test_set["text"])
-    )
-    print()
-
-    # How much of test set is in val set?
-    val_test_overlap = get_overlap(smaller_set=test_set, larger_set=val_set)
-    print("val test overlap size", len(val_test_overlap))
-    print("val test overlap proportion", len(val_test_overlap) / len(test_set["text"]))
-    print()
+    print_overlaps(train_set, val_set, test_set)
 
     print("Tokenizing datasets...")
     tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
@@ -151,6 +155,9 @@ def main():
         train_epochs=args.num_train_epochs,
     )
     training.run_trainer()
+
+    # Print overlaps again so it's stored in the output logged in wandb
+    print_overlaps(train_set, val_set, test_set)
 
 
 if __name__ == "__main__":
