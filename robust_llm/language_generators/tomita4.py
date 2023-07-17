@@ -37,6 +37,7 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
             )  # don't allow empty
             digits = [0, 0, 0]
             while contains_000(digits):
+                print("the list is", digits, "and it contains 000, so regenerating")
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
                 )
