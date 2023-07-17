@@ -72,7 +72,7 @@ class Training:
     model: AutoModelForSequenceClassification
     train_epochs: int = 3
     eval_steps: int = 32
-    logging_steps: int = 1
+    logging_steps: int = 150
 
     def __post_init__(self):
         self.metric = evaluate.load("accuracy")
@@ -82,7 +82,7 @@ class Training:
             output_dir="test_trainer",
             num_train_epochs=self.train_epochs,
             eval_steps=self.eval_steps,
-            evaluation_strategy="epoch",
+            evaluation_strategy="steps",
             logging_steps=self.logging_steps,
             report_to=["wandb"],
         )
