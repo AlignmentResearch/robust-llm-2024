@@ -17,12 +17,9 @@ def contains_000(the_list: list[int]):
 
 @dataclasses.dataclass
 class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
-
     def __post_init__(self):
         if self.max_length < 3:
-            raise ValueError(
-                "max_length must be at least 3 for Tomita4"
-            )
+            raise ValueError("max_length must be at least 3 for Tomita4")
         super().__post_init__()
 
     # Overrides
@@ -35,12 +32,20 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
             num_digits = self.rng.integers(
                 low=1, high=self.max_length + 1
             )  # don't allow empty
-            digits = [0, 0, 0]
-            while contains_000(digits):
-                print("the list is", digits, "and it contains 000, so regenerating")
-                digits = self.rng.integers(
-                    low=0, high=2, size=(num_digits,), dtype=np.int8
-                )
+
+            # Generate digits one-by-one, making sure we don't have three consecutive zeros
+            digits = []
+            for i in range(num_digits):
+                if i < 3:
+                    digits.append(self.rng.integers(low=0, high=2))
+                else:
+                    # If the last two digits are both 0, then we need to choose 1
+                    # Otherwise, we can choose either 0 or 1
+                    if digits[-2] == 0 and digits[-1] == 0:
+                        digits.append(1)
+                    else:
+                        digits.append(self.rng.integers(low=0, high=2))
+
             return " ".join(
                 [str(el) for el in digits]
             )  # put spaces between the digits for more natural tokenization
@@ -60,13 +65,14 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
         def generate_one():
             # Choose how many digits in our list
             num_extra_digits = self.rng.integers(
-                low=0, high=self.max_length + 1 - 3  # how many we add on top of the "000" part
+                low=0,
+                high=self.max_length
+                + 1
+                - 3,  # how many we add on top of the "000" part
             )
 
             # Choose where to put the "000" in the digits
-            zeros_location = self.rng.integers(
-                low=0, high=num_extra_digits + 1
-            )
+            zeros_location = self.rng.integers(low=0, high=num_extra_digits + 1)
 
             # Generate the digits
             digits = self.rng.integers(
@@ -87,7 +93,7 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
 
 
 if __name__ == "__main__":
-    tomita4 = Tomita4(max_length=10)
+    tomita4 = Tomita4(max_length=500)
     train, val, test = tomita4.generate_dataset(10, 4, 4)
     print(train)
     print(val)

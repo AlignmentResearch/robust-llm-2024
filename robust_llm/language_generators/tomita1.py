@@ -11,7 +11,6 @@ def is_all_ones(the_list: list[int]):
 
 @dataclasses.dataclass
 class Tomita1(TomitaBase):  # 1*
-
     # Overrides
     def generate_true(self, num: int = 1):
         # Generate a string of ones of random length, from zero up to length n

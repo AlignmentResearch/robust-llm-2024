@@ -51,7 +51,7 @@ def main():
         choices=["Tomita1", "Tomita2", "Tomita4"],
         default="Tomita1",
         help="Choose the regular language to use (Tomita1, Tomita2, Tomita4). "
-             "Defaults to Tomita1.",
+        "Defaults to Tomita1.",
     )
     parser.add_argument(
         "--max_length",
@@ -105,7 +105,9 @@ def main():
     # How much of test set is in train set?
     train_test_overlap = get_overlap(smaller_set=test_set, larger_set=train_set)
     print("train test overlap size", len(train_test_overlap))
-    print("train test overlap proportion", len(train_test_overlap) / len(test_set["text"]))
+    print(
+        "train test overlap proportion", len(train_test_overlap) / len(test_set["text"])
+    )
     print()
 
     # How much of test set is in val set?

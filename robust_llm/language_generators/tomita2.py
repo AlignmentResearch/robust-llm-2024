@@ -23,7 +23,6 @@ def is_all_tens(the_list: list[int]):
 
 @dataclasses.dataclass
 class Tomita2(TomitaBase):  # 10*
-
     # Overrides
     def generate_true(self, num: int = 1):
         # Generate a string of ones of random length, from zero up to length n / 2
