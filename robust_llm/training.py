@@ -71,7 +71,7 @@ class Training:
     eval_dataset: Dataset
     model: AutoModelForSequenceClassification
     train_epochs: int = 3
-    eval_steps: int = 32
+    eval_steps: int = 150
     logging_steps: int = 150
 
     def __post_init__(self):
