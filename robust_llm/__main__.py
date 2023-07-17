@@ -17,12 +17,14 @@ CONTEXT_LENGTH = BERT_CONTEXT_LENGTH - 3 - BUFFER  # 3 for special tokens
 
 
 def make_language_generator_from_args(args):
-    if args.language_generator == "A":
+    if args.language_generator == "Tomita1":
         language_generator = Tomita1(args.max_length)
-    elif args.language_generator == "B":
+    elif args.language_generator == "Tomita2":
         language_generator = Tomita2(args.max_length)
-    else:
+    elif args.language_generator == "Tomita4":
         language_generator = Tomita4(args.max_length)
+    else:
+        raise ValueError(f"Unknown language generator: {args.language_generator}")
 
     return language_generator
 
