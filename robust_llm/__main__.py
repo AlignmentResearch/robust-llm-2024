@@ -86,7 +86,7 @@ def main():
     tokenize = partial(
         tokenize_dataset, 
         tokenizer=tokenizer,
-        max_length=hparams.string_max_len*2 # TODO This is a huristic that will bite us
+        max_length=hparams.string_max_len*2 # TODO This is a heuristic that will bite us
         # in the ass.
     )
 
