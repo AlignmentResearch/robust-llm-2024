@@ -18,7 +18,7 @@ def is_0101_all_star(the_list: list[int]):
 
 
 @dataclasses.dataclass
-class Tomita7(TomitaBase):  # doesn't contain "000" as a substring
+class Tomita7(TomitaBase):  # 0*1*0*1*
 
     # Overrides
     def generate_true(self, num: int = 1):
@@ -29,7 +29,7 @@ class Tomita7(TomitaBase):  # doesn't contain "000" as a substring
         assert isinstance(num, int)
 
         def generate_one():
-            # Let each each "*" be of length 0 with 25%
+            # Let each "*" be of length 0 with 25%
             star_values = self.rng.choice([0, 1], p=[0.25, 0.75], size=(4,))
 
             cutoffs_0_to_1 = self.rng.beta(a=2, b=5, size=(4,))
@@ -49,6 +49,11 @@ class Tomita7(TomitaBase):  # doesn't contain "000" as a substring
 
             # Cut the list to the correct length
             digit_list = digit_list[: self.max_length]
+
+            # We don't accept the empty string
+            if digit_list == []:
+                digit_list.append(self.rng.choice([0, 1]))
+
             assert is_0101_all_star(digit_list)
 
             return " ".join(
@@ -99,8 +104,8 @@ class Tomita7(TomitaBase):  # doesn't contain "000" as a substring
 
 
 if __name__ == "__main__":
-    tomita4 = Tomita7(max_length=50, seed=0)
-    train, val, test = tomita4.generate_dataset(10, 4, 4)
+    tomita7 = Tomita7(max_length=50, seed=0)
+    train, val, test = tomita7.generate_dataset(10, 4, 4)
     print(train)
     print(val)
     print(test)
