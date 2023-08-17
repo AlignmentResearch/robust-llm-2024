@@ -8,6 +8,7 @@ from robust_llm.language_generators.tomita_base import TomitaBase
 from robust_llm.language_generators.tomita1 import Tomita1
 from robust_llm.language_generators.tomita2 import Tomita2
 from robust_llm.language_generators.tomita4 import Tomita4
+from robust_llm.language_generators.tomita7 import Tomita7
 
 from robust_llm.training import Training
 
@@ -23,6 +24,8 @@ def make_language_generator_from_args(args):
         language_generator = Tomita2(args.max_length)
     elif args.language_generator == "Tomita4":
         language_generator = Tomita4(args.max_length)
+    elif args.language_generator == "Tomita7":
+        language_generator = Tomita7(args.max_length)
     else:
         raise ValueError(f"Unknown language generator: {args.language_generator}")
 
@@ -70,9 +73,9 @@ def main():
 
     parser.add_argument(
         "--language_generator",
-        choices=["Tomita1", "Tomita2", "Tomita4"],
+        choices=["Tomita1", "Tomita2", "Tomita4", "Tomita7"],
         default="Tomita1",
-        help="Choose the regular language to use (Tomita1, Tomita2, Tomita4). "
+        help="Choose the regular language to use (Tomita1, Tomita2, Tomita4, Tomita7). "
         "Defaults to Tomita1.",
     )
     parser.add_argument(
