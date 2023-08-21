@@ -114,20 +114,6 @@ class AdversarialTraining(Training):
 
     # Overrides
     def run_trainer(self):
-        for i in range(self.number_adversarial_rounds):
-            self.run_one_round(i)
-
-    def run_one_round(self, round_number: int):
-
-        if round_number == 0:  # first round
-            print("It's the first round, so we're doing the default training")
-            train_set = self.train_dataset
-            eval_set = self.eval_dataset
-        else:
-            print("It's not the first round, so we're doing adversarial training")
-            train_set = self.adversarial_training_set  # TODO: avoid catastrophic forgetting?
-            eval_set = self.eval_dataset
-
         hf_training_args = TrainingArguments(
             output_dir="adversarial_trainer",
             num_train_epochs=self.train_epochs,
@@ -136,18 +122,37 @@ class AdversarialTraining(Training):
             logging_steps=self.logging_steps,
             report_to=["wandb"],
         )
+
         trainer = Trainer(
             model=self.model,
             args=hf_training_args,
-            train_dataset=train_set,
-            eval_dataset=eval_set,
+            train_dataset=self.train_dataset,
+            eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
         )
-        # Add a callback to print incorrect classifications (needs trainer so it can predict())
+
         trainer.add_callback(PrintIncorrectClassificationsCallback(trainer))
 
+        for i in range(self.number_adversarial_rounds):
+            self.run_one_round(i, trainer)
+
+    def run_one_round(self, round_number: int, trainer: Trainer):
+
+        if round_number == 0:  # first round
+            print("It's the first round, so we're doing the default training")
+        else:
+            print("It's not the first round, so we're doing adversarial training")
+            # TODO: can I do the below?
+            trainer.train_dataset = self.adversarial_training_set  # TODO: avoid catastrophic forgetting?
+
+        # Add a callback to print incorrect classifications (needs trainer so it can predict())
+
         # Perform an initial evaluation, then train
-        eval_dataloader = trainer.get_eval_dataloader(eval_set)
+        eval_dataloader = trainer.get_eval_dataloader(self.eval_dataset)
+
+        # Perform an initial evaluation, then train
+        trainer.evaluate(eval_dataset=self.eval_dataset)
+        trainer.train()
 
         output = trainer.evaluation_loop(
             eval_dataloader,
