@@ -104,3 +104,83 @@ class Training:
         logits, labels = eval_pred
         predictions = np.argmax(logits, axis=-1)
         return self.metric.compute(predictions=predictions, references=labels)
+
+
+@dataclasses.dataclass
+class AdversarialTraining(Training):
+    number_adversarial_rounds: int = 1
+    brute_force_test = False
+    adversarial_training_set = set()
+
+    # Overrides
+    def run_trainer(self):
+        for i in range(self.number_adversarial_rounds):
+            self.run_one_round(i)
+
+    def run_one_round(self, round_number: int):
+
+        if round_number == 0:  # first round
+            print("It's the first round, so we're doing the default training")
+            train_set = self.train_dataset
+            eval_set = self.eval_dataset
+        else:
+            print("It's not the first round, so we're doing adversarial training")
+            train_set = self.adversarial_training_set  # TODO: avoid catastrophic forgetting?
+            eval_set = self.eval_dataset
+
+        hf_training_args = TrainingArguments(
+            output_dir="adversarial_trainer",
+            num_train_epochs=self.train_epochs,
+            eval_steps=self.eval_steps,
+            evaluation_strategy="steps",
+            logging_steps=self.logging_steps,
+            report_to=["wandb"],
+        )
+        trainer = Trainer(
+            model=self.model,
+            args=hf_training_args,
+            train_dataset=train_set,
+            eval_dataset=eval_set,
+            compute_metrics=self.compute_metrics,
+        )
+        # Add a callback to print incorrect classifications (needs trainer so it can predict())
+        trainer.add_callback(PrintIncorrectClassificationsCallback(trainer))
+
+        # Perform an initial evaluation, then train
+        eval_dataloader = trainer.get_eval_dataloader(eval_set)
+
+        output = trainer.evaluation_loop(
+            eval_dataloader,
+            description="Evaluation",
+            # No point gathering the predictions if there are no metrics, otherwise we defer to
+            # self.args.prediction_loss_only
+            prediction_loss_only= None,
+            metric_key_prefix = "adversarial-eval",
+        )
+
+        predictions, label_ids, metrics, num_samples = output
+
+        # Get the incorrect predictions
+        logits = predictions
+        predictions = np.argmax(logits, axis=-1)
+        labels = label_ids
+
+        prediction_outcomes = predictions == labels
+        incorrect_indices = np.where(prediction_outcomes == False)[0].astype(int)
+
+        # Add the incorrectly predicted texts and labels to the adversarial training set
+        for incorrect_index in incorrect_indices:
+            self.adversarial_training_set.add(
+                (
+                    eval_set["text"][incorrect_index],
+                    eval_set["label"][incorrect_index],
+                )
+            )
+
+        # eval_results = trainer.evaluate(eval_dataset=self.eval_dataset)
+        # predictions = []
+        # true_labels = []
+        # trainer.train()
+        #
+
+

@@ -10,7 +10,7 @@ from robust_llm.language_generators.tomita2 import Tomita2
 from robust_llm.language_generators.tomita4 import Tomita4
 from robust_llm.language_generators.tomita7 import Tomita7
 
-from robust_llm.training import Training
+from robust_llm.training import Training, AdversarialTraining
 
 BERT_CONTEXT_LENGTH = 512
 BUFFER = 5
@@ -81,7 +81,7 @@ def main():
     parser.add_argument(
         "--max_length",
         type=int,
-        default=500,
+        default=50,  # 500
         help="The maximum length of the strings to generate.",
     )
     parser.add_argument(
@@ -99,19 +99,19 @@ def main():
     parser.add_argument(
         "--train_set_size",
         type=int,
-        default=1000,
+        default=100,
         help="The size of the train set.",
     )
     parser.add_argument(
         "--val_set_size",
         type=int,
-        default=1000,
+        default=100,
         help="The size of the validation set.",
     )
     parser.add_argument(
         "--test_set_size",
         type=int,
-        default=200,
+        default=100,
         help="The size of the test set.",
     )
 
@@ -150,12 +150,22 @@ def main():
         "bert-base-cased", num_labels=2
     )
 
-    training = Training(
+    # training = Training(
+    #     hparams={},
+    #     train_dataset=tokenized_train_dataset,
+    #     eval_dataset=tokenized_val_dataset,
+    #     model=model,
+    #     train_epochs=args.num_train_epochs,
+    # )
+    # training.run_trainer()
+
+    training = AdversarialTraining(
         hparams={},
         train_dataset=tokenized_train_dataset,
         eval_dataset=tokenized_val_dataset,
         model=model,
         train_epochs=args.num_train_epochs,
+        number_adversarial_rounds=3,
     )
     training.run_trainer()
 
