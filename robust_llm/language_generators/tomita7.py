@@ -19,7 +19,6 @@ def is_0101_all_star(the_list: list[int]):
 
 @dataclasses.dataclass
 class Tomita7(TomitaBase):  # 0*1*0*1*
-
     # Overrides
     def generate_true(self, num: int = 1):
         # Generate a random string that satisfies 0*1*0*1*
@@ -73,8 +72,8 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
         assert isinstance(num, int)
 
         def generate_one():
-            print("low was", np.log(4))
-            print("high was", np.log(self.max_length + 1))
+            # print("low was", np.log(4))
+            # print("high was", np.log(self.max_length + 1))
             # Sample in a log-uniform way
             num_digits = self.rng.uniform(
                 low=np.log(4), high=np.log(self.max_length + 1)
@@ -86,7 +85,7 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
 
             digits = [0]
             while is_0101_all_star(digits):  # this catches the empty list too
-                print("digits were", digits)
+                # print("digits were", digits)
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
                 )

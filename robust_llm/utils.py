@@ -9,3 +9,39 @@ def check_input_length(input_text, tokenizer):
             f"Warning: Input length ({input_length}) exceeds the maximum model length ({max_length})."
         )
         raise ValueError
+
+
+def tokenize_dataset(dataset, tokenizer):
+    # Padding seems necessary in order to avoid an error
+    tokenized_data = tokenizer(dataset["text"], padding="max_length", truncation=True)
+    return {"text": dataset["text"], "label": dataset["label"], **tokenized_data}
+
+
+def get_overlap(smaller_set, larger_set):
+    overlap = []
+    for s in smaller_set["text"]:
+        if s in larger_set["text"]:
+            overlap.append(s)
+    return overlap
+
+
+def print_overlaps(train_set, val_set, test_set):
+    # How much of val set is in train set?
+    train_val_overlap = get_overlap(smaller_set=val_set, larger_set=train_set)
+    print("train val overlap size", len(train_val_overlap))
+    print("train val overlap proportion", len(train_val_overlap) / len(val_set["text"]))
+    print()
+
+    # How much of test set is in train set?
+    train_test_overlap = get_overlap(smaller_set=test_set, larger_set=train_set)
+    print("train test overlap size", len(train_test_overlap))
+    print(
+        "train test overlap proportion", len(train_test_overlap) / len(test_set["text"])
+    )
+    print()
+
+    # How much of test set is in val set?
+    val_test_overlap = get_overlap(smaller_set=test_set, larger_set=val_set)
+    print("val test overlap size", len(val_test_overlap))
+    print("val test overlap proportion", len(val_test_overlap) / len(test_set["text"]))
+    print()
