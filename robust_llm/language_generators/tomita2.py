@@ -4,25 +4,26 @@ import numpy as np
 from robust_llm.language_generators.tomita_base import TomitaBase
 
 
-def is_all_tens(the_list: list[int]):
-    assert len(the_list) > 0  # for simplicity don't allow empty
-
-    # First make sure the list is even
-    if not len(the_list) % 2 == 0:
-        return False
-
-    # Make sure that the list alternates 0 and 1, starting with 1, and ending with 0
-    current_digit = 1
-    for el in the_list:
-        if not el == current_digit:
-            return False
-        current_digit = 1 - current_digit
-
-    return True
-
-
 @dataclasses.dataclass
 class Tomita2(TomitaBase):  # 10*
+    # Overrides
+    def is_in_language(self, the_list: list[int]) -> bool:
+        assert len(the_list) > 0  # for simplicity don't allow empty
+
+        # First make sure the list is even
+        if not len(the_list) % 2 == 0:
+            return False
+
+        # Make sure that the list alternates 0 and 1, starting with 1, and ending with 0
+        current_digit = 1
+        for el in the_list:
+            if not el == current_digit:
+                return False
+            current_digit = 1 - current_digit
+
+        return True
+
+
     # Overrides
     def generate_true(self, num: int = 1):
         # Generate a string of ones of random length, from zero up to length n / 2
@@ -52,7 +53,7 @@ class Tomita2(TomitaBase):  # 10*
                 low=1, high=self.max_length + 1
             )  # don't allow empty
             digits = [1, 0]
-            while is_all_tens(digits):  # this catches the empty list too
+            while self.is_in_language(digits):  # this catches the empty list too
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
                 )

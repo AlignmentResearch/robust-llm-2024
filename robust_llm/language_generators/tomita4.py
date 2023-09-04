@@ -4,23 +4,23 @@ import numpy as np
 from robust_llm.language_generators.tomita_base import TomitaBase
 
 
-def contains_000(the_list: list[int]):
-    assert len(the_list) > 0  # for simplicity don't allow empty
-
-    # Check if the list contains three consecutive zeros
-    for i in range(len(the_list) - 2):
-        if the_list[i] == 0 and the_list[i + 1] == 0 and the_list[i + 2] == 0:
-            return True
-
-    return False
-
-
 @dataclasses.dataclass
 class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
     def __post_init__(self):
         if self.max_length < 3:
             raise ValueError("max_length must be at least 3 for Tomita4")
         super().__post_init__()
+
+    # Overrides
+    def is_in_language(self, the_list: list[int]) -> bool:
+        assert len(the_list) > 0  # for simplicity don't allow empty
+
+        # Check if the list contains three consecutive zeros
+        for i in range(len(the_list) - 2):
+            if the_list[i] == 0 and the_list[i + 1] == 0 and the_list[i + 2] == 0:
+                return False
+
+        return True
 
     # Overrides
     def generate_true(self, num: int = 1):
@@ -46,7 +46,7 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
                     else:
                         digits.append(self.rng.integers(low=0, high=2))
 
-            assert not contains_000(digits)
+            assert self.is_in_language(digits)
 
             return " ".join(
                 [str(el) for el in digits]
@@ -84,7 +84,7 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
             # Insert the "000" into the digits
             digits = np.insert(digits, zeros_location, [0, 0, 0])
 
-            assert contains_000(list(digits))
+            assert not self.is_in_language(list(digits))
 
             return " ".join(
                 [str(el) for el in digits]
@@ -97,7 +97,7 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
 
 
 if __name__ == "__main__":
-    tomita4 = Tomita4(max_length=500, seed=0)
+    tomita4 = Tomita4(max_length=10, seed=0)
     train, val, test = tomita4.generate_dataset(10, 4, 4)
     print(train)
     print(val)

@@ -18,13 +18,17 @@ class TomitaBase:
         self.rng.shuffle(labelled_dataset)
         data, labels = zip(*labelled_dataset)
         return {"text": list(data), "label": list(labels)}
-
+    
     @abc.abstractmethod
-    def generate_true(self, num: int = 1):
+    def is_in_language(self, string: str) -> bool:
         pass
 
     @abc.abstractmethod
-    def generate_false(self, num: int = 1):
+    def generate_true(self, num: int = 1) -> list[str]:
+        pass
+
+    @abc.abstractmethod
+    def generate_false(self, num: int = 1) -> list[str]:
         pass
 
     def generate_dataset(self, train_size=10_000, val_size=3000, test_size=3000):

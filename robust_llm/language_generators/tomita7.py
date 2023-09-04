@@ -8,17 +8,17 @@ from robust_llm.language_generators.tomita_base import TomitaBase
 PATTERN = re.compile("0*1*0*1*")
 
 
-def is_0101_all_star(the_list: list[int]):
-    assert len(the_list) > 0  # for simplicity don't allow empty
-
-    string_list = [str(el) for el in the_list]
-
-    # Check if the list satisfies the regular expression 1*0*1*0*
-    return bool(PATTERN.fullmatch("".join(string_list)))
-
-
 @dataclasses.dataclass
 class Tomita7(TomitaBase):  # 0*1*0*1*
+    # Overrides
+    def is_in_language(self, the_list: list[int]) -> bool:
+        assert len(the_list) > 0  # for simplicity don't allow empty
+
+        string_list = [str(el) for el in the_list]
+
+        # Check if the list satisfies the regular expression 1*0*1*0*
+        return bool(PATTERN.fullmatch("".join(string_list)))
+
     # Overrides
     def generate_true(self, num: int = 1):
         # Generate a random string that satisfies 0*1*0*1*
@@ -53,7 +53,7 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
             if digit_list == []:
                 digit_list.append(self.rng.choice([0, 1]))
 
-            assert is_0101_all_star(digit_list)
+            assert self.is_in_language(digit_list)
 
             return " ".join(
                 [str(el) for el in digit_list]
@@ -84,13 +84,13 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
                 return "1 0 1 0"  # only option when n = 4
 
             digits = [0]
-            while is_0101_all_star(digits):  # this catches the empty list too
+            while self.is_in_language(digits):  # this catches the empty list too
                 # print("digits were", digits)
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
                 )
 
-            assert not is_0101_all_star(digits)
+            assert not self.is_in_language(digits)
 
             return " ".join(
                 [str(el) for el in digits]
@@ -103,7 +103,7 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
 
 
 if __name__ == "__main__":
-    tomita7 = Tomita7(max_length=50, seed=0)
+    tomita7 = Tomita7(max_length=10, seed=0)
     train, val, test = tomita7.generate_dataset(10, 4, 4)
     print(train)
     print(val)
