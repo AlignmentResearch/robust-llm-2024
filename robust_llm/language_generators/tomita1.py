@@ -6,6 +6,9 @@ from robust_llm.language_generators.tomita_base import TomitaBase
 
 @dataclasses.dataclass
 class Tomita1(TomitaBase):  # 1*
+
+    name: str = "tomita1"
+
     # Overrides
     def is_in_language(self, the_list: list[int]) -> bool:
         assert len(the_list) > 0  # for simplicity don't allow empty
@@ -52,28 +55,3 @@ class Tomita1(TomitaBase):  # 1*
         for _ in range(num):  # I think this is hard to parallelize efficiently
             all_strings.append(generate_one())
         return all_strings
-    
-    def sort_saved_binary_strings(self, binary_strings: list):
-        trues = []
-        falses = []
-        for string in binary_strings:
-            if "0" in string:
-                falses.append(string)
-            else:
-                trues.append(string)
-
-        return trues, falses
-    
-
-if __name__ == "__main__":
-    t = Tomita1(50)  
-    for i in range(3, 10):
-        with open(f"robust_llm/datasets/{i}.txt", 'r') as afile:
-            big_list_of_strings = []
-            for line in afile:
-                big_list_of_strings.append(line.rstrip())
-
-        trues, falses = t.sort_saved_binary_strings(big_list_of_strings)
-        print("trues", trues)
-        print("falses", falses)
-        break

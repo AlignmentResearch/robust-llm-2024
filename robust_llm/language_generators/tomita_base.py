@@ -2,11 +2,14 @@ import abc
 import dataclasses
 import numpy as np
 
+from robust_llm.utils import write_lines_to_file
+
 
 @dataclasses.dataclass
 class TomitaBase:
     max_length: int
     seed: int = 42
+    name: str = "tomitabase"
 
     def __post_init__(self):
         self.rng = np.random.default_rng(seed=self.seed)
@@ -62,3 +65,27 @@ class TomitaBase:
         )
 
         return train_set, val_set, test_set
+
+    def sort_saved_binary_strings(self, binary_strings: list):
+        trues = []
+        falses = []
+        for string in binary_strings:
+            int_version = [int(el) for el in string.split(" ")]
+            if self.is_in_language(int_version):
+                trues.append(string)
+            else:
+                falses.append(string)
+
+        return trues, falses
+
+    def make_complete_dataset(self, length: int = 10):
+        with open(f"robust_llm/datasets/{length}.txt", 'r') as afile:
+            big_list_of_strings = []
+            for line in afile:
+                big_list_of_strings.append(line.rstrip())
+
+        trues, falses = self.sort_saved_binary_strings(big_list_of_strings) 
+    
+        # Save the trues and falses as trues_i and falses_i in the tomita1 folder
+        write_lines_to_file(trues, f"/home/dev/robust-llm/robust_llm/datasets/{self.name}/trues_{length}.txt")
+        write_lines_to_file(falses, f"/home/dev/robust-llm/robust_llm/datasets/{self.name}/falses_{length}.txt")

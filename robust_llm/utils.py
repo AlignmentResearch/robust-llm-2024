@@ -1,3 +1,6 @@
+import os
+
+
 def check_input_length(input_text, tokenizer):
     max_length = tokenizer.max_length
 
@@ -45,3 +48,16 @@ def print_overlaps(train_set, val_set, test_set):
     print("val test overlap size", len(val_test_overlap))
     print("val test overlap proportion", len(val_test_overlap) / len(test_set["text"]))
     print()
+
+
+def write_lines_to_file(lines, file_path):
+
+    # If the folder doesn't exist yet, make one
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    
+    # Save the file
+    with open(file_path, "w") as afile:
+        for i, line in enumerate(lines):
+            afile.write(line)
+            if i < len(lines) - 1:
+                afile.write("\n")
