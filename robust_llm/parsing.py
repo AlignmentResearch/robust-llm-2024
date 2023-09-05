@@ -9,11 +9,23 @@ def add_parser_arguments(parser):
         help="Whether to use adversarial training or not.",
     )
     parser.add_argument(
+        "--brute_force_attack",
+        type=bool,
+        default=False,
+        help="Whether to exhaustively test all possible adversarial examples or not.",
+    )
+    parser.add_argument(
+        "--random_sample_attack",
+        type=bool,
+        default=False,
+        help="Whether to randomly sample adversarial examples or not.",
+    )
+    parser.add_argument(
         "--language_generator",
         choices=["Tomita1", "Tomita2", "Tomita4", "Tomita7"],
         default="Tomita4",
         help="Choose the regular language to use (Tomita1, Tomita2, Tomita4, Tomita7). "
-        "Defaults to Tomita4.",
+        "Defaults to Tomita4 because 1 and 2 are rather simple.",
     )
     parser.add_argument(
         "--max_length",

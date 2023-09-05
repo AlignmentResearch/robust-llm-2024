@@ -48,7 +48,7 @@ def main():
     # Set up the training environment
     if args.adversarial_training:
         training = AdversarialTraining(
-            hparams={},
+            hparams={args},
             train_dataset=tokenized_train_dataset,
             eval_dataset=tokenized_val_dataset,
             model=model,
@@ -58,7 +58,7 @@ def main():
         )
     else:
         training = Training(
-            hparams={},
+            hparams={args},
             train_dataset=tokenized_train_dataset,
             eval_dataset=tokenized_val_dataset,
             model=model,
