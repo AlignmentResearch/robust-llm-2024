@@ -158,3 +158,12 @@ robust_llm/wandb/
 
 # PyCharm
 .idea/
+
+# Datasets
+datasets/
+
+# Checkpoints
+adversarial_trainer/
+
+# Configurations
+.vscode/
