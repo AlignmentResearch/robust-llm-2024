@@ -21,7 +21,7 @@ class TomitaBase:
         self.rng.shuffle(labelled_dataset)
         data, labels = zip(*labelled_dataset)
         return {"text": list(data), "label": list(labels)}
-    
+
     @abc.abstractmethod
     def is_in_language(self, string: str) -> bool:
         pass
@@ -79,13 +79,19 @@ class TomitaBase:
         return trues, falses
 
     def make_complete_dataset(self, length: int = 10):
-        with open(f"robust_llm/datasets/{length}.txt", 'r') as afile:
+        with open(f"robust_llm/datasets/{length}.txt", "r") as afile:
             big_list_of_strings = []
             for line in afile:
                 big_list_of_strings.append(line.rstrip())
 
-        trues, falses = self.sort_saved_binary_strings(big_list_of_strings) 
-    
+        trues, falses = self.sort_saved_binary_strings(big_list_of_strings)
+
         # Save the trues and falses as trues_i and falses_i in the tomita1 folder
-        write_lines_to_file(trues, f"/home/dev/robust-llm/robust_llm/datasets/{self.name}/trues_{length}.txt")
-        write_lines_to_file(falses, f"/home/dev/robust-llm/robust_llm/datasets/{self.name}/falses_{length}.txt")
+        write_lines_to_file(
+            trues,
+            f"/home/dev/robust-llm/robust_llm/datasets/{self.name}/trues_{length}.txt",
+        )
+        write_lines_to_file(
+            falses,
+            f"/home/dev/robust-llm/robust_llm/datasets/{self.name}/falses_{length}.txt",
+        )
