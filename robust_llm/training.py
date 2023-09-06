@@ -12,6 +12,7 @@ from transformers import (
 )
 
 from robust_llm.adversarial_trainer import AdversarialTrainer
+from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
 from robust_llm.utils import tokenize_dataset
 
 
@@ -124,7 +125,18 @@ class Training:
 class AdversarialTraining(Training):
     tokenizer: AutoTokenizer
     num_adversarial_training_rounds: int
-    brute_force_test = False
+    language_generator_name: str
+    brute_force_attack: bool
+    brute_force_length: int
+    random_sample_attack: bool
+
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.language_generator_name = self.language_generator_name.lower()
+
+        # Make sure that only one of brute force and random sample is set to true
+        assert not (self.brute_force_attack and self.random_sample_attack)
 
     # Overrides
     def setup_trainer(self):
@@ -154,14 +166,35 @@ class AdversarialTraining(Training):
         # Set up the trainer
         adversarial_trainer = self.setup_trainer()
 
+        # Prepare the attack dataset
+        attack_dataset = None
+        if self.brute_force_attack:
+            # Load in the brute force test set
+            brute_force_dataset = load_adversarial_dataset(
+                self.language_generator_name, self.brute_force_length
+            )
+            tokenized_brute_force_dataset = Dataset.from_dict(
+                tokenize_dataset(brute_force_dataset, self.tokenizer)
+            )
+            attack_dataset = tokenized_brute_force_dataset
+
+        elif self.random_sample_attack:
+            raise NotImplementedError("Random sample attack not implemented yet.")
+
+        else:
+            # Just find mistakes in the eval set
+            attack_dataset = self.eval_dataset
+
         # Run the adversarial training loop
         for _ in range(self.num_adversarial_training_rounds):
             # Train for "one round" (i.e., num_train_epochs) on the train set
             adversarial_trainer.train()
 
-            # Find where the model makes mistakes on the eval set
+            # TODO: sample if we're doing random sample attack
+
+            # Get the incorrect predictions
             incorrect_predictions = self.get_incorrect_predictions(
-                adversarial_trainer, self.eval_dataset
+                adversarial_trainer, attack_dataset
             )
 
             # Check if we have perfect accuracy now. If so, we're done.

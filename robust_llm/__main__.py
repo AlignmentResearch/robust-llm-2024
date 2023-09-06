@@ -48,17 +48,21 @@ def main():
     # Set up the training environment
     if args.adversarial_training:
         training = AdversarialTraining(
-            hparams={args},
+            hparams={},
             train_dataset=tokenized_train_dataset,
             eval_dataset=tokenized_val_dataset,
             model=model,
             train_epochs=args.num_train_epochs,
             num_adversarial_training_rounds=args.num_adversarial_training_rounds,
             tokenizer=tokenizer,
+            language_generator_name=args.language_generator,
+            brute_force_attack=args.brute_force_attack,
+            brute_force_length=args.brute_force_length,
+            random_sample_attack=args.random_sample_attack,
         )
     else:
         training = Training(
-            hparams={args},
+            hparams={},
             train_dataset=tokenized_train_dataset,
             eval_dataset=tokenized_val_dataset,
             model=model,

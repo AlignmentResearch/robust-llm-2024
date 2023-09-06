@@ -5,11 +5,10 @@ from robust_llm.language_generators.tomita7 import Tomita7
 
 
 language_generators = {Tomita1, Tomita2, Tomita4, Tomita7}
-dataset_path = "datasets/"
+DATASET_PATH = "/home/dev/robust-llm/robust_llm/datasets"
 
 
 def make_single_length_datasets():
-
     for language_generator in language_generators:
         t = language_generator(max_length=50)
 
@@ -42,9 +41,24 @@ def make_up_to_length_dataset(dataset_path, length):
 def make_all_up_to_length_datasets(length):
     for language_generator in language_generators:
         for i in range(1, length + 1):
-            dataset_path = f"/home/dev/robust-llm/robust_llm/datasets/{language_generator.name}"
+            dataset_path = f"{DATASET_PATH}/{language_generator.name}"
             make_up_to_length_dataset(dataset_path, i)
 
 
+# Load in a dataset of up to length "length"
+def load_adversarial_dataset(language_generator_name: str, length: int):
+    dataset_path = f"{DATASET_PATH}/{language_generator_name}"
+    with open(f"{dataset_path}/trues_up_to_{length}.txt", "r") as f:
+        trues = f.read().splitlines()
+    with open(f"{dataset_path}/falses_up_to_{length}.txt", "r") as f:
+        falses = f.read().splitlines()
+
+    # Make the dataset as a dict with "text" and "label" keys
+    dataset = {"text": trues + falses, "label": [1] * len(trues) + [0] * len(falses)}
+    # TODO: do we need to shuffle it too, or is that managed by the Trainer?
+
+    return dataset
+
+
 if __name__ == "__main__":
-    make_all_up_to_length_datasets(25)
+    make_all_up_to_length_datasets(5)

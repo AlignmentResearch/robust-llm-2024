@@ -15,6 +15,12 @@ def add_parser_arguments(parser):
         help="Whether to exhaustively test all possible adversarial examples or not.",
     )
     parser.add_argument(
+        "--brute_force_length",
+        type=int,
+        default=-1,
+        help="Up to which length strings should be exhaustively tested.",
+    )
+    parser.add_argument(
         "--random_sample_attack",
         type=bool,
         default=False,
