@@ -6,7 +6,6 @@ from robust_llm.language_generators.tomita_base import TomitaBase
 
 @dataclasses.dataclass
 class Tomita2(TomitaBase):  # 10*
-
     name: str = "tomita2"
 
     # Overrides
@@ -25,7 +24,6 @@ class Tomita2(TomitaBase):  # 10*
             current_digit = 1 - current_digit
 
         return True
-
 
     # Overrides
     def generate_true(self, num: int = 1):

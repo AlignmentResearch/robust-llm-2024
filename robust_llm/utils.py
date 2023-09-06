@@ -51,10 +51,9 @@ def print_overlaps(train_set, val_set, test_set):
 
 
 def write_lines_to_file(lines, file_path):
-
     # If the folder doesn't exist yet, make one
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    
+
     # Save the file
     with open(file_path, "w") as afile:
         for i, line in enumerate(lines):

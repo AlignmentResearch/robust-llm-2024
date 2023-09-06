@@ -6,14 +6,12 @@ from robust_llm.language_generators.tomita_base import TomitaBase
 
 @dataclasses.dataclass
 class Tomita1(TomitaBase):  # 1*
-
     name: str = "tomita1"
 
     # Overrides
     def is_in_language(self, the_list: list[int]) -> bool:
         assert len(the_list) > 0  # for simplicity don't allow empty
         return all(digit == 1 for digit in the_list)
-
 
     # Overrides
     def generate_true(self, num: int = 1):

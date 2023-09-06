@@ -10,9 +10,8 @@ PATTERN = re.compile("0*1*0*1*")
 
 @dataclasses.dataclass
 class Tomita7(TomitaBase):  # 0*1*0*1*
-
     name: str = "tomita7"
-    
+
     # Overrides
     def is_in_language(self, the_list: list[int]) -> bool:
         assert len(the_list) > 0  # for simplicity don't allow empty

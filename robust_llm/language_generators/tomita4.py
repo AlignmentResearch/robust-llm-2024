@@ -6,7 +6,6 @@ from robust_llm.language_generators.tomita_base import TomitaBase
 
 @dataclasses.dataclass
 class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
-    
     name: str = "tomita4"
 
     def __post_init__(self):
