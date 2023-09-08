@@ -1,6 +1,7 @@
 import dataclasses
 import evaluate
 import numpy as np
+import wandb
 
 from datasets import concatenate_datasets, Dataset
 from transformers import (
@@ -91,6 +92,14 @@ class Training:
             logging_steps=self.logging_steps,
             report_to=["wandb"],
         )
+
+        # Initialize wandb before Trainer init?
+        # https://docs.wandb.ai/guides/integrations/huggingface#customize-wandbinit
+        # wandb.init(project="robust-llm", 
+        #    name="bert-base-high-lr",
+        #    tags=["baseline", "high-lr"],
+        #    group="bert")
+
         trainer = Trainer(
             model=self.model,
             args=hf_training_args,
@@ -185,9 +194,12 @@ class AdversarialTraining(Training):
             # Just find mistakes in the eval set
             attack_dataset = self.eval_dataset
 
+        # Set up a wandb table to log the incorrect predictions
+
         # Run the adversarial training loop
-        for _ in range(self.num_adversarial_training_rounds):
-            # Train for "one round" (i.e., num_train_epochs) on the train set
+        for i in range(self.num_adversarial_training_rounds):
+            # Train for "one round" (i.e., num_train_epochs) on the (eventually, adversarial example-augmented) train set
+            # Note that the first round is just normal training on the train set
             adversarial_trainer.train()
 
             # TODO: sample if we're doing random sample attack
@@ -201,6 +213,12 @@ class AdversarialTraining(Training):
             if len(incorrect_predictions["adversarial_string"]) == 0:
                 print("Model got perfect accuracy, so stopping adversarial training.")
                 break
+
+            # Append the incorrect predictions to the table (adv training round, text, incorrect label, correct label)
+            table = wandb.Table(columns=["example text", "incorrect label", "correct label"])
+            for text_string, correct_label in zip(incorrect_predictions["adversarial_string"], incorrect_predictions["true_label"]):
+                table.add_data(text_string, 1 - correct_label, correct_label)
+            wandb.log({f"successful_attacks_after_round_{i}": table}, commit=False)
 
             # Add the incorrect predictions to the adversarial dataset
             # If we already added that incorrect prediction, don't add it again
@@ -221,7 +239,7 @@ class AdversarialTraining(Training):
                         text_true_label
                     )
 
-    def get_incorrect_predictions(self, trainer: Trainer, dataset: Dataset):
+    def get_incorrect_predictions(self, trainer: Trainer, dataset: Dataset) -> dict[str, list]:
         # Get model outputs on the dataset provided
         eval_dataloader = trainer.get_eval_dataloader(dataset)
 
