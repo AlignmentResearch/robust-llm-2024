@@ -10,10 +10,11 @@ from transformers import (
     Trainer,
     TrainerCallback,
 )
+from typing_extensions import override
 
 from robust_llm.adversarial_trainer import AdversarialTrainer
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
-from robust_llm.utils import tokenize_dataset
+from robust_llm.utils import get_incorrect_predictions, tokenize_dataset
 
 
 class PrintIncorrectClassificationsCallback(TrainerCallback):
@@ -23,29 +24,14 @@ class PrintIncorrectClassificationsCallback(TrainerCallback):
         self.trainer = trainer
 
     def on_evaluate(self, args, state, control, **kwargs):
-        model = kwargs["model"]
-        eval_dataloader = kwargs["eval_dataloader"]
+        incorrect_predictions = get_incorrect_predictions(
+            trainer=self.trainer, dataset=self.trainer.eval_dataset
+        )
 
-        # Get the incorrect predictions
-        outputs = self.trainer.predict(test_dataset=self.trainer.eval_dataset)
-
-        logits = outputs.predictions
-        predictions = np.argmax(logits, axis=-1)
-        labels = outputs.label_ids
-
-        prediction_outcomes = predictions == labels
-        incorrect_indices = np.where(prediction_outcomes == False)[0].astype(int)
-
-        incorrectly_predicted_texts = [
-            self.trainer.eval_dataset["text"][incorrect_index]
-            for incorrect_index in incorrect_indices
-        ]
-        incorrectly_predicted_true_labels = [
-            self.trainer.eval_dataset["label"][incorrect_index]
-            for incorrect_index in incorrect_indices
-        ]
+        incorrectly_predicted_texts = incorrect_predictions["text"]
+        incorrectly_predicted_true_labels = incorrect_predictions["label"]
         incorrectly_predicted_predicted_labels = [
-            predictions[incorrect_index] for incorrect_index in incorrect_indices
+            1 - label for label in incorrect_predictions["label"]
         ]
 
         if len(incorrectly_predicted_texts) == 0:
@@ -138,7 +124,7 @@ class AdversarialTraining(Training):
         # Make sure that only one of brute force and random sample is set to true
         assert not (self.brute_force_attack and self.random_sample_attack)
 
-    # Overrides
+    @override
     def setup_trainer(self):
         hf_training_args = TrainingArguments(
             output_dir="adversarial_trainer",
@@ -161,7 +147,7 @@ class AdversarialTraining(Training):
 
         return trainer
 
-    # Overrides
+    @override
     def run_trainer(self):
         # Set up the trainer
         adversarial_trainer = self.setup_trainer()
@@ -193,7 +179,7 @@ class AdversarialTraining(Training):
             # TODO: sample if we're doing random sample attack
 
             # Get the incorrect predictions
-            incorrect_predictions = self.get_incorrect_predictions(
+            incorrect_predictions = get_incorrect_predictions(
                 adversarial_trainer, attack_dataset
             )
 
@@ -208,48 +194,9 @@ class AdversarialTraining(Training):
                 incorrect_predictions["adversarial_string"],
                 incorrect_predictions["true_label"],
             ):
-                if (
+                adversarial_trainer.adversarial_examples["adversarial_string"].append(
                     text_string
-                    not in adversarial_trainer.adversarial_examples[
-                        "adversarial_string"
-                    ]
-                ):
-                    adversarial_trainer.adversarial_examples[
-                        "adversarial_string"
-                    ].append(text_string)
-                    adversarial_trainer.adversarial_examples["true_label"].append(
-                        text_true_label
-                    )
-
-    def get_incorrect_predictions(self, trainer: Trainer, dataset: Dataset):
-        # Get model outputs on the dataset provided
-        eval_dataloader = trainer.get_eval_dataloader(dataset)
-
-        output = trainer.evaluation_loop(
-            eval_dataloader,
-            description="Evaluation",
-            # No point gathering the predictions if there are no metrics,
-            # otherwise we defer to self.args.prediction_loss_only
-            prediction_loss_only=None,
-            metric_key_prefix="adversarial-eval",
-        )
-
-        logits, labels, metrics, num_samples = output
-
-        # Extract the incorrect predictions
-        predictions = np.argmax(logits, axis=-1)
-
-        prediction_outcomes = predictions == labels
-        incorrect_indices = np.where(prediction_outcomes == False)[0].astype(int)
-
-        # Return the incorrectly predicted examples, along with their true labels
-        incorrect_predictions = {"adversarial_string": [], "true_label": []}
-        for incorrect_index in incorrect_indices:
-            incorrect_predictions["adversarial_string"].append(
-                dataset["text"][incorrect_index]
-            )
-            incorrect_predictions["true_label"].append(
-                dataset["label"][incorrect_index]
-            )
-
-        return incorrect_predictions
+                )
+                adversarial_trainer.adversarial_examples["true_label"].append(
+                    text_true_label
+                )

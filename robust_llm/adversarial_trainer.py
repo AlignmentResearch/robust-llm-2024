@@ -1,3 +1,4 @@
+from typing_extensions import override
 from datasets import concatenate_datasets, Dataset
 from transformers import Trainer
 
@@ -11,7 +12,7 @@ class AdversarialTrainer(Trainer):
         self.adversarial_examples: dict = {"adversarial_string": [], "true_label": []}
         self.adversarial_examples_seen_so_far: int = 0
 
-    # Overrides
+    @override
     def get_train_dataloader(self):
         # Augment the train set with the new adversarial examples
         if self.adversarial_examples[
@@ -47,7 +48,7 @@ class AdversarialTrainer(Trainer):
                 ]
             )
 
-            # Update the pointer to the end of the adversarial examples
+            # Update the count of the adversarial examples seen so far
             self.adversarial_examples_seen_so_far = len(
                 self.adversarial_examples["adversarial_string"]
             )

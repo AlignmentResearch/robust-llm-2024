@@ -36,7 +36,7 @@ def add_parser_arguments(parser):
     parser.add_argument(
         "--max_length",
         type=int,
-        default=50,  # 500
+        default=50,
         help="The maximum length of the strings to generate.",
     )
     parser.add_argument(
