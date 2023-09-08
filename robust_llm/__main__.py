@@ -6,10 +6,6 @@ from robust_llm.parsing import setup_argument_parser
 from robust_llm.training import Training, AdversarialTraining
 from robust_llm.utils import print_overlaps, tokenize_dataset
 
-BERT_CONTEXT_LENGTH = 512
-BUFFER = 5
-CONTEXT_LENGTH = BERT_CONTEXT_LENGTH - 3 - BUFFER  # 3 for special tokens
-
 
 def main():
     # Setup the argument parser for the language classification task
