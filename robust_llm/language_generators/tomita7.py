@@ -2,6 +2,8 @@ import dataclasses
 import numpy as np
 import re
 
+from typing_extensions import override
+
 from robust_llm.language_generators.tomita_base import TomitaBase
 
 
@@ -12,16 +14,15 @@ PATTERN = re.compile("0*1*0*1*")
 class Tomita7(TomitaBase):  # 0*1*0*1*
     name: str = "tomita7"
 
-    # Overrides
+    @override
     def is_in_language(self, the_list: list[int]) -> bool:
         assert len(the_list) > 0  # for simplicity don't allow empty
 
         string_list = [str(el) for el in the_list]
 
-        # Check if the list satisfies the regular expression 1*0*1*0*
         return bool(PATTERN.fullmatch("".join(string_list)))
 
-    # Overrides
+    @override
     def generate_true(self, num: int = 1):
         # Generate a random string that satisfies 0*1*0*1*
         # We do this by choosing the four cutoff locations, and then filling in the digits in between
@@ -66,16 +67,14 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
             all_strings.append(generate_one())
         return all_strings
 
-    # Overrides
+    @override
     def generate_false(self, num: int = 1):
-        # Generate a random string of 0s and 1s of random length, from zero up to length n,
-        # checking to make sure it's not all ones
+        # Generate a random string that does not satisfy 0*1*0*1*.
+        # Generally we do this by randomly sampling and then checking.
         assert num > 0
         assert isinstance(num, int)
 
         def generate_one():
-            # print("low was", np.log(4))
-            # print("high was", np.log(self.max_length + 1))
             # Sample in a log-uniform way
             num_digits = self.rng.uniform(
                 low=np.log(4), high=np.log(self.max_length + 1)
@@ -87,7 +86,6 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
 
             digits = [0]
             while self.is_in_language(digits):  # this catches the empty list too
-                # print("digits were", digits)
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
                 )

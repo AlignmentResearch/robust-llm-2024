@@ -1,5 +1,6 @@
 import abc
 import dataclasses
+import git
 import numpy as np
 
 from robust_llm.utils import write_lines_to_file
@@ -49,15 +50,15 @@ class TomitaBase:
         assert test_size % 2 == 0
 
         total_size = train_size + val_size + test_size
-        true_size = int(total_size / 2)
-        false_size = int(total_size / 2)
+        true_size = total_size // 2
+        false_size = total_size // 2
 
         trues = self.generate_true(num=true_size)
         falses = self.generate_false(num=false_size)
 
-        half_train_size = int(train_size / 2)
-        half_val_size = int(val_size / 2)
-        half_test_size = int(test_size / 2)
+        half_train_size = train_size // 2
+        half_val_size = val_size // 2
+        half_test_size = test_size // 2
 
         train_set = self.label_and_shuffle(
             trues[:half_train_size], falses[:half_train_size]
@@ -85,7 +86,12 @@ class TomitaBase:
         return trues, falses
 
     def make_complete_dataset(self, length: int = 10):
-        with open(f"robust_llm/datasets/{length}.txt", "r") as afile:
+
+        # Get the path to save in
+        repo = git.Repo('.', search_parent_directories=True)
+        path_to_repo = repo.working_dir
+
+        with open(f"{path_to_repo}/robust_llm/datasets/{length}.txt", "r") as afile:
             big_list_of_strings = []
             for line in afile:
                 big_list_of_strings.append(line.rstrip())
@@ -95,9 +101,9 @@ class TomitaBase:
         # Save the trues and falses as trues_i and falses_i in the tomita1 folder
         write_lines_to_file(
             trues,
-            f"/home/dev/robust-llm/robust_llm/datasets/{self.name}/trues_{length}.txt",
+            f"{path_to_repo}/robust_llm/datasets/{self.name}/trues_{length}.txt",
         )
         write_lines_to_file(
             falses,
-            f"/home/dev/robust-llm/robust_llm/datasets/{self.name}/falses_{length}.txt",
+            f"{path_to_repo}/robust_llm/datasets/{self.name}/falses_{length}.txt",
         )

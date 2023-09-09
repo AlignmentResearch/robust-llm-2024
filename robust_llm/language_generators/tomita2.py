@@ -1,24 +1,26 @@
 import dataclasses
 import numpy as np
 
+from typing_extensions import override
+
 from robust_llm.language_generators.tomita_base import TomitaBase
 
 
 @dataclasses.dataclass
-class Tomita2(TomitaBase):  # 10*
+class Tomita2(TomitaBase):  # (10)*
     name: str = "tomita2"
 
-    # Overrides
-    def is_in_language(self, the_list: list[int]) -> bool:
-        assert len(the_list) > 0  # for simplicity don't allow empty
+    @override
+    def is_in_language(self, digits: list[int]) -> bool:
+        assert len(digits) > 0  # for simplicity don't allow empty
 
         # First make sure the list is even
-        if not len(the_list) % 2 == 0:
+        if not len(digits) % 2 == 0:
             return False
 
         # Make sure that the list alternates 0 and 1, starting with 1, and ending with 0
         current_digit = 1
-        for el in the_list:
+        for el in digits:
             if not el == current_digit:
                 return False
             current_digit = 1 - current_digit
@@ -44,8 +46,6 @@ class Tomita2(TomitaBase):  # 10*
         ]  # put spaces between the digits for more natural tokenization
 
     def generate_false(self, num: int = 1):
-        # Generate a random string of 0s and 1s of random length, from zero up to length n,
-        # checking to make sure it's not all ones
         assert num > 0
         assert isinstance(num, int)
 
@@ -69,8 +69,12 @@ class Tomita2(TomitaBase):  # 10*
 
 
 if __name__ == "__main__":
-    tomita2 = Tomita2(max_length=10)
-    train, val, test = tomita2.generate_dataset(10, 4, 4)
+    tomita2 = Tomita2(
+        max_length=10
+    )  # 10 is fine since this is just to test if it looks reasonable
+    train, val, test = tomita2.generate_dataset(
+        10, 4, 4
+    )  # these are fine since just need to ensure it looks ok in terms of diversity and correctness
     print(train)
     print(val)
     print(test)

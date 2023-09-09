@@ -41,11 +41,13 @@ def main():
     tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
     tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
 
-    base_training_args = {"hparams": {},
+    base_training_args = {
+        "hparams": {},
         "train_dataset": tokenized_train_dataset,
         "eval_dataset": tokenized_val_dataset,
         "model": model,
-        "train_epochs": args.num_train_epochs}
+        "train_epochs": args.num_train_epochs,
+    }
 
     # Set up the training environment
     if args.adversarial_training:

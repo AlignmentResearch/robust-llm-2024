@@ -1,4 +1,8 @@
+import numpy as np
 import os
+
+from datasets import Dataset
+from transformers import Trainer
 
 
 def check_input_length(input_text, tokenizer):
@@ -20,12 +24,10 @@ def tokenize_dataset(dataset, tokenizer):
     return {"text": dataset["text"], "label": dataset["label"], **tokenized_data}
 
 
-def get_overlap(smaller_set, larger_set):
-    overlap = []
-    for s in smaller_set["text"]:
-        if s in larger_set["text"]:
-            overlap.append(s)
-    return overlap
+def get_overlap(
+    smaller_dataset: dict[str, list[str]], larger_dataset: dict[str, list[str]]
+) -> list[str]:
+    return list(set(smaller_dataset["text"]).intersection(set(larger_dataset["text"])))
 
 
 def print_overlaps(train_set, val_set, test_set):
@@ -60,3 +62,21 @@ def write_lines_to_file(lines, file_path):
             afile.write(line)
             if i < len(lines) - 1:
                 afile.write("\n")
+
+
+def get_incorrect_predictions(trainer: Trainer, dataset: Dataset) -> dict[str, list]:
+    outputs = trainer.predict(test_dataset=dataset)
+    logits = outputs.predictions
+    labels = outputs.label_ids
+
+    # Extract the incorrect predictions
+    predictions = np.argmax(logits, axis=-1)
+    incorrect_indices = np.where(predictions != labels)[0].astype(int)
+
+    # Return the incorrectly predicted examples, along with their true labels
+    incorrect_predictions = {"text": [], "label": []}
+    for incorrect_index in incorrect_indices:
+        incorrect_predictions["text"].append(dataset["text"][incorrect_index])
+        incorrect_predictions["label"].append(dataset["label"][incorrect_index])
+
+    return incorrect_predictions

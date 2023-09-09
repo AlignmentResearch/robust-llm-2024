@@ -14,11 +14,15 @@ class AdversarialTrainer(Trainer):
 
     @override
     def get_train_dataloader(self):
+        # This method is called at the start of each training loop, when my_trainer.train() is called
+        # In turn, the train_dataloader it returns is called at the start of each training epoch
+        # https://github.com/huggingface/transformers/blob/5a4f340df74b42b594aedf60199eea95cdb9bed0/src/transformers/trainer.py#L812
+
         # Augment the train set with the new adversarial examples
         if self.adversarial_examples[
             "adversarial_string"
         ] != [] and self.adversarial_examples_seen_so_far < len(
-            self.adversarial_examples
+            self.adversarial_examples["text"]
         ):
             # We only want the *new* examples
             new_adversarial_examples = {

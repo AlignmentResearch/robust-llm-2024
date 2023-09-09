@@ -1,6 +1,8 @@
 import dataclasses
 import numpy as np
 
+from typing_extensions import override
+
 from robust_llm.language_generators.tomita_base import TomitaBase
 
 
@@ -13,18 +15,18 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
             raise ValueError("max_length must be at least 3 for Tomita4")
         super().__post_init__()
 
-    # Overrides
-    def is_in_language(self, the_list: list[int]) -> bool:
-        assert len(the_list) > 0  # for simplicity don't allow empty
+    @override
+    def is_in_language(self, digits: list[int]) -> bool:
+        assert len(digits) > 0  # for simplicity don't allow empty
 
         # Check if the list contains three consecutive zeros
-        for i in range(len(the_list) - 2):
-            if the_list[i] == 0 and the_list[i + 1] == 0 and the_list[i + 2] == 0:
+        for i in range(len(digits) - 2):
+            if digits[i] == 0 and digits[i + 1] == 0 and digits[i + 2] == 0:
                 return False
 
         return True
 
-    # Overrides
+    @override
     def generate_true(self, num: int = 1):
         # Generate a random string that doesn't contain three consecutive zeros
         assert num > 0
@@ -59,10 +61,8 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
             all_strings.append(generate_one())
         return all_strings
 
-    # Overrides
+    @override
     def generate_false(self, num: int = 1):
-        # Generate a random string of 0s and 1s of random length, from zero up to length n,
-        # checking to make sure it's not all ones
         assert num > 0
         assert isinstance(num, int)
 
