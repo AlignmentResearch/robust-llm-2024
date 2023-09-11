@@ -1,6 +1,8 @@
 import dataclasses
 import numpy as np
 
+from typing_extensions import override
+
 from robust_llm.language_generators.tomita_base import TomitaBase
 
 
@@ -8,14 +10,14 @@ from robust_llm.language_generators.tomita_base import TomitaBase
 class Tomita1(TomitaBase):  # 1*
     name: str = "tomita1"
 
-    # Overrides
-    def is_in_language(self, the_list: list[int]) -> bool:
-        assert len(the_list) > 0  # for simplicity don't allow empty
-        return all(digit == 1 for digit in the_list)
+    @override
+    def is_in_language(self, digits: list[int]) -> bool:
+        assert len(digits) > 0  # for simplicity don't allow empty
+        return all(digit == 1 for digit in digits)
 
-    # Overrides
+    @override
     def generate_true(self, num: int = 1):
-        # Generate a string of ones of random length, from zero up to length n
+        # Generate a string of ones of random length, from one up to length num
         assert num > 0
         assert isinstance(num, int)
 
@@ -29,10 +31,10 @@ class Tomita1(TomitaBase):  # 1*
             " ".join("1" * el) for el in num
         ]  # put spaces between the digits for more natural tokenization
 
-    # Overrides
+    @override
     def generate_false(self, num: int = 1):
-        # Generate a random string of 0s and 1s of random length, from zero up to length n,
-        # checking to make sure it's not all ones
+        # Generate a random string of 0s and 1s of random length,
+        # from zero up to length num, checking to make sure it's not all ones
         assert num > 0
         assert isinstance(num, int)
 

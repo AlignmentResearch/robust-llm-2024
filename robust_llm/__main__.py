@@ -6,10 +6,6 @@ from robust_llm.parsing import setup_argument_parser
 from robust_llm.training import Training, AdversarialTraining
 from robust_llm.utils import print_overlaps, tokenize_dataset
 
-BERT_CONTEXT_LENGTH = 512
-BUFFER = 5
-CONTEXT_LENGTH = BERT_CONTEXT_LENGTH - 3 - BUFFER  # 3 for special tokens
-
 
 def main():
     # Setup the argument parser for the language classification task
@@ -27,9 +23,9 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
     print()
-    print("train_size", args.train_set_size)
-    print("val_size", args.val_set_size)
-    print("test_size", args.test_set_size)
+    print("train_size:", args.train_set_size)
+    print("val_size:", args.val_set_size)
+    print("test_size:", args.test_set_size)
     print()
 
     train_set, val_set, test_set = language_generator.generate_dataset(
@@ -45,14 +41,18 @@ def main():
     tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
     tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
 
+    base_training_args = {
+        "hparams": {},
+        "train_dataset": tokenized_train_dataset,
+        "eval_dataset": tokenized_val_dataset,
+        "model": model,
+        "train_epochs": args.num_train_epochs,
+    }
+
     # Set up the training environment
     if args.adversarial_training:
         training = AdversarialTraining(
-            hparams={},
-            train_dataset=tokenized_train_dataset,
-            eval_dataset=tokenized_val_dataset,
-            model=model,
-            train_epochs=args.num_train_epochs,
+            **base_training_args,
             num_adversarial_training_rounds=args.num_adversarial_training_rounds,
             tokenizer=tokenizer,
             language_generator_name=args.language_generator,
@@ -62,11 +62,7 @@ def main():
         )
     else:
         training = Training(
-            hparams={},
-            train_dataset=tokenized_train_dataset,
-            eval_dataset=tokenized_val_dataset,
-            model=model,
-            train_epochs=args.num_train_epochs,
+            **base_training_args,
         )
 
     # Perform the training
@@ -79,16 +75,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# adv_dataset = []
-# trainer = CustomTrainer(..., adv_dataset)
-# for _ in range(num_adv_iterations):
-#   # outer training loop
-#   trainer.train()  # train for one epoch
-#   adversary.attack()  # find vulnerabilities
-#   adv_dataset.append(adversary.vulnerabilities())
-
-# class CustomTrainer(Trainer):
-#   def get_train_dataloader():
-#      # concatenate train_dataset with adversary_dataset
