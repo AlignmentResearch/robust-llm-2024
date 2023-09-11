@@ -86,9 +86,8 @@ class TomitaBase:
         return trues, falses
 
     def make_complete_dataset(self, length: int = 10):
-
         # Get the path to save in
-        repo = git.Repo('.', search_parent_directories=True)
+        repo = git.Repo(".", search_parent_directories=True)
         path_to_repo = repo.working_dir
 
         with open(f"{path_to_repo}/robust_llm/datasets/{length}.txt", "r") as afile:
@@ -98,7 +97,7 @@ class TomitaBase:
 
         trues, falses = self.sort_saved_binary_strings(big_list_of_strings)
 
-        # Save the trues and falses as trues_i and falses_i in the tomita1 folder
+        # Save the trues and falses as trues_i and falses_i in the 'self.name' folder
         write_lines_to_file(
             trues,
             f"{path_to_repo}/robust_llm/datasets/{self.name}/trues_{length}.txt",

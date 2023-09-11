@@ -58,10 +58,7 @@ def write_lines_to_file(lines, file_path):
 
     # Save the file
     with open(file_path, "w") as afile:
-        for i, line in enumerate(lines):
-            afile.write(line)
-            if i < len(lines) - 1:
-                afile.write("\n")
+        afile.writelines(lines)
 
 
 def get_incorrect_predictions(trainer: Trainer, dataset: Dataset) -> dict[str, list]:
