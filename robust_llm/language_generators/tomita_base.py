@@ -6,17 +6,19 @@ import numpy as np
 from robust_llm.utils import write_lines_to_file
 
 
-BERT_CONTEXT_LENGTH = 512
-BUFFER = 10
-FINAL_SPECIAL_TOKEN_LENGTH = 3
-MAX_BERT_CONTEXT_LENGTH = BERT_CONTEXT_LENGTH - BUFFER - FINAL_SPECIAL_TOKEN_LENGTH
-
-
 @dataclasses.dataclass
 class TomitaBase:
-    max_length: int = MAX_BERT_CONTEXT_LENGTH
     seed: int = 42
     name: str = "tomitabase"
+
+    # Model specific configuration. Defaults to BERT.
+    context_length: int = 512
+    context_buffer: int = 10
+    final_special_token_length: int = 3
+
+    @property
+    def max_length(self):
+        return self.context_length - self.context_buffer - self.final_special_token_length
 
     def __post_init__(self):
         self.rng = np.random.default_rng(seed=self.seed)
