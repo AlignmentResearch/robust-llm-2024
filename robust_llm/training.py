@@ -3,7 +3,8 @@ import evaluate
 import numpy as np
 import wandb
 
-from datasets import concatenate_datasets, Dataset
+from datasets import Dataset
+
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -58,6 +59,9 @@ class PrintIncorrectClassificationsCallback(TrainerCallback):
 
 @dataclasses.dataclass
 class Training:
+    """
+    Manage training and evaluation of a model.
+    """
     hparams: dict
     train_dataset: Dataset
     eval_dataset: Dataset
@@ -92,7 +96,6 @@ class Training:
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
-            tokenizer=self.tokenizer,
         )
         # Add a callback to print incorrect classifications (needs trainer so it can predict())
         trainer.add_callback(PrintIncorrectClassificationsCallback(trainer))
@@ -196,7 +199,7 @@ class AdversarialTraining(Training):
             )
 
             # Check if we have perfect accuracy now. If so, we're done.
-            if len(incorrect_predictions["adversarial_string"]) == 0:
+            if len(incorrect_predictions["text"]) == 0:
                 print("Model got perfect accuracy, so stopping adversarial training.")
                 break
 
@@ -213,13 +216,13 @@ class AdversarialTraining(Training):
 
             # Add the incorrect predictions to the adversarial dataset
             # If we already added that incorrect prediction, don't add it again
-            for text_string, text_true_label in zip(
-                incorrect_predictions["adversarial_string"],
-                incorrect_predictions["true_label"],
+            for text, true_label in zip(
+                incorrect_predictions["text"],
+                incorrect_predictions["label"],  # true label
             ):
-                adversarial_trainer.adversarial_examples["adversarial_string"].append(
-                    text_string
+                adversarial_trainer.adversarial_examples["text"].append(
+                    text
                 )
-                adversarial_trainer.adversarial_examples["true_label"].append(
-                    text_true_label
+                adversarial_trainer.adversarial_examples["label"].append(
+                    true_label
                 )
