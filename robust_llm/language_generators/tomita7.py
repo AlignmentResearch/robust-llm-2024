@@ -88,7 +88,7 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
             while self.is_in_language(digits):  # this catches the empty list too
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
-                )
+                ).tolist()
 
             assert not self.is_in_language(digits)
 

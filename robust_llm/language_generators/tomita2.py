@@ -57,7 +57,7 @@ class Tomita2(TomitaBase):  # (10)*
             while self.is_in_language(digits):  # this catches the empty list too
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
-                )
+                ).tolist()
             return " ".join(
                 [str(el) for el in digits]
             )  # put spaces between the digits for more natural tokenization

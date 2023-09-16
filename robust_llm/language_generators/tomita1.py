@@ -21,14 +21,14 @@ class Tomita1(TomitaBase):  # 1*
         assert num > 0
         assert isinstance(num, int)
 
-        num = self.rng.integers(
+        string_lengths = self.rng.integers(
             low=1,  # for simplicity, don't allow empty string
             high=self.max_length + 1,
             size=(num,),
             dtype=np.int32,
         )
         return [
-            " ".join("1" * el) for el in num
+            " ".join("1" * el) for el in string_lengths
         ]  # put spaces between the digits for more natural tokenization
 
     @override
@@ -46,7 +46,7 @@ class Tomita1(TomitaBase):  # 1*
             while self.is_in_language(digits):  # this catches the empty list too
                 digits = self.rng.integers(
                     low=0, high=2, size=(num_digits,), dtype=np.int8
-                )
+                ).tolist()
             return " ".join(
                 [str(el) for el in digits]
             )  # put spaces between the digits for more natural tokenization
