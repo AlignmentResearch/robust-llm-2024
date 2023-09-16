@@ -8,70 +8,41 @@ from datasets import Dataset
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    EvalPrediction,
+    PreTrainedModel,
     TrainingArguments,
     Trainer,
-    TrainerCallback,
 )
+from typing import Optional
 from typing_extensions import override
 
 from robust_llm.adversarial_trainer import AdversarialTrainer
+from robust_llm.callbacks import (
+    AdversarialTrainerLoggingCallback,
+    TrainerLoggingCallback,
+)
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
 from robust_llm.utils import get_incorrect_predictions, tokenize_dataset
 
 
-class PrintIncorrectClassificationsCallback(TrainerCallback):
-    # TODO: log this correctly to wandb
-    def __init__(self, trainer: Trainer):
-        super().__init__()
-        self.trainer = trainer
-
-    def on_evaluate(self, args, state, control, **kwargs):
-        incorrect_predictions = get_incorrect_predictions(
-            trainer=self.trainer, dataset=self.trainer.eval_dataset
-        )
-
-        incorrectly_predicted_texts = incorrect_predictions["text"]
-        incorrectly_predicted_true_labels = incorrect_predictions["label"]
-        incorrectly_predicted_predicted_labels = [
-            1 - label for label in incorrect_predictions["label"]
-        ]
-
-        if len(incorrectly_predicted_texts) == 0:
-            print("\nAll eval texts predicted correctly.\n")
-            return
-
-        if len(incorrectly_predicted_texts) > 20:
-            print(
-                f"\nPrinting 20 (of the {len(incorrectly_predicted_texts)}) incorrect predictions:"
-            )
-        else:
-            print(
-                f"\nPrinting the {len(incorrectly_predicted_texts)} incorrect predictions:"
-            )
-
-        for i in range(min(20, len(incorrectly_predicted_texts))):
-            print("Incorrectly predicted text:", incorrectly_predicted_texts[i])
-            print("True label:", incorrectly_predicted_true_labels[i])
-            print("Predicted label:", incorrectly_predicted_predicted_labels[i])
-            print()
-        print()
-
-
 @dataclasses.dataclass
 class Training:
-    """
-    Manage training and evaluation of a model.
-    """
     hparams: dict
     train_dataset: Dataset
     eval_dataset: Dataset
-    model: AutoModelForSequenceClassification
+    model: PreTrainedModel
     train_epochs: int = 3
-    eval_steps: int = 150
-    logging_steps: int = 150
+    eval_steps: int = 10
+    logging_steps: int = 10
+    trainer: Optional[Trainer] = None
 
     def __post_init__(self):
         self.metric = evaluate.load("accuracy")
+
+        # TODO: change this
+        # Right now it's necessary because otherwise the on_init_end callback
+        # is not able to log anything (mysteriously)
+        # wandb.init(project="robust-llm",)
 
     def setup_trainer(self):
         hf_training_args = TrainingArguments(
@@ -90,30 +61,83 @@ class Training:
         #    tags=["baseline", "high-lr"],
         #    group="bert")
 
+        # TODO: interesting chicken-and-egg problem here
+        # Want to log the dataset at "on_init_end" but can't do that until the trainer is set up
+
         trainer = Trainer(
             model=self.model,
             args=hf_training_args,
-            train_dataset=self.train_dataset,
-            eval_dataset=self.eval_dataset,
+            train_dataset=self.train_dataset,  # type: ignore
+            eval_dataset=self.eval_dataset,  # type: ignore
             compute_metrics=self.compute_metrics,
         )
-        # Add a callback to print incorrect classifications (needs trainer so it can predict())
-        trainer.add_callback(PrintIncorrectClassificationsCallback(trainer))
+
+        # TODO: ideally we'd initiate a callback right here to save the datasets
+        # I suppose we can save them manually but that's much less fun
+        trainer.add_callback(TrainerLoggingCallback(self))
+
+        # Save the trainer as an attribute
+        self.trainer = trainer
 
         return trainer
 
     def run_trainer(self):
         # Set up the trainer
         trainer = self.setup_trainer()
+        
+        # Log the datasets
+        self.log_datasets()
 
         # Perform an initial evaluation, then train
-        trainer.evaluate(eval_dataset=self.eval_dataset)
+        trainer.evaluate(eval_dataset=self.eval_dataset)  # type: ignore
         trainer.train()
 
-    def compute_metrics(self, eval_pred):
+    def compute_metrics(self, eval_pred: EvalPrediction) -> dict:
         logits, labels = eval_pred
         predictions = np.argmax(logits, axis=-1)
-        return self.metric.compute(predictions=predictions, references=labels)
+        computed_metrics = self.metric.compute(
+            predictions=predictions, references=labels
+        )
+        if computed_metrics is None:
+            raise ValueError("computed_metrics is None, exiting...")
+        return computed_metrics
+    
+    def log_datasets(self):
+        # Save the training and eval datasets to wandb
+        to_log = {}
+
+        # Save the training dataset to a wandb table
+        if self.trainer is None:
+            raise ValueError("self.trainer should have been assigned by now, exiting...")
+        
+        if self.trainer.train_dataset is None:
+            raise ValueError("self.trainer.train_dataset should have been assigned by now, exiting...")
+        
+        train_table = wandb.Table(columns=["text", "label"])
+        
+        for text, label in zip(
+            self.trainer.train_dataset["text"],
+            self.trainer.train_dataset["label"],
+        ):
+            train_table.add_data(text, label)
+
+        to_log["train_dataset"] = train_table
+
+        # Save the eval dataset to a wandb table
+        if self.trainer.eval_dataset is None:
+            raise ValueError("self.trainer.eval_dataset should have been assigned by now, exiting...")
+        
+        eval_table = wandb.Table(columns=["text", "label"])
+        
+        for text, label in zip(
+            self.trainer.eval_dataset["text"],  # type: ignore
+            self.trainer.eval_dataset["label"],  # type: ignore
+        ):
+            eval_table.add_data(text, label)
+
+        to_log["eval_dataset"] = eval_table
+
+        wandb.log(to_log, commit=False)
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -127,6 +151,7 @@ class AdversarialTraining(Training):
     brute_force_attack: bool
     brute_force_length: int
     random_sample_attack: bool
+    attack_dataset: Optional[Dataset] = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -153,9 +178,8 @@ class AdversarialTraining(Training):
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
+            callbacks=[AdversarialTrainerLoggingCallback(self)],
         )
-        # Add a callback to print incorrect classifications (needs trainer so it can predict())
-        trainer.add_callback(PrintIncorrectClassificationsCallback(trainer))
 
         return trainer
 
@@ -183,13 +207,20 @@ class AdversarialTraining(Training):
             # Just find mistakes in the eval set
             attack_dataset = self.eval_dataset
 
-        # Set up a wandb table to log the incorrect predictions
+        # Save the attack dataset as an attribute so we can access it later
+        self.attack_dataset = attack_dataset
+        
+        # Log the datasets
+        self.log_datasets()
 
         # Run the adversarial training loop
         for i in range(self.num_adversarial_training_rounds):
+            print("Starting training round", i)
+
             # Train for "one round" (i.e., num_train_epochs) on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
             adversarial_trainer.train()
+            adversarial_trainer.evaluate()
 
             # TODO: sample if we're doing random sample attack
 
@@ -200,16 +231,20 @@ class AdversarialTraining(Training):
 
             # Check if we have perfect accuracy now. If so, we're done.
             if len(incorrect_predictions["text"]) == 0:
-                print("Model got perfect accuracy, so stopping adversarial training.")
+                print(
+                    "Model got perfect accuracy on the adversarial dataset, so stopping adversarial training."
+                )
                 break
+
+            print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
 
             # Append the incorrect predictions to the table (adv training round, text, incorrect label, correct label)
             table = wandb.Table(
-                columns=["example text", "incorrect label", "correct label"]
+                columns=["example text", "predicted label", "correct label"]
             )
             for text_string, correct_label in zip(
-                incorrect_predictions["adversarial_string"],
-                incorrect_predictions["true_label"],
+                incorrect_predictions["text"],
+                incorrect_predictions["label"],
             ):
                 table.add_data(text_string, 1 - correct_label, correct_label)
             wandb.log({f"successful_attacks_after_round_{i}": table}, commit=False)
@@ -220,9 +255,27 @@ class AdversarialTraining(Training):
                 incorrect_predictions["text"],
                 incorrect_predictions["label"],  # true label
             ):
-                adversarial_trainer.adversarial_examples["text"].append(
-                    text
-                )
-                adversarial_trainer.adversarial_examples["label"].append(
-                    true_label
-                )
+                adversarial_trainer.adversarial_examples["text"].append(text)
+                adversarial_trainer.adversarial_examples["label"].append(true_label)
+
+    @override
+    def log_datasets(self):
+        super().log_datasets()
+        
+        to_log = {}
+        
+        # Save the adversarial training dataset to a wandb table
+        if self.attack_dataset is None:
+            raise ValueError("self.trainer.attack_dataset should have been assigned by now, exiting...")
+        
+        adversarial_table = wandb.Table(columns=["text", "label"])
+        for text, label in zip(
+            self.attack_dataset["text"],
+            self.attack_dataset["label"],
+        ):
+            adversarial_table.add_data(text, label)
+
+        to_log["adversarial_dataset"] = adversarial_table
+
+        wandb.log(to_log, commit=False)
+        
