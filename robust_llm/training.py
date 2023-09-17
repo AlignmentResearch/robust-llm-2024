@@ -162,7 +162,7 @@ class AdversarialTraining(Training):
         assert not (self.brute_force_attack and self.random_sample_attack)
 
     @override
-    def setup_trainer(self):
+    def setup_trainer(self) -> AdversarialTrainer:
         hf_training_args = TrainingArguments(
             output_dir="adversarial_trainer",
             num_train_epochs=self.train_epochs,
@@ -178,8 +178,12 @@ class AdversarialTraining(Training):
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
-            callbacks=[AdversarialTrainerLoggingCallback(self)],
         )
+        
+        trainer.add_callback(AdversarialTrainerLoggingCallback(self))
+
+        # Save the trainer as an attribute
+        self.trainer = trainer
 
         return trainer
 
