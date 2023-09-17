@@ -6,10 +6,9 @@ import wandb
 from datasets import Dataset
 
 from transformers import (
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
     EvalPrediction,
     PreTrainedModel,
+    PreTrainedTokenizerBase,
     TrainingArguments,
     Trainer,
 )
@@ -39,10 +38,11 @@ class Training:
     def __post_init__(self):
         self.metric = evaluate.load("accuracy")
 
-        # TODO: change this
-        # Right now it's necessary because otherwise the on_init_end callback
-        # is not able to log anything (mysteriously)
-        # wandb.init(project="robust-llm",)
+        # TODO: it would be nice to not have to do this manually
+        # I'm concerned that by initializing wandb here, we're losing
+        # information that is stored when we let the trainer
+        # automatically initialize wandb
+        wandb.init(project="robust-llm",)
 
     def setup_trainer(self):
         hf_training_args = TrainingArguments(
@@ -145,7 +145,7 @@ class Training:
 # I put it there because of this:
 # https://medium.com/@aniscampos/python-dataclass-inheritance-finally-686eaf60fbb5
 class AdversarialTraining(Training):
-    tokenizer: AutoTokenizer
+    tokenizer: PreTrainedTokenizerBase
     num_adversarial_training_rounds: int
     language_generator_name: str
     brute_force_attack: bool
@@ -223,6 +223,7 @@ class AdversarialTraining(Training):
 
             # Train for "one round" (i.e., num_train_epochs) on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
+            # NOTE: this is where wandb.init() is called by default
             adversarial_trainer.train()
             adversarial_trainer.evaluate()
 
