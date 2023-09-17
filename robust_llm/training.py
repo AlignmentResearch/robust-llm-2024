@@ -42,6 +42,7 @@ class Training:
         # I'm concerned that by initializing wandb here, we're losing
         # information that is stored when we let the trainer
         # automatically initialize wandb
+        # https://docs.wandb.ai/guides/integrations/huggingface#customize-wandbinit
         wandb.init(project="robust-llm",)
 
     def setup_trainer(self):
@@ -53,16 +54,6 @@ class Training:
             logging_steps=self.logging_steps,
             report_to=["wandb"],
         )
-
-        # Initialize wandb before Trainer init?
-        # https://docs.wandb.ai/guides/integrations/huggingface#customize-wandbinit
-        # wandb.init(project="robust-llm",
-        #    name="bert-base-high-lr",
-        #    tags=["baseline", "high-lr"],
-        #    group="bert")
-
-        # TODO: interesting chicken-and-egg problem here
-        # Want to log the dataset at "on_init_end" but can't do that until the trainer is set up
 
         trainer = Trainer(
             model=self.model,
