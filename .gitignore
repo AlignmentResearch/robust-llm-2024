@@ -153,8 +153,17 @@ dmypy.json
 cython_debug/
 
 # Wandb
-.wandb/
+wandb/
 robust_llm/wandb/
 
 # PyCharm
 .idea/
+
+# Datasets
+datasets/
+
+# Checkpoints
+adversarial_trainer/
+
+# Configurations
+.vscode/
