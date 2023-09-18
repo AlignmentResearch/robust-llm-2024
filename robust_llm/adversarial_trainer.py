@@ -9,7 +9,7 @@ class AdversarialTrainer(Trainer):
     def __init__(self, **trainer_kwargs):
         super().__init__(**trainer_kwargs)
 
-        self.adversarial_examples: dict = {"adversarial_string": [], "true_label": []}
+        self.adversarial_examples: dict = {"text": [], "label": []}
         self.adversarial_examples_seen_so_far: int = 0
 
     @override
@@ -20,16 +20,16 @@ class AdversarialTrainer(Trainer):
 
         # Augment the train set with the new adversarial examples
         if self.adversarial_examples[
-            "adversarial_string"
-        ] != [] and self.adversarial_examples_seen_so_far < len(
+            "text"
+        ] and self.adversarial_examples_seen_so_far < len(
             self.adversarial_examples["text"]
         ):
             # We only want the *new* examples
             new_adversarial_examples = {
-                "text": self.adversarial_examples["adversarial_string"][
+                "text": self.adversarial_examples["text"][
                     self.adversarial_examples_seen_so_far :
                 ],
-                "label": self.adversarial_examples["true_label"][
+                "label": self.adversarial_examples["label"][
                     self.adversarial_examples_seen_so_far :
                 ],
             }
@@ -54,7 +54,7 @@ class AdversarialTrainer(Trainer):
 
             # Update the count of the adversarial examples seen so far
             self.adversarial_examples_seen_so_far = len(
-                self.adversarial_examples["adversarial_string"]
+                self.adversarial_examples["text"]
             )
 
             print(f"train_dataset is now of size {len(self.train_dataset)}")
