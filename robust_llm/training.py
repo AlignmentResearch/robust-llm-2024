@@ -9,51 +9,12 @@ from transformers import (
     AutoTokenizer,
     TrainingArguments,
     Trainer,
-    TrainerCallback,
 )
 from typing_extensions import override
 
 from robust_llm.adversarial_trainer import AdversarialTrainer
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
 from robust_llm.utils import get_incorrect_predictions, tokenize_dataset
-
-
-class PrintIncorrectClassificationsCallback(TrainerCallback):
-    # TODO: log this correctly to wandb
-    def __init__(self, trainer: Trainer):
-        super().__init__()
-        self.trainer = trainer
-
-    def on_evaluate(self, args, state, control, **kwargs):
-        incorrect_predictions = get_incorrect_predictions(
-            trainer=self.trainer, dataset=self.trainer.eval_dataset
-        )
-
-        incorrectly_predicted_texts = incorrect_predictions["text"]
-        incorrectly_predicted_true_labels = incorrect_predictions["label"]
-        incorrectly_predicted_predicted_labels = [
-            1 - label for label in incorrect_predictions["label"]
-        ]
-
-        if len(incorrectly_predicted_texts) == 0:
-            print("\nAll eval texts predicted correctly.\n")
-            return
-
-        if len(incorrectly_predicted_texts) > 20:
-            print(
-                f"\nPrinting 20 (of the {len(incorrectly_predicted_texts)}) incorrect predictions:"
-            )
-        else:
-            print(
-                f"\nPrinting the {len(incorrectly_predicted_texts)} incorrect predictions:"
-            )
-
-        for i in range(min(20, len(incorrectly_predicted_texts))):
-            print("Incorrectly predicted text:", incorrectly_predicted_texts[i])
-            print("True label:", incorrectly_predicted_true_labels[i])
-            print("Predicted label:", incorrectly_predicted_predicted_labels[i])
-            print()
-        print()
 
 
 @dataclasses.dataclass
@@ -88,8 +49,6 @@ class Training:
             eval_dataset=self.eval_dataset,
             compute_metrics=self.compute_metrics,
         )
-        # Add a callback to print incorrect classifications (needs trainer so it can predict())
-        trainer.add_callback(PrintIncorrectClassificationsCallback(trainer))
 
         return trainer
 
@@ -145,8 +104,6 @@ class AdversarialTraining(Training):
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
         )
-        # Add a callback to print incorrect classifications (needs trainer so it can predict())
-        trainer.add_callback(PrintIncorrectClassificationsCallback(trainer))
 
         return trainer
 
