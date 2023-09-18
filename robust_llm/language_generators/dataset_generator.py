@@ -34,9 +34,9 @@ def make_up_to_length_dataset(dataset_path: str, max_length: int):
 
     # Combine the datasets
     with open(f"{dataset_path}/trues_up_to_{i}.txt", "w") as f:
-        f.writelines(line + '\n' for line in all_trues)
+        f.writelines(line + "\n" for line in all_trues)
     with open(f"{dataset_path}/falses_up_to_{i}.txt", "w") as f:
-        f.writelines(line + '\n' for line in all_falses)
+        f.writelines(line + "\n" for line in all_falses)
     # TODO check that above still works (changed from write to writelines)
 
 

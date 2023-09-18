@@ -22,6 +22,7 @@ class Training:
     """
     Manage training and evaluation of a model.
     """
+
     hparams: dict
     train_dataset: Dataset
     eval_dataset: Dataset
@@ -154,9 +155,5 @@ class AdversarialTraining(Training):
                 incorrect_predictions["text"],
                 incorrect_predictions["label"],  # true label
             ):
-                adversarial_trainer.adversarial_examples["text"].append(
-                    text
-                )
-                adversarial_trainer.adversarial_examples["label"].append(
-                    true_label
-                )
+                adversarial_trainer.adversarial_examples["text"].append(text)
+                adversarial_trainer.adversarial_examples["label"].append(true_label)

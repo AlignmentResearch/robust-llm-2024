@@ -18,7 +18,9 @@ class TomitaBase:
 
     @property
     def max_length(self):
-        return self.context_length - self.context_buffer - self.final_special_token_length
+        return (
+            self.context_length - self.context_buffer - self.final_special_token_length
+        )
 
     def __post_init__(self):
         self.rng = np.random.default_rng(seed=self.seed)
