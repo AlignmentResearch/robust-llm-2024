@@ -16,7 +16,6 @@ class AdversarialTrainer(Trainer):
         super().__init__(**trainer_kwargs)
 
         self.adversarial_examples: dict = {"text": [], "label": []}
-        self.num_rounds_completed: int = 0
 
     @override
     def get_train_dataloader(self):
@@ -84,19 +83,17 @@ class AdversarialTrainer(Trainer):
 
         return train_dataset_plus_adv_examples  # type: ignore
 
-    def get_tokenized_adversarial_dataset(self) -> Optional[Dataset]:
-        if self.adversarial_examples["text"]:
-            # Tokenize the new examples
-            tokenized_adversarial_examples = Dataset.from_dict(
-                tokenize_dataset(self.adversarial_examples, self.tokenizer)
-            )
+    def get_tokenized_adversarial_dataset(self) -> Dataset:
+        assert self.adversarial_examples["text"]
 
-            assert (
-                self.train_dataset.features.type  # type: ignore
-                == tokenized_adversarial_examples.features.type
-            )
+        # Tokenize the new examples
+        tokenized_adversarial_examples = Dataset.from_dict(
+            tokenize_dataset(self.adversarial_examples, self.tokenizer)
+        )
 
-            return tokenized_adversarial_examples
+        assert (
+            self.train_dataset.features.type  # type: ignore
+            == tokenized_adversarial_examples.features.type
+        )
 
-        else:
-            return None
+        return tokenized_adversarial_examples
