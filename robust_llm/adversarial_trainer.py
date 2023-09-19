@@ -16,7 +16,7 @@ from transformers import (
 from typing_extensions import override
 
 import wandb
-from robust_llm.utils import get_incorrect_predictions, tokenize_dataset
+from robust_llm.utils import tokenize_dataset
 
 
 class AdversarialTrainer(Trainer):
