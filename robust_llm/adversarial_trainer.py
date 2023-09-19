@@ -16,7 +16,6 @@ class AdversarialTrainer(Trainer):
         super().__init__(**trainer_kwargs)
 
         self.adversarial_examples: dict = {"text": [], "label": []}
-        self.num_rounds_completed: int = 0
 
     @override
     def get_train_dataloader(self):

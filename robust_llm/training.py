@@ -69,7 +69,7 @@ class Training:
 
         # Save the trainer as an attribute
         self.trainer = trainer
-
+        
         return trainer
 
     def run_trainer(self):
@@ -274,4 +274,3 @@ class AdversarialTraining(Training):
         to_log["adversarial_dataset"] = adversarial_table
 
         wandb.log(to_log, commit=False)
-        
