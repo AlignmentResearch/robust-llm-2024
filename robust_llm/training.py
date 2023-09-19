@@ -15,10 +15,9 @@ from transformers import (
 from typing import Optional
 from typing_extensions import override
 
-from robust_llm.adversarial_trainer import AdversarialTrainer
-from robust_llm.callbacks import (
+from robust_llm.adversarial_trainer import (
+    AdversarialTrainer,
     AdversarialTrainerLoggingCallback,
-    TrainerLoggingCallback,
 )
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
 from robust_llm.utils import get_incorrect_predictions, tokenize_dataset
@@ -43,7 +42,9 @@ class Training:
         # information that is stored when we let the trainer
         # automatically initialize wandb
         # https://docs.wandb.ai/guides/integrations/huggingface#customize-wandbinit
-        wandb.init(project="robust-llm",)
+        wandb.init(
+            project="robust-llm",
+        )
 
     def setup_trainer(self):
         hf_training_args = TrainingArguments(
@@ -63,23 +64,16 @@ class Training:
             compute_metrics=self.compute_metrics,
         )
 
-        # TODO: ideally we'd initiate a callback right here to save the datasets
-        # I suppose we can save them manually but that's much less fun
-        trainer.add_callback(TrainerLoggingCallback(self))
-
         # Save the trainer as an attribute
         self.trainer = trainer
-        
+
         return trainer
 
     def run_trainer(self):
-        # Set up the trainer
         trainer = self.setup_trainer()
-        
-        # Log the datasets
+
         self.log_datasets()
 
-        # Perform an initial evaluation, then train
         trainer.evaluate(eval_dataset=self.eval_dataset)  # type: ignore
         trainer.train()
 
@@ -92,40 +86,39 @@ class Training:
         if computed_metrics is None:
             raise ValueError("computed_metrics is None, exiting...")
         return computed_metrics
-    
-    def log_datasets(self):
-        # Save the training and eval datasets to wandb
+
+    def log_datasets(self) -> None:
+        """Save the training and eval datasets to wandb."""
         to_log = {}
 
         # Save the training dataset to a wandb table
         if self.trainer is None:
-            raise ValueError("self.trainer should have been assigned by now, exiting...")
-        
+            raise ValueError(
+                "self.trainer should have been assigned by now, exiting..."
+            )
         if self.trainer.train_dataset is None:
-            raise ValueError("self.trainer.train_dataset should have been assigned by now, exiting...")
-        
+            raise ValueError(
+                "self.trainer.train_dataset should have been assigned by now, exiting..."
+            )
         train_table = wandb.Table(columns=["text", "label"])
-        
         for text, label in zip(
             self.trainer.train_dataset["text"],
             self.trainer.train_dataset["label"],
         ):
             train_table.add_data(text, label)
-
         to_log["train_dataset"] = train_table
 
         # Save the eval dataset to a wandb table
         if self.trainer.eval_dataset is None:
-            raise ValueError("self.trainer.eval_dataset should have been assigned by now, exiting...")
-        
+            raise ValueError(
+                "self.trainer.eval_dataset should have been assigned by now, exiting..."
+            )
         eval_table = wandb.Table(columns=["text", "label"])
-        
         for text, label in zip(
             self.trainer.eval_dataset["text"],  # type: ignore
             self.trainer.eval_dataset["label"],  # type: ignore
         ):
             eval_table.add_data(text, label)
-
         to_log["eval_dataset"] = eval_table
 
         wandb.log(to_log, commit=False)
@@ -170,7 +163,6 @@ class AdversarialTraining(Training):
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
         )
-        
         trainer.add_callback(AdversarialTrainerLoggingCallback(self))
 
         # Save the trainer as an attribute
@@ -186,7 +178,6 @@ class AdversarialTraining(Training):
         # Prepare the attack dataset
         attack_dataset = None
         if self.brute_force_attack:
-            # Load in the brute force test set
             brute_force_dataset = load_adversarial_dataset(
                 self.language_generator_name, self.brute_force_length
             )
@@ -202,10 +193,8 @@ class AdversarialTraining(Training):
             # Just find mistakes in the eval set
             attack_dataset = self.eval_dataset
 
-        # Save the attack dataset as an attribute so we can access it later
         self.attack_dataset = attack_dataset
-        
-        # Log the datasets
+
         self.log_datasets()
 
         # Run the adversarial training loop
@@ -257,20 +246,19 @@ class AdversarialTraining(Training):
     @override
     def log_datasets(self):
         super().log_datasets()
-        
+
         to_log = {}
-        
-        # Save the adversarial training dataset to a wandb table
+
         if self.attack_dataset is None:
-            raise ValueError("self.trainer.attack_dataset should have been assigned by now, exiting...")
-        
+            raise ValueError(
+                "self.trainer.attack_dataset should have been assigned by now, exiting..."
+            )
         adversarial_table = wandb.Table(columns=["text", "label"])
         for text, label in zip(
             self.attack_dataset["text"],
             self.attack_dataset["label"],
         ):
             adversarial_table.add_data(text, label)
-
-        to_log["adversarial_dataset"] = adversarial_table
+        to_log["brute_force_attack_dataset"] = adversarial_table
 
         wandb.log(to_log, commit=False)

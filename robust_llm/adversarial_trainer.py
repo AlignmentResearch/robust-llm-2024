@@ -1,14 +1,22 @@
-import datasets
-import torch
-import torch.utils.data
-import transformers
+from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from robust_llm.training import AdversarialTraining
+
+from datasets import Dataset, concatenate_datasets
+from transformers import (
+    Trainer,
+    TrainerCallback,
+    TrainingArguments,
+    TrainerState,
+    TrainerControl,
+)
 from typing_extensions import override
-from datasets import concatenate_datasets, Dataset
-from transformers import Trainer
-from typing import Optional
 
-from robust_llm.utils import tokenize_dataset
+import wandb
+from robust_llm.utils import get_incorrect_predictions, tokenize_dataset
 
 
 class AdversarialTrainer(Trainer):
@@ -23,51 +31,21 @@ class AdversarialTrainer(Trainer):
         # In turn, the train_dataloader it returns is called at the start of each training epoch
         # https://github.com/huggingface/transformers/blob/5a4f340df74b42b594aedf60199eea95cdb9bed0/src/transformers/trainer.py#L812
 
-        train_dataset_plus_adv_examples = self.get_augmented_training_set()
+        old_train_set = self.train_dataset  # does this deep copy?
 
-        print(
-            f"This round's train set has {len(train_dataset_plus_adv_examples)} examples"
-        )
+        self.train_dataset = self.get_augmented_training_set()
 
-        # From here to end, copied from Trainer.get_train_dataloader(), with some modifications
-        if train_dataset_plus_adv_examples is None:
-            raise ValueError("Trainer: training requires a train_dataset.")
+        train_dataloader_to_return = super().get_train_dataloader()
 
-        data_collator = self.data_collator
-        if transformers.utils.is_datasets_available() and isinstance(
-            train_dataset_plus_adv_examples, datasets.Dataset
-        ):
-            train_dataset_plus_adv_examples = self._remove_unused_columns(
-                train_dataset_plus_adv_examples, description="training"
-            )
-        else:
-            data_collator = self._get_collator_with_removed_columns(
-                data_collator, description="training"
-            )
+        self.train_dataset = old_train_set
 
-        dataloader_params = {
-            "batch_size": self._train_batch_size,
-            "collate_fn": data_collator,
-            "num_workers": self.args.dataloader_num_workers,
-            "pin_memory": self.args.dataloader_pin_memory,
-        }
+        return train_dataloader_to_return
 
-        if not isinstance(
-            train_dataset_plus_adv_examples, torch.utils.data.IterableDataset
-        ):
-            dataloader_params["sampler"] = self._get_train_sampler()
-            dataloader_params["drop_last"] = self.args.dataloader_drop_last
-            dataloader_params["worker_init_fn"] = transformers.trainer_utils.seed_worker
-
-        return self.accelerator.prepare(
-            torch.utils.data.DataLoader(
-                train_dataset_plus_adv_examples, **dataloader_params  # type: ignore
-            )
-        )
+        # TODO: test this to make sure the dataloader pulls from the augmented dataset
 
     def get_augmented_training_set(self) -> Dataset:
         # Augment the train set with the new adversarial examples
-        if self.adversarial_examples["text"]:
+        if len(self.adversarial_examples["text"]) > 0:
             # Tokenize the new examples
             tokenized_adversarial_examples = self.get_tokenized_adversarial_dataset()
 
@@ -83,19 +61,124 @@ class AdversarialTrainer(Trainer):
 
         return train_dataset_plus_adv_examples  # type: ignore
 
-    def get_tokenized_adversarial_dataset(self) -> Optional[Dataset]:
-        if self.adversarial_examples["text"]:
-            # Tokenize the new examples
-            tokenized_adversarial_examples = Dataset.from_dict(
-                tokenize_dataset(self.adversarial_examples, self.tokenizer)
+    def get_tokenized_adversarial_dataset(self) -> Dataset:
+        assert len(self.adversarial_examples["text"]) > 0
+
+        # Tokenize the new examples
+        tokenized_adversarial_examples = Dataset.from_dict(
+            tokenize_dataset(self.adversarial_examples, self.tokenizer)
+        )
+
+        assert (
+            self.train_dataset.features.type  # type: ignore
+            == tokenized_adversarial_examples.features.type
+        )
+
+        return tokenized_adversarial_examples
+
+
+class AdversarialTrainerLoggingCallback(TrainerCallback):
+    """
+    Logs the accuracy on the attack set, adversarial examples, and augmented train set whenever evaluation happens.
+    Also logs the augmented train set at the start of each training round.
+    """
+
+    def __init__(self, training: AdversarialTraining) -> None:
+        super().__init__()
+        self.training = training
+        self.adversarial_training_round: int = 0
+
+    @override
+    def on_evaluate(self, args, state, control, **kwargs) -> None:
+        if self.training.trainer is None:
+            raise ValueError(
+                "self.training.trainer should have been initialized by now, exiting..."
             )
 
-            assert (
-                self.train_dataset.features.type  # type: ignore
-                == tokenized_adversarial_examples.features.type
+        to_log = {}
+
+        # Accuracy on the entire attack set
+        if self.training.attack_dataset is not None:
+            assert len(self.training.attack_dataset) > 0
+
+            # Accuracy on all of the attack set (of which adversarial examples will be a subset)
+            attack_set = self.training.attack_dataset
+
+            incorrect_predictions_attack_set = get_incorrect_predictions(
+                trainer=self.training.trainer, dataset=attack_set
             )
 
-            return tokenized_adversarial_examples
+            to_log["attack_set_accuracy"] = 1 - len(
+                incorrect_predictions_attack_set
+            ) / len(attack_set)
 
-        else:
-            return None
+        assert type(self.training.trainer) is AdversarialTrainer
+
+        if len(self.training.trainer.adversarial_examples["text"]) > 0:
+            # Accuracy on adversarial examples only
+            adversarial_examples = self.training.trainer.get_tokenized_adversarial_dataset()  # type: ignore
+
+            incorrect_predictions_adversarial = get_incorrect_predictions(
+                trainer=self.training.trainer, dataset=adversarial_examples
+            )
+
+            to_log["adversarial_examples_accuracy"] = 1 - len(
+                incorrect_predictions_adversarial
+            ) / len(adversarial_examples)
+
+        # Accuracy on augmented train set (original train set + adversarial examples, so never None)
+        augmented_train_set = self.training.trainer.get_augmented_training_set()  # type: ignore
+
+        incorrect_predictions_augmented = get_incorrect_predictions(
+            trainer=self.training.trainer, dataset=augmented_train_set
+        )
+
+        to_log["augmented_train_set_accuracy"] = 1 - len(
+            incorrect_predictions_augmented
+        ) / len(augmented_train_set)
+
+        wandb.log(to_log, commit=False)
+
+        # TODO: make sure everything I wanted to log is actually appearing on wandb.
+
+    @override
+    def on_train_begin(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ) -> None:
+        # Log the round, the augmented train set, and the augmented train set size
+        to_log = {}
+
+        to_log["adversarial_training_round"] = self.adversarial_training_round
+
+        train_dataset_plus_adv_examples = (
+            self.training.trainer.get_augmented_training_set()  # type: ignore
+        )
+
+        table = wandb.Table(columns=["text", "label"])
+        for text_string, correct_label in zip(
+            train_dataset_plus_adv_examples["text"],
+            train_dataset_plus_adv_examples["label"],
+        ):
+            table.add_data(text_string, correct_label)
+
+        to_log[
+            f"augmented_train_set_start_round_{self.adversarial_training_round}"
+        ] = table
+
+        to_log[f"augmented_train_set_size"] = len(train_dataset_plus_adv_examples)
+
+        wandb.log(to_log, commit=False)
+
+    @override
+    def on_train_end(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ):
+        self.adversarial_training_round += 1
