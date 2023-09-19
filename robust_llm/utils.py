@@ -62,7 +62,7 @@ def write_lines_to_file(lines, file_path):
 
 
 def get_incorrect_predictions(trainer: Trainer, dataset: Dataset) -> dict[str, list]:
-    outputs = trainer.predict(test_dataset=dataset)
+    outputs = trainer.predict(test_dataset=dataset)  # type: ignore
     logits = outputs.predictions
     labels = outputs.label_ids
 

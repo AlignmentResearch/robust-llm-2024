@@ -1,6 +1,6 @@
 import abc
 import dataclasses
-import git
+import git.repo
 import numpy as np
 
 from robust_llm.utils import write_lines_to_file
@@ -10,6 +10,7 @@ from robust_llm.utils import write_lines_to_file
 class TomitaBase:
     seed: int = 42
     name: str = "tomitabase"
+    max_length: int = 5  # short for debugging purposes
 
     # Model specific configuration. Defaults to BERT.
     context_length: int = 512
@@ -17,13 +18,14 @@ class TomitaBase:
     final_special_token_length: int = 3
 
     @property
-    def max_length(self):
+    def largest_string_the_model_can_handle(self):
         return (
             self.context_length - self.context_buffer - self.final_special_token_length
         )
 
     def __post_init__(self):
         self.rng = np.random.default_rng(seed=self.seed)
+        assert self.max_length <= self.largest_string_the_model_can_handle
 
     def label_and_shuffle(self, trues: list[str], falses: list[str]):
         labelled_trues = [(el, 1) for el in trues]
@@ -34,7 +36,7 @@ class TomitaBase:
         return {"text": list(data), "label": list(labels)}
 
     @abc.abstractmethod
-    def is_in_language(self, string: str) -> bool:
+    def is_in_language(self, digits: list[int]) -> bool:
         pass
 
     @abc.abstractmethod
@@ -91,7 +93,7 @@ class TomitaBase:
 
     def make_complete_dataset(self, length: int = 10):
         # Get the path to save in
-        repo = git.Repo(".", search_parent_directories=True)
+        repo = git.repo.Repo(".", search_parent_directories=True)
         path_to_repo = repo.working_dir
 
         with open(f"{path_to_repo}/robust_llm/datasets/{length}.txt", "r") as afile:
