@@ -15,10 +15,10 @@ from transformers import (
 from typing import Optional
 from typing_extensions import override
 
-from robust_llm.adversarial_trainer import AdversarialTrainer
-from robust_llm.callbacks import (
-    AdversarialTrainerDatasetManagementCallback,
+from robust_llm.adversarial_trainer import (
+    AdversarialTrainer,
     AdversarialTrainerLoggingCallback,
+    AdversarialTrainerDatasetManagementCallback,
 )
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
 from robust_llm.utils import get_incorrect_predictions, tokenize_dataset
@@ -76,13 +76,10 @@ class Training:
         return trainer
 
     def run_trainer(self):
-        # Set up the trainer
         trainer = self.setup_trainer()
 
-        # Log the datasets
         self.log_datasets()
 
-        # Perform an initial evaluation, then train
         trainer.evaluate(eval_dataset=self.eval_dataset)  # type: ignore
         trainer.train()
 
@@ -99,11 +96,8 @@ class Training:
 
         return computed_metrics
 
-    # NOTE: hard to do this with a callback because we would want to use "on_init_end" but things
-    # aren't initialized by then. Don't want to use "on_train_begin" because then we'll call it every
-    # training round (which in the case of adversarial training, is >1 times in general).
-    def log_datasets(self):
-        # Save the training and eval datasets to wandb
+    def log_datasets(self) -> None:
+        """Save the training and eval datasets to wandb."""
         to_log = {}
 
         # Save the training dataset to a wandb table
@@ -111,20 +105,16 @@ class Training:
             raise ValueError(
                 "self.trainer should have been assigned by now, exiting..."
             )
-
         if self.trainer.train_dataset is None:
             raise ValueError(
                 "self.trainer.train_dataset should have been assigned by now, exiting..."
             )
-
         train_table = wandb.Table(columns=["text", "label"])
-
         for text, label in zip(
             self.trainer.train_dataset["text"],
             self.trainer.train_dataset["label"],
         ):
             train_table.add_data(text, label)
-
         to_log["train_dataset"] = train_table
 
         # Save the eval dataset to a wandb table
@@ -132,15 +122,12 @@ class Training:
             raise ValueError(
                 "self.trainer.eval_dataset should have been assigned by now, exiting..."
             )
-
         eval_table = wandb.Table(columns=["text", "label"])
-
         for text, label in zip(
             self.trainer.eval_dataset["eval"]["text"],
             self.trainer.eval_dataset["eval"]["label"],
         ):
             eval_table.add_data(text, label)
-
         to_log["eval_dataset"] = eval_table
 
         wandb.log(to_log, commit=False)
@@ -190,7 +177,6 @@ class AdversarialTraining(Training):
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
         )
-
         trainer.add_callback(AdversarialTrainerLoggingCallback(self))
         trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
 
@@ -207,7 +193,6 @@ class AdversarialTraining(Training):
         # Prepare the attack dataset
         attack_dataset = None
         if self.brute_force_attack:
-            # Load in the brute force test set
             brute_force_dataset = load_adversarial_dataset(
                 self.language_generator_name, self.brute_force_length
             )
@@ -290,7 +275,6 @@ class AdversarialTraining(Training):
         # First log the train and eval sets
         super().log_datasets()
 
-        # Then log the attack dataset
         to_log = {}
 
         # Save the adversarial training dataset to a wandb table
@@ -298,14 +282,12 @@ class AdversarialTraining(Training):
             raise ValueError(
                 "self.trainer.attack_dataset should have been assigned by now, exiting..."
             )
-
         adversarial_table = wandb.Table(columns=["text", "label"])
         for text, label in zip(
             self.eval_dataset["brute_force_attack_dataset"]["text"],
             self.eval_dataset["brute_force_attack_dataset"]["label"],
         ):
             adversarial_table.add_data(text, label)
-
         to_log["brute_force_attack_dataset"] = adversarial_table
 
         wandb.log(to_log, commit=False)
