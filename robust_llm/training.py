@@ -148,14 +148,13 @@ class AdversarialTraining(Training):
     def __post_init__(self):
         super().__post_init__()
 
-        # We will want to add in the attack dataset and the adversarial examples dataset
-        assert type(self.eval_dataset) is dict[str, Dataset]
+        assert type(self.eval_dataset) is dict
+        assert "eval" in self.eval_dataset
+        
+        assert not (self.brute_force_attack and self.random_sample_attack)
 
         # Standardize the language generator name
         self.language_generator_name = self.language_generator_name.lower()
-
-        # Make sure that only one of brute force and random sample is set to true
-        assert not (self.brute_force_attack and self.random_sample_attack)
 
     @override
     def setup_trainer(self) -> AdversarialTrainer:
