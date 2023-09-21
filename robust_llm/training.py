@@ -1,24 +1,23 @@
 import dataclasses
+from typing import Optional
+
 import evaluate
 import numpy as np
-import wandb
-
 from datasets import Dataset
-
 from transformers import (
     EvalPrediction,
     PreTrainedModel,
     PreTrainedTokenizerBase,
-    TrainingArguments,
     Trainer,
+    TrainingArguments,
 )
-from typing import Optional
 from typing_extensions import override
 
+import wandb
 from robust_llm.adversarial_trainer import (
     AdversarialTrainer,
-    AdversarialTrainerLoggingCallback,
     AdversarialTrainerDatasetManagementCallback,
+    AdversarialTrainerLoggingCallback,
 )
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
 from robust_llm.utils import get_incorrect_predictions, tokenize_dataset
@@ -70,7 +69,6 @@ class Training:
             compute_metrics=self.compute_metrics,
         )
 
-        # Save the trainer as an attribute
         self.trainer = trainer
 
         return trainer
@@ -151,9 +149,9 @@ class AdversarialTraining(Training):
         super().__post_init__()
 
         # We will want to add in the attack dataset and the adversarial examples dataset
-        if type(self.eval_dataset) is Dataset:
-            self.eval_dataset = {"eval": self.eval_dataset}
+        assert type(self.eval_dataset) is dict[str, Dataset]
 
+        # Standardize the language generator name
         self.language_generator_name = self.language_generator_name.lower()
 
         # Make sure that only one of brute force and random sample is set to true
@@ -206,12 +204,8 @@ class AdversarialTraining(Training):
 
         else:
             # Just find mistakes in the eval set
-            if type(self.eval_dataset) != Dataset:
-                raise ValueError(
-                    "self.eval_dataset should in this case be a Dataset, exiting..."
-                )
-
-            attack_dataset = self.eval_dataset
+            assert "eval" in self.eval_dataset
+            attack_dataset = self.eval_dataset["eval"]
 
         # Save the attack dataset as one of the datasets to do eval on
         self.eval_dataset["brute_force_attack_dataset"] = attack_dataset

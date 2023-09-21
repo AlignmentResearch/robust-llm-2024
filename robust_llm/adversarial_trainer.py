@@ -87,7 +87,6 @@ class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ) -> None:
-
         # This is a bit wonky, since it'll keep updating the augmented train set
         # and be evaluating on something new after the start of each adversarial training round
         self.training.eval_dataset["augmented_train_set"] = self.training.trainer.get_augmented_training_set()  # type: ignore
