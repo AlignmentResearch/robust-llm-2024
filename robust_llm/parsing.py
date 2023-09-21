@@ -21,6 +21,24 @@ def add_parser_arguments(parser):
         help="Up to which length strings should be exhaustively tested.",
     )
     parser.add_argument(
+        "--min_num_adversarial_examples_to_add",
+        type=int,
+        default=50,
+        help="The minimum number of adversarial examples to add to the train set each attack round.",
+    )
+    parser.add_argument(
+        "--max_num_search_for_adversarial_examples",
+        type=int,
+        default=8192,
+        help="The maximum number of examples to search for adversarial examples in each attack round. Think 'compute budget'.",
+    )
+    parser.add_argument(
+        "--adversarial_example_search_minibatch_size",
+        type=int,
+        default=64,
+        help="The size of the minibatches to use when searching for adversarial examples.",
+    )
+    parser.add_argument(
         "--random_sample_attack",
         type=bool,
         default=False,

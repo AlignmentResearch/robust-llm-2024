@@ -20,7 +20,11 @@ from robust_llm.adversarial_trainer import (
     AdversarialTrainerLoggingCallback,
 )
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
-from robust_llm.utils import get_incorrect_predictions, tokenize_dataset
+from robust_llm.utils import (
+    get_incorrect_predictions,
+    search_for_adversarial_examples,
+    tokenize_dataset,
+)
 
 
 @dataclasses.dataclass
@@ -142,6 +146,9 @@ class AdversarialTraining(Training):
     brute_force_attack: bool
     brute_force_length: int
     random_sample_attack: bool
+    min_num_adversarial_examples_to_add: int
+    max_num_search_for_adversarial_examples: int
+    adversarial_example_search_minibatch_size: int
     attack_dataset: Optional[Dataset] = None
     current_adversarial_training_round: int = 0
 
@@ -150,7 +157,7 @@ class AdversarialTraining(Training):
 
         assert type(self.eval_dataset) is dict
         assert "eval" in self.eval_dataset
-        
+
         assert not (self.brute_force_attack and self.random_sample_attack)
 
         # Standardize the language generator name
@@ -222,11 +229,12 @@ class AdversarialTraining(Training):
             # NOTE: this is where wandb.init() is called by default
             adversarial_trainer.train()
 
-            # TODO: sample if we're doing random sample attack
-
-            # Get the incorrect predictions
-            incorrect_predictions = get_incorrect_predictions(
-                adversarial_trainer, attack_dataset
+            incorrect_predictions = search_for_adversarial_examples(
+                adversarial_trainer,
+                attack_dataset,
+                min_num_adversarial_examples_to_add=self.min_num_adversarial_examples_to_add,
+                max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,
+                adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,
             )
 
             # Check if we have perfect accuracy now. If so, we're done.
