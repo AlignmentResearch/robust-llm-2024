@@ -1,5 +1,15 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from robust_llm.adversarial_trainer import AdversarialTrainer
+
+
 import numpy as np
 import os
+
+from torch.utils.data import DataLoader
+from typing import Generator
 
 from datasets import Dataset
 from transformers import Trainer
@@ -62,6 +72,11 @@ def write_lines_to_file(lines, file_path):
 
 
 def get_incorrect_predictions(trainer: Trainer, dataset: Dataset) -> dict[str, list]:
+    incorrect_predictions = {"text": [], "label": []}
+
+    if not dataset:
+        return incorrect_predictions
+
     outputs = trainer.predict(test_dataset=dataset)  # type: ignore
     logits = outputs.predictions
     labels = outputs.label_ids
@@ -71,9 +86,68 @@ def get_incorrect_predictions(trainer: Trainer, dataset: Dataset) -> dict[str, l
     incorrect_indices = np.where(predictions != labels)[0].astype(int)
 
     # Return the incorrectly predicted examples, along with their true labels
-    incorrect_predictions = {"text": [], "label": []}
     for incorrect_index in incorrect_indices:
         incorrect_predictions["text"].append(dataset["text"][incorrect_index])
         incorrect_predictions["label"].append(dataset["label"][incorrect_index])
 
     return incorrect_predictions
+
+
+def search_for_adversarial_examples(
+    adversarial_trainer: AdversarialTrainer,
+    attack_dataset: Dataset,
+    min_num_adversarial_examples_to_add: int,
+    max_num_search_for_adversarial_examples: int,
+    adversarial_example_search_minibatch_size: int,
+) -> dict[str, list]:
+    number_searched = 0
+    adversarial_examples = {"text": [], "label": []}
+
+    # dataloader = DataLoader(
+    #     attack_dataset,  # type: ignore
+    #     batch_size=adversarial_example_search_minibatch_size,
+    #     shuffle=True,
+    # )
+
+    for minibatch in yield_minibatch(
+        attack_dataset, adversarial_example_search_minibatch_size
+    ):
+    # for minibatch in dataloader:
+        print("current minibatch size:", len(minibatch["text"]))
+        
+        # Make the minibatch a dataset
+        # TODO: why wasn't it a dataset to begin with?!
+        # minibatch = Dataset.from_dict(minibatch)
+        
+        # Search for adversarial examples
+        incorrect_predictions = get_incorrect_predictions(
+            trainer=adversarial_trainer, dataset=minibatch
+        )
+
+        # Add these (if any) to the already-found adversarial examples
+        adversarial_examples["text"] += incorrect_predictions["text"]
+        adversarial_examples["label"] += incorrect_predictions["label"]
+
+        # If we found enough adversarial examples, stop searching
+        if len(adversarial_examples["text"]) >= min_num_adversarial_examples_to_add:
+            break
+
+        # If we passed the threshold of how many examples to search for, stop searching
+        number_searched += adversarial_example_search_minibatch_size
+        if number_searched >= max_num_search_for_adversarial_examples:
+            print(f"Stopping search after {number_searched} examples searched (limit was {max_num_search_for_adversarial_examples})")
+            break
+
+    return adversarial_examples
+
+
+def yield_minibatch(
+    dataset: Dataset, minibatch_size: int
+) -> Generator[Dataset, None, None]:
+    # First, shuffle the dataset
+    shuffled_dataset = dataset.shuffle()
+
+    # Yield minibatches of the given size
+    for i in range(0, len(shuffled_dataset), minibatch_size):
+    #     yield shuffled_dataset[i : i + minibatch_size]  # this works on Dataset objects
+        yield shuffled_dataset.select(range(i, i + minibatch_size))
