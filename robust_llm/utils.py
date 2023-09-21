@@ -103,22 +103,11 @@ def search_for_adversarial_examples(
     number_searched = 0
     adversarial_examples = {"text": [], "label": []}
 
-    # dataloader = DataLoader(
-    #     attack_dataset,  # type: ignore
-    #     batch_size=adversarial_example_search_minibatch_size,
-    #     shuffle=True,
-    # )
-
     for minibatch in yield_minibatch(
         attack_dataset, adversarial_example_search_minibatch_size
     ):
-    # for minibatch in dataloader:
         print("current minibatch size:", len(minibatch["text"]))
-        
-        # Make the minibatch a dataset
-        # TODO: why wasn't it a dataset to begin with?!
-        # minibatch = Dataset.from_dict(minibatch)
-        
+
         # Search for adversarial examples
         incorrect_predictions = get_incorrect_predictions(
             trainer=adversarial_trainer, dataset=minibatch
@@ -135,7 +124,9 @@ def search_for_adversarial_examples(
         # If we passed the threshold of how many examples to search for, stop searching
         number_searched += adversarial_example_search_minibatch_size
         if number_searched >= max_num_search_for_adversarial_examples:
-            print(f"Stopping search after {number_searched} examples searched (limit was {max_num_search_for_adversarial_examples})")
+            print(
+                f"Stopping search after {number_searched} examples searched (limit was {max_num_search_for_adversarial_examples})"
+            )
             break
 
     return adversarial_examples
@@ -144,10 +135,9 @@ def search_for_adversarial_examples(
 def yield_minibatch(
     dataset: Dataset, minibatch_size: int
 ) -> Generator[Dataset, None, None]:
-    # First, shuffle the dataset
     shuffled_dataset = dataset.shuffle()
 
     # Yield minibatches of the given size
-    for i in range(0, len(shuffled_dataset), minibatch_size):
-    #     yield shuffled_dataset[i : i + minibatch_size]  # this works on Dataset objects
-        yield shuffled_dataset.select(range(i, i + minibatch_size))
+    for i in range(0, shuffled_dataset.num_rows, minibatch_size):
+        upper_limit = min(i + minibatch_size, shuffled_dataset.num_rows)
+        yield shuffled_dataset.select(range(i, upper_limit))
