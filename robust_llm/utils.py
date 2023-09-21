@@ -74,8 +74,8 @@ def write_lines_to_file(lines, file_path):
 def get_incorrect_predictions(trainer: Trainer, dataset: Dataset) -> dict[str, list]:
     incorrect_predictions = {"text": [], "label": []}
 
-    if not dataset:
-        return incorrect_predictions
+    assert dataset is not None
+    assert dataset.num_rows > 0
 
     outputs = trainer.predict(test_dataset=dataset)  # type: ignore
     logits = outputs.predictions
@@ -100,6 +100,19 @@ def search_for_adversarial_examples(
     max_num_search_for_adversarial_examples: int,
     adversarial_example_search_minibatch_size: int,
 ) -> dict[str, list]:
+    """
+    Randomly iterates through `attack_dataset` for examples that the model misclassifiels, and returns them (and their correct labels) in a dict.
+
+    Args:
+        adversarial_trainer (AdversarialTrainer): trainer from which we use the model to make predictions.
+        attack_dataset (Dataset): dataset in which to search for adversarial examples.
+        min_num_adversarial_examples_to_add (int): the minimum number of examples to return. The function may return fewer than this examples if `max_num_search_for_adversarial_examples` has been exceeded, or if the entire dataset contains fewer than the desired count of adversarial examples.
+        max_num_search_for_adversarial_examples (int): the maximum number of examples to search over from `attack_dataset`. The function may return up to one minibatch's worth of examples more than this number.
+
+    Returns:
+        dict[str, list]: A dict containing the adversarial examples and their true labels.
+    """
+
     number_searched = 0
     adversarial_examples = {"text": [], "label": []}
 
@@ -121,7 +134,7 @@ def search_for_adversarial_examples(
         if len(adversarial_examples["text"]) >= min_num_adversarial_examples_to_add:
             break
 
-        # If we passed the threshold of how many examples to search for, stop searching
+        # If we passed the threshold of how many examples to search over, stop searching
         number_searched += adversarial_example_search_minibatch_size
         if number_searched >= max_num_search_for_adversarial_examples:
             print(

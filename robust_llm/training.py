@@ -157,7 +157,7 @@ class AdversarialTraining(Training):
 
         assert type(self.eval_dataset) is dict
         assert "eval" in self.eval_dataset
-        
+
         assert not (self.brute_force_attack and self.random_sample_attack)
 
         # Standardize the language generator name
