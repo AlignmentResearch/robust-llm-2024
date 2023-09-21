@@ -44,7 +44,7 @@ def main():
     base_training_args = {
         "hparams": {},
         "train_dataset": tokenized_train_dataset,
-        "eval_dataset": tokenized_val_dataset,
+        "eval_dataset": {"eval": tokenized_val_dataset},
         "model": model,
         "train_epochs": args.num_train_epochs,
     }
