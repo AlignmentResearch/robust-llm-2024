@@ -19,9 +19,9 @@ from robust_llm.adversarial_trainer import (
     AdversarialTrainerDatasetManagementCallback,
     AdversarialTrainerLoggingCallback,
 )
+from robust_llm.callbacks import CustomWandbCallback
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
 from robust_llm.utils import (
-    get_incorrect_predictions,
     search_for_adversarial_examples,
     tokenize_dataset,
 )
@@ -62,7 +62,6 @@ class Training:
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
-            report_to=["wandb"],
         )
 
         trainer = Trainer(
@@ -72,6 +71,8 @@ class Training:
             eval_dataset=self.eval_dataset,  # type: ignore
             compute_metrics=self.compute_metrics,
         )
+        
+        trainer.add_callback(CustomWandbCallback)
 
         self.trainer = trainer
 
@@ -171,7 +172,6 @@ class AdversarialTraining(Training):
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
-            report_to=["wandb"],
         )
         trainer = AdversarialTrainer(
             model=self.model,
@@ -183,6 +183,10 @@ class AdversarialTraining(Training):
         )
         trainer.add_callback(AdversarialTrainerLoggingCallback(self))
         trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
+        
+        # In order to have custom wandb logging behaviour, it seems I should remove the "report_to=['wandb']" line from the hf_training_args,
+        # and instead add a trainer callback here that inherits from the wandb one.
+        trainer.add_callback(CustomWandbCallback)
 
         # Save the trainer as an attribute
         self.trainer = trainer
