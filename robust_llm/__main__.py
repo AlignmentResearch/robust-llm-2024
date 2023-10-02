@@ -1,9 +1,9 @@
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from robust_llm.language_generators import make_language_generator_from_args
+from robust_llm.language_generators import make_language_generator
 from robust_llm.parsing import setup_argument_parser
-from robust_llm.training import Training, AdversarialTraining
+from robust_llm.training import AdversarialTraining, Training
 from robust_llm.utils import print_overlaps, tokenize_dataset
 
 
@@ -15,7 +15,9 @@ def main():
 
     # Make the language generator to generate the strings in
     # and not in the chosen regular language
-    language_generator = make_language_generator_from_args(args)
+    language_generator = make_language_generator(
+        args.language_generator, args.max_length
+    )
 
     # Choose a model and a tokenizer
     model_name = "bert-base-cased"
@@ -39,6 +41,7 @@ def main():
     print("Tokenizing datasets...")
     tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
     tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
+    # TODO use
     tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
 
     base_training_args = {
@@ -64,9 +67,7 @@ def main():
             adversarial_example_search_minibatch_size=args.adversarial_example_search_minibatch_size,
         )
     else:
-        training = Training(
-            **base_training_args,
-        )
+        training = Training(**base_training_args,)
 
     # Perform the training
     training.run_trainer()

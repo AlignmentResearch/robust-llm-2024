@@ -2,6 +2,8 @@
 name = "robust-llm"
 description = "Testing the robustness of LLMs"
 requires-python = ">=3.10"
+version="0.0.1"
+
 dependencies = [
     "evaluate",
     "torch",
@@ -12,8 +14,10 @@ dependencies = [
     "scikit-learn",
     "wandb",
 ]
-version="0.0.1"
-
+[project.optional-dependencies]
+dev = [
+    "pytest"
+]
 
 
 [tool.setuptools.packages.find]
