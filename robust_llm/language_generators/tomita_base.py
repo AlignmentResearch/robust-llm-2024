@@ -3,6 +3,7 @@ import dataclasses
 
 import git.repo
 import numpy as np
+
 from robust_llm.utils import write_lines_to_file
 
 
@@ -113,5 +114,5 @@ class TomitaBase:
         )
 
     def string_to_digit_list(self, string: str) -> list[int]:
-        """ Converts a space separated digit string into a list. """
+        """ Converts a space separated digit string into a list of ints. """
         return [int(c) for c in string.split(" ")]
