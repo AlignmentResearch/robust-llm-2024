@@ -1,8 +1,8 @@
 import abc
 import dataclasses
+
 import git.repo
 import numpy as np
-
 from robust_llm.utils import write_lines_to_file
 
 
@@ -105,10 +105,13 @@ class TomitaBase:
 
         # Save the trues and falses as trues_i and falses_i in the 'self.name' folder
         write_lines_to_file(
-            trues,
-            f"{path_to_repo}/robust_llm/datasets/{self.name}/trues_{length}.txt",
+            trues, f"{path_to_repo}/robust_llm/datasets/{self.name}/trues_{length}.txt",
         )
         write_lines_to_file(
             falses,
             f"{path_to_repo}/robust_llm/datasets/{self.name}/falses_{length}.txt",
         )
+
+    def string_to_digit_list(self, string: str) -> list[int]:
+        """ Converts a space separated digit string into a list. """
+        return [int(c) for c in string.split(" ")]
