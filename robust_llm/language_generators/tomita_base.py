@@ -41,17 +41,16 @@ class TomitaBase:
         pass
 
     @abc.abstractmethod
-    def generate_true(self, num: int = 1) -> list[str]:
+    def generate_true(self, count: int = 1) -> list[str]:
         pass
 
     @abc.abstractmethod
-    def generate_false(self, num: int = 1) -> list[str]:
+    def generate_false(self, count: int = 1) -> list[str]:
         pass
 
-    def generate_dataset(self, train_size=10_000, val_size=3000, test_size=3000):
+    def generate_dataset(self, train_size=10_000, val_size=3000, test_size=0):
         assert train_size > 0
         assert val_size > 0
-        assert test_size > 0
         assert train_size % 2 == 0
         assert val_size % 2 == 0
         assert test_size % 2 == 0
@@ -60,8 +59,8 @@ class TomitaBase:
         true_size = total_size // 2
         false_size = total_size // 2
 
-        trues = self.generate_true(num=true_size)
-        falses = self.generate_false(num=false_size)
+        trues = self.generate_true(count=true_size)
+        falses = self.generate_false(count=false_size)
 
         half_train_size = train_size // 2
         half_val_size = val_size // 2

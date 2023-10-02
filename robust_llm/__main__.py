@@ -27,22 +27,19 @@ def main():
     print()
     print("train_size:", args.train_set_size)
     print("val_size:", args.val_set_size)
-    print("test_size:", args.test_set_size)
     print()
 
-    train_set, val_set, test_set = language_generator.generate_dataset(
+    train_set, val_set, _ = language_generator.generate_dataset(
         train_size=args.train_set_size,
         val_size=args.val_set_size,
-        test_size=args.test_set_size,
+        test_size=0,
     )
 
-    print_overlaps(train_set, val_set, test_set)
+    print_overlaps(train_set, val_set)
 
     print("Tokenizing datasets...")
     tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
     tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
-    # TODO use
-    tokenized_test_dataset = Dataset.from_dict(tokenize_dataset(test_set, tokenizer))
 
     base_training_args = {
         "hparams": {},
@@ -74,7 +71,7 @@ def main():
 
     # Print overlaps again so it's stored in the output logged in wandb
     # TODO: log this directly to wandb instead of printing it
-    print_overlaps(train_set, val_set, test_set)
+    print_overlaps(train_set, val_set)
 
 
 if __name__ == "__main__":
