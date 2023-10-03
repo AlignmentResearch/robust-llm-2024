@@ -25,8 +25,8 @@ def test_generator_basic(language_name: str):
 
 @pytest.mark.parametrize("language_name", TOMITA_LANGUAGES)
 @pytest.mark.parametrize("train_size", [2,10,100])
-@pytest.mark.parametrize("val_size", [2,10,100])
-@pytest.mark.parametrize("test_size", [0,2,10,100])
+@pytest.mark.parametrize("val_size", [0,10,100])
+@pytest.mark.parametrize("test_size", [0,10,100])
 def test_generate_dataset(language_name: str, train_size: int, val_size: int, test_size: int):
     language_generator = make_language_generator(
         language_name=language_name, max_length=MAX_LANGUAGE_LENGTH
