@@ -17,7 +17,8 @@ class Tomita1(TomitaBase):  # 1*
 
     @override
     def generate_true(self, count: int = 1):
-        """ Generate a string of ones of random length. From 1 to `count`, inclusive."""
+        """ Generate a string of ones with random length
+            between 1 and `self.max_length`, inclusive."""
         assert count > 0
         assert isinstance(count, int)
 
@@ -33,9 +34,9 @@ class Tomita1(TomitaBase):  # 1*
 
     @override
     def generate_false(self, count: int = 1):
-        """ Generate a random string of 0s and 1s of random length,
-            from zero up to length count (inclusive), and rerunning until a string which
-            is not all 1s is found.
+        """ Generate a random string of 0s and 1s with random length
+            between one and `self.max_length` (inclusive),
+            and rerunning until a string which is not all 1s is found.
         """
         assert count > 0
         assert isinstance(count, int)

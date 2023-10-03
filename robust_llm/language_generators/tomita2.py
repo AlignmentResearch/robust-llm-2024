@@ -29,7 +29,8 @@ class Tomita2(TomitaBase):  # (10)*
 
     # Overrides
     def generate_true(self, count: int = 1):
-        """ Generate a string of ones of random length, from one up to `count` (inclusive)."""
+        """ Generate a string of ones with a random length
+            between one and `self.max_length` (inclusive)."""
         assert count > 0
         assert isinstance(count, int)
 
