@@ -29,8 +29,8 @@ class Tomita2(TomitaBase):  # (10)*
 
     # Overrides
     def generate_true(self, count: int = 1):
-        """ Generate a string of ones with a random length
-            between one and `self.max_length` (inclusive)."""
+        """Generate a string of ones with a random length
+        between one and `self.max_length` (inclusive)."""
         assert count > 0
         assert isinstance(count, int)
 
@@ -64,9 +64,7 @@ class Tomita2(TomitaBase):  # (10)*
             )  # put spaces between the digits for more natural tokenization
 
         all_strings = []
-        for _ in range(
-            count
-        ):  # I think this is hard to parallelize efficiently
+        for _ in range(count):  # I think this is hard to parallelize efficiently
             all_strings.append(generate_one())
         return all_strings
 

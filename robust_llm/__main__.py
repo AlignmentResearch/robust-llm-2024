@@ -64,7 +64,9 @@ def main():
             adversarial_example_search_minibatch_size=args.adversarial_example_search_minibatch_size,
         )
     else:
-        training = Training(**base_training_args,)
+        training = Training(
+            **base_training_args,
+        )
 
     # Perform the training
     training.run_trainer()
