@@ -51,6 +51,7 @@ class TomitaBase:
     def generate_dataset(self, train_size=10_000, val_size=3000, test_size=0):
         assert train_size > 0
         assert val_size > 0
+        assert test_size >= 0
         assert train_size % 2 == 0
         assert val_size % 2 == 0
         assert test_size % 2 == 0
@@ -76,7 +77,7 @@ class TomitaBase:
         # The test set is allowed to be empty, which would otherwise cause bugs for
         # this form of indexing.
         test_set = {"text": [], "label": []}
-        if test_size != 0:
+        if test_size > 0:
             test_set = self.label_and_shuffle(trues[-half_test_size:], falses[-half_test_size:])
 
         return train_set, val_set, test_set
