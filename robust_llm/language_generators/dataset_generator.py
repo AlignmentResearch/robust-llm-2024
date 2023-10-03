@@ -1,18 +1,16 @@
-from robust_llm.language_generators.tomita1 import Tomita1
-from robust_llm.language_generators.tomita2 import Tomita2
-from robust_llm.language_generators.tomita4 import Tomita4
-from robust_llm.language_generators.tomita7 import Tomita7
+from robust_llm.language_generators import make_language_generator
+from robust_llm.language_generators.tomita_base import TomitaBase
 
 
-language_generators = {Tomita1, Tomita2, Tomita4, Tomita7}
+language_names = {"tomita1", "tomita2", "tomita4", "tomita7"}
 DATASET_PATH = "/home/dev/robust-llm/robust_llm/datasets"
 
 
 def make_single_length_datasets(
     max_length: int = 25,
 ):  # length 25 leads to 1.56 GB file; could go bigger later
-    for language_generator in language_generators:
-        t = language_generator()
+    for language_name in language_names:
+        t: TomitaBase = make_language_generator(language_name, max_length=5)
 
         for i in range(1, max_length + 1):
             print("making dataset", t, i)
@@ -42,9 +40,9 @@ def make_up_to_length_dataset(dataset_path: str, max_length: int):
 
 # Now make the "up to length" datasets for all the lengths and languages
 def make_all_up_to_length_datasets(max_length: int):
-    for language_generator in language_generators:
+    for language_name in language_names:
         for i in range(1, max_length + 1):
-            dataset_path = f"{DATASET_PATH}/{language_generator.name}"
+            dataset_path = f"{DATASET_PATH}/{language_name}"
             make_up_to_length_dataset(dataset_path, i)
 
 

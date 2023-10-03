@@ -58,7 +58,7 @@ def write_lines_to_file(lines, file_path):
 
 
 def get_incorrect_predictions(trainer: Trainer, dataset: Dataset) -> dict[str, list]:
-    incorrect_predictions = {"text": [], "label": []}
+    incorrect_predictions = {"text": [], "label": []}  # type: ignore
 
     assert dataset is not None
     assert dataset.num_rows > 0
@@ -100,7 +100,7 @@ def search_for_adversarial_examples(
     """
 
     number_searched = 0
-    adversarial_examples = {"text": [], "label": []}
+    adversarial_examples = {"text": [], "label": []}  # type: ignore
 
     for minibatch in yield_minibatch(
         attack_dataset, adversarial_example_search_minibatch_size
