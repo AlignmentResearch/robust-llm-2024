@@ -81,7 +81,9 @@ class TomitaBase:
             )
         test_set = {"text": [], "label": []}
         if test_size > 0:
-            test_set = self.label_and_shuffle(trues[-half_test_size:], falses[-half_test_size:])
+            test_set = self.label_and_shuffle(
+                trues[-half_test_size:], falses[-half_test_size:]
+            )
 
         return train_set, val_set, test_set
 
@@ -111,7 +113,8 @@ class TomitaBase:
 
         # Save the trues and falses as trues_i and falses_i in the 'self.name' folder
         write_lines_to_file(
-            trues, f"{path_to_repo}/robust_llm/datasets/{self.name}/trues_{length}.txt",
+            trues,
+            f"{path_to_repo}/robust_llm/datasets/{self.name}/trues_{length}.txt",
         )
         write_lines_to_file(
             falses,
@@ -119,5 +122,5 @@ class TomitaBase:
         )
 
     def string_to_digit_list(self, string: str) -> list[int]:
-        """ Converts a space separated digit string into a list of ints. """
+        """Converts a space separated digit string into a list of ints."""
         return [int(c) for c in string.split(" ")]

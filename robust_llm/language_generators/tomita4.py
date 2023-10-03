@@ -28,7 +28,7 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
 
     @override
     def generate_true(self, count: int = 1):
-        """ Generate a random string that doesn't contain three consecutive zeros. """
+        """Generate a random string that doesn't contain three consecutive zeros."""
         assert count > 0
         assert isinstance(count, int)
 
