@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from robust_llm.training import AdversarialTraining
@@ -80,7 +80,7 @@ class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
         self.adversarial_training_round: int = 0
 
     @override
-    def on_train_begin(
+    def on_train_begin(  # type: ignore[misc]
         self,
         args: TrainingArguments,
         state: TrainerState,
@@ -98,14 +98,14 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
         self.training = training
 
     @override
-    def on_train_begin(
+    def on_train_begin(  # type: ignore[misc]
         self,
         args: TrainingArguments,
         state: TrainerState,
         control: TrainerControl,
         **kwargs,
     ) -> None:
-        to_log = {}
+        to_log: dict[str, Any] = {}
 
         to_log[
             "train/adversarial_training_round"
