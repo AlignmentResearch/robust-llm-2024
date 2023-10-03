@@ -73,9 +73,11 @@ class TomitaBase:
             trues[half_train_size : half_train_size + half_val_size],
             falses[half_train_size : half_train_size + half_val_size],
         )
-        test_set = self.label_and_shuffle(
-            trues[-half_test_size:], falses[-half_test_size:]
-        )
+        # The test set is allowed to be empty, which would otherwise cause bugs for
+        # this form of indexing.
+        test_set = {"text": [], "label": []}
+        if test_size != 0:
+            test_set = self.label_and_shuffle(trues[-half_test_size:], falses[-half_test_size:])
 
         return train_set, val_set, test_set
 
