@@ -1,4 +1,4 @@
-from robust_llm.language_generators import make_language_generator 
+from robust_llm.language_generators import make_language_generator
 from robust_llm.language_generators.tomita1 import TomitaBase
 from robust_llm.language_generators.tomita1 import Tomita1
 from robust_llm.language_generators.tomita2 import Tomita2
