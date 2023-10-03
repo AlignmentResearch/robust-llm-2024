@@ -41,17 +41,17 @@ class TomitaBase:
         pass
 
     @abc.abstractmethod
-    def generate_true(self, num: int = 1) -> list[str]:
+    def generate_true(self, count: int = 1) -> list[str]:
         pass
 
     @abc.abstractmethod
-    def generate_false(self, num: int = 1) -> list[str]:
+    def generate_false(self, count: int = 1) -> list[str]:
         pass
 
-    def generate_dataset(self, train_size=10_000, val_size=3000, test_size=3000):
+    def generate_dataset(self, train_size=10_000, val_size=3000, test_size=0):
         assert train_size > 0
-        assert val_size > 0
-        assert test_size > 0
+        assert val_size >= 0
+        assert test_size >= 0
         assert train_size % 2 == 0
         assert val_size % 2 == 0
         assert test_size % 2 == 0
@@ -60,8 +60,8 @@ class TomitaBase:
         true_size = total_size // 2
         false_size = total_size // 2
 
-        trues = self.generate_true(num=true_size)
-        falses = self.generate_false(num=false_size)
+        trues = self.generate_true(count=true_size)
+        falses = self.generate_false(count=false_size)
 
         half_train_size = train_size // 2
         half_val_size = val_size // 2
@@ -70,13 +70,18 @@ class TomitaBase:
         train_set = self.label_and_shuffle(
             trues[:half_train_size], falses[:half_train_size]
         )
-        val_set = self.label_and_shuffle(
-            trues[half_train_size : half_train_size + half_val_size],
-            falses[half_train_size : half_train_size + half_val_size],
-        )
-        test_set = self.label_and_shuffle(
-            trues[-half_test_size:], falses[-half_test_size:]
-        )
+
+        # The test and validation sets areallowed to be empty,
+        # which would otherwise cause bugs for this form of indexing.
+        val_set = {"text": [], "label": []}
+        if val_size > 0:
+            val_set = self.label_and_shuffle(
+                trues[half_train_size : half_train_size + half_val_size],
+                falses[half_train_size : half_train_size + half_val_size],
+            )
+        test_set = {"text": [], "label": []}
+        if test_size > 0:
+            test_set = self.label_and_shuffle(trues[-half_test_size:], falses[-half_test_size:])
 
         return train_set, val_set, test_set
 

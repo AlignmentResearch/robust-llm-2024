@@ -87,12 +87,6 @@ def add_parser_arguments(parser):
         default=100,
         help="The size of the validation set.",
     )
-    parser.add_argument(
-        "--test_set_size",
-        type=int,
-        default=100,
-        help="The size of the test set.",
-    )
 
 
 def setup_argument_parser():
