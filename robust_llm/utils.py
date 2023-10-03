@@ -40,25 +40,11 @@ def get_overlap(
     return list(set(smaller_dataset["text"]).intersection(set(larger_dataset["text"])))
 
 
-def print_overlaps(train_set, val_set, test_set):
+def print_overlaps(train_set, val_set):
     # How much of val set is in train set?
     train_val_overlap = get_overlap(smaller_dataset=val_set, larger_dataset=train_set)
     print("train val overlap size", len(train_val_overlap))
     print("train val overlap proportion", len(train_val_overlap) / len(val_set["text"]))
-    print()
-
-    # How much of test set is in train set?
-    train_test_overlap = get_overlap(smaller_dataset=test_set, larger_dataset=train_set)
-    print("train test overlap size", len(train_test_overlap))
-    print(
-        "train test overlap proportion", len(train_test_overlap) / len(test_set["text"])
-    )
-    print()
-
-    # How much of test set is in val set?
-    val_test_overlap = get_overlap(smaller_dataset=test_set, larger_dataset=val_set)
-    print("val test overlap size", len(val_test_overlap))
-    print("val test overlap proportion", len(val_test_overlap) / len(test_set["text"]))
     print()
 
 

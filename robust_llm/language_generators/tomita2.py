@@ -28,26 +28,27 @@ class Tomita2(TomitaBase):  # (10)*
         return True
 
     # Overrides
-    def generate_true(self, how_many_to_generate: int = 1):
-        # Generate a string of ones of random length, from zero up to length n / 2
-        assert how_many_to_generate > 0
-        assert isinstance(how_many_to_generate, int)
+    def generate_true(self, count: int = 1):
+        """ Generate a string of ones with a random length
+            between one and `self.max_length` (inclusive)."""
+        assert count > 0
+        assert isinstance(count, int)
 
         max_halflength = self.max_length // 2  # int
 
         half_lengths = self.rng.integers(
             low=1,  # for simplicity, don't allow empty string
             high=max_halflength + 1,
-            size=(how_many_to_generate,),
+            size=(count,),
             dtype=np.int32,
         )
         return [
             " ".join("10" * el) for el in half_lengths
         ]  # put spaces between the digits for more natural tokenization
 
-    def generate_false(self, how_many_to_generate: int = 1):
-        assert how_many_to_generate > 0
-        assert isinstance(how_many_to_generate, int)
+    def generate_false(self, count: int = 1):
+        assert count > 0
+        assert isinstance(count, int)
 
         def generate_one():
             num_digits = self.rng.integers(
@@ -64,7 +65,7 @@ class Tomita2(TomitaBase):  # (10)*
 
         all_strings = []
         for _ in range(
-            how_many_to_generate
+            count
         ):  # I think this is hard to parallelize efficiently
             all_strings.append(generate_one())
         return all_strings

@@ -23,12 +23,13 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
         return bool(PATTERN.fullmatch("".join(string_list)))
 
     @override
-    def generate_true(self, num: int = 1):
-        # Generate a random string that satisfies 0*1*0*1*
-        # We do this by choosing the four cutoff locations, and then filling in the digits in between
-        # The cutoff locations are sampled from Beta(2, 5) so that we ideally get more than a couple
-        assert num > 0
-        assert isinstance(num, int)
+    def generate_true(self, count: int = 1):
+        """ Generate a random string that satisfies 0*1*0*1*.
+            We do this by choosing the four cutoff locations, and then filling in the digits in between
+            The cutoff locations are sampled from Beta(2, 5) so that we ideally get more than a couple.
+        """
+        assert count > 0
+        assert isinstance(count, int)
 
         def generate_one():
             # Let each "*" be of length 0 with 25%
@@ -63,16 +64,17 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
             )  # put spaces between the digits for more natural tokenization
 
         all_strings = []
-        for _ in range(num):  # I think this is hard to parallelize efficiently
+        for _ in range(count):  # I think this is hard to parallelize efficiently
             all_strings.append(generate_one())
         return all_strings
 
     @override
-    def generate_false(self, num: int = 1):
-        # Generate a random string that does not satisfy 0*1*0*1*.
-        # Generally we do this by randomly sampling and then checking.
-        assert num > 0
-        assert isinstance(num, int)
+    def generate_false(self, count: int = 1):
+        """ Generate a random string that does not satisfy 0*1*0*1*.
+            Do this by randomly sampling and then checking.
+        """
+        assert count > 0
+        assert isinstance(count, int)
 
         def generate_one():
             # Sample in a log-uniform way
@@ -97,7 +99,7 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
             )  # put spaces between the digits for more natural tokenization
 
         all_strings = []
-        for _ in range(num):  # I think this is hard to parallelize efficiently
+        for _ in range(count):  # I think this is hard to parallelize efficiently
             all_strings.append(generate_one())
         return all_strings
 

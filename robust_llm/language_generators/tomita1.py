@@ -16,15 +16,16 @@ class Tomita1(TomitaBase):  # 1*
         return all(digit == 1 for digit in digits)
 
     @override
-    def generate_true(self, num: int = 1):
-        # Generate a string of ones of random length, from one up to length num
-        assert num > 0
-        assert isinstance(num, int)
+    def generate_true(self, count: int = 1):
+        """ Generate a string of ones with random length
+            between 1 and `self.max_length`, inclusive."""
+        assert count > 0
+        assert isinstance(count, int)
 
         string_lengths = self.rng.integers(
             low=1,  # for simplicity, don't allow empty string
             high=self.max_length + 1,
-            size=(num,),
+            size=(count,),
             dtype=np.int32,
         )
         return [
@@ -32,11 +33,13 @@ class Tomita1(TomitaBase):  # 1*
         ]  # put spaces between the digits for more natural tokenization
 
     @override
-    def generate_false(self, num: int = 1):
-        # Generate a random string of 0s and 1s of random length,
-        # from zero up to length num, checking to make sure it's not all ones
-        assert num > 0
-        assert isinstance(num, int)
+    def generate_false(self, count: int = 1):
+        """ Generate a random string of 0s and 1s with random length
+            between one and `self.max_length` (inclusive),
+            and rerunning until a string which is not all 1s is found.
+        """
+        assert count > 0
+        assert isinstance(count, int)
 
         def generate_one():
             num_digits = self.rng.integers(
@@ -52,6 +55,6 @@ class Tomita1(TomitaBase):  # 1*
             )  # put spaces between the digits for more natural tokenization
 
         all_strings = []
-        for _ in range(num):  # I think this is hard to parallelize efficiently
+        for _ in range(count):  # I think this is hard to parallelize efficiently
             all_strings.append(generate_one())
         return all_strings
