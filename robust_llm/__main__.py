@@ -75,8 +75,12 @@ def main():
 
         train_val_overlap = get_overlap(smaller_dataset=val_set, larger_dataset=train_set)  # type: ignore
         wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)
-        wandb.run.summary["train_val_overlap_over_train_set_size"] = len(train_val_overlap) / len(train_set["text"])
-        wandb.run.summary["train_val_overlap_over_val_set_size"] = len(train_val_overlap) / len(val_set["text"])
+        wandb.run.summary["train_val_overlap_over_train_set_size"] = len(
+            train_val_overlap
+        ) / len(train_set["text"])
+        wandb.run.summary["train_val_overlap_over_val_set_size"] = len(
+            train_val_overlap
+        ) / len(val_set["text"])
 
     # Perform the training
     training.run_trainer()
