@@ -34,4 +34,4 @@ class CrossTrainRunStepRecordingWandbCallback(WandbCallback):
     def on_step_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         super().on_step_begin(args, state, control, **kwargs)
         
-        wandb.log({"overall_global_step": self.num_past_training_steps_completed + state.global_step})
+        wandb.log({"overall_global_step": self.num_past_training_steps_completed + state.global_step}, commit=False)

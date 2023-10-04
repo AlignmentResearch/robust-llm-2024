@@ -1,3 +1,5 @@
+import wandb
+
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -34,11 +36,6 @@ def main():
         val_size=args.val_set_size,
         test_size=0,
     )
-    
-    train_val_overlap = get_overlap(smaller_dataset=val_set, larger_dataset=train_set)  # type: ignore
-    print("train val overlap size", len(train_val_overlap))
-    print("train val overlap proportion", len(train_val_overlap) / len(val_set["text"]))
-    print()
 
     print("Tokenizing datasets...")
     tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
@@ -71,12 +68,18 @@ def main():
             **base_training_args,
         )
 
+    # Log the train-val overlap to wandb
+    if args.train_set_size > 0 and args.val_set_size > 0:
+        if not wandb.run:
+            raise ValueError("wandb should have been initialized by now, exiting...")
+
+        train_val_overlap = get_overlap(smaller_dataset=val_set, larger_dataset=train_set)  # type: ignore
+        wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)
+        wandb.run.summary["train_val_overlap_over_train_set_size"] = len(train_val_overlap) / len(train_set["text"])
+        wandb.run.summary["train_val_overlap_over_val_set_size"] = len(train_val_overlap) / len(val_set["text"])
+
     # Perform the training
     training.run_trainer()
-
-    # Print overlaps again so it's stored in the output logged in wandb
-    # TODO: log this directly to wandb instead of printing it
-    print_overlaps(train_set, val_set)
 
 
 if __name__ == "__main__":
