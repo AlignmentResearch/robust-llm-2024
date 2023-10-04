@@ -151,6 +151,7 @@ class AdversarialTraining(Training):
     adversarial_example_search_minibatch_size: int
     attack_dataset: Optional[Dataset] = None
     current_adversarial_training_round: int = 0
+    skip_first_training_round: bool = False
 
     def __post_init__(self):
         super().__post_init__()
@@ -227,7 +228,10 @@ class AdversarialTraining(Training):
             # Train for "one round" (i.e., num_train_epochs) on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
             # NOTE: this is where wandb.init() is called by default
-            adversarial_trainer.train()
+            if i == 0 and self.skip_first_training_round:
+                print("Skipping first round of training...")
+            else:
+                adversarial_trainer.train()
 
             incorrect_predictions = search_for_adversarial_examples(
                 adversarial_trainer,
@@ -253,7 +257,15 @@ class AdversarialTraining(Training):
                 incorrect_predictions["label"],
             ):
                 table.add_data(text_string, correct_label)
-            wandb.log({f"successful_attacks_after_round_{i}": table}, commit=False)
+            wandb.log(
+                {
+                    f"successful_attacks_after_round_{i}": table,
+                    f"misc/number_successful_attacks": len(
+                        incorrect_predictions["text"]
+                    ),
+                },
+                commit=False,
+            )
 
             # Add the incorrect predictions to the adversarial dataset
             for text, true_label in zip(

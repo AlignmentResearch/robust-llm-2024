@@ -62,6 +62,7 @@ def main():
             min_num_adversarial_examples_to_add=args.min_num_adversarial_examples_to_add,
             max_num_search_for_adversarial_examples=args.max_num_search_for_adversarial_examples,
             adversarial_example_search_minibatch_size=args.adversarial_example_search_minibatch_size,
+            skip_first_training_round=args.skip_first_training_round,
         )
     else:
         training = Training(
