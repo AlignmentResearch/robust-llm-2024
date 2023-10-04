@@ -19,9 +19,9 @@ from robust_llm.adversarial_trainer import (
     AdversarialTrainerDatasetManagementCallback,
     AdversarialTrainerLoggingCallback,
 )
+from robust_llm.callbacks import CrossTrainRunStepRecordingWandbCallback
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
 from robust_llm.utils import (
-    get_incorrect_predictions,
     search_for_adversarial_examples,
     tokenize_dataset,
 )
@@ -62,7 +62,6 @@ class Training:
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
-            report_to=["wandb"],
         )
 
         trainer = Trainer(
@@ -72,6 +71,7 @@ class Training:
             eval_dataset=self.eval_dataset,  # type: ignore
             compute_metrics=self.compute_metrics,
         )
+        trainer.add_callback(CrossTrainRunStepRecordingWandbCallback)
 
         self.trainer = trainer
 
@@ -171,7 +171,6 @@ class AdversarialTraining(Training):
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
-            report_to=["wandb"],
         )
         trainer = AdversarialTrainer(
             model=self.model,
@@ -181,6 +180,7 @@ class AdversarialTraining(Training):
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
         )
+        trainer.add_callback(CrossTrainRunStepRecordingWandbCallback)
         trainer.add_callback(AdversarialTrainerLoggingCallback(self))
         trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
 
