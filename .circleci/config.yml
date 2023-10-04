@@ -9,8 +9,9 @@ jobs:
       - image: cimg/python:3.10.2
     steps:
       - checkout
-      - python/install-packages:
-          pkg-manager: pip
+      - run:
+          name: install robustllm
+          pkg-manager: pip install -e '.[dev]'
       - run:
           name: Run tests
           command: pytest
