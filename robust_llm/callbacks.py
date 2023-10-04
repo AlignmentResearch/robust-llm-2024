@@ -19,9 +19,10 @@ class CrossTrainRunStepRecordingWandbCallback(WandbCallback):
     def setup(self, args, state, model, **kwargs):
         super().setup(args, state, model, **kwargs)
         
-        # Try to undo the setting "global_step" as the default step metric
-        if getattr(self._wandb, "define_metric", None):
-            self._wandb.define_metric("*", step_metric="manual_global_step", step_sync=True)
+        # Undo setting "global_step" (which resets each `train`) as the default step metric
+        # NOTE: apparently older versions of wandb don't have "define_metric"
+        assert hasattr(self._wandb, "define_metric")
+        self._wandb.define_metric("*", step_metric="overall_global_step", step_sync=True)
     
     @override
     def on_train_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
@@ -33,4 +34,4 @@ class CrossTrainRunStepRecordingWandbCallback(WandbCallback):
     def on_step_begin(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         super().on_step_begin(args, state, control, **kwargs)
         
-        wandb.log({"overall_cross_round_global_step": self.num_past_training_steps_completed + state.global_step})
+        wandb.log({"overall_global_step": self.num_past_training_steps_completed + state.global_step})
