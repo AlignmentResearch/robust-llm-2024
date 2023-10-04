@@ -22,8 +22,8 @@ jobs:
       - run:
           name: Run tests
           command: pytest
-        environment:
-          WANDB_MODE: offline
+          environment:
+            WANDB_MODE: offline
 
   lint:
     docker:
