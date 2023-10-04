@@ -40,14 +40,6 @@ def get_overlap(
     return list(set(smaller_dataset["text"]).intersection(set(larger_dataset["text"])))
 
 
-def print_overlaps(train_set, val_set):
-    # How much of val set is in train set?
-    train_val_overlap = get_overlap(smaller_dataset=val_set, larger_dataset=train_set)
-    print("train val overlap size", len(train_val_overlap))
-    print("train val overlap proportion", len(train_val_overlap) / len(val_set["text"]))
-    print()
-
-
 def write_lines_to_file(lines, file_path):
     # If the folder doesn't exist yet, make one
     os.makedirs(os.path.dirname(file_path), exist_ok=True)

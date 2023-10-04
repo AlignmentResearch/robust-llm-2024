@@ -4,7 +4,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from robust_llm.language_generators import make_language_generator
 from robust_llm.parsing import setup_argument_parser
 from robust_llm.training import AdversarialTraining, Training
-from robust_llm.utils import print_overlaps, tokenize_dataset
+from robust_llm.utils import get_overlap, tokenize_dataset
 
 
 def main():
@@ -34,8 +34,11 @@ def main():
         val_size=args.val_set_size,
         test_size=0,
     )
-
-    print_overlaps(train_set, val_set)
+    
+    train_val_overlap = get_overlap(smaller_dataset=val_set, larger_dataset=train_set)  # type: ignore
+    print("train val overlap size", len(train_val_overlap))
+    print("train val overlap proportion", len(train_val_overlap) / len(val_set["text"]))
+    print()
 
     print("Tokenizing datasets...")
     tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
