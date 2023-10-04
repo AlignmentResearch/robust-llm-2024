@@ -3,21 +3,40 @@ version: 2.1
 orbs:
   python: circleci/python@1.5.0
 
-jobs:
-  build-and-test:
-    docker:
-      - image: cimg/python:3.10.2
+commands:
+  install-dependencies:
+    description: "Check out and update Python dependencies."
     steps:
       - checkout
       - run:
           name: install robustllm
           command: |
             pip install -e '.[dev]'
+
+jobs:
+  pytest:
+    docker:
+      - image: cimg/python:3.10.2
+    steps:
+      - install-dependencies
       - run:
           name: Run tests
           command: pytest
 
+  lint:
+    docker:
+      - image: cimg/python:3.10.2
+    steps:
+      - install-dependencies
+      - run:
+          name: black
+          command: |
+            black --version
+            pre-commit run --all black
+        # TODO add isort, maybe flake8 & codespell
+
 workflows:
   tests:
     jobs:
-      - build-and-test
+      - pytest
+      - lint
