@@ -35,7 +35,7 @@ def test_basic_constructor():
             eval_dataset=train_dataset,
             model=model,
         )
-    except e:
+    except Exception as e:
         logger.warn(f"Failed to initialize Training. {e}")
 
 
