@@ -27,16 +27,12 @@ def test_basic_constructor():
     model_name = "bert-base-cased"
     model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
 
-    # TODO(dan) configure CircleCI with a wandb API key, and delete this 'try'.
-    try:
-        Training(
-            hparams={},
-            train_dataset=train_dataset,
-            eval_dataset=train_dataset,
-            model=model,
-        )
-    except Exception as e:
-        logger.warn(f"Failed to initialize Training. {e}")
+    Training(
+        hparams={},
+        train_dataset=train_dataset,
+        eval_dataset=train_dataset,
+        model=model,
+    )
 
 
 # TODO test that training improves performance
