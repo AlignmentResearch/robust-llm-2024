@@ -11,7 +11,8 @@ jobs:
       - checkout
       - run:
           name: install robustllm
-          pkg-manager: pip install -e '.[dev]'
+          command: |
+            pip install -e '.[dev]'
       - run:
           name: Run tests
           command: pytest
