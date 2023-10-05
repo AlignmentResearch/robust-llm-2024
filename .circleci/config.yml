@@ -34,7 +34,7 @@ jobs:
           name: black
           command: |
             black --version
-            black .
+            black . --check
         # TODO add isort,mypy, maybe flake8 & codespell
 
 workflows:
