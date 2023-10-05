@@ -248,15 +248,15 @@ class AdversarialTraining(Training):
             print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
 
             # Append the incorrect predictions to the table (text, correct label)
-            table = wandb.Table(columns=["text", "correct label"])
+            successful_attacks_table = wandb.Table(columns=["text", "correct label"])
             for text_string, correct_label in zip(
                 incorrect_predictions["text"],
                 incorrect_predictions["label"],
             ):
-                table.add_data(text_string, correct_label)
+                successful_attacks_table.add_data(text_string, correct_label)
             wandb.log(
                 {
-                    f"successful_attacks_after_round_{i}": table,
+                    f"successful_attacks_after_round_{i}": successful_attacks_table,
                     f"misc/number_successful_attacks": len(
                         incorrect_predictions["text"]
                     ),

@@ -144,7 +144,6 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
     ) -> None:
         to_log: dict[str, Any] = {}
 
-        assert self.training.trainer is not None
         augmented_train_set = self.training.trainer.get_augmented_training_set()  # type: ignore
 
         # Record how much of the brute force attack set is in the train set
