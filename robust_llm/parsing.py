@@ -87,6 +87,12 @@ def add_parser_arguments(parser):
         default=100,
         help="The size of the validation set.",
     )
+    parser.add_argument(
+        "--skip_first_training_round",
+        type=bool,
+        default=False,
+        help="Whether to skip the first training round or not.",
+    )
 
 
 def setup_argument_parser():

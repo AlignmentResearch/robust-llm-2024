@@ -16,7 +16,7 @@ from transformers import (
 from typing_extensions import override
 
 import wandb
-from robust_llm.utils import tokenize_dataset
+from robust_llm.utils import get_overlap, tokenize_dataset
 
 
 class AdversarialTrainer(Trainer):
@@ -128,6 +128,33 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
             f"augmented_train_set_start_round_{self.training.current_adversarial_training_round}"
         ] = table
 
-        to_log[f"train/augmented_train_set_size"] = len(train_dataset_plus_adv_examples)
+        to_log[
+            f"misc/augmented_train_set_size"
+        ] = train_dataset_plus_adv_examples.num_rows
+
+        wandb.log(to_log, commit=False)
+
+    @override
+    def on_train_end(  # type: ignore[misc]
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ) -> None:
+        to_log: dict[str, Any] = {}
+
+        augmented_train_set = self.training.trainer.get_augmented_training_set()  # type: ignore
+
+        # Record how much of the brute force attack set is in the train set
+        overlap = get_overlap(
+            self.training.eval_dataset["brute_force_attack_dataset"].to_dict(),  # type: ignore
+            augmented_train_set.to_dict(),  # type: ignore
+        )
+        proportion_of_attack_in_train = (
+            len(overlap)
+            / self.training.eval_dataset["brute_force_attack_dataset"].num_rows
+        )
+        to_log["misc/proportion_of_attack_in_train"] = proportion_of_attack_in_train
 
         wandb.log(to_log, commit=False)
