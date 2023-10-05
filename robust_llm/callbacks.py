@@ -1,10 +1,9 @@
 from transformers.integrations import WandbCallback
+from transformers.trainer_callback import TrainerControl, TrainerState
+from transformers.training_args import TrainingArguments
 from typing_extensions import override
 
 import wandb
-
-from transformers.trainer_callback import TrainerControl, TrainerState
-from transformers.training_args import TrainingArguments
 
 
 class CrossTrainRunStepRecordingWandbCallback(WandbCallback):

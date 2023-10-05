@@ -21,10 +21,7 @@ from robust_llm.adversarial_trainer import (
 )
 from robust_llm.callbacks import CrossTrainRunStepRecordingWandbCallback
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
-from robust_llm.utils import (
-    search_for_adversarial_examples,
-    tokenize_dataset,
-)
+from robust_llm.utils import search_for_adversarial_examples, tokenize_dataset
 
 
 @dataclasses.dataclass

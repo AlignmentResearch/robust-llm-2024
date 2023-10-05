@@ -1,11 +1,10 @@
 import dataclasses
-import numpy as np
 import re
 
+import numpy as np
 from typing_extensions import override
 
 from robust_llm.language_generators.tomita_base import TomitaBase
-
 
 PATTERN = re.compile("0*1*0*1*")
 

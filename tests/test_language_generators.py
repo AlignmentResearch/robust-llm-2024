@@ -1,4 +1,5 @@
 import pytest
+
 from robust_llm.language_generators import make_language_generator
 
 # Long enough for all Tomita languages to have several
