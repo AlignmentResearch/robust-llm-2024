@@ -1,17 +1,16 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from robust_llm.adversarial_trainer import AdversarialTrainer
 
-
-import numpy as np
 import os
-
-from torch.utils.data import DataLoader
 from typing import Generator
 
+import numpy as np
 from datasets import Dataset
+from torch.utils.data import DataLoader
 from transformers import Trainer
 
 

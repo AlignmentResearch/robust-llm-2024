@@ -1,8 +1,7 @@
-import wandb
-
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+import wandb
 from robust_llm.language_generators import make_language_generator
 from robust_llm.parsing import setup_argument_parser
 from robust_llm.training import AdversarialTraining, Training
