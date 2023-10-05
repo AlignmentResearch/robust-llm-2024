@@ -128,7 +128,9 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
             f"augmented_train_set_start_round_{self.training.current_adversarial_training_round}"
         ] = table
 
-        to_log[f"misc/augmented_train_set_size"] = train_dataset_plus_adv_examples.num_rows
+        to_log[
+            f"misc/augmented_train_set_size"
+        ] = train_dataset_plus_adv_examples.num_rows
 
         wandb.log(to_log, commit=False)
 
@@ -150,7 +152,10 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
             self.training.eval_dataset["brute_force_attack_dataset"].to_dict(),  # type: ignore
             augmented_train_set.to_dict(),  # type: ignore
         )
-        proportion_of_attack_in_train = len(overlap) / self.training.eval_dataset["brute_force_attack_dataset"].num_rows
+        proportion_of_attack_in_train = (
+            len(overlap)
+            / self.training.eval_dataset["brute_force_attack_dataset"].num_rows
+        )
         to_log["misc/proportion_of_attack_in_train"] = proportion_of_attack_in_train
-        
+
         wandb.log(to_log, commit=False)

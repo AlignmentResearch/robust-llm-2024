@@ -14,6 +14,7 @@ from typing import Generator
 from datasets import Dataset
 from transformers import Trainer
 
+
 def tokenize_dataset(dataset, tokenizer):
     # Padding seems necessary in order to avoid an error
     tokenized_data = tokenizer(dataset["text"], padding="max_length", truncation=True)
