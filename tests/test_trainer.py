@@ -1,13 +1,10 @@
 import pytest
-import logging
 
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from robust_llm.language_generators import make_language_generator
 from robust_llm.training import Training
-
-logger = logging.getLogger(__name__)
 
 # 10 is long enough for all Tomita languages to have several
 # true and false examples, but is otherwise arbitrary.
