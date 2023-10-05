@@ -1,7 +1,8 @@
-from robust_llm.language_generators.tomita1 import Tomita1, TomitaBase
+from robust_llm.language_generators.tomita1 import Tomita1
 from robust_llm.language_generators.tomita2 import Tomita2
 from robust_llm.language_generators.tomita4 import Tomita4
 from robust_llm.language_generators.tomita7 import Tomita7
+from robust_llm.language_generators.tomita_base import TomitaBase
 
 
 def make_language_generator(language_name: str, max_length: int) -> TomitaBase:
