@@ -13,7 +13,7 @@ If you are planning to develop in the repository and thus want the optional deve
 pip install -e '.[dev]'
 ```
 
-Add pre-commit hooks for linting and the like with:
+Add [pre-commit](https://pre-commit.com/) hooks for linting and the like with:
 ```
 pre-commit install
 ```
