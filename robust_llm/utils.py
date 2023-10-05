@@ -40,7 +40,7 @@ def get_overlap(
     return list(set(smaller_dataset["text"]).intersection(set(larger_dataset["text"])))
 
 
-def write_lines_to_file(lines, file_path):
+def write_lines_to_file(lines: list[str], file_path: str) -> None:
     # If the folder doesn't exist yet, make one
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
