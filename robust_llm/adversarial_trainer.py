@@ -142,10 +142,9 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ) -> None:
-        
         if self.training.use_probabilistic_robustness_check:
             return
-        
+
         to_log: dict[str, Any] = {}
 
         augmented_train_set = self.training.trainer.get_augmented_training_set()  # type: ignore

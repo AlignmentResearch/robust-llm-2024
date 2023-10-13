@@ -94,6 +94,7 @@ def add_parser_arguments(parser):
         help="If true, only checks robustness on a random subset of the brute force attack dataset.",
     )
 
+
 def setup_argument_parser():
     parser = ArgumentParser()
     add_parser_arguments(parser)
