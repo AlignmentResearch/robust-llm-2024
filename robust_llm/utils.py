@@ -64,9 +64,9 @@ def search_for_adversarial_examples(
     min_num_adversarial_examples_to_add: int,
     max_num_search_for_adversarial_examples: int,
     adversarial_example_search_minibatch_size: int,
-) -> dict[str, list]:
+) -> tuple[dict[str, list], int]:
     """
-    Randomly iterates through `attack_dataset` for examples that the model misclassifiels, and returns them (and their correct labels) in a dict.
+    Iterates through a shuffled `attack_dataset` for examples that the model misclassifies, and returns them (and their correct labels) in a dict.
 
     Args:
         adversarial_trainer (AdversarialTrainer): trainer from which we use the model to make predictions.
@@ -76,6 +76,7 @@ def search_for_adversarial_examples(
 
     Returns:
         dict[str, list]: A dict containing the adversarial examples and their true labels.
+        int: the number of examples searched through
     """
 
     number_searched = 0
@@ -84,8 +85,6 @@ def search_for_adversarial_examples(
     for minibatch in yield_minibatch(
         attack_dataset, adversarial_example_search_minibatch_size
     ):
-        print("current minibatch size:", len(minibatch["text"]))
-
         # Search for adversarial examples
         incorrect_predictions = get_incorrect_predictions(
             trainer=adversarial_trainer, dataset=minibatch
@@ -107,7 +106,7 @@ def search_for_adversarial_examples(
             )
             break
 
-    return adversarial_examples
+    return adversarial_examples, number_searched
 
 
 def yield_minibatch(

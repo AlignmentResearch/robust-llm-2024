@@ -145,21 +145,19 @@ class AdversarialTraining(Training):
     language_generator_name: str
     brute_force_attack: bool
     brute_force_length: int
-    random_sample_attack: bool
     min_num_adversarial_examples_to_add: int
     max_num_search_for_adversarial_examples: int
     adversarial_example_search_minibatch_size: int
     attack_dataset: Optional[Dataset] = None
     current_adversarial_training_round: int = 0
     skip_first_training_round: bool = False
+    use_probabilistic_robustness_check: bool = False
 
     def __post_init__(self):
         super().__post_init__()
 
         assert type(self.eval_dataset) is dict
         assert "eval" in self.eval_dataset
-
-        assert not (self.brute_force_attack and self.random_sample_attack)
 
         # Standardize the language generator name
         self.language_generator_name = self.language_generator_name.lower()
@@ -205,17 +203,15 @@ class AdversarialTraining(Training):
                 tokenize_dataset(brute_force_dataset, self.tokenizer)
             )
             attack_dataset = tokenized_brute_force_dataset
-
-        elif self.random_sample_attack:
-            raise NotImplementedError("Random sample attack not implemented yet.")
+            
+            if not self.use_probabilistic_robustness_check:
+                # Save the attack dataset as one of the datasets to do eval on
+                self.eval_dataset["brute_force_attack_dataset"] = attack_dataset
 
         else:
             # Just find mistakes in the eval set
             assert "eval" in self.eval_dataset
             attack_dataset = self.eval_dataset["eval"]
-
-        # Save the attack dataset as one of the datasets to do eval on
-        self.eval_dataset["brute_force_attack_dataset"] = attack_dataset
 
         # Log the datasets
         self.log_datasets()
@@ -224,6 +220,8 @@ class AdversarialTraining(Training):
         for i in range(self.num_adversarial_training_rounds):
             print("Starting training round", i)
             self.current_adversarial_training_round = i
+            
+            to_log = {}
 
             # Train for "one round" (i.e., num_train_epochs) on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
@@ -232,19 +230,21 @@ class AdversarialTraining(Training):
                 print("Skipping first round of training...")
             else:
                 adversarial_trainer.train()
-
-            incorrect_predictions = search_for_adversarial_examples(
+            
+            incorrect_predictions, number_examples_searched = search_for_adversarial_examples(
                 adversarial_trainer,
                 attack_dataset,
                 min_num_adversarial_examples_to_add=self.min_num_adversarial_examples_to_add,
                 max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,
                 adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,
             )
+            
+            to_log["misc/number_examples_searched"] = number_examples_searched
 
             # Check if we have perfect accuracy now. If so, we're done.
             if len(incorrect_predictions["text"]) == 0:
                 print(
-                    "Model got perfect accuracy on the adversarial dataset, so stopping adversarial training."
+                    f"~~~Model got perfect accuracy on the {number_examples_searched} examples tried, so stopping adversarial training.~~~"
                 )
                 break
 
@@ -257,16 +257,9 @@ class AdversarialTraining(Training):
                 incorrect_predictions["label"],
             ):
                 successful_attacks_table.add_data(text_string, correct_label)
-            wandb.log(
-                {
-                    f"successful_attacks_after_round_{i}": successful_attacks_table,
-                    f"misc/number_successful_attacks": len(
-                        incorrect_predictions["text"]
-                    ),
-                },
-                commit=False,
-            )
-
+            to_log[f"successful_attacks_after_round_{i}"] = successful_attacks_table
+            to_log[f"misc/number_successful_attacks"] = len( incorrect_predictions["text"])
+            
             # Add the incorrect predictions to the adversarial dataset
             for text, true_label in zip(
                 incorrect_predictions["text"],
@@ -283,11 +276,16 @@ class AdversarialTraining(Training):
             )
             self.eval_dataset["adversarial_examples"] = tokenized_adversarial_examples
 
+            wandb.log(to_log, commit=False)
+
     @override
     def log_datasets(self):
         # First log the train and eval sets
         super().log_datasets()
 
+        if self.use_probabilistic_robustness_check:
+            return
+        
         to_log = {}
 
         # Save the adversarial training dataset to a wandb table

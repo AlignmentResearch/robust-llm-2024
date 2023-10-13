@@ -58,11 +58,11 @@ def main():
             language_generator_name=args.language_generator,
             brute_force_attack=args.brute_force_attack,
             brute_force_length=args.brute_force_length,
-            random_sample_attack=args.random_sample_attack,
             min_num_adversarial_examples_to_add=args.min_num_adversarial_examples_to_add,
             max_num_search_for_adversarial_examples=args.max_num_search_for_adversarial_examples,
             adversarial_example_search_minibatch_size=args.adversarial_example_search_minibatch_size,
             skip_first_training_round=args.skip_first_training_round,
+            use_probabilistic_robustness_check=args.use_probabilistic_robustness_check,
         )
     else:
         training = Training(
