@@ -39,12 +39,6 @@ def add_parser_arguments(parser):
         help="The size of the minibatches to use when searching for adversarial examples.",
     )
     parser.add_argument(
-        "--random_sample_attack",
-        type=bool,
-        default=False,
-        help="Whether to randomly sample adversarial examples or not.",
-    )
-    parser.add_argument(
         "--language_generator",
         choices=["Tomita1", "Tomita2", "Tomita4", "Tomita7"],
         default="Tomita4",
@@ -92,6 +86,12 @@ def add_parser_arguments(parser):
         type=bool,
         default=False,
         help="Whether to skip the first training round or not.",
+    )
+    parser.add_argument(
+        "--use_probabilistic_robustness_check",
+        type=bool,
+        default=False,
+        help="If true, only checks robustness on a random subset of the brute force attack dataset.",
     )
 
 
