@@ -1,17 +1,16 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from robust_llm.adversarial_trainer import AdversarialTrainer
 
-
-import numpy as np
 import os
-
-from torch.utils.data import DataLoader
 from typing import Generator
 
+import numpy as np
 from datasets import Dataset
+from torch.utils.data import DataLoader
 from transformers import Trainer
 
 
@@ -27,7 +26,7 @@ def get_overlap(
     return list(set(smaller_dataset["text"]).intersection(set(larger_dataset["text"])))
 
 
-def write_lines_to_file(lines, file_path):
+def write_lines_to_file(lines: list[str], file_path: str) -> None:
     # If the folder doesn't exist yet, make one
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 

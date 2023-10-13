@@ -9,9 +9,9 @@ from datasets import Dataset, concatenate_datasets
 from transformers import (
     Trainer,
     TrainerCallback,
-    TrainingArguments,
-    TrainerState,
     TrainerControl,
+    TrainerState,
+    TrainingArguments,
 )
 from typing_extensions import override
 

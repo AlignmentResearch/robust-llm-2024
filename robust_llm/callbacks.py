@@ -1,10 +1,9 @@
 from transformers.integrations import WandbCallback
+from transformers.trainer_callback import TrainerControl, TrainerState
+from transformers.training_args import TrainingArguments
 from typing_extensions import override
 
 import wandb
-
-from transformers.trainer_callback import TrainerControl, TrainerState
-from transformers.training_args import TrainingArguments
 
 
 class CrossTrainRunStepRecordingWandbCallback(WandbCallback):
@@ -26,7 +25,7 @@ class CrossTrainRunStepRecordingWandbCallback(WandbCallback):
         )
 
     @override
-    def on_train_end(
+    def on_train_end(  # type: ignore[misc]
         self,
         args: TrainingArguments,
         state: TrainerState,
@@ -38,7 +37,7 @@ class CrossTrainRunStepRecordingWandbCallback(WandbCallback):
         self.num_past_training_steps_completed += state.global_step
 
     @override
-    def on_step_begin(
+    def on_step_begin(  # type: ignore[misc]
         self,
         args: TrainingArguments,
         state: TrainerState,

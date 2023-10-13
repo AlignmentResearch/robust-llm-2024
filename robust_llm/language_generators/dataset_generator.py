@@ -1,7 +1,6 @@
 from robust_llm.language_generators import make_language_generator
 from robust_llm.language_generators.tomita_base import TomitaBase
 
-
 language_names = {"tomita1", "tomita2", "tomita4", "tomita7"}
 DATASET_PATH = "/home/dev/robust-llm/robust_llm/datasets"
 

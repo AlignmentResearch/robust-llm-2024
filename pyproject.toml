@@ -17,7 +17,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "black",
+    "isort",
     "mypy",
+    "pre-commit",
     "pytest",
 ]
 
