@@ -144,7 +144,7 @@ class AdversarialTraining(Training):
         tokenizer:
             Huggingface tokenizer used for tokenizing the dataset. Should match the model we're using.
         num_adversarial_training_rounds:
-            One round of adversarial training involves first finding some number of adversarial examples, 
+            One round of adversarial training involves first finding some number of adversarial examples,
             adding them to an "augmented train set", and training on that for some number of epochs.
         language_generator_name:
             The name of the language generator which should be created to generate datapoints for training and evaluation.
@@ -164,9 +164,10 @@ class AdversarialTraining(Training):
         skip_first_training_round:
             Whether to skip the first round of training. Useful for doing "exclusively" adversarial training.
         use_probabilistic_robustness_check:
-            Whether to determine model robustness by randomly selecting some examples from the brute force dataset and testing only on those, 
+            Whether to determine model robustness by randomly selecting some examples from the brute force dataset and testing only on those,
             rather than the default of checking against the entire brute force dataset.
     """
+
     tokenizer: PreTrainedTokenizerBase
     num_adversarial_training_rounds: int
     language_generator_name: str
@@ -186,7 +187,7 @@ class AdversarialTraining(Training):
 
         # Standardize the language generator name
         self.language_generator_name: str = self.language_generator_name.lower()
-        
+
         self.current_adversarial_training_round: int = 0
 
     @override
