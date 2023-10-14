@@ -79,7 +79,7 @@ class Training:
 
         self.log_datasets()
 
-        trainer.evaluate(eval_dataset=self.eval_dataset)  # type: ignore
+        trainer.evaluate(eval_dataset=self.eval_dataset["eval"])  # type: ignore
         trainer.train()
 
     def compute_metrics(self, eval_preds: EvalPrediction) -> dict:
