@@ -270,6 +270,7 @@ class AdversarialTraining(Training):
 
             wandb.log(
                 {
+                    "train/adversarial_training_round": self.current_adversarial_training_round,
                     "misc/number_examples_searched": number_examples_searched,
                     "misc/number_successful_attacks": len(
                         incorrect_predictions["text"]
@@ -281,7 +282,7 @@ class AdversarialTraining(Training):
             # Check if we have perfect accuracy now. If so, we're done.
             if len(incorrect_predictions["text"]) == 0:
                 print(
-                    f"~~~Model got perfect accuracy on the {number_examples_searched} examples tried, so stopping adversarial training.~~~"
+                    f"~~~In round {i} of adversarial training, model got perfect accuracy on the {number_examples_searched} examples tried, so stopping adversarial training.~~~"
                 )
                 break
 

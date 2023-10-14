@@ -107,10 +107,6 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
     ) -> None:
         to_log: dict[str, Any] = {}
 
-        to_log[
-            "train/adversarial_training_round"
-        ] = self.training.current_adversarial_training_round
-
         assert self.training.trainer is not None
 
         train_dataset_plus_adv_examples = (
