@@ -68,11 +68,16 @@ def main():
             **base_training_args,
         )
 
+    # Log the training arguments to wandb
+    if not wandb.run:
+        raise ValueError("wandb should have been initialized by now, exiting...")
+    for k, v in sorted(list(vars(args).items())):
+        wandb.run.summary[f"args/{k}"] = v
+
     # Log the train-val overlap to wandb
     if args.train_set_size > 0 and args.val_set_size > 0:
         if not wandb.run:
             raise ValueError("wandb should have been initialized by now, exiting...")
-
         train_val_overlap = get_overlap(smaller_dataset=val_set, larger_dataset=train_set)  # type: ignore
         wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)
         wandb.run.summary["train_val_overlap_over_train_set_size"] = len(
