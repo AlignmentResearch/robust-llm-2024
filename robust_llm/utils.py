@@ -84,6 +84,8 @@ def search_for_adversarial_examples(
     for minibatch in yield_minibatch(
         attack_dataset, adversarial_example_search_minibatch_size
     ):
+        number_searched += adversarial_example_search_minibatch_size
+
         # Search for adversarial examples
         incorrect_predictions = get_incorrect_predictions(
             trainer=adversarial_trainer, dataset=minibatch
@@ -98,7 +100,6 @@ def search_for_adversarial_examples(
             break
 
         # If we passed the threshold of how many examples to search over, stop searching
-        number_searched += adversarial_example_search_minibatch_size
         if number_searched >= max_num_search_for_adversarial_examples:
             print(
                 f"Stopping search after {number_searched} examples searched (limit was {max_num_search_for_adversarial_examples})"

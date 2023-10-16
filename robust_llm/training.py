@@ -268,29 +268,25 @@ class AdversarialTraining(Training):
                 adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,
             )
 
-            to_log = {}
-            to_log["misc/number_examples_searched"] = number_examples_searched
+            wandb.log(
+                {
+                    "train/adversarial_training_round": self.current_adversarial_training_round,
+                    "misc/number_examples_searched": number_examples_searched,
+                    "misc/number_successful_attacks": len(
+                        incorrect_predictions["text"]
+                    ),
+                },
+                commit=False,
+            )
 
             # Check if we have perfect accuracy now. If so, we're done.
             if len(incorrect_predictions["text"]) == 0:
                 print(
-                    f"~~~Model got perfect accuracy on the {number_examples_searched} examples tried, so stopping adversarial training.~~~"
+                    f"~~~In round {i} of adversarial training, model got perfect accuracy on the {number_examples_searched} examples tried, so stopping adversarial training.~~~"
                 )
                 break
 
             print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
-
-            # Append the incorrect predictions to the table (text, correct label)
-            successful_attacks_table = wandb.Table(columns=["text", "correct label"])
-            for text_string, correct_label in zip(
-                incorrect_predictions["text"],
-                incorrect_predictions["label"],
-            ):
-                successful_attacks_table.add_data(text_string, correct_label)
-            to_log[f"successful_attacks_after_round_{i}"] = successful_attacks_table
-            to_log[f"misc/number_successful_attacks"] = len(
-                incorrect_predictions["text"]
-            )
 
             # Add the incorrect predictions to the adversarial dataset
             for text, true_label in zip(
@@ -299,6 +295,16 @@ class AdversarialTraining(Training):
             ):
                 adversarial_trainer.adversarial_examples["text"].append(text)
                 adversarial_trainer.adversarial_examples["label"].append(true_label)
+
+            to_log = {}
+            # Append the incorrect predictions to the table (text, correct label)
+            successful_attacks_table = wandb.Table(columns=["text", "correct label"])
+            for text_string, correct_label in zip(
+                incorrect_predictions["text"],
+                incorrect_predictions["label"],
+            ):
+                successful_attacks_table.add_data(text_string, correct_label)
+            to_log[f"successful_attacks_after_round_{i}"] = successful_attacks_table
 
             # Save the adversarial dataset to the eval sets
             tokenized_adversarial_examples = Dataset.from_dict(
