@@ -9,6 +9,12 @@ def add_parser_arguments(parser):
         help="Whether to use adversarial training or not.",
     )
     parser.add_argument(
+        "--proportion",
+        type=float,
+        default=0.1,
+        help="The proportion of the brute force dataset to use for training, when running a baseline.",
+    )
+    parser.add_argument(
         "--brute_force_attack",
         type=bool,
         default=False,
