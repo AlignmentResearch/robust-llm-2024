@@ -21,7 +21,11 @@ from robust_llm.adversarial_trainer import (
 )
 from robust_llm.callbacks import CrossTrainRunStepRecordingWandbCallback
 from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
-from robust_llm.utils import search_for_adversarial_examples, tokenize_dataset
+from robust_llm.utils import (
+    search_for_adversarial_examples,
+    tokenize_dataset,
+    yield_minibatch,
+)
 
 
 @dataclasses.dataclass
@@ -166,6 +170,8 @@ class AdversarialTraining(Training):
         use_probabilistic_robustness_check:
             Whether to determine model robustness by randomly selecting some examples from the brute force dataset and testing only on those,
             rather than the default of checking against the entire brute force dataset.
+        non_adversarial_baseline:
+            If true, don't train on adversarial examples, just train on any old examples, whether or not the models gets them right.
     """
 
     tokenizer: PreTrainedTokenizerBase
@@ -178,6 +184,7 @@ class AdversarialTraining(Training):
     adversarial_example_search_minibatch_size: int
     skip_first_training_round: bool = False
     use_probabilistic_robustness_check: bool = False
+    non_adversarial_baseline: bool = False
 
     def __post_init__(self):
         super().__post_init__()
@@ -257,16 +264,30 @@ class AdversarialTraining(Training):
             else:
                 adversarial_trainer.train()
 
-            (
-                incorrect_predictions,
-                number_examples_searched,
-            ) = search_for_adversarial_examples(
-                adversarial_trainer,
-                attack_dataset,
-                min_num_adversarial_examples_to_add=self.min_num_adversarial_examples_to_add,
-                max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,
-                adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,
-            )
+            incorrect_predictions: dict[str, list[str]]
+            number_examples_searched: int
+            if self.non_adversarial_baseline:
+                print(
+                    "Non-adversarial baseline: NOT searching for mistakes, just adding the first few random examples..."
+                )
+                # TODO: make sure the next line always searches randomly over the entire dataset, vs going through it iteratively
+                incorrect_predictions = next(yield_minibatch(attack_dataset, self.min_num_adversarial_examples_to_add + self.adversarial_example_search_minibatch_size // 2))  # type: ignore
+                number_examples_searched = (
+                    self.min_num_adversarial_examples_to_add
+                    + self.adversarial_example_search_minibatch_size // 2
+                )
+            else:
+                print("Searching for mistakes...")
+                (
+                    incorrect_predictions,
+                    number_examples_searched,
+                ) = search_for_adversarial_examples(
+                    adversarial_trainer,
+                    attack_dataset,
+                    min_num_adversarial_examples_to_add=self.min_num_adversarial_examples_to_add,
+                    max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,
+                    adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,
+                )
 
             wandb.log(
                 {

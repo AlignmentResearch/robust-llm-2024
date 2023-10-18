@@ -62,6 +62,7 @@ def main():
             adversarial_example_search_minibatch_size=args.adversarial_example_search_minibatch_size,
             skip_first_training_round=args.skip_first_training_round,
             use_probabilistic_robustness_check=args.use_probabilistic_robustness_check,
+            non_adversarial_baseline=args.non_adversarial_baseline,
         )
     else:
         training = Training(
