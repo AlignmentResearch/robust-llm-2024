@@ -7,13 +7,14 @@ from robust_llm.language_generators.tomita_base import TomitaBase
 
 def make_language_generator(language_name: str, max_length: int) -> TomitaBase:
     language_generator: TomitaBase
-    if language_name == "Tomita1":
+    language_name = language_name.lower()
+    if language_name == "tomita1":
         language_generator = Tomita1(max_length=max_length)
-    elif language_name == "Tomita2":
+    elif language_name == "tomita2":
         language_generator = Tomita2(max_length=max_length)
-    elif language_name == "Tomita4":
+    elif language_name == "tomita4":
         language_generator = Tomita4(max_length=max_length)
-    elif language_name == "Tomita7":
+    elif language_name == "tomita7":
         language_generator = Tomita7(max_length=max_length)
     else:
         raise ValueError(f"Unsupported language: {language_name}")
