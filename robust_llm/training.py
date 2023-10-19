@@ -171,7 +171,7 @@ class AdversarialTraining(Training):
             Whether to determine model robustness by randomly selecting some examples from the brute force dataset and testing only on those,
             rather than the default of checking against the entire brute force dataset.
         non_adversarial_baseline:
-            If true, don't train on adversarial examples, just train on any old examples, whether or not the models gets them right.
+            If true, don't train on adversarial examples, just train on random examples, whether or not the models gets them right.
     """
 
     tokenizer: PreTrainedTokenizerBase
