@@ -163,7 +163,7 @@ robust_llm/wandb/
 datasets/
 
 # Checkpoints
-adversarial_trainer/
+checkpoint*/
 
 # Configurations
 .vscode/
