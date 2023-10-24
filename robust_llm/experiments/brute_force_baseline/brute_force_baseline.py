@@ -2,7 +2,9 @@ from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 import wandb
-from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
+from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
+    load_adversarial_dataset,
+)
 from robust_llm.parsing import setup_argument_parser
 from robust_llm.training import Training
 from robust_llm.utils import get_overlap, tokenize_dataset
