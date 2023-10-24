@@ -3,7 +3,7 @@ from robust_llm.experiments.brute_force_baseline import brute_force_baseline
 
 
 def main():
-    brute_force_baseline.main()
+    adversarial_training.main()
 
 
 if __name__ == "__main__":

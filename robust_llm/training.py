@@ -283,13 +283,14 @@ class AdversarialTraining(Training):
             )
 
             print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
+            
+            examples_to_actually_add_to_train_set = incorrect_predictions
 
             if self.non_adversarial_baseline:
                 print(
                     "Non-adversarial baseline: NOT adding those mistakes, instead adding the first few random examples..."
                 )
-                # TODO: make sure the next line always searches randomly over the entire dataset, vs going through it iteratively
-                minibatch_to_actually_add_to_train_set = next(yield_minibatch(attack_dataset, self.min_num_adversarial_examples_to_add + self.adversarial_example_search_minibatch_size // 2))  # type: ignore
+                examples_to_actually_add_to_train_set = next(yield_minibatch(attack_dataset, self.min_num_adversarial_examples_to_add + self.adversarial_example_search_minibatch_size // 2))  # type: ignore
 
             wandb.log(
                 {
@@ -309,8 +310,8 @@ class AdversarialTraining(Training):
                 )
                 break
 
+            # Log the successful attacks and the examples to add to the training set
             to_log = {}
-            # Append the incorrect predictions to the table (text, correct label)
             successful_attacks_table = wandb.Table(columns=["text", "correct label"])
             for text_string, correct_label in zip(
                 incorrect_predictions["text"],
@@ -318,39 +319,34 @@ class AdversarialTraining(Training):
             ):
                 successful_attacks_table.add_data(text_string, correct_label)
             to_log[f"successful_attacks_after_round_{i}"] = successful_attacks_table
-
-            if self.non_adversarial_baseline:
-                incorrect_predictions = {"text": minibatch_to_actually_add_to_train_set["text"], "label": minibatch_to_actually_add_to_train_set["label"]}  # type: ignore
-
-                actual_examples_added_table = wandb.Table(
-                    columns=["text", "correct label"]
-                )
-                for text_string, correct_label in zip(
-                    incorrect_predictions["text"],
-                    incorrect_predictions["label"],
-                ):
-                    actual_examples_added_table.add_data(text_string, correct_label)
-                to_log[
-                    f"examples_added_to_training_set_after_round_{i}"
-                ] = actual_examples_added_table
-
+            actual_examples_added_table = wandb.Table(
+                columns=["text", "correct label"]
+            )
+            for text_string, correct_label in zip(
+                examples_to_actually_add_to_train_set["text"],
+                examples_to_actually_add_to_train_set["label"],
+            ):
+                actual_examples_added_table.add_data(text_string, correct_label)
+            to_log[
+                f"examples_added_to_training_set_after_round_{i}"
+            ] = actual_examples_added_table
             wandb.log(to_log, commit=False)
 
-            # Add the "incorrect predictions" to the adversarial dataset
+            # Save the new examples to the adversarial trainer
             for text, true_label in zip(
-                incorrect_predictions["text"],
-                incorrect_predictions["label"],  # true label
+                examples_to_actually_add_to_train_set["text"],
+                examples_to_actually_add_to_train_set["label"],  # true label
             ):
-                adversarial_trainer.adversarial_examples["text"].append(text)
-                adversarial_trainer.adversarial_examples["label"].append(true_label)
+                adversarial_trainer.new_examples["text"].append(text)
+                adversarial_trainer.new_examples["label"].append(true_label)
 
-            # Save the adversarial dataset to the eval sets
-            tokenized_adversarial_examples = Dataset.from_dict(
+            # Save the adversarial dataset as an eval set
+            tokenized_new_examples = Dataset.from_dict(
                 tokenize_dataset(
-                    adversarial_trainer.adversarial_examples, self.tokenizer
+                    adversarial_trainer.new_examples, self.tokenizer
                 )
             )
-            self.eval_dataset["adversarial_examples"] = tokenized_adversarial_examples
+            self.eval_dataset["new_examples"] = tokenized_new_examples
 
     @override
     def log_datasets(self):
