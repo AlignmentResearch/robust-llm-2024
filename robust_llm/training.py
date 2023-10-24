@@ -283,7 +283,7 @@ class AdversarialTraining(Training):
             )
 
             print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
-            
+
             examples_to_actually_add_to_train_set = incorrect_predictions
 
             if self.non_adversarial_baseline:
@@ -319,9 +319,7 @@ class AdversarialTraining(Training):
             ):
                 successful_attacks_table.add_data(text_string, correct_label)
             to_log[f"successful_attacks_after_round_{i}"] = successful_attacks_table
-            actual_examples_added_table = wandb.Table(
-                columns=["text", "correct label"]
-            )
+            actual_examples_added_table = wandb.Table(columns=["text", "correct label"])
             for text_string, correct_label in zip(
                 examples_to_actually_add_to_train_set["text"],
                 examples_to_actually_add_to_train_set["label"],
@@ -342,11 +340,11 @@ class AdversarialTraining(Training):
 
             # Save the adversarial dataset as an eval set
             tokenized_new_examples = Dataset.from_dict(
-                tokenize_dataset(
-                    adversarial_trainer.new_examples, self.tokenizer
-                )
+                tokenize_dataset(adversarial_trainer.new_examples, self.tokenizer)
             )
-            self.eval_dataset["new_examples"] = tokenized_new_examples
+            self.eval_dataset[
+                "all_examples_added_during_iterative_training"
+            ] = tokenized_new_examples
 
     @override
     def log_datasets(self):
