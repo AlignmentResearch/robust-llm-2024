@@ -99,6 +99,12 @@ def add_parser_arguments(parser):
         default=False,
         help="If true, only checks robustness on a random subset of the brute force attack dataset.",
     )
+    parser.add_argument(
+        "--non_adversarial_baseline",
+        type=bool,
+        default=False,
+        help="Whether to run a non-adversarial baseline or not.",
+    )
 
 
 def setup_argument_parser():

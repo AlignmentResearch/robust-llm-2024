@@ -23,7 +23,7 @@ class AdversarialTrainer(Trainer):
     def __init__(self, **trainer_kwargs):
         super().__init__(**trainer_kwargs)
 
-        self.adversarial_examples: dict = {"text": [], "label": []}
+        self.new_examples: dict = {"text": [], "label": []}
 
     @override
     def get_train_dataloader(self):
@@ -41,14 +41,14 @@ class AdversarialTrainer(Trainer):
 
     def get_augmented_training_set(self) -> Dataset:
         # Augment the train set with the new adversarial examples
-        if len(self.adversarial_examples["text"]) > 0:
+        if len(self.new_examples["text"]) > 0:
             # Tokenize the new examples
-            tokenized_adversarial_examples = self.get_tokenized_adversarial_dataset()
+            tokenized_new_examples = self.get_tokenized_adversarial_dataset()
 
             train_dataset_plus_adv_examples = concatenate_datasets(
                 [
                     self.train_dataset,  # type: ignore
-                    tokenized_adversarial_examples,
+                    tokenized_new_examples,
                 ]
             )
 
@@ -58,19 +58,19 @@ class AdversarialTrainer(Trainer):
         return train_dataset_plus_adv_examples  # type: ignore
 
     def get_tokenized_adversarial_dataset(self) -> Dataset:
-        assert len(self.adversarial_examples["text"]) > 0
+        assert len(self.new_examples["text"]) > 0
 
         # Tokenize the new examples
-        tokenized_adversarial_examples = Dataset.from_dict(
-            tokenize_dataset(self.adversarial_examples, self.tokenizer)
+        tokenized_new_examples = Dataset.from_dict(
+            tokenize_dataset(self.new_examples, self.tokenizer)
         )
 
         assert (
             self.train_dataset.features.type  # type: ignore
-            == tokenized_adversarial_examples.features.type
+            == tokenized_new_examples.features.type
         )
 
-        return tokenized_adversarial_examples
+        return tokenized_new_examples
 
 
 class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
