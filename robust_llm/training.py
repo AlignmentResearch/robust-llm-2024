@@ -20,7 +20,10 @@ from robust_llm.adversarial_trainer import (
     AdversarialTrainerLoggingCallback,
 )
 from robust_llm.callbacks import CrossTrainRunStepRecordingWandbCallback
-from robust_llm.language_generators.dataset_generator import load_adversarial_dataset
+
+from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
+    load_adversarial_dataset,
+)
 from robust_llm.utils import (
     search_for_adversarial_examples,
     tokenize_dataset,
@@ -266,7 +269,7 @@ class AdversarialTraining(Training):
 
             incorrect_predictions: dict[str, list[str]]
             number_examples_searched: int
-        
+
             print("Searching for mistakes...")
             (
                 incorrect_predictions,
@@ -278,9 +281,9 @@ class AdversarialTraining(Training):
                 max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,
                 adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,
             )
-            
+
             print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
-            
+
             if self.non_adversarial_baseline:
                 print(
                     "Non-adversarial baseline: NOT adding those mistakes, instead adding the first few random examples..."
@@ -305,7 +308,7 @@ class AdversarialTraining(Training):
                     f"~~~In round {i} of adversarial training, model got perfect accuracy on the {number_examples_searched} examples tried, so stopping adversarial training.~~~"
                 )
                 break
-            
+
             to_log = {}
             # Append the incorrect predictions to the table (text, correct label)
             successful_attacks_table = wandb.Table(columns=["text", "correct label"])
@@ -318,17 +321,21 @@ class AdversarialTraining(Training):
 
             if self.non_adversarial_baseline:
                 incorrect_predictions = {"text": minibatch_to_actually_add_to_train_set["text"], "label": minibatch_to_actually_add_to_train_set["label"]}  # type: ignore
-                
-                actual_examples_added_table = wandb.Table(columns=["text", "correct label"])
+
+                actual_examples_added_table = wandb.Table(
+                    columns=["text", "correct label"]
+                )
                 for text_string, correct_label in zip(
                     incorrect_predictions["text"],
                     incorrect_predictions["label"],
                 ):
                     actual_examples_added_table.add_data(text_string, correct_label)
-                to_log[f"examples_added_to_training_set_after_round_{i}"] = actual_examples_added_table
-                
+                to_log[
+                    f"examples_added_to_training_set_after_round_{i}"
+                ] = actual_examples_added_table
+
             wandb.log(to_log, commit=False)
-            
+
             # Add the "incorrect predictions" to the adversarial dataset
             for text, true_label in zip(
                 incorrect_predictions["text"],
@@ -344,7 +351,6 @@ class AdversarialTraining(Training):
                 )
             )
             self.eval_dataset["adversarial_examples"] = tokenized_adversarial_examples
-
 
     @override
     def log_datasets(self):

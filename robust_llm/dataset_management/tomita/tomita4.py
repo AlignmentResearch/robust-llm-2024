@@ -3,7 +3,7 @@ import dataclasses
 import numpy as np
 from typing_extensions import override
 
-from robust_llm.language_generators.tomita_base import TomitaBase
+from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
 
 
 @dataclasses.dataclass

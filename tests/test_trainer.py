@@ -2,7 +2,7 @@ import pytest
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from robust_llm.language_generators import make_language_generator
+from robust_llm.dataset_management.tomita import make_language_generator
 from robust_llm.training import Training
 
 # 10 is long enough for all Tomita languages to have several
