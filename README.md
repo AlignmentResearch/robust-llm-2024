@@ -18,6 +18,21 @@ Add [pre-commit](https://pre-commit.com/) hooks for linting and the like with:
 pre-commit install
 ```
 
+## Running experiments
+Experiments are configured with [Hydra](https://hydra.cc/). You can run the default configuration with:
+
+```
+python robust_llm/__main__.py
+```
+
+Defaults can be overridden via the command line:
+
+```
+python robust_llm/__main__.py seed=42
+```
+
+Alternatively, you can also define new config files, which is the recommended strategy for saving experiment configurations long term. You can see example config files in /robust_llm/experiments, and can then override the config_name used in `__main__.py` `main()`.
+
 ## Datasets
 
 ### Tomita

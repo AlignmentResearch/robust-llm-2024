@@ -1,1 +1,0 @@
-To run adversarial training, do the following:  # TODO: complete this

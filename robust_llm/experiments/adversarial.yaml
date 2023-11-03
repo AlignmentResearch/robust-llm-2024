@@ -1,0 +1,5 @@
+defaults:
+  - base_config
+
+adversarial_training: true
+brute_force_attack: true

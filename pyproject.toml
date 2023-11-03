@@ -9,6 +9,7 @@ dependencies = [
     "torch",
     "transformers[accelerate]",
     "huggingface_hub",
+    "hydra-core",
     "datasets",
     "simple_parsing",
     "scikit-learn",

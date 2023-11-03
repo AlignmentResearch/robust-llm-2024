@@ -167,3 +167,7 @@ checkpoint*/
 
 # Configurations
 .vscode/
+
+# Hydra output
+outputs/
+robust_llm/outputs/

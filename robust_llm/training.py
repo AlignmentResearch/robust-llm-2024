@@ -20,7 +20,6 @@ from robust_llm.adversarial_trainer import (
     AdversarialTrainerLoggingCallback,
 )
 from robust_llm.callbacks import CrossTrainRunStepRecordingWandbCallback
-
 from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
     load_adversarial_dataset,
 )
@@ -357,7 +356,7 @@ class AdversarialTraining(Training):
         to_log = {}
 
         # Save the adversarial training dataset to a wandb table
-        if self.eval_dataset["brute_force_attack_dataset"] is None:
+        if self.eval_dataset.get("brute_force_attack_dataset", None) is None:
             raise ValueError(
                 "self.trainer.attack_dataset should have been assigned by now, exiting..."
             )
