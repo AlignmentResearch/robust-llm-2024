@@ -7,6 +7,25 @@ import numpy as np
 from robust_llm.utils import write_lines_to_file
 
 
+def all_binary_strings_of_length(length: int):
+    """
+    Returns a list of all binary strings of `length`, with spaces separating bits.
+
+    For example, calling with `length` of 2 returns:
+    ["0 0", "0 1", "1 0", "1 1"]
+    """
+    if length < 1:
+        raise ValueError("n should be greater than or equal to 1.")
+
+    strings = []
+    for i in range(2**length):
+        binary_string = bin(i)[2:].zfill(length)
+        spaced_binary_string = " ".join(binary_string)
+        strings.append(spaced_binary_string)
+
+    return strings
+
+
 @dataclasses.dataclass
 class TomitaBase:
     seed: int = 42
@@ -87,7 +106,7 @@ class TomitaBase:
 
         return train_set, val_set, test_set
 
-    def sort_saved_binary_strings(self, binary_strings: list):
+    def _classify_saved_binary_strings(self, binary_strings: list):
         trues = []
         falses = []
         for string in binary_strings:
@@ -104,21 +123,18 @@ class TomitaBase:
         repo = git.repo.Repo(".", search_parent_directories=True)
         path_to_repo = repo.working_dir
 
-        with open(f"{path_to_repo}/robust_llm/datasets/{length}.txt", "r") as afile:
-            big_list_of_strings = []
-            for line in afile:
-                big_list_of_strings.append(line.rstrip())
-
-        trues, falses = self.sort_saved_binary_strings(big_list_of_strings)
+        trues, falses = self._classify_saved_binary_strings(
+            all_binary_strings_of_length(length)
+        )
 
         # Save the trues and falses as trues_i and falses_i in the 'self.name' folder
         write_lines_to_file(
             trues,
-            f"{path_to_repo}/robust_llm/datasets/{self.name}/trues_{length}.txt",
+            f"{path_to_repo}/robust_llm/datasets/tomita/{self.name}/trues_{length}.txt",
         )
         write_lines_to_file(
             falses,
-            f"{path_to_repo}/robust_llm/datasets/{self.name}/falses_{length}.txt",
+            f"{path_to_repo}/robust_llm/datasets/tomita/{self.name}/falses_{length}.txt",
         )
 
     def string_to_digit_list(self, string: str) -> list[int]:

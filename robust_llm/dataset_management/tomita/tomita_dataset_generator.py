@@ -1,8 +1,15 @@
+import git.repo
+
 from robust_llm.dataset_management.tomita import make_language_generator
 from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
 
 LANGUAGE_NAMES = {"tomita1", "tomita2", "tomita4", "tomita7"}
-DATASET_PATH = "/home/dev/robust-llm/robust_llm/datasets/tomita"
+
+
+def compute_dataset_path():
+    repo = git.repo.Repo(".", search_parent_directories=True)
+    path_to_repo = repo.working_dir
+    return f"{path_to_repo}/robust_llm/datasets/tomita"
 
 
 def make_single_length_datasets(
@@ -21,6 +28,7 @@ def make_up_to_length_dataset(dataset_path: str, max_length: int):
     all_trues = []
     all_falses = []
     for i in range(1, max_length + 1):
+        make_single_length_datasets(i)
         # Load in the dataset
         with open(f"{dataset_path}/trues_{i}.txt", "r") as f:
             trues = f.read().splitlines()
@@ -41,13 +49,13 @@ def make_up_to_length_dataset(dataset_path: str, max_length: int):
 def make_all_up_to_length_datasets(max_length: int):
     for language_name in LANGUAGE_NAMES:
         for i in range(1, max_length + 1):
-            dataset_path = f"{DATASET_PATH}/{language_name}"
+            dataset_path = f"{compute_dataset_path()}/{language_name}"
             make_up_to_length_dataset(dataset_path, i)
 
 
 # Load in a dataset of up to length "length"
 def load_adversarial_dataset(language_generator_name: str, length: int):
-    dataset_path = f"{DATASET_PATH}/{language_generator_name}"
+    dataset_path = f"{compute_dataset_path()}/{language_generator_name}"
     with open(f"{dataset_path}/trues_up_to_{length}.txt", "r") as f:
         trues = f.read().splitlines()
     with open(f"{dataset_path}/falses_up_to_{length}.txt", "r") as f:

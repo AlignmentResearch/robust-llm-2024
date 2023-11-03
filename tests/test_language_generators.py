@@ -1,6 +1,9 @@
 import pytest
 
 from robust_llm.dataset_management.tomita import make_language_generator
+from robust_llm.dataset_management.tomita.tomita_base import (
+    all_binary_strings_of_length,
+)
 
 # Long enough for all Tomita languages to have several
 # true and false examples, but is otherwise arbitrary.
@@ -85,3 +88,8 @@ def test_tomita7_examples():
     assert language_generator.is_in_language([0, 1, 1, 0])
     assert not language_generator.is_in_language([1, 0, 1, 0])
     assert not language_generator.is_in_language([1, 0, 1, 0, 0])
+
+
+def test_all_binary_strings_of_length():
+    assert set(["0", "1"]) == set(all_binary_strings_of_length(1))
+    assert set(["0 0", "0 1", "1 0", "1 1"]) == set(all_binary_strings_of_length(2))
