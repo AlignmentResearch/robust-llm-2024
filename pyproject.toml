@@ -6,11 +6,11 @@ version="0.0.1"
 
 dependencies = [
     "evaluate",
-    "torch",
-    "transformers[accelerate]",
+    "datasets",
     "huggingface_hub",
     "hydra-core",
-    "datasets",
+    "torch",
+    "transformers[accelerate]",
     "simple_parsing",
     "scikit-learn",
     "wandb",
@@ -21,6 +21,7 @@ dev = [
     "isort",
     "mypy",
     "pre-commit",
+    "pyright",
     "pytest",
 ]
 

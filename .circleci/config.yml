@@ -36,10 +36,10 @@ jobs:
             black --version
             black . --check
       - run:
-          name: mypy
+          name: pyright
           command: |
-            mypy --version
-            mypy .
+            pyright --version
+            pyright .
         # TODO add isort, maybe flake8 & codespell
 
 workflows:
