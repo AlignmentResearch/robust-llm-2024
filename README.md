@@ -33,6 +33,8 @@ python robust_llm/__main__.py environment.seed=42
 
 Alternatively, you can also define new config files, which is the recommended strategy for saving experiment configurations long term. You can see example config files in /robust_llm/experiments, and can then override the config_name used in `__main__.py` `main()`.
 
+The complete configuration used will be printed as `Configuration arguments:` when running `__main__.py`. This description can be copied wholesale into a new experiment config file if you wish to exactly duplicate that run later.
+
 ## Datasets
 
 ### Tomita

@@ -90,6 +90,10 @@ cs.store(name="base_config", node=ExperimentConfig)
 
 @hydra.main(version_base=None, config_path="experiments", config_name="adversarial")
 def main(args: ExperimentConfig) -> None:
+    print("Configuration arguments:\n")
+    print(OmegaConf.to_yaml(args))
+    print()
+
     language_generator = make_language_generator(
         args.environment.language_generator, args.environment.max_length
     )
