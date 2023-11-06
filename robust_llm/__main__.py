@@ -88,6 +88,55 @@ cs = ConfigStore.instance()
 cs.store(name="base_config", node=ExperimentConfig)
 
 
+@dataclass
+class RobustLLMDatasets:
+    train_dataset: Dataset
+    eval_dataset: dict[str, Dataset]
+
+    tokenized_train_dataset: Dataset
+    tokenized_eval_dataset: Dataset
+
+
+def generateRobustLLMDatasets(
+    language_generator, tokenizer, training_args: TrainingConfig
+) -> RobustLLMDatasets:
+    if training_args.baseline.non_adversarial_baseline:
+        brute_force_dataset = load_adversarial_dataset(
+            language_generator.name,
+            training_args.adversarial.brute_force_length,
+        )
+        tokenized_brute_force_dataset = Dataset.from_dict(
+            tokenize_dataset(brute_force_dataset, tokenizer)
+        )
+        shuffled_brute_force_dataset = tokenized_brute_force_dataset.shuffle()
+        train_set = shuffled_brute_force_dataset.select(
+            range(
+                int(
+                    training_args.baseline.proportion
+                    * len(tokenized_brute_force_dataset)
+                )
+            )
+        )
+        val_set = brute_force_dataset
+
+    else:
+        train_set, val_set, _ = language_generator.generate_dataset(
+            train_size=training_args.train_set_size,
+            val_size=training_args.val_set_size,
+            test_size=0,
+        )
+
+    print("Tokenizing datasets...")
+    tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
+    tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
+    return RobustLLMDatasets(
+        train_dataset=train_set,
+        eval_dataset=val_set,
+        tokenized_train_dataset=tokenized_train_dataset,
+        tokenized_eval_dataset=tokenized_val_dataset,
+    )
+
+
 @hydra.main(version_base=None, config_path="experiments", config_name="adversarial")
 def main(args: ExperimentConfig) -> None:
     print("Configuration arguments:\n")
@@ -103,53 +152,14 @@ def main(args: ExperimentConfig) -> None:
     model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
-    # TODO(dan) refactor this if/else into a dataset generation function
-    if args.training.baseline.non_adversarial_baseline:
-        print()
-        print("baseline up to length:", args.training.adversarial.brute_force_length)
-        print(
-            "proportion of brute force set:",
-            args.training.baseline.proportion,
-        )
-        print()
-        brute_force_dataset = load_adversarial_dataset(
-            args.environment.language_generator,
-            args.training.adversarial.brute_force_length,
-        )
-        tokenized_brute_force_dataset = Dataset.from_dict(
-            tokenize_dataset(brute_force_dataset, tokenizer)
-        )
-        shuffled_brute_force_dataset = tokenized_brute_force_dataset.shuffle()
-        train_set = shuffled_brute_force_dataset.select(
-            range(
-                int(
-                    args.training.baseline.proportion
-                    * len(tokenized_brute_force_dataset)
-                )
-            )
-        )
-        val_set = brute_force_dataset
-
-    else:
-        print()
-        print("train_size:", args.training.train_set_size)
-        print("val_size:", args.training.val_set_size)
-        print()
-
-        train_set, val_set, _ = language_generator.generate_dataset(
-            train_size=args.training.train_set_size,
-            val_size=args.training.val_set_size,
-            test_size=0,
-        )
-
-    print("Tokenizing datasets...")
-    tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
-    tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
+    robust_llm_datasets = generateRobustLLMDatasets(
+        language_generator, tokenizer, args.training
+    )
 
     base_training_args = {
         "hparams": {},
-        "train_dataset": tokenized_train_dataset,
-        "eval_dataset": {"eval": tokenized_val_dataset},
+        "train_dataset": robust_llm_datasets.tokenized_train_dataset,
+        "eval_dataset": {"eval": robust_llm_datasets.tokenized_eval_dataset},
         "model": model,
         "train_epochs": args.training.num_train_epochs,
     }
@@ -189,14 +199,17 @@ def main(args: ExperimentConfig) -> None:
     if args.training.train_set_size > 0 and args.training.val_set_size > 0:
         if not wandb.run:
             raise ValueError("wandb should have been initialized by now, exiting...")
-        train_val_overlap = get_overlap(smaller_dataset=val_set, larger_dataset=train_set)  # type: ignore
+        train_val_overlap = get_overlap(
+            smaller_dataset=robust_llm_datasets.eval_dataset["eval"],
+            larger_dataset=robust_llm_datasets.train_dataset,
+        )
         wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)
         wandb.run.summary["train_val_overlap_over_train_set_size"] = len(
             train_val_overlap
-        ) / len(train_set["text"])
+        ) / len(robust_llm_datasets.train_dataset["text"])
         wandb.run.summary["train_val_overlap_over_val_set_size"] = len(
             train_val_overlap
-        ) / len(val_set["text"])
+        ) / len(robust_llm_datasets.eval_dataset["text"])
 
     # Perform the training
     training.run_trainer()

@@ -143,12 +143,13 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
 
         to_log: dict[str, Any] = {}
 
-        augmented_train_set = self.training.trainer.get_augmented_training_set()  # type: ignore
+        assert isinstance(self.training.trainer, AdversarialTrainer)
+        augmented_train_set = self.training.trainer.get_augmented_training_set()
 
         # Record how much of the brute force attack set is in the train set
         overlap = get_overlap(
-            self.training.eval_dataset["brute_force_attack_dataset"].to_dict(),  # type: ignore
-            augmented_train_set.to_dict(),  # type: ignore
+            self.training.eval_dataset["brute_force_attack_dataset"],
+            augmented_train_set,
         )
         proportion_of_attack_in_train = (
             len(overlap)

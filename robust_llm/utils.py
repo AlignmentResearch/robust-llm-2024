@@ -20,9 +20,7 @@ def tokenize_dataset(dataset, tokenizer):
     return {"text": dataset["text"], "label": dataset["label"], **tokenized_data}
 
 
-def get_overlap(
-    smaller_dataset: dict[str, list[str]], larger_dataset: dict[str, list[str]]
-) -> list[str]:
+def get_overlap(smaller_dataset: Dataset, larger_dataset: Dataset) -> list[str]:
     return list(set(smaller_dataset["text"]).intersection(set(larger_dataset["text"])))
 
 
