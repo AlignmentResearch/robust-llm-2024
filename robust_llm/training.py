@@ -105,7 +105,6 @@ class Training:
         """Save the training and eval datasets to wandb."""
         to_log = {}
 
-        # Save the training dataset to a wandb table
         if self.trainer is None:
             raise ValueError(
                 "self.trainer should have been assigned by now, exiting..."
@@ -114,26 +113,45 @@ class Training:
             raise ValueError(
                 "self.trainer.train_dataset should have been assigned by now, exiting..."
             )
-        train_table = wandb.Table(columns=["text", "label"])
-        for text, label in zip(
-            self.trainer.train_dataset["text"],
-            self.trainer.train_dataset["label"],
-        ):
-            train_table.add_data(text, label)
-        to_log["train_dataset"] = train_table
-
-        # Save the eval dataset to a wandb table
         if self.trainer.eval_dataset is None:
             raise ValueError(
                 "self.trainer.eval_dataset should have been assigned by now, exiting..."
             )
-        eval_table = wandb.Table(columns=["text", "label"])
-        for text, label in zip(
-            self.trainer.eval_dataset["eval"]["text"],
-            self.trainer.eval_dataset["eval"]["label"],
-        ):
-            eval_table.add_data(text, label)
-        to_log["eval_dataset"] = eval_table
+
+        assert (
+            "label"
+            in self.trainer.train_dataset
+            == "label"
+            in self.trainer.eval_dataset
+        )
+
+        if "label" in self.trainer.train_dataset:
+            train_table = wandb.Table(columns=["text", "label"])
+            for text, label in zip(
+                self.trainer.train_dataset["text"],
+                self.trainer.train_dataset["label"],
+            ):
+                train_table.add_data(text, label)
+            to_log["train_dataset"] = train_table
+        else:
+            train_table = wandb.Table(columns=["text"])
+            for text in self.trainer.train_dataset["text"]:
+                train_table.add_data(text)
+            to_log["train_dataset"] = train_table
+
+        if "label" in self.trainer.eval_dataset:
+            eval_table = wandb.Table(columns=["text", "label"])
+            for text, label in zip(
+                self.trainer.eval_dataset["eval"]["text"],
+                self.trainer.eval_dataset["eval"]["label"],
+            ):
+                eval_table.add_data(text, label)
+            to_log["eval_dataset"] = eval_table
+        else:
+            eval_table = wandb.Table(columns=["text"])
+            for text in self.trainer.eval_dataset["eval"]["text"]:
+                eval_table.add_data(text)
+            to_log["eval_dataset"] = eval_table
 
         wandb.log(to_log, commit=False)
 
