@@ -71,7 +71,7 @@ class TrainingConfig:
     # The size of the train set.
     train_set_size: int = 100
     # The size of the validation set.
-    val_set_size: int = 100
+    validation_set_size: int = 100
     # The number of epochs to train for.
     num_train_epochs: int = 3
 
@@ -91,10 +91,10 @@ cs.store(name="base_config", node=ExperimentConfig)
 @dataclass
 class RobustLLMDatasets:
     train_dataset: Dataset
-    eval_dataset: dict[str, Dataset]
+    validation_dataset: Dataset
 
     tokenized_train_dataset: Dataset
-    tokenized_eval_dataset: Dataset
+    tokenized_validation_dataset: Dataset
 
 
 def generateRobustLLMDatasets(
@@ -117,23 +117,25 @@ def generateRobustLLMDatasets(
                 )
             )
         )
-        val_set = brute_force_dataset
+        validation_set = brute_force_dataset
 
     else:
-        train_set, val_set, _ = language_generator.generate_dataset(
+        train_set, validation_set, _ = language_generator.generate_dataset(
             train_size=training_args.train_set_size,
-            val_size=training_args.val_set_size,
+            validation_size=training_args.validation_set_size,
             test_size=0,
         )
 
     print("Tokenizing datasets...")
     tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
-    tokenized_val_dataset = Dataset.from_dict(tokenize_dataset(val_set, tokenizer))
+    tokenized_validation_dataset = Dataset.from_dict(
+        tokenize_dataset(validation_set, tokenizer)
+    )
     return RobustLLMDatasets(
         train_dataset=train_set,
-        eval_dataset=val_set,
+        validation_dataset=validation_set,
         tokenized_train_dataset=tokenized_train_dataset,
-        tokenized_eval_dataset=tokenized_val_dataset,
+        tokenized_validation_dataset=tokenized_validation_dataset,
     )
 
 
@@ -156,10 +158,15 @@ def main(args: ExperimentConfig) -> None:
         language_generator, tokenizer, args.training
     )
 
+    # NOTE: a confusing thing: the "validation" dataset is one of what will be
+    # several datasets that we perform model evaluation on, hence "eval_dataset"
+    # is a dict[str, Dataset] and not a Dataset.
     base_training_args = {
         "hparams": {},
         "train_dataset": robust_llm_datasets.tokenized_train_dataset,
-        "eval_dataset": {"eval": robust_llm_datasets.tokenized_eval_dataset},
+        "eval_dataset": {
+            "validation": robust_llm_datasets.tokenized_validation_dataset
+        },
         "model": model,
         "train_epochs": args.training.num_train_epochs,
     }
@@ -192,15 +199,15 @@ def main(args: ExperimentConfig) -> None:
     arg_names = []
     for f in fields(ExperimentConfig):
         arg_names.append(f.name)
-    for field_name in sorted(arg_names):
-        wandb.run.summary[f"args/{field_name}"] = getattr(args, field_name)
+    # for field_name in sorted(arg_names):
+    #     wandb.run.summary[f"args/{field_name}"] = getattr(args, field_name)
 
     # Log the train-val overlap to wandb
-    if args.training.train_set_size > 0 and args.training.val_set_size > 0:
+    if args.training.train_set_size > 0 and args.training.validation_set_size > 0:
         if not wandb.run:
             raise ValueError("wandb should have been initialized by now, exiting...")
         train_val_overlap = get_overlap(
-            smaller_dataset=robust_llm_datasets.eval_dataset["eval"],
+            smaller_dataset=robust_llm_datasets.validation_dataset,
             larger_dataset=robust_llm_datasets.train_dataset,
         )
         wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)
@@ -209,7 +216,7 @@ def main(args: ExperimentConfig) -> None:
         ) / len(robust_llm_datasets.train_dataset["text"])
         wandb.run.summary["train_val_overlap_over_val_set_size"] = len(
             train_val_overlap
-        ) / len(robust_llm_datasets.eval_dataset["text"])
+        ) / len(robust_llm_datasets.validation_dataset["text"])
 
     # Perform the training
     training.run_trainer()

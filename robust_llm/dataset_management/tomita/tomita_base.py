@@ -1,5 +1,6 @@
 import abc
 import dataclasses
+from datasets import Dataset
 
 import git.repo
 import numpy as np
@@ -67,15 +68,17 @@ class TomitaBase:
     def generate_false(self, count: int = 1) -> list[str]:
         pass
 
-    def generate_dataset(self, train_size=10_000, val_size=3000, test_size=0):
+    def generate_dataset(
+        self, train_size=10_000, validation_size=3000, test_size=0
+    ) -> tuple[Dataset, Dataset, Dataset]:
         assert train_size > 0
-        assert val_size >= 0
+        assert validation_size >= 0
         assert test_size >= 0
         assert train_size % 2 == 0
-        assert val_size % 2 == 0
+        assert validation_size % 2 == 0
         assert test_size % 2 == 0
 
-        total_size = train_size + val_size + test_size
+        total_size = train_size + validation_size + test_size
         true_size = total_size // 2
         false_size = total_size // 2
 
@@ -83,28 +86,33 @@ class TomitaBase:
         falses = self.generate_false(count=false_size)
 
         half_train_size = train_size // 2
-        half_val_size = val_size // 2
+        half_validation_size = validation_size // 2
         half_test_size = test_size // 2
 
+        train_set: dict[str, list[str]]
         train_set = self.label_and_shuffle(
             trues[:half_train_size], falses[:half_train_size]
         )
 
         # The test and validation sets areallowed to be empty,
         # which would otherwise cause bugs for this form of indexing.
-        val_set = {"text": [], "label": []}
-        if val_size > 0:
+        val_set: dict[str, list[str]] = {"text": [], "label": []}
+        if validation_size > 0:
             val_set = self.label_and_shuffle(
-                trues[half_train_size : half_train_size + half_val_size],
-                falses[half_train_size : half_train_size + half_val_size],
+                trues[half_train_size : half_train_size + half_validation_size],
+                falses[half_train_size : half_train_size + half_validation_size],
             )
-        test_set = {"text": [], "label": []}
+        test_set: dict[str, list[str]] = {"text": [], "label": []}
         if test_size > 0:
             test_set = self.label_and_shuffle(
                 trues[-half_test_size:], falses[-half_test_size:]
             )
 
-        return train_set, val_set, test_set
+        return (
+            Dataset.from_dict(train_set),
+            Dataset.from_dict(val_set),
+            Dataset.from_dict(test_set),
+        )
 
     def _classify_saved_binary_strings(self, binary_strings: list):
         trues = []

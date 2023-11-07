@@ -31,24 +31,24 @@ def test_generator_basic(language_name: str):
 
 @pytest.mark.parametrize("language_name", TOMITA_LANGUAGES)
 @pytest.mark.parametrize("train_size", [2, 10, 100])
-@pytest.mark.parametrize("val_size", [0, 10, 100])
+@pytest.mark.parametrize("validation_size", [0, 10, 100])
 @pytest.mark.parametrize("test_size", [0, 10, 100])
 def test_generate_dataset(
-    language_name: str, train_size: int, val_size: int, test_size: int
+    language_name: str, train_size: int, validation_size: int, test_size: int
 ):
     language_generator = make_language_generator(
         language_name=language_name, max_length=MAX_LANGUAGE_LENGTH
     )
     train_set, val_set, test_set = language_generator.generate_dataset(
-        train_size=train_size, val_size=val_size, test_size=test_size
+        train_size=train_size, validation_size=validation_size, test_size=test_size
     )
     for dataset in [train_set, val_set, test_set]:
-        assert "text" in dataset.keys()
-        assert "label" in dataset.keys()
+        assert "text" in dataset.features.keys()
+        assert "label" in dataset.features.keys()
         assert len(dataset["text"]) == len(dataset["label"])
 
     assert len(train_set["text"]) == train_size
-    assert len(val_set["text"]) == val_size
+    assert len(val_set["text"]) == validation_size
     assert len(test_set["text"]) == test_size
 
 

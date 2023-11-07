@@ -15,9 +15,13 @@ def test_basic_constructor():
     language_generator = make_language_generator(
         language_name="Tomita1", max_length=MAX_LANGUAGE_LENGTH
     )
-    train_dataset, eval_dataset, _test_dataset = language_generator.generate_dataset(
+    (
+        train_dataset,
+        validation_dataset,
+        _test_dataset,
+    ) = language_generator.generate_dataset(
         train_size=10,
-        val_size=10,
+        validation_size=10,
         test_size=10,
     )
 
@@ -27,14 +31,14 @@ def test_basic_constructor():
     tokenized_train_dataset = Dataset.from_dict(
         tokenize_dataset(train_dataset, tokenizer)
     )
-    tokenized_eval_dataset = Dataset.from_dict(
-        tokenize_dataset(eval_dataset, tokenizer)
+    tokenized_validation_dataset = Dataset.from_dict(
+        tokenize_dataset(validation_dataset, tokenizer)
     )
 
     Training(
         hparams={},
         train_dataset=tokenized_train_dataset,
-        eval_dataset={"eval": tokenized_eval_dataset},
+        eval_dataset={"validation": tokenized_validation_dataset},
         model=model,
     )
 

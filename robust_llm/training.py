@@ -85,7 +85,7 @@ class Training:
 
         self.log_datasets()
 
-        trainer.evaluate(eval_dataset=self.eval_dataset["eval"])  # type: ignore
+        trainer.evaluate(eval_dataset=self.eval_dataset["validation"])  # type: ignore
         trainer.train()
 
     def compute_metrics(self, eval_preds: EvalPrediction) -> dict:
@@ -142,16 +142,16 @@ class Training:
         if "label" in self.trainer.eval_dataset:
             eval_table = wandb.Table(columns=["text", "label"])
             for text, label in zip(
-                self.trainer.eval_dataset["eval"]["text"],
-                self.trainer.eval_dataset["eval"]["label"],
+                self.trainer.eval_dataset["validation"]["text"],
+                self.trainer.eval_dataset["validation"]["label"],
             ):
                 eval_table.add_data(text, label)
-            to_log["eval_dataset"] = eval_table
+            to_log["validation_dataset"] = eval_table
         else:
             eval_table = wandb.Table(columns=["text"])
-            for text in self.trainer.eval_dataset["eval"]["text"]:
+            for text in self.trainer.eval_dataset["validation"]["text"]:
                 eval_table.add_data(text)
-            to_log["eval_dataset"] = eval_table
+            to_log["validation_dataset"] = eval_table
 
         wandb.log(to_log, commit=False)
 
@@ -210,7 +210,7 @@ class AdversarialTraining(Training):
         super().__post_init__()
 
         assert type(self.eval_dataset) is dict
-        assert "eval" in self.eval_dataset
+        assert "validation" in self.eval_dataset
 
         # Standardize the language generator name
         self.language_generator_name: str = self.language_generator_name.lower()
@@ -264,9 +264,9 @@ class AdversarialTraining(Training):
                 self.eval_dataset["brute_force_attack_dataset"] = attack_dataset
 
         else:
-            # Just find mistakes in the eval set
-            assert "eval" in self.eval_dataset
-            attack_dataset = self.eval_dataset["eval"]
+            # Just find mistakes in the validation set
+            assert "validation" in self.eval_dataset
+            attack_dataset = self.eval_dataset["validation"]
 
         # Log the datasets
         self.log_datasets()
@@ -365,7 +365,7 @@ class AdversarialTraining(Training):
 
     @override
     def log_datasets(self):
-        # First log the train and eval sets
+        # First log the train and evaluation sets
         super().log_datasets()
 
         if self.use_probabilistic_robustness_check:

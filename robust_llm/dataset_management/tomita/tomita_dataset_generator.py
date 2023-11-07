@@ -1,4 +1,5 @@
 import git.repo
+from datasets import Dataset
 
 from robust_llm.dataset_management.tomita import make_language_generator
 from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
@@ -54,19 +55,18 @@ def make_all_up_to_length_datasets(max_length: int):
 
 
 # Load in a dataset of up to length "length"
-def load_adversarial_dataset(language_generator_name: str, length: int):
+def load_adversarial_dataset(language_generator_name: str, length: int) -> Dataset:
     dataset_path = f"{compute_dataset_path()}/{language_generator_name}"
     with open(f"{dataset_path}/trues_up_to_{length}.txt", "r") as f:
         trues = f.read().splitlines()
     with open(f"{dataset_path}/falses_up_to_{length}.txt", "r") as f:
         falses = f.read().splitlines()
 
-    # Make the dataset as a dict with "text" and "label" keys
     # Note that shuffling is managed by the Trainer
     # https://discuss.huggingface.co/t/how-to-ensure-the-dataset-is-shuffled-for-each-epoch-using-trainer-and-datasets/4212/3
-    dataset = {"text": trues + falses, "label": [1] * len(trues) + [0] * len(falses)}
-
-    return dataset
+    return Dataset.from_dict(
+        {"text": trues + falses, "label": [1] * len(trues) + [0] * len(falses)}
+    )
 
 
 if __name__ == "__main__":
