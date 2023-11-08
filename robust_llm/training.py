@@ -118,14 +118,11 @@ class Training:
                 "self.trainer.eval_dataset should have been assigned by now, exiting..."
             )
 
-        assert (
-            "label"
-            in self.trainer.train_dataset
-            == "label"
-            in self.trainer.eval_dataset
+        assert ("label" in self.trainer.train_dataset.column_names) == (  # type: ignore
+            "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore
         )
 
-        if "label" in self.trainer.train_dataset:
+        if "label" in self.trainer.train_dataset.column_names:  # type: ignore
             train_table = wandb.Table(columns=["text", "label"])
             for text, label in zip(
                 self.trainer.train_dataset["text"],
@@ -139,7 +136,7 @@ class Training:
                 train_table.add_data(text)
             to_log["train_dataset"] = train_table
 
-        if "label" in self.trainer.eval_dataset:
+        if "label" in self.trainer.eval_dataset["validation"].column_names:  # type: ignore
             eval_table = wandb.Table(columns=["text", "label"])
             for text, label in zip(
                 self.trainer.eval_dataset["validation"]["text"],
