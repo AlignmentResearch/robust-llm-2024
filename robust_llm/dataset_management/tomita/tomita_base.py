@@ -1,10 +1,11 @@
 import abc
 import dataclasses
-from datasets import Dataset
 
 import git.repo
 import numpy as np
+from datasets import Dataset
 
+from robust_llm.dataset_management.file_utils import compute_dataset_path
 from robust_llm.utils import write_lines_to_file
 
 
@@ -127,10 +128,6 @@ class TomitaBase:
         return trues, falses
 
     def make_complete_dataset(self, length: int = 10):
-        # Get the path to save in
-        repo = git.repo.Repo(".", search_parent_directories=True)
-        path_to_repo = repo.working_dir
-
         trues, falses = self._classify_saved_binary_strings(
             all_binary_strings_of_length(length)
         )
@@ -138,11 +135,11 @@ class TomitaBase:
         # Save the trues and falses as trues_i and falses_i in the 'self.name' folder
         write_lines_to_file(
             trues,
-            f"{path_to_repo}/robust_llm/datasets/tomita/{self.name}/trues_{length}.txt",
+            f"{compute_dataset_path()}/tomita/{self.name}/trues_{length}.txt",
         )
         write_lines_to_file(
             falses,
-            f"{path_to_repo}/robust_llm/datasets/tomita/{self.name}/falses_{length}.txt",
+            f"{compute_dataset_path()}/tomita/{self.name}/falses_{length}.txt",
         )
 
     def string_to_digit_list(self, string: str) -> list[int]:

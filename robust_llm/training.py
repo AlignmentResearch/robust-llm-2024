@@ -304,7 +304,13 @@ class AdversarialTraining(Training):
                 print(
                     "Non-adversarial baseline: NOT adding those mistakes, instead adding the first few random examples..."
                 )
-                examples_to_actually_add_to_train_set = next(yield_minibatch(attack_dataset, self.min_num_adversarial_examples_to_add + self.adversarial_example_search_minibatch_size // 2))  # type: ignore
+                examples_to_actually_add_to_train_set = next(
+                    yield_minibatch(
+                        attack_dataset,
+                        self.min_num_adversarial_examples_to_add
+                        + self.adversarial_example_search_minibatch_size // 2,
+                    )
+                )
 
             wandb.log(
                 {
