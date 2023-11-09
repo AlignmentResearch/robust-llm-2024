@@ -84,8 +84,13 @@ class ExperimentConfig:
     environment: EnvironmentConfig = EnvironmentConfig()
 
 
+@dataclass
+class OverallConfig:
+    experiment: ExperimentConfig = ExperimentConfig()
+
+
 cs = ConfigStore.instance()
-cs.store(name="base_config", node=ExperimentConfig)
+cs.store(name="base_config", node=OverallConfig)
 
 
 @dataclass
@@ -139,14 +144,15 @@ def generateRobustLLMDatasets(
     )
 
 
-@hydra.main(version_base=None, config_path="experiments", config_name="adversarial")
-def main(args: ExperimentConfig) -> None:
+@hydra.main(version_base=None, config_path="hydra_conf", config_name="default_config")
+def main(args: OverallConfig) -> None:
+    experiment = args.experiment
     print("Configuration arguments:\n")
-    print(OmegaConf.to_yaml(args))
+    print(OmegaConf.to_yaml(experiment))
     print()
 
     language_generator = make_language_generator(
-        args.environment.language_generator, args.environment.max_length
+        experiment.environment.language_generator, experiment.environment.max_length
     )
 
     # Choose a model and a tokenizer
@@ -155,7 +161,7 @@ def main(args: ExperimentConfig) -> None:
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
     robust_llm_datasets = generateRobustLLMDatasets(
-        language_generator, tokenizer, args.training
+        language_generator, tokenizer, experiment.training
     )
 
     # NOTE: a confusing thing: the "validation" dataset is one of what will be
@@ -168,25 +174,25 @@ def main(args: ExperimentConfig) -> None:
             "validation": robust_llm_datasets.tokenized_validation_dataset
         },
         "model": model,
-        "train_epochs": args.training.num_train_epochs,
+        "train_epochs": experiment.training.num_train_epochs,
     }
 
     # Set up the training environment
     training: Training
-    if args.training.adversarial.adversarial_training:
+    if experiment.training.adversarial.adversarial_training:
         training = AdversarialTraining(
             **base_training_args,
-            num_adversarial_training_rounds=args.training.adversarial.num_adversarial_training_rounds,
+            num_adversarial_training_rounds=experiment.training.adversarial.num_adversarial_training_rounds,
             tokenizer=tokenizer,
-            language_generator_name=args.environment.language_generator,
-            brute_force_attack=args.training.adversarial.brute_force_attack,
-            brute_force_length=args.training.adversarial.brute_force_length,
-            min_num_adversarial_examples_to_add=args.training.adversarial.min_num_adversarial_examples_to_add,
-            max_num_search_for_adversarial_examples=args.training.adversarial.max_num_search_for_adversarial_examples,
-            adversarial_example_search_minibatch_size=args.training.adversarial.adversarial_example_search_minibatch_size,
-            skip_first_training_round=args.training.adversarial.skip_first_training_round,
-            use_probabilistic_robustness_check=args.training.adversarial.use_probabilistic_robustness_check,
-            non_adversarial_baseline=args.training.baseline.non_adversarial_baseline,
+            language_generator_name=experiment.environment.language_generator,
+            brute_force_attack=experiment.training.adversarial.brute_force_attack,
+            brute_force_length=experiment.training.adversarial.brute_force_length,
+            min_num_adversarial_examples_to_add=experiment.training.adversarial.min_num_adversarial_examples_to_add,
+            max_num_search_for_adversarial_examples=experiment.training.adversarial.max_num_search_for_adversarial_examples,
+            adversarial_example_search_minibatch_size=experiment.training.adversarial.adversarial_example_search_minibatch_size,
+            skip_first_training_round=experiment.training.adversarial.skip_first_training_round,
+            use_probabilistic_robustness_check=experiment.training.adversarial.use_probabilistic_robustness_check,
+            non_adversarial_baseline=experiment.training.baseline.non_adversarial_baseline,
         )
     else:
         training = Training(
@@ -196,14 +202,13 @@ def main(args: ExperimentConfig) -> None:
     # Log the training arguments to wandb
     if not wandb.run:
         raise ValueError("wandb should have been initialized by now, exiting...")
-    arg_names = []
-    for f in fields(ExperimentConfig):
-        arg_names.append(f.name)
-    # for field_name in sorted(arg_names):
-    #     wandb.run.summary[f"args/{field_name}"] = getattr(args, field_name)
+    wandb.run.summary[f"experiment_yaml"] = OmegaConf.to_yaml(experiment)
 
     # Log the train-val overlap to wandb
-    if args.training.train_set_size > 0 and args.training.validation_set_size > 0:
+    if (
+        experiment.training.train_set_size > 0
+        and experiment.training.validation_set_size > 0
+    ):
         if not wandb.run:
             raise ValueError("wandb should have been initialized by now, exiting...")
         train_val_overlap = get_overlap(

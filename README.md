@@ -22,18 +22,22 @@ pre-commit install
 Experiments are configured with [Hydra](https://hydra.cc/). You can run the default configuration with:
 
 ```
-python robust_llm/__main__.py
+python robust_llm
 ```
 
 Defaults can be overridden via the command line:
 
 ```
-python robust_llm/__main__.py environment.seed=42
+python robust_llm experiment.environment.seed=42
 ```
 
-Alternatively, you can also define new config files, which is the recommended strategy for saving experiment configurations long term. You can see example config files in /robust_llm/experiments, and can then override the config_name used in `__main__.py` `main()`.
+Alternatively, you can also define new config files, which is the recommended strategy for saving experiment configurations long term. You can see example config files in /robust_llm/hydra_conf/experiment. If you add a new file to /robust_llm/hydra_conf/experiment called `my_exp.yaml` then you can use it with:
 
-The complete configuration used will be printed as `Configuration arguments:` when running `__main__.py`. This description can be copied wholesale into a new experiment config file if you wish to exactly duplicate that run later.
+```
+python robust_llm +experiment=my_exp
+```
+
+The complete configuration used will be printed as `Configuration arguments:`. This description can be copied into a new file in the /robust_llm/hydra_conf/experiment directory if you want to repeat it later.
 
 ## Datasets
 

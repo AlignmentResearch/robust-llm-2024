@@ -1,7 +1,5 @@
-defaults:
-  - base_config
-
 training:
   adversarial:
     adversarial_training: true
+  baseline:
     non_adversarial_baseline: true
