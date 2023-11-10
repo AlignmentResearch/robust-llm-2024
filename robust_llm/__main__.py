@@ -1,9 +1,9 @@
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 
 import hydra
 from datasets import Dataset
 from hydra.core.config_store import ConfigStore
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
