@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from robust_llm.adversarial_trainer import AdversarialTrainer
@@ -11,10 +11,16 @@ from typing import Generator
 import numpy as np
 from datasets import Dataset
 from torch.utils.data import DataLoader
-from transformers import Trainer
+from transformers import (
+    AutoModelForSequenceClassification,
+    PreTrainedTokenizerBase,
+    Trainer,
+)
 
 
-def tokenize_dataset(dataset, tokenizer):
+def tokenize_dataset(
+    dataset: Dataset | dict[str, Any], tokenizer: PreTrainedTokenizerBase
+) -> dict[str, Any]:
     # Padding seems necessary in order to avoid an error
     tokenized_data = tokenizer(dataset["text"], padding="max_length", truncation=True)
     return {"text": dataset["text"], "label": dataset["label"], **tokenized_data}

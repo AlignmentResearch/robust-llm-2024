@@ -9,7 +9,7 @@ from robust_llm.dataset_management.file_utils import compute_dataset_path
 from robust_llm.utils import write_lines_to_file
 
 
-def all_binary_strings_of_length(length: int):
+def all_binary_strings_of_length(length: int) -> list[str]:
     """
     Returns a list of all binary strings of `length`, with spaces separating bits.
 
@@ -40,7 +40,7 @@ class TomitaBase:
     final_special_token_length: int = 3
 
     @property
-    def largest_string_the_model_can_handle(self):
+    def largest_string_the_model_can_handle(self) -> int:
         return (
             self.context_length - self.context_buffer - self.final_special_token_length
         )
@@ -49,7 +49,9 @@ class TomitaBase:
         self.rng = np.random.default_rng(seed=self.seed)
         assert self.max_length <= self.largest_string_the_model_can_handle
 
-    def label_and_shuffle(self, trues: list[str], falses: list[str]):
+    def label_and_shuffle(
+        self, trues: list[str], falses: list[str]
+    ) -> dict[str, list[str]]:
         labelled_trues = [(el, 1) for el in trues]
         labelled_falses = [(el, 0) for el in falses]
         labelled_dataset = labelled_trues + labelled_falses
@@ -70,7 +72,7 @@ class TomitaBase:
         pass
 
     def generate_dataset(
-        self, train_size=10_000, validation_size=3000, test_size=0
+        self, train_size: int = 10_000, validation_size: int = 3000, test_size: int = 0
     ) -> tuple[Dataset, Dataset, Dataset]:
         assert train_size > 0
         assert validation_size >= 0
@@ -115,7 +117,9 @@ class TomitaBase:
             Dataset.from_dict(test_set),
         )
 
-    def _classify_saved_binary_strings(self, binary_strings: list):
+    def _classify_saved_binary_strings(
+        self, binary_strings: list[str]
+    ) -> tuple[list[str], list[str]]:
         trues = []
         falses = []
         for string in binary_strings:
@@ -127,7 +131,7 @@ class TomitaBase:
 
         return trues, falses
 
-    def make_complete_dataset(self, length: int = 10):
+    def make_complete_dataset(self, length: int = 10) -> None:
         trues, falses = self._classify_saved_binary_strings(
             all_binary_strings_of_length(length)
         )

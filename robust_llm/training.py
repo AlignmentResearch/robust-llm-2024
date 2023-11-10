@@ -58,7 +58,7 @@ class Training:
             project="robust-llm",
         )
 
-    def setup_trainer(self):
+    def setup_trainer(self) -> Trainer:
         hf_training_args = TrainingArguments(
             output_dir="test_trainer",
             num_train_epochs=self.train_epochs,
@@ -80,7 +80,7 @@ class Training:
 
         return trainer
 
-    def run_trainer(self):
+    def run_trainer(self) -> None:
         trainer = self.setup_trainer()
 
         self.log_datasets()
@@ -241,7 +241,7 @@ class AdversarialTraining(Training):
         return trainer
 
     @override
-    def run_trainer(self):
+    def run_trainer(self) -> None:
         # Set up the trainer
         adversarial_trainer = self.setup_trainer()
 
@@ -367,7 +367,7 @@ class AdversarialTraining(Training):
             ] = tokenized_new_examples
 
     @override
-    def log_datasets(self):
+    def log_datasets(self) -> None:
         # First log the train and evaluation sets
         super().log_datasets()
 

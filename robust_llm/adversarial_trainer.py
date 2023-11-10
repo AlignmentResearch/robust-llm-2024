@@ -61,6 +61,7 @@ class AdversarialTrainer(Trainer):
         assert len(self.new_examples["text"]) > 0
 
         # Tokenize the new examples
+        assert self.tokenizer is not None
         tokenized_new_examples = Dataset.from_dict(
             tokenize_dataset(self.new_examples, self.tokenizer)
         )

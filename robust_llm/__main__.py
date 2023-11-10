@@ -4,10 +4,14 @@ import hydra
 from datasets import Dataset
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig, OmegaConf
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    PreTrainedTokenizerBase,
+)
 
 import wandb
-from robust_llm.dataset_management.tomita import make_language_generator
+from robust_llm.dataset_management.tomita import TomitaBase, make_language_generator
 from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
     load_adversarial_dataset,
 )
@@ -103,7 +107,9 @@ class RobustLLMDatasets:
 
 
 def generateRobustLLMDatasets(
-    language_generator, tokenizer, training_args: TrainingConfig
+    language_generator: TomitaBase,
+    tokenizer: PreTrainedTokenizerBase,
+    training_args: TrainingConfig,
 ) -> RobustLLMDatasets:
     if training_args.baseline.non_adversarial_baseline:
         brute_force_dataset = load_adversarial_dataset(

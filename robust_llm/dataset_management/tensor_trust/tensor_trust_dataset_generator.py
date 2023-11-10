@@ -1,6 +1,7 @@
-import numpy as np
 from pathlib import Path
 from typing import Optional
+
+import numpy as np
 
 from robust_llm.dataset_management.file_utils import compute_dataset_path
 
@@ -38,7 +39,7 @@ def load_dataset(
     return contexts, questions, answers
 
 
-def _select_different_word(word, words):
+def _select_different_word(word: str, words: list[str]) -> str:
     other_word = word
 
     num_words_tried = 0
