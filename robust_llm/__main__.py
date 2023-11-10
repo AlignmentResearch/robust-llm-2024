@@ -9,6 +9,7 @@ from transformers import (
     AutoTokenizer,
     PreTrainedTokenizerBase,
 )
+import yaml
 
 import wandb
 from robust_llm.dataset_management.tomita import TomitaBase, make_language_generator
@@ -208,7 +209,8 @@ def main(args: OverallConfig) -> None:
     # Log the training arguments to wandb
     if not wandb.run:
         raise ValueError("wandb should have been initialized by now, exiting...")
-    wandb.run.summary[f"experiment_yaml"] = OmegaConf.to_yaml(experiment)
+    yaml_string = yaml.load(OmegaConf.to_yaml(experiment), Loader=yaml.FullLoader)
+    wandb.run.summary[f"experiment_yaml"] = yaml_string
 
     # Log the train-val overlap to wandb
     if (
