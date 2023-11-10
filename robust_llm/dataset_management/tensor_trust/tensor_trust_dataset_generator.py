@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
+from numpy.random import Generator
 
 from robust_llm.dataset_management.file_utils import compute_dataset_path
 
@@ -39,12 +40,12 @@ def load_dataset(
     return contexts, questions, answers
 
 
-def _select_different_word(word: str, words: list[str]) -> str:
+def _select_different_word(word: str, words: list[str], rng: Generator) -> str:
     other_word = word
 
     num_words_tried = 0
     while other_word == word:
-        other_word = np.random.choice(words)
+        other_word = rng.choice(words)
         if num_words_tried > 1000:
             raise ValueError(f"Couldn't find a different word than {word} in {words}")
         num_words_tried += 1
@@ -102,7 +103,7 @@ def _generate_dataset(
         questions.append(word)
         answers.append("Access Granted")
 
-        other_word = _select_different_word(word, words)
+        other_word = _select_different_word(word, words, rng)
         contexts.append(context)
         questions.append(other_word)
         answers.append("Access Denied")
