@@ -164,7 +164,7 @@ class AdversarialTraining(Training):
     Parameters:
         tokenizer:
             Huggingface tokenizer used for tokenizing the dataset. Should match the model we're using.
-        num_adversarial_training_rounds:
+        num_iterative_training_rounds:
             One round of adversarial training involves first finding some number of adversarial examples,
             adding them to an "augmented train set", and training on that for some number of epochs.
         language_generator_name:
@@ -173,7 +173,7 @@ class AdversarialTraining(Training):
             Whether to use a "brute force attack" to generate adversarial examples. This means testing on all possible examples up to a given length.
         brute_force_length:
             The maximum string length to use for the brute force attack. Note that the brute force dataset size grows as 2^length.
-        min_num_adversarial_examples_to_add:
+        min_num_new_examples_to_add:
             When searching for adversarial examples in the brute force attack, we usually don't stop looking until we surpass this number.
             If we search the entire brute force dataset and don't find enough examples, we do stop looking.
             If we surpass max_num_search_for_adversarial_examples during the search, we also do stop looking.
@@ -192,11 +192,11 @@ class AdversarialTraining(Training):
     """
 
     tokenizer: PreTrainedTokenizerBase
-    num_adversarial_training_rounds: int
+    num_iterative_training_rounds: int
     language_generator_name: str
     brute_force_attack: bool
     brute_force_length: int
-    min_num_adversarial_examples_to_add: int
+    min_num_new_examples_to_add: int
     max_num_search_for_adversarial_examples: int
     adversarial_example_search_minibatch_size: int
     skip_first_training_round: bool = False
@@ -212,7 +212,7 @@ class AdversarialTraining(Training):
         # Standardize the language generator name
         self.language_generator_name: str = self.language_generator_name.lower()
 
-        self.current_adversarial_training_round: int = 0
+        self.current_iterative_training_round: int = 0
 
     @override
     def setup_trainer(self) -> AdversarialTrainer:
@@ -269,9 +269,9 @@ class AdversarialTraining(Training):
         self.log_datasets()
 
         # Run the adversarial training loop
-        for i in range(self.num_adversarial_training_rounds):
+        for i in range(self.num_iterative_training_rounds):
             print("Starting training round", i)
-            self.current_adversarial_training_round = i
+            self.current_iterative_training_round = i
 
             # Train for "one round" (i.e., num_train_epochs) on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
@@ -291,7 +291,7 @@ class AdversarialTraining(Training):
             ) = search_for_adversarial_examples(
                 adversarial_trainer,
                 attack_dataset,
-                min_num_adversarial_examples_to_add=self.min_num_adversarial_examples_to_add,
+                min_num_new_examples_to_add=self.min_num_new_examples_to_add,
                 max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,
                 adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,
             )
@@ -301,20 +301,23 @@ class AdversarialTraining(Training):
             examples_to_actually_add_to_train_set = incorrect_predictions
 
             if self.non_adversarial_baseline:
+                num_examples_to_add = (
+                    self.min_num_new_examples_to_add
+                    + self.adversarial_example_search_minibatch_size // 2
+                )
                 print(
-                    "Non-adversarial baseline: NOT adding those mistakes, instead adding the first few random examples..."
+                    f"Non-adversarial baseline: NOT adding those mistakes, instead adding the first {num_examples_to_add} random examples..."
                 )
                 examples_to_actually_add_to_train_set = next(
                     yield_minibatch(
                         attack_dataset,
-                        self.min_num_adversarial_examples_to_add
-                        + self.adversarial_example_search_minibatch_size // 2,
+                        num_examples_to_add,
                     )
                 )
 
             wandb.log(
                 {
-                    "train/adversarial_training_round": self.current_adversarial_training_round,
+                    "train/iterative_training_round": self.current_iterative_training_round,
                     "misc/number_examples_searched": number_examples_searched,
                     "misc/number_successful_attacks": len(
                         incorrect_predictions["text"]

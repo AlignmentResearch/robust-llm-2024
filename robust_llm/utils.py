@@ -62,7 +62,7 @@ def get_incorrect_predictions(trainer: Trainer, dataset: Dataset) -> dict[str, l
 def search_for_adversarial_examples(
     adversarial_trainer: AdversarialTrainer,
     attack_dataset: Dataset,
-    min_num_adversarial_examples_to_add: int,
+    min_num_new_examples_to_add: int,
     max_num_search_for_adversarial_examples: int,
     adversarial_example_search_minibatch_size: int,
 ) -> tuple[dict[str, list], int]:
@@ -72,7 +72,7 @@ def search_for_adversarial_examples(
     Args:
         adversarial_trainer (AdversarialTrainer): trainer from which we use the model to make predictions.
         attack_dataset (Dataset): dataset in which to search for adversarial examples.
-        min_num_adversarial_examples_to_add (int): the minimum number of examples to return. The function may return fewer than this examples if `max_num_search_for_adversarial_examples` has been exceeded, or if the entire dataset contains fewer than the desired count of adversarial examples.
+        min_num_new_examples_to_add (int): the minimum number of examples to return. The function may return fewer than this examples if `max_num_search_for_adversarial_examples` has been exceeded, or if the entire dataset contains fewer than the desired count of adversarial examples.
         max_num_search_for_adversarial_examples (int): the maximum number of examples to search over from `attack_dataset`. The function may return up to one minibatch's worth of examples more than this number.
 
     Returns:
@@ -98,7 +98,7 @@ def search_for_adversarial_examples(
         adversarial_examples["label"] += incorrect_predictions["label"]
 
         # If we found enough adversarial examples, stop searching
-        if len(adversarial_examples["text"]) >= min_num_adversarial_examples_to_add:
+        if len(adversarial_examples["text"]) >= min_num_new_examples_to_add:
             break
 
         # If we passed the threshold of how many examples to search over, stop searching

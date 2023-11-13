@@ -122,7 +122,7 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
             table.add_data(text_string, correct_label)
 
         to_log[
-            f"augmented_train_set_start_round_{self.training.current_adversarial_training_round}"
+            f"augmented_train_set_start_round_{self.training.current_iterative_training_round}"
         ] = table
 
         to_log[

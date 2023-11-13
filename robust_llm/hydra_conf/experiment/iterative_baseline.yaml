@@ -1,0 +1,18 @@
+training:
+  train_set_size: 2
+  validation_set_size: 2
+  num_train_epochs: 20
+
+  iterative:
+    iterative_training: true
+    non_adversarial_baseline: true
+    brute_force_attack: true
+    brute_force_length: 7
+    num_iterative_training_rounds: 10
+    skip_first_training_round: true
+    min_num_new_examples_to_add: 50
+    adversarial_example_search_minibatch_size: 16
+
+environment:
+  language_generator: "tomita4"
+  max_length: 50

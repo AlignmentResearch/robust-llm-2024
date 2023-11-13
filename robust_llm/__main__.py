@@ -21,32 +21,35 @@ from robust_llm.utils import get_overlap, tokenize_dataset
 
 
 @dataclass
-class NonAdversarialBaselineTrainingConfig:
+class BaselineTrainingConfig:
+    """Configs used in baseline training."""
+
     # The proportion of the brute force dataset to use for training, when running a baseline.
     proportion: float = 0.1
-    # Whether to run a non-adversarial baseline or not.
-    non_adversarial_baseline: bool = False
+    # Whether to run a non-iterative baseline or not.
+    non_iterative_baseline: bool = False
 
 
 @dataclass
-class AdversarialTrainingConfig:
-    """Configs used in adversarial training."""
+class IterativeTrainingConfig:
+    """Configs used in iterative (often adversarial) training."""
 
-    # Whether to use adversarial training.
-    adversarial_training: bool = False
+    # Whether to use iterative training.
+    iterative_training: bool = False
+    # Whether to use the non-adversarial baseline or not
+    non_adversarial_baseline: bool = False
     # The minimum number of adversarial examples to add to the train set each attack round.
-    min_num_adversarial_examples_to_add: int = 50
+    min_num_new_examples_to_add: int = 50
     # The maximum number of examples to search for adversarial examples in each attack round. Think 'compute budget'.
     max_num_search_for_adversarial_examples: int = 8192
     # The size of the minibatches to use when searching for adversarial examples.
     adversarial_example_search_minibatch_size: int = 64
     # The number of adversarial training rounds to do.
-    num_adversarial_training_rounds: int = 3
+    num_iterative_training_rounds: int = 3
     # If true, only checks robustness on a random subset of the brute force attack dataset.
     use_probabilistic_robustness_check: bool = False
     # Whether to skip the first training round or not.
     skip_first_training_round: bool = False
-
     # Up to which length strings should be exhaustively tested.
     brute_force_length: int = 5
     # Whether to exhaustively test all possible adversarial examples.
@@ -69,10 +72,8 @@ class EnvironmentConfig:
 class TrainingConfig:
     """Configs used by multiple training types."""
 
-    adversarial: AdversarialTrainingConfig = AdversarialTrainingConfig()
-    baseline: NonAdversarialBaselineTrainingConfig = (
-        NonAdversarialBaselineTrainingConfig()
-    )
+    iterative: IterativeTrainingConfig = IterativeTrainingConfig()
+    baseline: BaselineTrainingConfig = BaselineTrainingConfig()
     # The size of the train set.
     train_set_size: int = 100
     # The size of the validation set.
@@ -85,7 +86,6 @@ class TrainingConfig:
 @dataclass
 class ExperimentConfig:
     training: TrainingConfig = TrainingConfig()
-
     environment: EnvironmentConfig = EnvironmentConfig()
 
 
@@ -112,10 +112,10 @@ def generateRobustLLMDatasets(
     tokenizer: PreTrainedTokenizerBase,
     training_args: TrainingConfig,
 ) -> RobustLLMDatasets:
-    if training_args.baseline.non_adversarial_baseline:
+    if training_args.baseline.non_iterative_baseline:
         brute_force_dataset = load_adversarial_dataset(
             language_generator.name,
-            training_args.adversarial.brute_force_length,
+            training_args.iterative.brute_force_length,
         )
         tokenized_brute_force_dataset = Dataset.from_dict(
             tokenize_dataset(brute_force_dataset, tokenizer)
@@ -171,9 +171,9 @@ def main(args: OverallConfig) -> None:
         language_generator, tokenizer, experiment.training
     )
 
-    # NOTE: a confusing thing: the "validation" dataset is one of what will be
-    # several datasets that we perform model evaluation on, hence "eval_dataset"
-    # is a dict[str, Dataset] and not a Dataset.
+    # NOTE: the "validation" dataset is one of what will be
+    # several datasets that we perform model evaluation on,
+    # hence "eval_dataset" is a dict[str, Dataset], not a Dataset.
     base_training_args = {
         "hparams": {},
         "train_dataset": robust_llm_datasets.tokenized_train_dataset,
@@ -186,20 +186,20 @@ def main(args: OverallConfig) -> None:
 
     # Set up the training environment
     training: Training
-    if experiment.training.adversarial.adversarial_training:
+    if experiment.training.iterative.iterative_training:
         training = AdversarialTraining(
             **base_training_args,
-            num_adversarial_training_rounds=experiment.training.adversarial.num_adversarial_training_rounds,
+            num_iterative_training_rounds=experiment.training.iterative.num_iterative_training_rounds,
             tokenizer=tokenizer,
             language_generator_name=experiment.environment.language_generator,
-            brute_force_attack=experiment.training.adversarial.brute_force_attack,
-            brute_force_length=experiment.training.adversarial.brute_force_length,
-            min_num_adversarial_examples_to_add=experiment.training.adversarial.min_num_adversarial_examples_to_add,
-            max_num_search_for_adversarial_examples=experiment.training.adversarial.max_num_search_for_adversarial_examples,
-            adversarial_example_search_minibatch_size=experiment.training.adversarial.adversarial_example_search_minibatch_size,
-            skip_first_training_round=experiment.training.adversarial.skip_first_training_round,
-            use_probabilistic_robustness_check=experiment.training.adversarial.use_probabilistic_robustness_check,
-            non_adversarial_baseline=experiment.training.baseline.non_adversarial_baseline,
+            brute_force_attack=experiment.training.iterative.brute_force_attack,
+            brute_force_length=experiment.training.iterative.brute_force_length,
+            min_num_new_examples_to_add=experiment.training.iterative.min_num_new_examples_to_add,
+            max_num_search_for_adversarial_examples=experiment.training.iterative.max_num_search_for_adversarial_examples,
+            adversarial_example_search_minibatch_size=experiment.training.iterative.adversarial_example_search_minibatch_size,
+            skip_first_training_round=experiment.training.iterative.skip_first_training_round,
+            use_probabilistic_robustness_check=experiment.training.iterative.use_probabilistic_robustness_check,
+            non_adversarial_baseline=experiment.training.iterative.non_adversarial_baseline,
         )
     else:
         training = Training(

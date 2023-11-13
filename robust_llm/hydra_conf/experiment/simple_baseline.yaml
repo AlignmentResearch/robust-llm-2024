@@ -1,0 +1,9 @@
+training:
+  num_train_epochs: 40
+  
+  baseline:
+    proportion: 0.2
+    non_iterative_baseline: true
+  
+  iterative:
+    brute_force_length: 7
