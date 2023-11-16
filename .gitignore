@@ -171,3 +171,6 @@ checkpoint*/
 # Hydra output
 outputs/
 robust_llm/outputs/
+
+# Pythia
+pythia*/
