@@ -1,9 +1,12 @@
-import git.repo
 from datasets import Dataset
+from transformers import PreTrainedTokenizerBase
 
+from robust_llm.configs import TrainingConfig
 from robust_llm.dataset_management.file_utils import compute_dataset_path
 from robust_llm.dataset_management.tomita import make_language_generator
 from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
+from robust_llm.utils import tokenize_dataset
+
 
 LANGUAGE_NAMES = {"tomita1", "tomita2", "tomita4", "tomita7"}
 
@@ -62,6 +65,40 @@ def load_adversarial_dataset(language_generator_name: str, length: int) -> Datas
     return Dataset.from_dict(
         {"text": trues + falses, "label": [1] * len(trues) + [0] * len(falses)}
     )
+
+
+def get_tomita_dataset(
+    training_args: TrainingConfig,
+    language_generator: TomitaBase,
+    tokenizer: PreTrainedTokenizerBase,
+) -> tuple[Dataset, Dataset]:
+    if training_args.baseline.non_iterative_baseline:
+        brute_force_dataset = load_adversarial_dataset(
+            language_generator.name,
+            training_args.iterative.brute_force_length,
+        )
+        tokenized_brute_force_dataset = Dataset.from_dict(
+            tokenize_dataset(brute_force_dataset, tokenizer)
+        )
+        shuffled_brute_force_dataset = tokenized_brute_force_dataset.shuffle()
+        train_set = shuffled_brute_force_dataset.select(
+            range(
+                int(
+                    training_args.baseline.proportion
+                    * len(tokenized_brute_force_dataset)
+                )
+            )
+        )
+        validation_set = brute_force_dataset
+
+    else:
+        train_set, validation_set, _ = language_generator.generate_dataset(
+            train_size=training_args.train_set_size,
+            validation_size=training_args.validation_set_size,
+            test_size=0,
+        )
+
+    return train_set, validation_set
 
 
 if __name__ == "__main__":

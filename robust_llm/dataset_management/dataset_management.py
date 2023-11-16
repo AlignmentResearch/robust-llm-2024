@@ -1,14 +1,17 @@
 from dataclasses import dataclass
-
 from datasets import Dataset
 from transformers import (
     PreTrainedTokenizerBase,
 )
+from typing import Optional
 
 from robust_llm.configs import TrainingConfig
 from robust_llm.dataset_management.tomita import TomitaBase
 from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
-    load_adversarial_dataset,
+    get_tomita_dataset,
+)
+from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
+    get_tensor_trust_dataset,
 )
 
 from robust_llm.utils import tokenize_dataset
@@ -24,37 +27,27 @@ class RobustLLMDatasets:
 
 
 def generateRobustLLMDatasets(
-    language_generator: TomitaBase,
+    dataset_type: str,
+    language_generator: Optional[TomitaBase],
     tokenizer: PreTrainedTokenizerBase,
     training_args: TrainingConfig,
 ) -> RobustLLMDatasets:
-    if training_args.baseline.non_iterative_baseline:
-        brute_force_dataset = load_adversarial_dataset(
-            language_generator.name,
-            training_args.iterative.brute_force_length,
+    if dataset_type.lower() == "tensor_trust":
+        train_set, validation_set = get_tensor_trust_dataset(training_args, tokenizer)
+
+    elif dataset_type.lower() == "tomita":
+        assert language_generator is not None and isinstance(
+            language_generator, TomitaBase
         )
-        tokenized_brute_force_dataset = Dataset.from_dict(
-            tokenize_dataset(brute_force_dataset, tokenizer)
+        train_set, validation_set = get_tomita_dataset(
+            training_args, language_generator, tokenizer
         )
-        shuffled_brute_force_dataset = tokenized_brute_force_dataset.shuffle()
-        train_set = shuffled_brute_force_dataset.select(
-            range(
-                int(
-                    training_args.baseline.proportion
-                    * len(tokenized_brute_force_dataset)
-                )
-            )
-        )
-        validation_set = brute_force_dataset
 
     else:
-        train_set, validation_set, _ = language_generator.generate_dataset(
-            train_size=training_args.train_set_size,
-            validation_size=training_args.validation_set_size,
-            test_size=0,
-        )
+        raise ValueError(f"Unknown dataset type {dataset_type}")
 
     print("Tokenizing datasets...")
+    # TODO: is the below necessary? Seems like the datasets are already tokenized by now.
     tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
     tokenized_validation_dataset = Dataset.from_dict(
         tokenize_dataset(validation_set, tokenizer)

@@ -41,6 +41,8 @@ class IterativeTrainingConfig:
 class EnvironmentConfig:
     """Configs used in environment setup."""
 
+    # Dataset type (tomita, tensor_trust)
+    dataset_type: str = "tomita"
     # Choose the regular language to use (tomita1, tomita2, tomita4, tomita7).
     language_generator: str = "tomita4"
     # The maximum length of the strings to generate.

@@ -29,9 +29,16 @@ def main(args: OverallConfig) -> None:
     print(OmegaConf.to_yaml(experiment))
     print()
 
-    language_generator = make_language_generator(
-        experiment.environment.language_generator, experiment.environment.max_length
-    )
+    if experiment.environment.dataset_type.lower() == "tensor_trust":
+        language_generator = None
+        dataset_type = "tensor_trust"
+    elif experiment.environment.dataset_type.lower() == "tomita":
+        dataset_type = "tomita"
+        language_generator = make_language_generator(
+            experiment.environment.language_generator, experiment.environment.max_length
+        )
+    else:
+        raise ValueError(f"Unknown dataset type {experiment.environment.dataset_type}")
 
     # Choose a model and a tokenizer
     model_name = "bert-base-cased"
@@ -39,7 +46,7 @@ def main(args: OverallConfig) -> None:
     tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
     robust_llm_datasets = generateRobustLLMDatasets(
-        language_generator, tokenizer, experiment.training
+        dataset_type, language_generator, tokenizer, experiment.training
     )
 
     # NOTE: the "validation" dataset is one of what will be
@@ -62,7 +69,8 @@ def main(args: OverallConfig) -> None:
             **base_training_args,
             num_iterative_training_rounds=experiment.training.iterative.num_iterative_training_rounds,
             tokenizer=tokenizer,
-            language_generator_name=experiment.environment.language_generator,
+            dataset_type=dataset_type,
+            language_generator=language_generator,
             brute_force_attack=experiment.training.iterative.brute_force_attack,
             brute_force_length=experiment.training.iterative.brute_force_length,
             min_num_new_examples_to_add=experiment.training.iterative.min_num_new_examples_to_add,

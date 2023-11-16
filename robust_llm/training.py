@@ -20,6 +20,7 @@ from robust_llm.adversarial_trainer import (
     AdversarialTrainerLoggingCallback,
 )
 from robust_llm.callbacks import CrossTrainRunStepRecordingWandbCallback
+from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
 from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
     load_adversarial_dataset,
 )
@@ -167,8 +168,11 @@ class AdversarialTraining(Training):
         num_iterative_training_rounds:
             One round of adversarial training involves first finding some number of adversarial examples,
             adding them to an "augmented train set", and training on that for some number of epochs.
-        language_generator_name:
-            The name of the language generator which should be created to generate datapoints for training and evaluation.
+        dataset_type:
+            The type of dataset to use. Either "tomita" or "tensor_trust".
+        language_generator:
+            The language generator which should be created to generate datapoints for training and evaluation.
+            Only relevant in the Tomita setting.
         brute_force_attack:
             Whether to use a "brute force attack" to generate adversarial examples. This means testing on all possible examples up to a given length.
         brute_force_length:
@@ -193,7 +197,8 @@ class AdversarialTraining(Training):
 
     tokenizer: PreTrainedTokenizerBase
     num_iterative_training_rounds: int
-    language_generator_name: str
+    dataset_type: str
+    language_generator: Optional[TomitaBase]
     brute_force_attack: bool
     brute_force_length: int
     min_num_new_examples_to_add: int
@@ -210,7 +215,12 @@ class AdversarialTraining(Training):
         assert "validation" in self.eval_dataset
 
         # Standardize the language generator name
-        self.language_generator_name: str = self.language_generator_name.lower()
+        if self.language_generator is None:
+            self.language_generator_name = (
+                "(no language generator, tensor trust setting)"
+            )
+        else:
+            self.language_generator_name: str = self.language_generator.name
 
         self.current_iterative_training_round: int = 0
 
@@ -248,6 +258,11 @@ class AdversarialTraining(Training):
         # Prepare the attack dataset
         attack_dataset = None
         if self.brute_force_attack:
+            if self.dataset_type not in ["tomita"]:
+                raise ValueError(
+                    f"Brute force attack not yet supported in dataset type {self.dataset_type}, exiting..."
+                )
+
             brute_force_dataset = load_adversarial_dataset(
                 self.language_generator_name, self.brute_force_length
             )
