@@ -1,0 +1,35 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: devbox
+  labels:
+    kueue.x-k8s.io/queue-name: farai
+spec:
+  suspend: true
+  ttlSecondsAfterFinished: 100
+  template:
+    metadata:
+      name: devbox
+    spec:
+      priorityClassName: interactive
+      volumes:
+        - name: working-storage
+          persistentVolumeClaim:
+            claimName: devbox-storage
+      containers:
+        - name: devbox-container
+          image: ghcr.io/alignmentresearch/robust-llm:latest
+          args: ["sleep", "2d"]
+          resources:
+            requests:
+              cpu: 14
+            limits:
+              memory: "60G"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: working-storage
+              mountPath: /home/dev
+      imagePullSecrets:
+        - name: docker
+      restartPolicy: Never
