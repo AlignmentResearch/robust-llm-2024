@@ -41,6 +41,8 @@ class IterativeTrainingConfig:
 class EnvironmentConfig:
     """Configs used in environment setup."""
 
+    # Model type
+    model_name: str = "bert-base-uncased"
     # Dataset type (tomita, tensor_trust)
     dataset_type: str = "tomita"
     # Choose the regular language to use (tomita1, tomita2, tomita4, tomita7).

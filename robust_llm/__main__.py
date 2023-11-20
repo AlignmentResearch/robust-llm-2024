@@ -1,10 +1,14 @@
 import hydra
 from hydra.core.config_store import ConfigStore
 from omegaconf import OmegaConf
+import torch
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    GPTNeoXForSequenceClassification,
+    GPTNeoXTokenizerFast,
 )
+from transformers.modeling_utils import PreTrainedModel
 import yaml
 
 import wandb
@@ -29,6 +33,8 @@ def main(args: OverallConfig) -> None:
     print(OmegaConf.to_yaml(experiment))
     print()
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
     if experiment.environment.dataset_type.lower() == "tensor_trust":
         language_generator = None
         dataset_type = "tensor_trust"
@@ -41,9 +47,35 @@ def main(args: OverallConfig) -> None:
         raise ValueError(f"Unknown dataset type {experiment.environment.dataset_type}")
 
     # Choose a model and a tokenizer
-    model_name = "bert-base-cased"
-    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    model_name = args.experiment.environment.model_name
+
+    if "bert" in model_name:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_name, num_labels=2
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+    elif "pythia" in model_name:
+        pythia_version = model_name.split("/")[-1]
+        untyped_model = GPTNeoXForSequenceClassification.from_pretrained(
+            model_name,
+            revision="step3000",
+            cache_dir=f"./{pythia_version}/step3000",
+            use_cache=False,  # otherwise returns last key/values attentions
+            num_labels=2,
+        )
+        assert isinstance(untyped_model, PreTrainedModel)
+        model = untyped_model
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name,
+            revision="step3000",
+            cache_dir=f"./{pythia_version}/step3000",
+            use_fast=True,
+            model_max_length=512,  # TODO: check this number
+        )
+        tokenizer.pad_token = tokenizer.eos_token
+        model.config.pad_token_id = model.config.eos_token_id
+    else:
+        raise ValueError(f"Unknown model name {model_name}")
 
     robust_llm_datasets = generateRobustLLMDatasets(
         dataset_type, language_generator, tokenizer, experiment.training
