@@ -58,9 +58,27 @@ def _shuffle_tensor_trust_dataset(
     questions: list[str],
     answers: list[str],
     seed: int,
+    balanced: bool = True,
 ) -> tuple[list[str], list[str], list[str]]:
     rng = np.random.default_rng(seed=seed)
-    indices = rng.permutation(len(contexts))
+
+    indices: np.ndarray
+    if balanced:
+        # Keep the alternation of positive/negative examples
+        positives = np.where(np.array(answers) == "Access Granted")[0]
+        negatives = np.where(np.array(answers) == "Access Denied")[0]
+        assert len(positives) == len(negatives)
+        indices1 = rng.permutation(len(positives))
+        indices2 = rng.permutation(len(negatives))
+        shuffled_positives = positives[indices1].tolist()
+        shuffled_negatives = negatives[indices2].tolist()
+        indices = (
+            np.array(list(zip(shuffled_positives, shuffled_negatives)))
+            .flatten()
+            .astype(int)
+        )
+    else:
+        indices = rng.permutation(len(contexts))
     return (
         np.array(contexts)[indices].tolist(),
         np.array(questions)[indices].tolist(),
@@ -172,17 +190,24 @@ def _generate_and_save_dataset(
 def _generate_dataset(
     words: list[str], dataset_size: int, seed: int
 ) -> tuple[list[str], list[str], list[str]]:
+    if dataset_size % 2 != 0:
+        raise ValueError(
+            "dataset_size must be even since we generate pairs of positive/negative examples"
+        )
+
     words_array = np.array(words)
 
     rng = np.random.default_rng(seed=seed)
-    subset_indices = rng.choice(len(words), size=dataset_size, replace=False)
+    subset_indices = rng.choice(len(words), size=dataset_size // 2, replace=False)
 
     contexts = []
     questions = []
     answers = []
     for i, word in enumerate(words_array[subset_indices]):
-        if i % 100 == 0:
-            print(f"Generated {i} TensorTrust examples so far, out of {dataset_size}")
+        if i % 50 == 0:
+            print(
+                f"Generated {i * 2} TensorTrust examples so far, out of {dataset_size}"
+            )
 
         context = CONTEXT_STRING.replace("<FIRST_TOKEN>", word)
         contexts.append(context)
