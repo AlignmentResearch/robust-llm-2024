@@ -32,8 +32,6 @@ def test_balanced_shuffle():
     )
     left_half_answers = shuffled_answers[:50]
     right_half_answers = shuffled_answers[50:]
-    print(left_half_answers)
-    print(right_half_answers)
     left_half_positives = np.where(np.array(left_half_answers) == "Access Granted")[0]
     left_half_negatives = np.where(np.array(left_half_answers) == "Access Denied")[0]
     right_half_positives = np.where(np.array(right_half_answers) == "Access Granted")[0]

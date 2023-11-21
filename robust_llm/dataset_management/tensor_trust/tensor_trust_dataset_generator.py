@@ -20,6 +20,7 @@ def get_tensor_trust_dataset(
     tokenizer: PreTrainedTokenizerBase,
     seed: int = RANDOM_SEED,
 ) -> tuple[Dataset, Dataset]:
+    """Generates a dataset in the form [positive, negative, positive, negative, ...]"""
     train_set_size = training_args.train_set_size
     validation_set_size = training_args.validation_set_size
 
@@ -68,10 +69,10 @@ def _shuffle_tensor_trust_dataset(
         positives = np.where(np.array(answers) == "Access Granted")[0]
         negatives = np.where(np.array(answers) == "Access Denied")[0]
         assert len(positives) == len(negatives)
-        indices1 = rng.permutation(len(positives))
-        indices2 = rng.permutation(len(negatives))
-        shuffled_positives = positives[indices1].tolist()
-        shuffled_negatives = negatives[indices2].tolist()
+        positive_permutation = rng.permutation(len(positives))
+        negative_permutation = rng.permutation(len(negatives))
+        shuffled_positives = positives[positive_permutation].tolist()
+        shuffled_negatives = negatives[negative_permutation].tolist()
         indices = (
             np.array(list(zip(shuffled_positives, shuffled_negatives)))
             .flatten()
