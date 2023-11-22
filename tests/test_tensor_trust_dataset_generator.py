@@ -2,8 +2,11 @@ import numpy as np
 import pytest
 
 from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
+    TWEAK_STYLES,
+    WordTweaker,
     _generate_dataset,
     _shuffle_tensor_trust_dataset,
+    _tweak_queries,
 )
 
 
@@ -40,3 +43,16 @@ def test_balanced_shuffle():
     assert len(right_half_positives) == len(right_half_negatives)
     assert len(left_half_positives) == len(right_half_positives)
     assert len(left_half_negatives) == len(right_half_negatives)
+
+
+def test_tweaks_consistently_for_set_seed():
+    seed = np.random.randint(low=0, high=100)
+    words = ["hello", "goodbye", "banana", "apple", "yellow", "red", "green", "blue"]
+    for style in TWEAK_STYLES:
+        for word in words:
+            tweaker = WordTweaker(style, seed)
+            first_tweak = tweaker.tweak(word)
+
+            tweaker = WordTweaker(style, seed)
+            second_tweak = tweaker.tweak(word)
+            assert first_tweak == second_tweak

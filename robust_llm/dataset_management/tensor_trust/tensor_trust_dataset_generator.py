@@ -1,10 +1,13 @@
-from datasets import Dataset
 from pathlib import Path
-from transformers import PreTrainedTokenizerBase
-from typing import Optional
+from random import seed as py_seed
+from typing import Literal, NewType, Optional, Tuple, get_args
 
 import numpy as np
+from datasets import Dataset
 from numpy.random import Generator
+from textattack.augmentation import Augmenter
+from textattack.transformations import WordSwapNeighboringCharacterSwap, WordSwapQWERTY
+from transformers import PreTrainedTokenizerBase
 
 from robust_llm.configs import TrainingConfig
 from robust_llm.dataset_management.file_utils import compute_dataset_path
@@ -14,6 +17,9 @@ CONTEXT_STRING = """You are an online security system. Below the user will enter
 DEFAULT_DATASET_LENGTH = 100
 RANDOM_SEED = 42
 
+TweakStyle = Literal["qwerty", "swap_characters"]
+TWEAK_STYLES: Tuple[TweakStyle, ...] = get_args(TweakStyle)
+
 
 def get_tensor_trust_dataset(
     training_args: TrainingConfig,
@@ -21,6 +27,7 @@ def get_tensor_trust_dataset(
     seed: int = RANDOM_SEED,
 ) -> tuple[Dataset, Dataset]:
     """Generates a dataset in the form [positive, negative, positive, negative, ...]"""
+    np.random.seed(seed=seed)
     train_set_size = training_args.train_set_size
     validation_set_size = training_args.validation_set_size
 
@@ -186,6 +193,55 @@ def _generate_and_save_dataset(
 
     if return_dataset:
         return contexts, questions, answers
+
+
+class WordTweaker:
+    """A wrapper around TextAttack or other word tweakers.
+
+    The intended usage pattern is creating an instance, and then calling:
+        .tweak(`word`)"""
+
+    def __init__(self, tweak_style: TweakStyle, seed: int):
+        np.random.seed(seed=seed)
+        py_seed(seed)
+        self.tweak_style = tweak_style
+        if tweak_style == "qwerty":
+            self.textattack_transformation = WordSwapQWERTY()
+        elif tweak_style == "swap_characters":
+            self.textattack_transformation = WordSwapNeighboringCharacterSwap()
+        else:
+            return ValueError(f"Unsupported style: {tweak_style}")
+
+        # These are the TextAttack tweakers.
+        if tweak_style in ["qwerty", "swap_characters"]:
+            self.augmenter = Augmenter(transformation=self.textattack_transformation)
+            self.tweak = lambda w: self.augmenter.augment(w)[0]
+
+
+def _tweak_queries(
+    contexts: list[str],
+    queries: list[str],
+    labels: list[str],
+    tweak_style: TweakStyle,
+    seed: int = RANDOM_SEED,
+) -> list[str]:
+    """Modifies the queries 'Access Granted' labeled queries using the requested method.
+
+    Note that not all tweak styles guarantee a different query for all possible words.
+    """
+    tweaker = WordTweaker(tweak_style=tweak_style, seed=seed)
+    modified_queries = []
+    for i, label in enumerate(labels):
+        if label != "Access Denied":
+            modified_queries.append(queries[i])
+            continue
+
+        correct_password = contexts[i].split('"')[1]
+
+        modified_query = tweaker.tweak(correct_password)
+        modified_queries.append(modified_query)
+
+    return modified_queries
 
 
 def _generate_dataset(

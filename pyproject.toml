@@ -13,6 +13,7 @@ dependencies = [
     "transformers[accelerate]",
     "simple_parsing",
     "scikit-learn",
+    "textattack",
     "wandb",
 ]
 [project.optional-dependencies]
