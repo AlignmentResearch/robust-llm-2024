@@ -1,4 +1,5 @@
 import dataclasses
+from datetime import date
 from typing import Optional
 
 import evaluate
@@ -14,6 +15,8 @@ from transformers import (
 from typing_extensions import override
 
 import wandb
+import wandb.util
+
 from robust_llm.adversarial_trainer import (
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,
@@ -34,6 +37,9 @@ from robust_llm.utils import (
 @dataclasses.dataclass
 class Training:
     hparams: dict
+    experiment_name: str
+    run_name: str
+    job_type: str
     train_dataset: Dataset
     eval_dataset: dict[str, Dataset]
     model: PreTrainedModel
@@ -57,6 +63,9 @@ class Training:
         # https://docs.wandb.ai/guides/integrations/huggingface#customize-wandbinit
         wandb.init(
             project="robust-llm",
+            group=self.experiment_name,
+            job_type=self.job_type,
+            name=self.run_name,
         )
 
     def setup_trainer(self) -> Trainer:
@@ -87,6 +96,11 @@ class Training:
         self.log_datasets()
 
         trainer.evaluate(eval_dataset=self.eval_dataset["validation"])  # type: ignore
+
+        if self.train_epochs <= 0:
+            print(f"Not training, since train_epochs={self.train_epochs}.")
+            return
+
         trainer.train()
 
     def compute_metrics(self, eval_preds: EvalPrediction) -> dict:
@@ -294,6 +308,10 @@ class AdversarialTraining(Training):
             if i == 0 and self.skip_first_training_round:
                 print("Skipping first round of training...")
             else:
+                if self.train_epochs == 0:
+                    raise ValueError(
+                        "Adversarial training should be done with >0 train epochs, exiting..."
+                    )
                 adversarial_trainer.train()
 
             incorrect_predictions: dict[str, list[str]]

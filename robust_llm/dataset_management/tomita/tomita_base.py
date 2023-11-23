@@ -5,7 +5,7 @@ import git.repo
 import numpy as np
 from datasets import Dataset
 
-from robust_llm.dataset_management.file_utils import compute_dataset_path
+from robust_llm.file_utils import compute_dataset_path
 from robust_llm.utils import write_lines_to_file
 
 

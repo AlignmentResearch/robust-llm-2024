@@ -1,0 +1,7 @@
+training:
+  num_train_epochs: 1
+  train_set_size: 1000
+  validation_set_size: 1000
+
+environment:
+  dataset_type: tensor_trust

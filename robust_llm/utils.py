@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import numpy as np
+import os
+from typing import TYPE_CHECKING, Any, Generator
 
 if TYPE_CHECKING:
     from robust_llm.adversarial_trainer import AdversarialTrainer
 
-import os
-from typing import Generator
-
-import numpy as np
 from datasets import Dataset
 from transformers import (
     PreTrainedTokenizerBase,

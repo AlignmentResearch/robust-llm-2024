@@ -1,6 +1,8 @@
 import hydra
+from hydra.core.hydra_config import HydraConfig
 from hydra.core.config_store import ConfigStore
 from omegaconf import OmegaConf
+import sys
 import torch
 from transformers import (
     AutoModelForSequenceClassification,
@@ -18,6 +20,7 @@ from robust_llm.dataset_management.dataset_management import (
     generateRobustLLMDatasets,
 )
 from robust_llm.dataset_management.tomita import make_language_generator
+from robust_llm.experiment_scripts import scaling_experiments
 from robust_llm.training import AdversarialTraining, Training
 from robust_llm.utils import get_overlap
 
@@ -29,11 +32,18 @@ cs.store(name="base_config", node=OverallConfig)
 @hydra.main(version_base=None, config_path="hydra_conf", config_name="default_config")
 def main(args: OverallConfig) -> None:
     experiment = args.experiment
+    if experiment.scaling_experiments:
+        print("Running a scaling experiment...")
+        hydra_config_name = HydraConfig.get().overrides.task[0].split("=")[1]
+        scaling_experiments.run_experiment(
+            experiment_yaml=hydra_config_name,
+            experiment_name=experiment.experiment_name,
+        )
+        return
+
     print("Configuration arguments:\n")
     print(OmegaConf.to_yaml(experiment))
     print()
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     if experiment.environment.dataset_type.lower() == "tensor_trust":
         language_generator = None
@@ -55,11 +65,13 @@ def main(args: OverallConfig) -> None:
         )
         tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     elif "pythia" in model_name:
+        checkpoint_step_number: int = experiment.training.checkpoint
+        checkpoint_string: str = f"step{checkpoint_step_number}"
         pythia_version = model_name.split("/")[-1]
         untyped_model = GPTNeoXForSequenceClassification.from_pretrained(
             model_name,
-            revision="step3000",
-            cache_dir=f"./{pythia_version}/step3000",
+            revision=checkpoint_string,
+            cache_dir=f"./{pythia_version}/{checkpoint_string}",
             use_cache=False,  # otherwise returns last key/values attentions
             num_labels=2,
         )
@@ -67,8 +79,8 @@ def main(args: OverallConfig) -> None:
         model = untyped_model
         tokenizer = AutoTokenizer.from_pretrained(
             model_name,
-            revision="step3000",
-            cache_dir=f"./{pythia_version}/step3000",
+            revision=checkpoint_string,
+            cache_dir=f"./{pythia_version}/{checkpoint_string}",
             use_fast=True,
             model_max_length=512,  # TODO: check this number
         )
@@ -86,6 +98,9 @@ def main(args: OverallConfig) -> None:
     # hence "eval_dataset" is a dict[str, Dataset], not a Dataset.
     base_training_args = {
         "hparams": {},
+        "experiment_name": experiment.experiment_name,
+        "run_name": experiment.run_name,
+        "job_type": experiment.job_type,
         "train_dataset": robust_llm_datasets.tokenized_train_dataset,
         "eval_dataset": {
             "validation": robust_llm_datasets.tokenized_validation_dataset
