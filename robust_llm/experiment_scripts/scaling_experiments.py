@@ -34,7 +34,7 @@ def run_experiment(
     model_names: list[str] = LIST_OF_PYTHIA_MODELS,
 ) -> None:
     """Run an experiment with the given parameters.
-    
+
     Args:
         experiment_yaml (str): The path to the yaml file for Hydra to use for the experiment.
         experiment_name (str): The name of the experiment. Used to group runs in wandb.

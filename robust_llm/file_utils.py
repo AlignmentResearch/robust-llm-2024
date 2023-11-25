@@ -3,7 +3,7 @@ import git.repo
 
 def compute_repo_path() -> str:
     repo = git.repo.Repo(".", search_parent_directories=True)
-    return repo.working_dir
+    return str(repo.working_dir)
 
 
 def compute_dataset_path() -> str:

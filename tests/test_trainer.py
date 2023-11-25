@@ -36,7 +36,10 @@ def test_basic_constructor():
     )
 
     Training(
-        hparams={"experiment_name": "test-experiment"},
+        hparams={},
+        experiment_name="test-experiment",
+        job_type="test-job_type",
+        run_name="test-run",
         train_dataset=tokenized_train_dataset,
         eval_dataset={"validation": tokenized_validation_dataset},
         model=model,

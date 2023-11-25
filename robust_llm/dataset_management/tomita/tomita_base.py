@@ -55,7 +55,7 @@ class TomitaBase:
         labelled_trues = [(el, 1) for el in trues]
         labelled_falses = [(el, 0) for el in falses]
         labelled_dataset = labelled_trues + labelled_falses
-        self.rng.shuffle(labelled_dataset)
+        self.rng.shuffle(labelled_dataset)  # type: ignore
         data, labels = zip(*labelled_dataset)
         return {"text": list(data), "label": list(labels)}
 

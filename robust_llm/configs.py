@@ -75,11 +75,11 @@ class ExperimentConfig:
     # The name of the overarching experiment being run. Used to set a "group" in wandb. Each experiment has several jobs.
     # Example: "scaling-model-size_2023-11-22_1e88j"
     experiment_name: str = "default-experiment"
-    # The name of the sub-experiment being run. Used to set a "job_type" in wandb. 
+    # The name of the sub-experiment being run. Used to set a "job_type" in wandb.
     # Should correspond to one specific sub-experiment. Each job can have several runs (with different seeds).
     # Example: "pythia-14m_step17000"
     job_type: str = "default-job"
-    # The name of the individual run. Don't need to put much here since group and job do most of the work distinguishing. 
+    # The name of the individual run. Don't need to put much here since group and job do most of the work distinguishing.
     # Random string is fine.
     # Example: "run_3f4ay"
     run_name: str = "default-run"
