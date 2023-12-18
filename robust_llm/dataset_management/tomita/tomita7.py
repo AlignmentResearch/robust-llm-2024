@@ -14,10 +14,10 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
     name: str = "tomita7"
 
     @override
-    def is_in_language(self, the_list: list[int]) -> bool:
-        assert len(the_list) > 0  # for simplicity don't allow empty
+    def is_in_language(self, digits: list[int]) -> bool:
+        assert len(digits) > 0  # for simplicity don't allow empty
 
-        string_list = [str(el) for el in the_list]
+        string_list = [str(el) for el in digits]
 
         return bool(PATTERN.fullmatch("".join(string_list)))
 
