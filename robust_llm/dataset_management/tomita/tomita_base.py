@@ -138,12 +138,10 @@ class TomitaBase:
 
         # Save the trues and falses as trues_i and falses_i in the 'self.name' folder
         write_lines_to_file(
-            trues,
-            f"{compute_dataset_path()}/tomita/{self.name}/trues_{length}.txt",
+            trues, f"{compute_dataset_path()}/tomita/{self.name}/trues_{length}.txt"
         )
         write_lines_to_file(
-            falses,
-            f"{compute_dataset_path()}/tomita/{self.name}/falses_{length}.txt",
+            falses, f"{compute_dataset_path()}/tomita/{self.name}/falses_{length}.txt"
         )
 
     def string_to_digit_list(self, string: str) -> list[int]:

@@ -45,6 +45,10 @@ class EnvironmentConfig:
     model_name: str = "bert-base-uncased"
     # Dataset type (tomita, tensor_trust)
     dataset_type: str = "tomita"
+    # How to generate the negative examples in the dataset (only works with tensor trust for now)
+    dataset_generation_style: str = (
+        "random_words"  # random_word / random_character_edit
+    )
     # Choose the regular language to use (tomita1, tomita2, tomita4, tomita7).
     language_generator: str = "tomita4"
     # The maximum length of the strings to generate.

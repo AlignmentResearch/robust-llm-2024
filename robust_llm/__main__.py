@@ -2,13 +2,10 @@ import hydra
 from hydra.core.hydra_config import HydraConfig
 from hydra.core.config_store import ConfigStore
 from omegaconf import OmegaConf
-import sys
-import torch
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
     GPTNeoXForSequenceClassification,
-    GPTNeoXTokenizerFast,
 )
 from transformers.modeling_utils import PreTrainedModel
 import yaml
@@ -17,7 +14,7 @@ import wandb
 
 from robust_llm.configs import OverallConfig
 from robust_llm.dataset_management.dataset_management import (
-    generateRobustLLMDatasets,
+    generate_robust_llm_datasets,
 )
 from robust_llm.dataset_management.tomita import make_language_generator
 from robust_llm.experiment_scripts import scaling_experiments
@@ -89,8 +86,12 @@ def main(args: OverallConfig) -> None:
     else:
         raise ValueError(f"Unknown model name {model_name}")
 
-    robust_llm_datasets = generateRobustLLMDatasets(
-        dataset_type, language_generator, tokenizer, experiment.training
+    robust_llm_datasets = generate_robust_llm_datasets(
+        dataset_type,
+        language_generator,
+        tokenizer,
+        experiment.training,
+        experiment.environment.dataset_generation_style,
     )
 
     # NOTE: the "validation" dataset is one of what will be
@@ -128,9 +129,7 @@ def main(args: OverallConfig) -> None:
             non_adversarial_baseline=experiment.training.iterative.non_adversarial_baseline,
         )
     else:
-        training = Training(
-            **base_training_args,
-        )
+        training = Training(**base_training_args)
 
     # Log the training arguments to wandb
     if not wandb.run:

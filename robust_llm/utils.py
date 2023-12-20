@@ -8,10 +8,7 @@ if TYPE_CHECKING:
     from robust_llm.adversarial_trainer import AdversarialTrainer
 
 from datasets import Dataset
-from transformers import (
-    PreTrainedTokenizerBase,
-    Trainer,
-)
+from transformers import PreTrainedTokenizerBase, Trainer
 
 
 def tokenize_dataset(

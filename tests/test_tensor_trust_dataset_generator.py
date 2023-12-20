@@ -1,13 +1,86 @@
 import numpy as np
-import pytest
 
 from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
+    _extract_password,
     TWEAK_STYLES,
     WordTweaker,
     _generate_dataset,
+    _modify_string,
     _shuffle_tensor_trust_dataset,
+    CONTEXT_STRING,
     _tweak_queries,
 )
+from textattack.transformations import (
+    WordSwapRandomCharacterInsertion,
+    WordSwapRandomCharacterDeletion,
+    WordSwapRandomCharacterSubstitution,
+)
+
+HAPPY_PASSWORD_STRING = CONTEXT_STRING.replace("<FIRST_TOKEN>", "myhappypassword")
+TEST_STRING = "happybirthday"
+
+
+def test_password_extraction():
+    assert _extract_password(HAPPY_PASSWORD_STRING) == "myhappypassword"
+
+
+def test_deletion():
+    seed = np.random.randint(low=0, high=100)
+    tweaker = WordTweaker(tweak_style="random_character_deletion", seed=seed)
+
+    new_string = tweaker.tweak(TEST_STRING)
+    assert len(new_string) == len(TEST_STRING) - 1
+    for char in new_string:
+        assert char in TEST_STRING
+
+    more_strings = []
+    for _ in range(10):
+        new_string = tweaker.tweak(TEST_STRING)
+        more_strings.append(new_string)
+    more_strings_set = set(more_strings)
+    assert len(more_strings_set) > 1
+
+
+def test_insertion():
+    seed = np.random.randint(low=0, high=100)
+    tweaker = WordTweaker(tweak_style="random_character_insertion", seed=seed)
+    new_string = tweaker.tweak(TEST_STRING)
+    assert len(new_string) == len(TEST_STRING) + 1
+    for char in TEST_STRING:
+        assert char in new_string
+
+    more_strings = []
+    for _ in range(10):
+        more_strings.append(tweaker.tweak(TEST_STRING))
+    more_strings_set = set(more_strings)
+    assert len(more_strings_set) > 5
+
+
+def test_substitution():
+    seed = np.random.randint(low=0, high=100)
+    tweaker = WordTweaker(tweak_style="random_character_substitution", seed=seed)
+    new_string = tweaker.tweak(TEST_STRING)
+    assert len(new_string) == len(TEST_STRING)
+    diff_count = 0
+    for i, _ in enumerate(new_string):
+        if new_string[i] != TEST_STRING[i]:
+            diff_count += 1
+    assert diff_count <= 1
+
+    more_strings = []
+    for _ in range(10):
+        more_strings.append(tweaker.tweak(TEST_STRING))
+    more_strings_set = set(more_strings)
+    assert len(more_strings_set) > 5
+
+
+def test_password_modification():
+    for _ in range(100):
+        seed = np.random.randint(low=0, high=1000)
+        rng = np.random.default_rng(seed=seed)
+        current_password = _extract_password(HAPPY_PASSWORD_STRING)
+        modified_password = _modify_string(current_password, seed=seed, max_changes=1)
+        assert modified_password != current_password
 
 
 def test_generates_consistently_for_set_seed():

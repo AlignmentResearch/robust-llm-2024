@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from datasets import Dataset
-from transformers import (
-    PreTrainedTokenizerBase,
-)
+from transformers import PreTrainedTokenizerBase
 from typing import Optional
 
 from robust_llm.configs import TrainingConfig
@@ -26,19 +24,33 @@ class RobustLLMDatasets:
     tokenized_validation_dataset: Dataset
 
 
-def generateRobustLLMDatasets(
+def generate_robust_llm_datasets(
     dataset_type: str,
     language_generator: Optional[TomitaBase],
     tokenizer: PreTrainedTokenizerBase,
     training_args: TrainingConfig,
+    dataset_generation_style: str,
 ) -> RobustLLMDatasets:
+    if dataset_generation_style not in ["random_words", "random_character_edit"]:
+        raise ValueError(
+            f"Unknown dataset_generation_style {dataset_generation_style}, exiting..."
+        )
+
     if dataset_type.lower() == "tensor_trust":
-        train_set, validation_set = get_tensor_trust_dataset(training_args, tokenizer)
+        train_set, validation_set = get_tensor_trust_dataset(
+            training_args=training_args,
+            tokenizer=tokenizer,
+            dataset_generation_style=dataset_generation_style,
+        )
 
     elif dataset_type.lower() == "tomita":
         assert language_generator is not None and isinstance(
             language_generator, TomitaBase
         )
+        if dataset_generation_style == "random_character_edit":
+            raise ValueError(
+                "Random character edit is not yet supported for Tomita datasets."
+            )
         train_set, validation_set = get_tomita_dataset(
             training_args, language_generator, tokenizer
         )

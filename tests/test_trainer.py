@@ -1,4 +1,3 @@
-import pytest
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -20,9 +19,7 @@ def test_basic_constructor():
         validation_dataset,
         _test_dataset,
     ) = language_generator.generate_dataset(
-        train_size=10,
-        validation_size=10,
-        test_size=10,
+        train_size=10, validation_size=10, test_size=10
     )
 
     model_name = "bert-base-cased"

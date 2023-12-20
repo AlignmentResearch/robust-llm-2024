@@ -74,8 +74,7 @@ def get_tomita_dataset(
 ) -> tuple[Dataset, Dataset]:
     if training_args.baseline.non_iterative_baseline:
         brute_force_dataset = load_adversarial_dataset(
-            language_generator.name,
-            training_args.iterative.brute_force_length,
+            language_generator.name, training_args.iterative.brute_force_length
         )
         tokenized_brute_force_dataset = Dataset.from_dict(
             tokenize_dataset(brute_force_dataset, tokenizer)

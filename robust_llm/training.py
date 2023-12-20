@@ -4,6 +4,7 @@ from typing import Optional
 
 import evaluate
 import numpy as np
+import wandb.util
 from datasets import Dataset
 from transformers import (
     EvalPrediction,
@@ -15,8 +16,6 @@ from transformers import (
 from typing_extensions import override
 
 import wandb
-import wandb.util
-
 from robust_llm.adversarial_trainer import (
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,
@@ -133,15 +132,14 @@ class Training:
                 "self.trainer.eval_dataset should have been assigned by now, exiting..."
             )
 
-        assert ("label" in self.trainer.train_dataset.column_names) == (  # type: ignore
-            "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore
-        )
+        in_train = "label" in self.trainer.train_dataset.column_names  # type: ignore
+        in_eval = "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore
+        assert in_train == in_eval
 
         if "label" in self.trainer.train_dataset.column_names:  # type: ignore
             train_table = wandb.Table(columns=["text", "label"])
             for text, label in zip(
-                self.trainer.train_dataset["text"],
-                self.trainer.train_dataset["label"],
+                self.trainer.train_dataset["text"], self.trainer.train_dataset["label"]
             ):
                 train_table.add_data(text, label)
             to_log["train_dataset"] = train_table
@@ -151,7 +149,8 @@ class Training:
                 train_table.add_data(text)
             to_log["train_dataset"] = train_table
 
-        if "label" in self.trainer.eval_dataset["validation"].column_names:  # type: ignore
+        label_in_validation = "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore
+        if label_in_validation:
             eval_table = wandb.Table(columns=["text", "label"])
             for text, label in zip(
                 self.trainer.eval_dataset["validation"]["text"],
@@ -342,10 +341,7 @@ class AdversarialTraining(Training):
                     f"Non-adversarial baseline: NOT adding those mistakes, instead adding the first {num_examples_to_add} random examples..."
                 )
                 examples_to_actually_add_to_train_set = next(
-                    yield_minibatch(
-                        attack_dataset,
-                        num_examples_to_add,
-                    )
+                    yield_minibatch(attack_dataset, num_examples_to_add)
                 )
 
             wandb.log(
@@ -370,8 +366,7 @@ class AdversarialTraining(Training):
             to_log = {}
             successful_attacks_table = wandb.Table(columns=["text", "correct label"])
             for text_string, correct_label in zip(
-                incorrect_predictions["text"],
-                incorrect_predictions["label"],
+                incorrect_predictions["text"], incorrect_predictions["label"]
             ):
                 successful_attacks_table.add_data(text_string, correct_label)
             to_log[f"successful_attacks_after_round_{i}"] = successful_attacks_table
