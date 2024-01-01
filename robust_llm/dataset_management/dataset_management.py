@@ -1,17 +1,17 @@
 from dataclasses import dataclass
-from datasets import Dataset
-from transformers import PreTrainedTokenizerBase
 from typing import Optional
 
+from datasets import Dataset
+from transformers import PreTrainedTokenizerBase
+
 from robust_llm.configs import TrainingConfig
+from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
+    get_tensor_trust_dataset,
+)
 from robust_llm.dataset_management.tomita import TomitaBase
 from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
     get_tomita_dataset,
 )
-from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
-    get_tensor_trust_dataset,
-)
-
 from robust_llm.utils import tokenize_dataset
 
 

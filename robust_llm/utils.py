@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import numpy as np
 import os
 from typing import TYPE_CHECKING, Any, Generator
+
+import numpy as np
 
 if TYPE_CHECKING:
     from robust_llm.adversarial_trainer import AdversarialTrainer

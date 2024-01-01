@@ -1,22 +1,38 @@
 # robust-llm
 
-## Installation
-Clone the repository, cd into it, create a new Python 3.10 virtual environment, and then run:
+## Simple installation
+If you just want to run the code and nothing else, you can do the following:
+
+1. clone the repository
+2. cd into it
+3. create a new Python 3.10 virtual environment called `venv`
+4. activate the virtual environment
+5. install the `robust-llm` project
 ```
-pip install -e .
+git clone https://github.com/AlignmentResearch/robust-llm.git
+cd robust-llm
+python -m venv venv
+source venv/bin/activate
+pip install .
 ```
 
-## Development
+Note that this project has not been tested with different versions of Python.
 
-If you are planning to develop in the repository and thus want the optional development dependencies (for running tests, etc), then run:
+## Development installation
+
+If you want to install `robust-llm` with developer dependencies (which gives you development tools like linting and tests), do the following:
+
+1. Follow steps 1-4 from the [Simple installation](#simple-installation).
+
+2. Add [pre-commit](https://pre-commit.com/) hooks for various linting tasks by installing pre-commit:
+```
+pre-commit install
+```
+3. Install `robust-llm` in developer mode, with dev dependencies:
 ```
 pip install -e '.[dev]'
 ```
 
-Add [pre-commit](https://pre-commit.com/) hooks for linting and the like with:
-```
-pre-commit install
-```
 
 ## Running experiments
 Experiments are configured with [Hydra](https://hydra.cc/). You can run the default configuration with:

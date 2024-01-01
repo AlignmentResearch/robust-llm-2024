@@ -26,6 +26,10 @@ dev = [
     "pytest",
 ]
 
-
 [tool.setuptools.packages.find]
 namespaces = false
+
+[tool.pyright]
+venvPath = "."
+venv = "venv"
+include = ["robust_llm"]

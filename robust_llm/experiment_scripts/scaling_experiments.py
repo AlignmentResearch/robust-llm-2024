@@ -1,9 +1,9 @@
-from datetime import date
-import numpy as np
 import shlex
 import subprocess
-import wandb.util
+from datetime import date
 
+import numpy as np
+import wandb.util
 
 # Model sizes: 14m, 31m, 70m, 160m, 410m, 1b, 1.4b, 2.8b, 6.9b, 12b
 LIST_OF_PYTHIA_MODELS = [
