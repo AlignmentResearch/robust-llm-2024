@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from robust_llm.training import AdversarialTraining
 
+import wandb
 from datasets import Dataset, concatenate_datasets
 from transformers import (
     Trainer,
@@ -15,7 +16,6 @@ from transformers import (
 )
 from typing_extensions import override
 
-import wandb
 from robust_llm.utils import get_overlap, tokenize_dataset
 
 

@@ -4,6 +4,7 @@ from typing import Optional
 
 import evaluate
 import numpy as np
+import wandb
 import wandb.util
 from datasets import Dataset
 from transformers import (
@@ -15,7 +16,6 @@ from transformers import (
 )
 from typing_extensions import override
 
-import wandb
 from robust_llm.adversarial_trainer import (
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,

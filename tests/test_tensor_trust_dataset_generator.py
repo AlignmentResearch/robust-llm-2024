@@ -1,19 +1,19 @@
 import numpy as np
+from textattack.transformations import (
+    WordSwapRandomCharacterDeletion,
+    WordSwapRandomCharacterInsertion,
+    WordSwapRandomCharacterSubstitution,
+)
 
 from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
-    _extract_password,
+    CONTEXT_STRING,
     TWEAK_STYLES,
     WordTweaker,
+    _extract_password,
     _generate_dataset,
     _modify_string,
     _shuffle_tensor_trust_dataset,
-    CONTEXT_STRING,
     _tweak_queries,
-)
-from textattack.transformations import (
-    WordSwapRandomCharacterInsertion,
-    WordSwapRandomCharacterDeletion,
-    WordSwapRandomCharacterSubstitution,
 )
 
 HAPPY_PASSWORD_STRING = CONTEXT_STRING.replace("<FIRST_TOKEN>", "myhappypassword")

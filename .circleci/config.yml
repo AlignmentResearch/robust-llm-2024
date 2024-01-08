@@ -9,14 +9,14 @@ commands:
     steps:
       - checkout
       - run:
-          name: install robustllm
+          name: Install robust-llm
           command: |
             pip install -e '.[dev]'
 
 jobs:
   pytest:
     docker:
-      - image: cimg/python:3.10.2
+      - image: cimg/python:3.10.13
     steps:
       - install-dependencies
       - run:
@@ -27,7 +27,7 @@ jobs:
 
   lint:
     docker:
-      - image: cimg/python:3.10.2
+      - image: cimg/python:3.10.13
     steps:
       - install-dependencies
       - run:
@@ -36,11 +36,16 @@ jobs:
             black --version
             black . --check
       - run:
+          name: isort
+          command: |
+            isort --version
+            isort robust_llm --check --verbose
+      - run:
           name: pyright
           command: |
             pyright --version
             pyright .
-        # TODO add isort, maybe flake8 & codespell
+        # TODO maybe add flake8 & codespell
 
 workflows:
   tests:

@@ -2,6 +2,7 @@ import sys
 
 import hydra
 import torch
+import wandb
 import yaml
 from hydra.core.config_store import ConfigStore
 from hydra.core.hydra_config import HydraConfig
@@ -13,7 +14,6 @@ from transformers import (
 )
 from transformers.modeling_utils import PreTrainedModel
 
-import wandb
 from robust_llm.configs import OverallConfig
 from robust_llm.dataset_management.dataset_management import (
     generate_robust_llm_datasets,

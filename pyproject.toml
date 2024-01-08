@@ -29,6 +29,10 @@ dev = [
 [tool.setuptools.packages.find]
 namespaces = false
 
+[tool.isort]
+profile = "black"
+known_third_party = ["wandb"]  # necessary because of "wandb" directory
+
 [tool.pyright]
 venvPath = "."
 venv = "venv"
