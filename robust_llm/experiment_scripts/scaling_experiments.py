@@ -36,7 +36,8 @@ def run_experiment(
     """Run an experiment with the given parameters.
 
     Args:
-        experiment_yaml (str): The path to the yaml file for Hydra to use for the experiment.
+        experiment_yaml (str): The path to the yaml file for Hydra to use for
+        the experiment.
         experiment_name (str): The name of the experiment. Used to group runs in wandb.
         checkpoints (list[int], optional): The checkpoints to use.
         model_names (list[str], optional): The models to use.
@@ -52,7 +53,7 @@ def run_experiment(
                 "+experiment=" + experiment_yaml,
                 "experiment.environment.model_name=" + full_model_name,
                 f"experiment.training.checkpoint={checkpoint}",
-                f"experiment.experiment_name={experiment_name}_{date.today().strftime('%Y-%m-%d')}_{random_string_for_experiment}",
+                f"experiment.experiment_name={experiment_name}_{date.today().strftime('%Y-%m-%d')}_{random_string_for_experiment}",  # noqa: E501
                 f"experiment.job_type={model_name}_step{checkpoint}",
                 f"experiment.run_name=run_{wandb.util.generate_id(length=5)}",
             ]

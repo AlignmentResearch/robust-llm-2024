@@ -5,7 +5,8 @@ from dataclasses import dataclass
 class BaselineTrainingConfig:
     """Configs used in baseline training."""
 
-    # The proportion of the brute force dataset to use for training, when running a baseline.
+    # The proportion of the brute force dataset to use for training, when
+    # running a baseline.
     proportion: float = 0.1
     # Whether to run a non-iterative baseline or not.
     non_iterative_baseline: bool = False
@@ -19,15 +20,19 @@ class IterativeTrainingConfig:
     iterative_training: bool = False
     # Whether to use the non-adversarial baseline or not
     non_adversarial_baseline: bool = False
-    # The minimum number of adversarial examples to add to the train set each attack round.
+    # The minimum number of adversarial examples to add to the train set each
+    # attack round.
     min_num_new_examples_to_add: int = 50
-    # The maximum number of examples to search for adversarial examples in each attack round. Think 'compute budget'.
+    # The maximum number of examples to search for adversarial examples in each
+    # attack round. Think 'compute budget'.
     max_num_search_for_adversarial_examples: int = 8192
-    # The size of the minibatches to use when searching for adversarial examples.
+    # The size of the minibatches to use when searching for adversarial
+    # examples.
     adversarial_example_search_minibatch_size: int = 64
     # The number of adversarial training rounds to do.
     num_iterative_training_rounds: int = 3
-    # If true, only checks robustness on a random subset of the brute force attack dataset.
+    # If true, only checks robustness on a random subset of the brute force
+    # attack dataset.
     use_probabilistic_robustness_check: bool = False
     # Whether to skip the first training round or not.
     skip_first_training_round: bool = False
@@ -45,7 +50,8 @@ class EnvironmentConfig:
     model_name: str = "bert-base-uncased"
     # Dataset type (tomita, tensor_trust)
     dataset_type: str = "tomita"
-    # How to generate the negative examples in the dataset (only works with tensor trust for now)
+    # How to generate the negative examples in the dataset
+    # (only works with tensor trust for now)
     dataset_generation_style: str = (
         "random_words"  # random_word / random_character_edit
     )
@@ -76,14 +82,19 @@ class TrainingConfig:
 # TODO(dan) guard against mutually exclusive options
 @dataclass
 class ExperimentConfig:
-    # The name of the overarching experiment being run. Used to set a "group" in wandb. Each experiment has several jobs.
+    # The name of the overarching experiment being run. Used to set a "group" in
+    # wandb. Each experiment has several jobs.
     # Example: "scaling-model-size_2023-11-22_1e88j"
+
     experiment_name: str = "default-experiment"
+
     # The name of the sub-experiment being run. Used to set a "job_type" in wandb.
-    # Should correspond to one specific sub-experiment. Each job can have several runs (with different seeds).
+    # Should correspond to one specific sub-experiment.
+    # Each job can have several runs (with different seeds).
     # Example: "pythia-14m_step17000"
     job_type: str = "default-job"
-    # The name of the individual run. Don't need to put much here since group and job do most of the work distinguishing.
+    # The name of the individual run.
+    # Don't need much here since group and job do most of the work distinguishing.
     # Random string is fine.
     # Example: "run_3f4ay"
     run_name: str = "default-run"

@@ -63,16 +63,26 @@ def search_for_adversarial_examples(
     adversarial_example_search_minibatch_size: int,
 ) -> tuple[dict[str, list], int]:
     """
-    Iterates through a shuffled `attack_dataset` for examples that the model misclassifies, and returns them (and their correct labels) in a dict.
+    Iterates through a shuffled `attack_dataset` for examples that the model
+    misclassifies, and returns them (and their correct labels) in a dict.
 
     Args:
-        adversarial_trainer (AdversarialTrainer): trainer from which we use the model to make predictions.
-        attack_dataset (Dataset): dataset in which to search for adversarial examples.
-        min_num_new_examples_to_add (int): the minimum number of examples to return. The function may return fewer than this examples if `max_num_search_for_adversarial_examples` has been exceeded, or if the entire dataset contains fewer than the desired count of adversarial examples.
-        max_num_search_for_adversarial_examples (int): the maximum number of examples to search over from `attack_dataset`. The function may return up to one minibatch's worth of examples more than this number.
+        adversarial_trainer (AdversarialTrainer): trainer from which we use the
+            model to make predictions.
+        attack_dataset (Dataset): dataset in which to search for adversarial
+            examples.
+        min_num_new_examples_to_add (int): the minimum number of examples to
+            return. The function may return fewer than this examples if
+            `max_num_search_for_adversarial_examples` has been exceeded, or if the
+            entire dataset contains fewer than the desired count of adversarial
+            examples.
+        max_num_search_for_adversarial_examples (int): the maximum number of
+            examples to search over from `attack_dataset`. The function may return
+            up to one minibatch's worth of examples more than this number.
 
     Returns:
-        dict[str, list]: A dict containing the adversarial examples and their true labels.
+        dict[str, list]: A dict containing the adversarial examples and their
+            true labels.
         int: the number of examples searched through
     """
 
@@ -100,7 +110,7 @@ def search_for_adversarial_examples(
         # If we passed the threshold of how many examples to search over, stop searching
         if number_searched >= max_num_search_for_adversarial_examples:
             print(
-                f"Stopping search after {number_searched} examples searched (limit was {max_num_search_for_adversarial_examples})"
+                f"Stopping search after {number_searched} examples searched (limit was {max_num_search_for_adversarial_examples})"  # noqa: E501
             )
             break
 

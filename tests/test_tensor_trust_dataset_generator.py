@@ -1,9 +1,4 @@
 import numpy as np
-from textattack.transformations import (
-    WordSwapRandomCharacterDeletion,
-    WordSwapRandomCharacterInsertion,
-    WordSwapRandomCharacterSubstitution,
-)
 
 from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
     CONTEXT_STRING,
@@ -13,7 +8,6 @@ from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator i
     _generate_dataset,
     _modify_string,
     _shuffle_tensor_trust_dataset,
-    _tweak_queries,
 )
 
 HAPPY_PASSWORD_STRING = CONTEXT_STRING.replace("<FIRST_TOKEN>", "myhappypassword")
@@ -77,7 +71,6 @@ def test_substitution():
 def test_password_modification():
     for _ in range(100):
         seed = np.random.randint(low=0, high=1000)
-        rng = np.random.default_rng(seed=seed)
         current_password = _extract_password(HAPPY_PASSWORD_STRING)
         modified_password = _modify_string(current_password, seed=seed, max_changes=1)
         assert modified_password != current_password

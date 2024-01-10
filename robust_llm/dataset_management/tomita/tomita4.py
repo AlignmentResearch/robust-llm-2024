@@ -37,7 +37,8 @@ class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
                 low=1, high=self.max_length + 1
             )  # don't allow empty
 
-            # Generate digits one-by-one, making sure we don't have three consecutive zeros
+            # Generate digits one-by-one, making sure we don't have three
+            # consecutive zeros
             digits = []
             for i in range(num_digits):
                 if i < 2:

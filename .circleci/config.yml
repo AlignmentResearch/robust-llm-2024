@@ -45,7 +45,12 @@ jobs:
           command: |
             pyright --version
             pyright .
-        # TODO maybe add flake8 & codespell
+      - run:
+          name: flake8
+          command: |
+            flake8 --version
+            flake8 . -v --exclude venv
+        # TODO maybe add codespell
 
 workflows:
   tests:

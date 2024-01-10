@@ -1,5 +1,4 @@
 import dataclasses
-from datetime import date
 from typing import Optional
 
 import evaluate
@@ -125,15 +124,15 @@ class Training:
             )
         if self.trainer.train_dataset is None:
             raise ValueError(
-                "self.trainer.train_dataset should have been assigned by now, exiting..."
+                "self.trainer.train_dataset should have been assigned by now, exiting..."  # noqa: E501
             )
         if self.trainer.eval_dataset is None:
             raise ValueError(
-                "self.trainer.eval_dataset should have been assigned by now, exiting..."
+                "self.trainer.eval_dataset should have been assigned by now, exiting..."  # noqa: E501
             )
 
         in_train = "label" in self.trainer.train_dataset.column_names  # type: ignore
-        in_eval = "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore
+        in_eval = "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore  # noqa: E501
         assert in_train == in_eval
 
         if "label" in self.trainer.train_dataset.column_names:  # type: ignore
@@ -149,7 +148,7 @@ class Training:
                 train_table.add_data(text)
             to_log["train_dataset"] = train_table
 
-        label_in_validation = "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore
+        label_in_validation = "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore  # noqa: E501
         if label_in_validation:
             eval_table = wandb.Table(columns=["text", "label"])
             for text, label in zip(
@@ -177,35 +176,50 @@ class AdversarialTraining(Training):
 
     Parameters:
         tokenizer:
-            Huggingface tokenizer used for tokenizing the dataset. Should match the model we're using.
+            Huggingface tokenizer used for tokenizing the dataset. Should match
+            the model we're using.
         num_iterative_training_rounds:
-            One round of adversarial training involves first finding some number of adversarial examples,
-            adding them to an "augmented train set", and training on that for some number of epochs.
+            One round of adversarial training involves first finding some number
+            of adversarial examples, adding them to an "augmented train set",
+            and training on that for some number of epochs.
         dataset_type:
             The type of dataset to use. Either "tomita" or "tensor_trust".
         language_generator:
-            The language generator which should be created to generate datapoints for training and evaluation.
+            The language generator which should be created to generate
+            datapoints for training and evaluation.
             Only relevant in the Tomita setting.
         brute_force_attack:
-            Whether to use a "brute force attack" to generate adversarial examples. This means testing on all possible examples up to a given length.
+            Whether to use a "brute force attack" to generate adversarial examples.
+            This means testing on all possible examples up to a given length.
         brute_force_length:
-            The maximum string length to use for the brute force attack. Note that the brute force dataset size grows as 2^length.
+            The maximum string length to use for the brute force attack.
+            Note that the brute force dataset size grows as 2^length.
         min_num_new_examples_to_add:
-            When searching for adversarial examples in the brute force attack, we usually don't stop looking until we surpass this number.
-            If we search the entire brute force dataset and don't find enough examples, we do stop looking.
-            If we surpass max_num_search_for_adversarial_examples during the search, we also do stop looking.
+            When searching for adversarial examples in the brute force attack,
+            we usually don't stop looking until we surpass this number.
+            If we search the entire brute force dataset and don't find enough
+            examples, we do stop looking.
+            If we surpass max_num_search_for_adversarial_examples during the
+            search, we also do stop looking.
         max_num_search_for_adversarial_examples:
-            When searching for adversarial examples in the brute force dataset, we stop looking if we search more or equal to this number of examples.
-            In practice we'll often search a few more than this number since we do the search in minibatches.
+            When searching for adversarial examples in the brute force dataset,
+            we stop looking if we search more or equal to this number of examples.
+            In practice we'll often search a few more than this
+            number since we do the search in minibatches.
         adversarial_example_search_minibatch_size:
-            The number of datapoints to consider at once when searching for adversarial examples.
+            The number of datapoints to consider at once when searching for
+            adversarial examples.
         skip_first_training_round:
-            Whether to skip the first round of training. Useful for doing "exclusively" adversarial training.
+            Whether to skip the first round of training.
+            Useful for doing "exclusively" adversarial training.
         use_probabilistic_robustness_check:
-            Whether to determine model robustness by randomly selecting some examples from the brute force dataset and testing only on those,
-            rather than the default of checking against the entire brute force dataset.
+            Whether to determine model robustness by randomly selecting some
+            examples from the brute force dataset and testing only on those,
+            rather than the default of checking against the entire brute force
+            dataset.
         non_adversarial_baseline:
-            If true, don't train on adversarial examples, just train on random examples, whether or not the models gets them right.
+            If true, don't train on adversarial examples, just train on random
+            examples, whether or not the models gets them right.
     """
 
     tokenizer: PreTrainedTokenizerBase
@@ -273,7 +287,7 @@ class AdversarialTraining(Training):
         if self.brute_force_attack:
             if self.dataset_type not in ["tomita"]:
                 raise ValueError(
-                    f"Brute force attack not yet supported in dataset type {self.dataset_type}, exiting..."
+                    f"Brute force attack not yet supported in dataset type {self.dataset_type}, exiting..."  # noqa: E501
                 )
 
             brute_force_dataset = load_adversarial_dataset(
@@ -301,7 +315,8 @@ class AdversarialTraining(Training):
             print("Starting training round", i)
             self.current_iterative_training_round = i
 
-            # Train for "one round" (i.e., num_train_epochs) on the (eventually, adversarial example-augmented) train set
+            # Train for "one round" (i.e., num_train_epochs) on the (eventually,
+            # adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
             # NOTE: this is where wandb.init() is called by default
             if i == 0 and self.skip_first_training_round:
@@ -309,7 +324,7 @@ class AdversarialTraining(Training):
             else:
                 if self.train_epochs == 0:
                     raise ValueError(
-                        "Adversarial training should be done with >0 train epochs, exiting..."
+                        "Adversarial training should be done with >0 train epochs, exiting..."  # noqa: E501
                     )
                 adversarial_trainer.train()
 
@@ -324,8 +339,8 @@ class AdversarialTraining(Training):
                 adversarial_trainer,
                 attack_dataset,
                 min_num_new_examples_to_add=self.min_num_new_examples_to_add,
-                max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,
-                adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,
+                max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,  # noqa: E501
+                adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,  # noqa: E501
             )
 
             print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
@@ -338,7 +353,7 @@ class AdversarialTraining(Training):
                     + self.adversarial_example_search_minibatch_size // 2
                 )
                 print(
-                    f"Non-adversarial baseline: NOT adding those mistakes, instead adding the first {num_examples_to_add} random examples..."
+                    f"Non-adversarial baseline: NOT adding those mistakes, instead adding the first {num_examples_to_add} random examples..."  # noqa: E501
                 )
                 examples_to_actually_add_to_train_set = next(
                     yield_minibatch(attack_dataset, num_examples_to_add)
@@ -346,7 +361,7 @@ class AdversarialTraining(Training):
 
             wandb.log(
                 {
-                    "train/iterative_training_round": self.current_iterative_training_round,
+                    "train/iterative_training_round": self.current_iterative_training_round,  # noqa: E501
                     "misc/number_examples_searched": number_examples_searched,
                     "misc/number_successful_attacks": len(
                         incorrect_predictions["text"]
@@ -358,7 +373,7 @@ class AdversarialTraining(Training):
             # Check if we have perfect accuracy now. If so, we're done.
             if len(incorrect_predictions["text"]) == 0:
                 print(
-                    f"~~~In round {i} of adversarial training, model got perfect accuracy on the {number_examples_searched} examples tried, so stopping adversarial training.~~~"
+                    f"~~~In round {i} of adversarial training, model got perfect accuracy on the {number_examples_searched} examples tried, so stopping adversarial training.~~~"  # noqa: E501
                 )
                 break
 
@@ -410,7 +425,7 @@ class AdversarialTraining(Training):
         # Save the adversarial training dataset to a wandb table
         if self.eval_dataset.get("brute_force_attack_dataset", None) is None:
             raise ValueError(
-                "self.trainer.attack_dataset should have been assigned by now, exiting..."
+                "self.trainer.attack_dataset should have been assigned by now, exiting..."  # noqa: E501
             )
         adversarial_table = wandb.Table(columns=["text", "label"])
         for text, label in zip(

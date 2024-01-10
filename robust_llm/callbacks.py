@@ -16,7 +16,8 @@ class CrossTrainRunStepRecordingWandbCallback(WandbCallback):
     def setup(self, args, state, model, **kwargs):
         super().setup(args, state, model, **kwargs)
 
-        # Undo setting "global_step" (which resets each `train`) as the default step metric
+        # Undo setting "global_step" (which resets each `train`) as the default
+        # step metric
         # NOTE: apparently older versions of wandb don't have "define_metric"
         assert hasattr(self._wandb, "define_metric")
         self._wandb.define_metric(

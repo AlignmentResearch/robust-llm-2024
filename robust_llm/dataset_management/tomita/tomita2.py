@@ -70,12 +70,11 @@ class Tomita2(TomitaBase):  # (10)*
 
 
 if __name__ == "__main__":
-    tomita2 = Tomita2(
-        max_length=10
-    )  # 10 is fine since this is just to test if it looks reasonable
-    train, val, test = tomita2.generate_dataset(
-        10, 4, 4
-    )  # these are fine since just need to ensure it looks ok in terms of diversity and correctness
+    # 10 is fine since this is just to test if it looks reasonable
+    tomita2 = Tomita2(max_length=10)
+    # these are fine since just need to ensure it looks ok in terms of diversity
+    # and correctness
+    train, val, test = tomita2.generate_dataset(10, 4, 4)
     print(train)
     print(val)
     print(test)

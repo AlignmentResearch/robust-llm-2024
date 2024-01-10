@@ -1,7 +1,6 @@
 import abc
 import dataclasses
 
-import git.repo
 import numpy as np
 from datasets import Dataset
 

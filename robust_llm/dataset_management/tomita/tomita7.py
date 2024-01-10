@@ -23,10 +23,13 @@ class Tomita7(TomitaBase):  # 0*1*0*1*
 
     @override
     def generate_true(self, count: int = 1):
-        """Generate a random string that satisfies 0*1*0*1*.
-        We do this by choosing the four cutoff locations, and then filling in the digits in between
-        The cutoff locations are sampled from Beta(2, 5) so that we ideally get more than a couple.
         """
+        Generate a random string that satisfies 0*1*0*1*.  We do this by
+        choosing the four cutoff locations, and then filling in the digits in
+        between The cutoff locations are sampled from Beta(2, 5) so that we
+        ideally get more than a couple.
+        """
+
         assert count > 0
         assert isinstance(count, int)
 

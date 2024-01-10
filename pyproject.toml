@@ -24,6 +24,7 @@ dev = [
     "pre-commit",
     "pyright",
     "pytest",
+    "flake8",
 ]
 
 [tool.setuptools.packages.find]

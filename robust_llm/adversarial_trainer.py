@@ -27,8 +27,9 @@ class AdversarialTrainer(Trainer):
 
     @override
     def get_train_dataloader(self):
-        # This method is called at the start of each training loop, when my_trainer.train() is called
-        # In turn, the train_dataloader it returns is called at the start of each training epoch
+        # This method is called at the start of each training loop, when
+        # my_trainer.train() is called. In turn, the train_dataloader it returns
+        # is called at the start of each training epoch
         # https://github.com/huggingface/transformers/blob/5a4f340df74b42b594aedf60199eea95cdb9bed0/src/transformers/trainer.py#L812
 
         old_train_set = self.train_dataset  # does this deep copy?
@@ -89,8 +90,9 @@ class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
         **kwargs,
     ) -> None:
         # This is a bit wonky, since it'll keep updating the augmented train set
-        # and be evaluating on something new after the start of each adversarial training round
-        augmented_train_set = self.training.trainer.get_augmented_training_set()  # type: ignore
+        # and be evaluating on something new after the start of each adversarial
+        # training round
+        augmented_train_set = self.training.trainer.get_augmented_training_set()  # type: ignore  # noqa: E501
         self.training.eval_dataset["augmented_train_set"] = augmented_train_set
 
 
@@ -122,13 +124,11 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
         ):
             table.add_data(text_string, correct_label)
 
-        to_log[
-            f"augmented_train_set_start_round_{self.training.current_iterative_training_round}"
-        ] = table
+        _current_round = self.training.current_iterative_training_round
+        to_log[f"augmented_train_set_start_round_{_current_round}"] = table
 
-        to_log[
-            f"misc/augmented_train_set_size"
-        ] = train_dataset_plus_adv_examples.num_rows
+        _num_rows = train_dataset_plus_adv_examples.num_rows
+        to_log["misc/augmented_train_set_size"] = _num_rows
 
         wandb.log(to_log, commit=False)
 

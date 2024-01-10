@@ -1,7 +1,4 @@
-import sys
-
 import hydra
-import torch
 import wandb
 import yaml
 from hydra.core.config_store import ConfigStore
@@ -113,21 +110,22 @@ def main(args: OverallConfig) -> None:
 
     # Set up the training environment
     training: Training
-    if experiment.training.iterative.iterative_training:
+    it = experiment.training.iterative
+    if it.iterative_training:
         training = AdversarialTraining(
             **base_training_args,
-            num_iterative_training_rounds=experiment.training.iterative.num_iterative_training_rounds,
+            num_iterative_training_rounds=it.num_iterative_training_rounds,
             tokenizer=tokenizer,
             dataset_type=dataset_type,
             language_generator=language_generator,
-            brute_force_attack=experiment.training.iterative.brute_force_attack,
-            brute_force_length=experiment.training.iterative.brute_force_length,
-            min_num_new_examples_to_add=experiment.training.iterative.min_num_new_examples_to_add,
-            max_num_search_for_adversarial_examples=experiment.training.iterative.max_num_search_for_adversarial_examples,
-            adversarial_example_search_minibatch_size=experiment.training.iterative.adversarial_example_search_minibatch_size,
-            skip_first_training_round=experiment.training.iterative.skip_first_training_round,
-            use_probabilistic_robustness_check=experiment.training.iterative.use_probabilistic_robustness_check,
-            non_adversarial_baseline=experiment.training.iterative.non_adversarial_baseline,
+            brute_force_attack=it.brute_force_attack,
+            brute_force_length=it.brute_force_length,
+            min_num_new_examples_to_add=it.min_num_new_examples_to_add,
+            max_num_search_for_adversarial_examples=it.max_num_search_for_adversarial_examples,  # noqa: E501
+            adversarial_example_search_minibatch_size=it.adversarial_example_search_minibatch_size,  # noqa: E501
+            skip_first_training_round=it.skip_first_training_round,
+            use_probabilistic_robustness_check=it.use_probabilistic_robustness_check,
+            non_adversarial_baseline=it.non_adversarial_baseline,
         )
     else:
         training = Training(**base_training_args)
@@ -136,7 +134,7 @@ def main(args: OverallConfig) -> None:
     if not wandb.run:
         raise ValueError("wandb should have been initialized by now, exiting...")
     yaml_string = yaml.load(OmegaConf.to_yaml(experiment), Loader=yaml.FullLoader)
-    wandb.run.summary[f"experiment_yaml"] = yaml_string
+    wandb.run.summary["experiment_yaml"] = yaml_string
 
     # Log the train-val overlap to wandb
     if (

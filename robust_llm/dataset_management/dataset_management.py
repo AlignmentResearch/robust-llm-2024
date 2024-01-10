@@ -59,7 +59,8 @@ def generate_robust_llm_datasets(
         raise ValueError(f"Unknown dataset type {dataset_type}")
 
     print("Tokenizing datasets...")
-    # TODO: is the below necessary? Seems like the datasets are already tokenized by now.
+    # TODO: is the below necessary?
+    # Seems like the datasets are already tokenized by now.
     tokenized_train_dataset = Dataset.from_dict(tokenize_dataset(train_set, tokenizer))
     tokenized_validation_dataset = Dataset.from_dict(
         tokenize_dataset(validation_set, tokenizer)
