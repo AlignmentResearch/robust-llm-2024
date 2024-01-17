@@ -25,6 +25,7 @@ dev = [
     "pyright",
     "pytest",
     "flake8",
+    "names-generator",
 ]
 
 [tool.setuptools.packages.find]

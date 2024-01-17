@@ -55,6 +55,21 @@ python robust_llm +experiment=my_exp
 
 The complete configuration used will be printed as `Configuration arguments:`. This description can be copied into a new file in the /robust_llm/hydra_conf/experiment directory if you want to repeat it later.
 
+### Running batch jobs
+If you have your hydra config prepared and want to run an experiment on the cluster in batch mode, you can use the `run_batch_job.py` script. To use it, make sure you check out the correct git commit that you want in your experiment, and that all the relevant changes are committed. The container will first set up a code directory with the commit matching your current repo, and then run the experiment. Usage:
+
+```
+python run_batch_job.py --hydra_config=<HYDRA_CONFIG_NAME> [--experiment_name=<EXP_NAME> --job_type=<JOB_TYPE> --container_tag=<TAG>]
+```
+
+As a requirement, you have to set up `docker` ([instructions](https://github.com/AlignmentResearch/flamingo/wiki/Docker-tutorial:-secure-credentials-and-basic-use#read-only-credentials-for-your-cluster-account)), `github-credentials` ([instructions](https://github.com/AlignmentResearch/flamingo/wiki/Build-Docker-images-on-the-cluster:-Kaniko#authentication-1-pulling-from-your-private-github-repo)), and `wandb` kubernetes secrets. For `wandb`, use the following command:
+
+```
+kubectl create secret generic wandb --from-literal=api-key=<YOUR_WANDB_API_KEY>
+```
+
+For now, we only support a single job. In the future we will probably add support for multiple jobs (like grid searches).
+
 ## Datasets
 
 ### Tomita

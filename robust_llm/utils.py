@@ -126,3 +126,14 @@ def yield_minibatch(
     for i in range(0, shuffled_dataset.num_rows, minibatch_size):
         upper_limit = min(i + minibatch_size, shuffled_dataset.num_rows)
         yield shuffled_dataset.select(range(i, upper_limit))
+
+
+def ask_for_confirmation(prompt: str) -> bool:
+    while True:
+        answer = input(prompt + " (y/n) ")
+        if answer.lower() == "y":
+            return True
+        elif answer.lower() == "n":
+            return False
+        else:
+            print("Please answer with 'y' or 'n'.")
