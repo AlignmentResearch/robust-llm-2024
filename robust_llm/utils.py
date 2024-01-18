@@ -8,6 +8,7 @@ import numpy as np
 if TYPE_CHECKING:
     from robust_llm.adversarial_trainer import AdversarialTrainer
 
+import wandb
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase, Trainer
 
@@ -15,9 +16,11 @@ from transformers import PreTrainedTokenizerBase, Trainer
 def tokenize_dataset(
     dataset: Dataset | dict[str, Any], tokenizer: PreTrainedTokenizerBase
 ) -> dict[str, Any]:
+    if isinstance(dataset, Dataset):
+        dataset = {key: dataset[key] for key in dataset.features.keys()}
     # Padding seems necessary in order to avoid an error
     tokenized_data = tokenizer(dataset["text"], padding="max_length", truncation=True)
-    return {"text": dataset["text"], "label": dataset["label"], **tokenized_data}
+    return {**dataset, **tokenized_data}
 
 
 def get_overlap(smaller_dataset: Dataset, larger_dataset: Dataset) -> list[str]:
@@ -126,6 +129,18 @@ def yield_minibatch(
     for i in range(0, shuffled_dataset.num_rows, minibatch_size):
         upper_limit = min(i + minibatch_size, shuffled_dataset.num_rows)
         yield shuffled_dataset.select(range(i, upper_limit))
+
+
+def log_dataset_to_wandb(dataset: Dataset, dataset_name: str) -> None:
+    dataset_table = wandb.Table(columns=["text", "label"])
+
+    for text, label in zip(
+        dataset["text"],
+        dataset["label"],
+    ):
+        dataset_table.add_data(text, label)
+
+    wandb.log({dataset_name: dataset_table}, commit=False)
 
 
 def ask_for_confirmation(prompt: str) -> bool:

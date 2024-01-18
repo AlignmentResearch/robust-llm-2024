@@ -23,6 +23,11 @@ class AdversarialTrainer(Trainer):
     def __init__(self, **trainer_kwargs):
         super().__init__(**trainer_kwargs)
 
+        # text_chunked is not needed for training.
+        # Remove it so that it's possible to merge datasets later on.
+        if "text_chunked" in self.train_dataset.features:
+            self.train_dataset = self.train_dataset.remove_columns("text_chunked")
+
         self.new_examples: dict = {"text": [], "label": []}
 
     @override
@@ -150,12 +155,11 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
 
         # Record how much of the brute force attack set is in the train set
         overlap = get_overlap(
-            self.training.eval_dataset["brute_force_attack_dataset"],
+            self.training.training_attack_dataset,
             augmented_train_set,
         )
         proportion_of_attack_in_train = (
-            len(overlap)
-            / self.training.eval_dataset["brute_force_attack_dataset"].num_rows
+            len(overlap) / self.training.training_attack_dataset.num_rows
         )
         to_log["misc/proportion_of_attack_in_train"] = proportion_of_attack_in_train
 

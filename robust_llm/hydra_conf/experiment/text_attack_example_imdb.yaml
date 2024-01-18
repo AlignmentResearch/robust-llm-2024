@@ -1,0 +1,22 @@
+training:
+  train_set_size: 10
+  validation_set_size: 10
+  shuffle_train_set: true
+  shuffle_validation_set: true
+  num_train_epochs: 1
+
+  iterative:
+    iterative_training: true
+    training_attack:
+      attack_type: "identity"
+    validation_attack:
+      attack_type: "textfooler"
+      text_attack_attack_config:
+        query_budget: 400
+    num_iterative_training_rounds: 1
+    skip_first_training_round: true
+    min_num_new_examples_to_add: 50
+    adversarial_example_search_minibatch_size: 16
+
+environment:
+  dataset_type: "hf/imdb"

@@ -1,12 +1,12 @@
+from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.dataset_management.tomita.tomita1 import Tomita1
 from robust_llm.dataset_management.tomita.tomita2 import Tomita2
 from robust_llm.dataset_management.tomita.tomita4 import Tomita4
 from robust_llm.dataset_management.tomita.tomita7 import Tomita7
-from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
 
 
-def make_language_generator(language_name: str, max_length: int) -> TomitaBase:
-    language_generator: TomitaBase
+def make_language_generator(language_name: str, max_length: int) -> Tomita:
+    language_generator: Tomita
     language_name = language_name.lower()
     if language_name == "tomita1":
         language_generator = Tomita1(max_length=max_length)

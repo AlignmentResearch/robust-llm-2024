@@ -20,12 +20,13 @@ from robust_llm.adversarial_trainer import (
     AdversarialTrainerDatasetManagementCallback,
     AdversarialTrainerLoggingCallback,
 )
+from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import CrossTrainRunStepRecordingWandbCallback
-from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
-from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
-    load_adversarial_dataset,
-)
+from robust_llm.configs import AttackConfig
+from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.utils import (
+    log_dataset_to_wandb,
     search_for_adversarial_examples,
     tokenize_dataset,
     yield_minibatch,
@@ -188,12 +189,12 @@ class AdversarialTraining(Training):
             The language generator which should be created to generate
             datapoints for training and evaluation.
             Only relevant in the Tomita setting.
-        brute_force_attack:
-            Whether to use a "brute force attack" to generate adversarial examples.
-            This means testing on all possible examples up to a given length.
-        brute_force_length:
-            The maximum string length to use for the brute force attack.
-            Note that the brute force dataset size grows as 2^length.
+        training_attack_config:
+            Config for the attack to use in adversarial training.
+        validation_attack_config:
+            Config for the attack to use in validation.
+        modifiable_chunks_spec:
+            Specification for which chunks of the original text can be modified.
         min_num_new_examples_to_add:
             When searching for adversarial examples in the brute force attack,
             we usually don't stop looking until we surpass this number.
@@ -225,9 +226,10 @@ class AdversarialTraining(Training):
     tokenizer: PreTrainedTokenizerBase
     num_iterative_training_rounds: int
     dataset_type: str
-    language_generator: Optional[TomitaBase]
-    brute_force_attack: bool
-    brute_force_length: int
+    language_generator: Optional[Tomita]
+    training_attack_config: AttackConfig
+    validation_attack_config: AttackConfig
+    modifiable_chunks_spec: ModifiableChunksSpec
     min_num_new_examples_to_add: int
     max_num_search_for_adversarial_examples: int
     adversarial_example_search_minibatch_size: int
@@ -282,33 +284,25 @@ class AdversarialTraining(Training):
         # Set up the trainer
         adversarial_trainer = self.setup_trainer()
 
-        # Prepare the attack dataset
-        attack_dataset = None
-        if self.brute_force_attack:
-            if self.dataset_type not in ["tomita"]:
-                raise ValueError(
-                    f"Brute force attack not yet supported in dataset type {self.dataset_type}, exiting..."  # noqa: E501
-                )
+        # Prepare attacks
+        training_attack = create_attack(
+            attack_config=self.training_attack_config,
+            modifiable_chunks_spec=self.modifiable_chunks_spec,
+            dataset_type=self.dataset_type,
+            model=self.model,
+            tokenizer=self.tokenizer,
+            language_generator_name=self.language_generator_name,
+        )
+        validation_attack = create_attack(
+            attack_config=self.validation_attack_config,
+            modifiable_chunks_spec=self.modifiable_chunks_spec,
+            dataset_type=self.dataset_type,
+            model=self.model,
+            tokenizer=self.tokenizer,
+            language_generator_name=self.language_generator_name,
+        )
 
-            brute_force_dataset = load_adversarial_dataset(
-                self.language_generator_name, self.brute_force_length
-            )
-            tokenized_brute_force_dataset = Dataset.from_dict(
-                tokenize_dataset(brute_force_dataset, self.tokenizer)
-            )
-            attack_dataset = tokenized_brute_force_dataset
-
-            if not self.use_probabilistic_robustness_check:
-                # Save the attack dataset as one of the datasets to do eval on
-                self.eval_dataset["brute_force_attack_dataset"] = attack_dataset
-
-        else:
-            # Just find mistakes in the validation set
-            assert "validation" in self.eval_dataset
-            attack_dataset = self.eval_dataset["validation"]
-
-        # Log the datasets
-        self.log_datasets()
+        training_attack_dataset = Dataset.from_dict({})
 
         # Run the adversarial training loop
         for i in range(self.num_iterative_training_rounds):
@@ -328,6 +322,34 @@ class AdversarialTraining(Training):
                     )
                 adversarial_trainer.train()
 
+            if i == 0 or self.training_attack_config.repeat_attack_every_round:
+                training_attack_dataset = Dataset.from_dict(
+                    tokenize_dataset(
+                        training_attack.get_attacked_dataset(self.train_dataset),
+                        self.tokenizer,
+                    )
+                )
+
+                self.training_attack_dataset = training_attack_dataset
+
+            if i == 0 or self.validation_attack_config.repeat_attack_every_round:
+                validation_attack_dataset = Dataset.from_dict(
+                    tokenize_dataset(
+                        validation_attack.get_attacked_dataset(
+                            self.eval_dataset["validation"]
+                        ),
+                        self.tokenizer,
+                    )
+                )
+
+                if not self.use_probabilistic_robustness_check:
+                    # Save the attack dataset as one of the datasets to do eval on
+                    self.eval_dataset[
+                        "validation_attack_dataset"
+                    ] = validation_attack_dataset
+
+            self.log_datasets()
+
             incorrect_predictions: dict[str, list[str]]
             number_examples_searched: int
 
@@ -337,7 +359,7 @@ class AdversarialTraining(Training):
                 number_examples_searched,
             ) = search_for_adversarial_examples(
                 adversarial_trainer,
-                attack_dataset,
+                training_attack_dataset,
                 min_num_new_examples_to_add=self.min_num_new_examples_to_add,
                 max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,  # noqa: E501
                 adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,  # noqa: E501
@@ -356,7 +378,7 @@ class AdversarialTraining(Training):
                     f"Non-adversarial baseline: NOT adding those mistakes, instead adding the first {num_examples_to_add} random examples..."  # noqa: E501
                 )
                 examples_to_actually_add_to_train_set = next(
-                    yield_minibatch(attack_dataset, num_examples_to_add)
+                    yield_minibatch(training_attack_dataset, num_examples_to_add)
                 )
 
             wandb.log(
@@ -420,19 +442,13 @@ class AdversarialTraining(Training):
         if self.use_probabilistic_robustness_check:
             return
 
-        to_log = {}
-
-        # Save the adversarial training dataset to a wandb table
-        if self.eval_dataset.get("brute_force_attack_dataset", None) is None:
+        # Save the adversarial datasets to wandb tables
+        if self.eval_dataset.get("validation_attack_dataset", None) is None:
             raise ValueError(
-                "self.trainer.attack_dataset should have been assigned by now, exiting..."  # noqa: E501
+                "validation_attack_dataset should have been assigned by now, exiting..."  # noqa: E501
             )
-        adversarial_table = wandb.Table(columns=["text", "label"])
-        for text, label in zip(
-            self.eval_dataset["brute_force_attack_dataset"]["text"],
-            self.eval_dataset["brute_force_attack_dataset"]["label"],
-        ):
-            adversarial_table.add_data(text, label)
-        to_log["brute_force_attack_dataset"] = adversarial_table
 
-        wandb.log(to_log, commit=False)
+        log_dataset_to_wandb(self.training_attack_dataset, "training_attack_dataset")
+        log_dataset_to_wandb(
+            self.eval_dataset["validation_attack_dataset"], "validation_attack_dataset"
+        )

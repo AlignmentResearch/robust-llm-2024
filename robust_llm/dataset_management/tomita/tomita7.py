@@ -4,13 +4,13 @@ import re
 import numpy as np
 from typing_extensions import override
 
-from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
+from robust_llm.dataset_management.tomita.tomita import Tomita
 
 PATTERN = re.compile("0*1*0*1*")
 
 
 @dataclasses.dataclass
-class Tomita7(TomitaBase):  # 0*1*0*1*
+class Tomita7(Tomita):  # 0*1*0*1*
     name: str = "tomita7"
 
     @override

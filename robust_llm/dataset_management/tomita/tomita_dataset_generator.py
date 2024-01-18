@@ -3,7 +3,7 @@ from transformers import PreTrainedTokenizerBase
 
 from robust_llm.configs import TrainingConfig
 from robust_llm.dataset_management.tomita import make_language_generator
-from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
+from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.file_utils import compute_dataset_path
 from robust_llm.utils import tokenize_dataset
 
@@ -14,7 +14,7 @@ def make_single_length_datasets(
     max_length: int = 25,
 ):  # length 25 leads to 1.56 GB file; could go bigger later
     for language_name in LANGUAGE_NAMES:
-        t: TomitaBase = make_language_generator(language_name, max_length=5)
+        t: Tomita = make_language_generator(language_name, max_length=5)
 
         for i in range(1, max_length + 1):
             print("making dataset", t, i)
@@ -68,12 +68,22 @@ def load_adversarial_dataset(language_generator_name: str, length: int) -> Datas
 
 def get_tomita_dataset(
     training_args: TrainingConfig,
-    language_generator: TomitaBase,
+    language_generator: Tomita,
     tokenizer: PreTrainedTokenizerBase,
 ) -> tuple[Dataset, Dataset]:
+    assert (
+        isinstance(training_args.train_set_size, int)
+        and training_args.train_set_size > 0
+    )
+    assert (
+        isinstance(training_args.validation_set_size, int)
+        and training_args.validation_set_size > 0
+    )
+
     if training_args.baseline.non_iterative_baseline:
         brute_force_dataset = load_adversarial_dataset(
-            language_generator.name, training_args.iterative.brute_force_length
+            language_generator.name,
+            training_args.iterative.training_attack.brute_force_tomita_attack_config.length,  # noqa: E501
         )
         tokenized_brute_force_dataset = Dataset.from_dict(
             tokenize_dataset(brute_force_dataset, tokenizer)

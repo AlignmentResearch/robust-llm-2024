@@ -3,11 +3,11 @@ import dataclasses
 import numpy as np
 from typing_extensions import override
 
-from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
+from robust_llm.dataset_management.tomita.tomita import Tomita
 
 
 @dataclasses.dataclass
-class Tomita4(TomitaBase):  # doesn't contain "000" as a substring
+class Tomita4(Tomita):  # doesn't contain "000" as a substring
     name: str = "tomita4"
 
     def __post_init__(self):

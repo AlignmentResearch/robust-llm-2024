@@ -5,13 +5,18 @@ training:
 
   iterative:
     iterative_training: true
-    brute_force_attack: true
-    brute_force_length: 7
+    training_attack:
+      attack_type: "brute_force"
+      brute_force_tomita_attack_config:
+        length: 7
+    validation_attack:
+      attack_type: "brute_force"
+      brute_force_tomita_attack_config:
+        length: 7
     skip_first_training_round: true
     min_num_new_examples_to_add: 16
     adversarial_example_search_minibatch_size: 16
     num_iterative_training_rounds: 10
-
 
 environment:
   language_generator: "tomita4"

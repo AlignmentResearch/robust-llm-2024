@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -10,6 +11,42 @@ class BaselineTrainingConfig:
     proportion: float = 0.1
     # Whether to run a non-iterative baseline or not.
     non_iterative_baseline: bool = False
+
+
+@dataclass
+class TextAttackAttackConfig:
+    """Options specific for TextAttack attacks."""
+
+    # Query budget per example.
+    query_budget: int = 100
+    # Number of examples to attack. If -1, attack whole dataset.
+    num_examples: int = -1
+
+
+@dataclass
+class BruteForceTomitaAttackConfig:
+    """Options specific for BruteForceTomita attacks."""
+
+    # Up to which length strings should be exhaustively tested.
+    length: int = 5
+
+
+@dataclass
+class AttackConfig:
+    """Configs used in attack setup."""
+
+    # The type of attack to use.
+    attack_type: str = "identity"
+    # Whether to repeat the attack every iterative training round or not.
+    repeat_attack_every_round: bool = True
+    # Random seed for the attack.
+    seed: int = 0
+
+    # Configs for specific types of attacks.
+    brute_force_tomita_attack_config: BruteForceTomitaAttackConfig = (
+        BruteForceTomitaAttackConfig()
+    )
+    text_attack_attack_config: TextAttackAttackConfig = TextAttackAttackConfig()
 
 
 @dataclass
@@ -36,10 +73,10 @@ class IterativeTrainingConfig:
     use_probabilistic_robustness_check: bool = False
     # Whether to skip the first training round or not.
     skip_first_training_round: bool = False
-    # Up to which length strings should be exhaustively tested.
-    brute_force_length: int = 5
-    # Whether to exhaustively test all possible adversarial examples.
-    brute_force_attack: bool = False
+    # Config for the attack to use in adversarial training.
+    training_attack: AttackConfig = AttackConfig()
+    # Config for the attack to use in validation.
+    validation_attack: AttackConfig = AttackConfig()
 
 
 @dataclass
@@ -69,10 +106,16 @@ class TrainingConfig:
 
     iterative: IterativeTrainingConfig = IterativeTrainingConfig()
     baseline: BaselineTrainingConfig = BaselineTrainingConfig()
-    # The size of the train set.
-    train_set_size: int = 100
-    # The size of the validation set.
-    validation_set_size: int = 100
+    # The size of the train set. For generated datasets, must be set to positive
+    # integer. For HF datasets, can be set to None to use the full dataset.
+    train_set_size: Optional[int] = None
+    # The size of the validation set. For generated datasets, must be set to positive
+    # integer. For HF datasets, can be set to None to use the full dataset.
+    validation_set_size: Optional[int] = None
+    # Whether to shuffle the train set. Can matter if we subsample.
+    shuffle_train_set: bool = False
+    # Whether to shuffle the validation set. Can matter if we subsample.
+    shuffle_validation_set: bool = False
     # The number of epochs to train for.
     num_train_epochs: int = 3
     # The checkpoint to start from

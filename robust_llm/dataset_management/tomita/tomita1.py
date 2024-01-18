@@ -3,11 +3,11 @@ import dataclasses
 import numpy as np
 from typing_extensions import override
 
-from robust_llm.dataset_management.tomita.tomita_base import TomitaBase
+from robust_llm.dataset_management.tomita.tomita import Tomita
 
 
 @dataclasses.dataclass
-class Tomita1(TomitaBase):  # 1*
+class Tomita1(Tomita):  # 1*
     name: str = "tomita1"
 
     @override

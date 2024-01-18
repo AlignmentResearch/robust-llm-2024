@@ -28,7 +28,7 @@ def all_binary_strings_of_length(length: int) -> list[str]:
 
 
 @dataclasses.dataclass
-class TomitaBase:
+class Tomita:
     seed: int = 42
     name: str = "tomitabase"
     max_length: int = 5  # short for debugging purposes

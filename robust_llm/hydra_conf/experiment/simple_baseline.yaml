@@ -1,4 +1,6 @@
 training:
+  train_set_size: 50
+  validation_set_size: 50
   num_train_epochs: 40
 
   baseline:
@@ -6,4 +8,11 @@ training:
     non_iterative_baseline: true
 
   iterative:
-    brute_force_length: 7
+    training_attack:
+      attack_type: "brute_force"
+      brute_force_tomita_attack_config:
+        length: 7
+    validation_attack:
+      attack_type: "brute_force"
+      brute_force_tomita_attack_config:
+        length: 7

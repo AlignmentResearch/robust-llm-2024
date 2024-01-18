@@ -1,9 +1,7 @@
 import pytest
 
 from robust_llm.dataset_management.tomita import make_language_generator
-from robust_llm.dataset_management.tomita.tomita_base import (
-    all_binary_strings_of_length,
-)
+from robust_llm.dataset_management.tomita.tomita import all_binary_strings_of_length
 
 # Long enough for all Tomita languages to have several
 # true and false examples, but is otherwise arbitrary.

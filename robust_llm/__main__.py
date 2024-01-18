@@ -40,20 +40,24 @@ def main(args: OverallConfig) -> None:
     print(OmegaConf.to_yaml(experiment))
     print()
 
+    # TODO(michal): move all this inside generate_robust_llm_datasets?
+    language_generator = None
     if experiment.environment.dataset_type.lower() == "tensor_trust":
-        language_generator = None
         dataset_type = "tensor_trust"
     elif experiment.environment.dataset_type.lower() == "tomita":
         dataset_type = "tomita"
         language_generator = make_language_generator(
             experiment.environment.language_generator, experiment.environment.max_length
         )
+    elif experiment.environment.dataset_type.startswith("hf/"):
+        dataset_type = experiment.environment.dataset_type
     else:
         raise ValueError(f"Unknown dataset type {experiment.environment.dataset_type}")
 
     # Choose a model and a tokenizer
     model_name = args.experiment.environment.model_name
 
+    # TODO(GH#103): make it compatible with tasks where num_labels > 2.
     if "bert" in model_name:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_name, num_labels=2
@@ -90,6 +94,7 @@ def main(args: OverallConfig) -> None:
         tokenizer,
         experiment.training,
         experiment.environment.dataset_generation_style,
+        experiment.environment.seed,
     )
 
     # NOTE: the "validation" dataset is one of what will be
@@ -118,8 +123,9 @@ def main(args: OverallConfig) -> None:
             tokenizer=tokenizer,
             dataset_type=dataset_type,
             language_generator=language_generator,
-            brute_force_attack=it.brute_force_attack,
-            brute_force_length=it.brute_force_length,
+            training_attack_config=it.training_attack,
+            validation_attack_config=it.validation_attack,
+            modifiable_chunks_spec=robust_llm_datasets.modifiable_chunks_spec,
             min_num_new_examples_to_add=it.min_num_new_examples_to_add,
             max_num_search_for_adversarial_examples=it.max_num_search_for_adversarial_examples,  # noqa: E501
             adversarial_example_search_minibatch_size=it.adversarial_example_search_minibatch_size,  # noqa: E501
@@ -138,8 +144,8 @@ def main(args: OverallConfig) -> None:
 
     # Log the train-val overlap to wandb
     if (
-        experiment.training.train_set_size > 0
-        and experiment.training.validation_set_size > 0
+        experiment.training.train_set_size is not None
+        and experiment.training.validation_set_size is not None
     ):
         if not wandb.run:
             raise ValueError("wandb should have been initialized by now, exiting...")
