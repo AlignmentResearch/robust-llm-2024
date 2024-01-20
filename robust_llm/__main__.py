@@ -111,6 +111,8 @@ def main(args: OverallConfig) -> None:
         },
         "model": model,
         "train_epochs": experiment.training.num_train_epochs,
+        "eval_steps": experiment.training.eval_steps,
+        "logging_steps": experiment.training.logging_steps,
     }
 
     # Set up the training environment

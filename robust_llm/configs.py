@@ -118,6 +118,10 @@ class TrainingConfig:
     shuffle_validation_set: bool = False
     # The number of epochs to train for.
     num_train_epochs: int = 3
+    # Number of update steps between two evaluations
+    eval_steps: Optional[int] = None
+    # Number of update steps between two logs
+    logging_steps: int | float = 500
     # The checkpoint to start from
     checkpoint: int = 142000
 
