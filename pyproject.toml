@@ -27,6 +27,7 @@ dev = [
     "pre-commit",
     "pyright",
     "pytest",
+    "pytest-cov",
     "flake8",
     "names-generator",
 ]

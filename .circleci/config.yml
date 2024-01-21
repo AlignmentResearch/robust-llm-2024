@@ -2,6 +2,8 @@ version: 2.1
 
 orbs:
   python: circleci/python@1.5.0
+  codecov: codecov/codecov@3.3.0
+  
 
 commands:
   install-dependencies:
@@ -13,6 +15,20 @@ commands:
           command: |
             pip install -e '.[dev]'
 
+  store-test-output:
+    description: "Store the output of tests."
+    steps:
+      - store_artifacts:
+          path: /tmp/test-reports
+          destination: test-reports
+
+      - store_test_results:
+          path: /tmp/test-reports
+
+      - store_artifacts:
+          path: /tmp/resource-usage
+          destination: resource-usage
+
 jobs:
   pytest:
     docker:
@@ -21,9 +37,16 @@ jobs:
       - install-dependencies
       - run:
           name: Run tests
-          command: pytest
+          command: |
+            pytest --cov=robust_llm \
+              --cov=tests --junitxml=/tmp/test-reports/junit.xml \
+              --durations=500 -vv tests/
+            mv .coverage .coverage.robust_llm
+            coverage combine  # rewrite paths from virtualenv to src/
           environment:
             WANDB_MODE: offline
+      - codecov/upload
+      - store-test-output
 
   lint:
     docker:
@@ -51,6 +74,7 @@ jobs:
             flake8 --version
             flake8 . -v --exclude venv
         # TODO maybe add codespell
+
 
 workflows:
   tests:
