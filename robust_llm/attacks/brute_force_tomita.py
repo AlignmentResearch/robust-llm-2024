@@ -1,6 +1,7 @@
 from typing import Optional
 
 from datasets import Dataset
+from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
 from robust_llm.configs import AttackConfig
@@ -43,6 +44,7 @@ class BruteForceTomitaAttack(Attack):
         self.language_generator_name = language_generator_name
         self.brute_force_length = attack_config.brute_force_tomita_attack_config.length
 
+    @override
     def get_attacked_dataset(
         self,
         dataset: Optional[Dataset] = None,

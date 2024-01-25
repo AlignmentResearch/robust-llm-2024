@@ -3,6 +3,7 @@ from enum import Enum, auto
 from typing import Optional
 
 from datasets import Dataset
+from typing_extensions import override
 
 from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
@@ -71,6 +72,7 @@ class IdentityAttack(Attack):
     A trivial 'attack' that could be used for debugging.
     """
 
+    @override
     def get_attacked_dataset(
         self,
         dataset: Optional[Dataset],

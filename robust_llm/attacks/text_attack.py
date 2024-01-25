@@ -5,6 +5,7 @@ import textattack
 import torch
 import transformers
 from datasets import Dataset
+from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack, SingleAttackResult
 from robust_llm.configs import AttackConfig
@@ -53,6 +54,7 @@ class TextAttackAttack(Attack):
             random_seed=self.attack_config.seed,
         )
 
+    @override
     def get_attacked_dataset(
         self,
         dataset: Optional[Dataset],
