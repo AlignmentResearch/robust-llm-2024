@@ -155,12 +155,14 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
 
         # Record how much of the brute force attack set is in the train set
         overlap = get_overlap(
-            self.training.training_attack_dataset,
+            self.training.eval_dataset["validation"],
             augmented_train_set,
         )
-        proportion_of_attack_in_train = (
-            len(overlap) / self.training.training_attack_dataset.num_rows
+        proportion_of_validation_in_train = (
+            len(overlap) / self.training.eval_dataset["validation"].num_rows
         )
-        to_log["misc/proportion_of_attack_in_train"] = proportion_of_attack_in_train
+        to_log[
+            "misc/proportion_of_validation_in_train"
+        ] = proportion_of_validation_in_train
 
         wandb.log(to_log, commit=False)

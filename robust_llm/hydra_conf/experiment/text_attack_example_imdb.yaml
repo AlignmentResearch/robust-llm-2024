@@ -14,7 +14,7 @@ training:
       text_attack_attack_config:
         query_budget: 400
     num_iterative_training_rounds: 1
-    skip_first_training_round: true
+    skip_first_training_round: false
     min_num_new_examples_to_add: 50
     adversarial_example_search_minibatch_size: 16
 

@@ -15,7 +15,7 @@ dependencies = [
     "scikit-learn",
     "textattack",
     # TF embeddings are used in some TextAttack attacks, even though models are in pytorch
-    "tensorflow",
+    "tensorflow==2.9.1",
     "tensorflow_hub",
     "wandb",
 ]
