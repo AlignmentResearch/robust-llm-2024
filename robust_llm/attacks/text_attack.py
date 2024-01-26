@@ -7,7 +7,7 @@ import transformers
 from datasets import Dataset
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack, SingleAttackResult
+from robust_llm.attacks.attack import Attack
 from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 
@@ -16,6 +16,8 @@ TEXT_ATTACK_ATTACK_TYPES = ["textfooler"]
 
 class TextAttackAttack(Attack):
     """Attack using the TextAttack library."""
+
+    REQUIRES_INPUT_DATASET = True
 
     def __init__(
         self,
@@ -78,32 +80,16 @@ class TextAttackAttack(Attack):
     def _get_dataset_from_attack_results(
         attack_results: Sequence[textattack.attack_results.AttackResult],
     ) -> Dataset:
-        texts, labels, results = [], [], []
+        texts, original_texts, labels = [], [], []
         for attack_result in attack_results:
             texts.append(attack_result.perturbed_result.attacked_text.text)
+            original_texts.append(attack_result.original_result.attacked_text.text)
             labels.append(attack_result.perturbed_result.ground_truth_output)
 
-            if isinstance(
-                attack_result,
-                (
-                    textattack.attack_results.SuccessfulAttackResult,
-                    textattack.attack_results.MaximizedAttackResult,
-                ),
-            ):
-                results.append(SingleAttackResult.SUCCESS.value)
-            elif isinstance(
-                attack_result, textattack.attack_results.FailedAttackResult
-            ):
-                results.append(SingleAttackResult.FAILURE.value)
-            elif isinstance(
-                attack_result, textattack.attack_results.SkippedAttackResult
-            ):
-                results.append(SingleAttackResult.SKIPPED.value)
-            else:
-                raise ValueError(
-                    "Unknown textattack.attack_results.AttackResult subclass!"
-                )
-
         return Dataset.from_dict(
-            {"text": texts, "label": labels, "attack_result": results}
+            {
+                "text": texts,
+                "original_text": original_texts,
+                "label": labels,
+            }
         )

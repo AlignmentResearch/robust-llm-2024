@@ -7,7 +7,6 @@ from robust_llm.dataset_management.tomita.tomita7 import Tomita7
 
 def make_language_generator(language_name: str, max_length: int) -> Tomita:
     language_generator: Tomita
-    language_name = language_name.lower()
     if language_name == "tomita1":
         language_generator = Tomita1(max_length=max_length)
     elif language_name == "tomita2":

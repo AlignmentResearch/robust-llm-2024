@@ -1,6 +1,10 @@
-training:
+experiment_type: "training"
+
+environment:
   train_set_size: 50
   validation_set_size: 50
+
+training:
   num_train_epochs: 40
 
   baseline:
@@ -12,7 +16,9 @@ training:
       attack_type: "brute_force"
       brute_force_tomita_attack_config:
         length: 7
-    validation_attack:
-      attack_type: "brute_force"
-      brute_force_tomita_attack_config:
-        length: 7
+
+evaluation:
+  evaluation_attack:
+    attack_type: "brute_force"
+    brute_force_tomita_attack_config:
+      length: 7

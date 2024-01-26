@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from omegaconf import MISSING
+
 
 @dataclass
 class BaselineTrainingConfig:
@@ -75,13 +77,11 @@ class IterativeTrainingConfig:
     skip_first_training_round: bool = False
     # Config for the attack to use in adversarial training.
     training_attack: AttackConfig = AttackConfig()
-    # Config for the attack to use in validation.
-    validation_attack: AttackConfig = AttackConfig()
 
 
 @dataclass
 class EnvironmentConfig:
-    """Configs used in environment setup."""
+    """Configs used in environment setup (including dataset)."""
 
     # Model type
     model_name: str = "bert-base-uncased"
@@ -98,14 +98,6 @@ class EnvironmentConfig:
     max_length: int = 50
     # The seed to use for the random number generator used to make the dataset
     seed: int = 0
-
-
-@dataclass
-class TrainingConfig:
-    """Configs used by multiple training types."""
-
-    iterative: IterativeTrainingConfig = IterativeTrainingConfig()
-    baseline: BaselineTrainingConfig = BaselineTrainingConfig()
     # The size of the train set. For generated datasets, must be set to positive
     # integer. For HF datasets, can be set to None to use the full dataset.
     train_set_size: Optional[int] = None
@@ -117,6 +109,14 @@ class TrainingConfig:
     # Whether to shuffle the validation set. Can matter if we subsample.
     shuffle_validation_set: bool = False
     # The number of epochs to train for.
+
+
+@dataclass
+class TrainingConfig:
+    """Configs used across different training procedures."""
+
+    iterative: IterativeTrainingConfig = IterativeTrainingConfig()
+    baseline: BaselineTrainingConfig = BaselineTrainingConfig()
     num_train_epochs: int = 3
     # Number of update steps between two evaluations
     eval_steps: Optional[int] = None
@@ -126,13 +126,27 @@ class TrainingConfig:
     checkpoint: int = 142000
 
 
+@dataclass
+class EvaluationConfig:
+    # The mini-batch size used to iterate over the dataset when evaluating.
+    batch_size: int = 4
+    # Config for the attack to use in evaluation.
+    evaluation_attack: AttackConfig = AttackConfig()
+    # The number of examples to generate for the evaluation attack. Should be specified
+    # only if the attack does not require an input dataset. Otherwise, we want the
+    # attack to generate an example per each sample in the input dataset.
+    num_generated_examples: Optional[int] = None
+
+
 # TODO(dan) guard against mutually exclusive options
 @dataclass
 class ExperimentConfig:
+    # Experiment type, from the ones defined in __main__.py
+    experiment_type: str = MISSING
+
     # The name of the overarching experiment being run. Used to set a "group" in
     # wandb. Each experiment has several jobs.
     # Example: "scaling-model-size_2023-11-22_1e88j"
-
     experiment_name: str = "default-experiment"
 
     # The name of the sub-experiment being run. Used to set a "job_type" in wandb.
@@ -140,14 +154,16 @@ class ExperimentConfig:
     # Each job can have several runs (with different seeds).
     # Example: "pythia-14m_step17000"
     job_type: str = "default-job"
+
     # The name of the individual run.
     # Don't need much here since group and job do most of the work distinguishing.
     # Random string is fine.
     # Example: "run_3f4ay"
     run_name: str = "default-run"
-    scaling_experiments: bool = False
-    training: TrainingConfig = TrainingConfig()
+
     environment: EnvironmentConfig = EnvironmentConfig()
+    training: TrainingConfig = TrainingConfig()
+    evaluation: EvaluationConfig = EvaluationConfig()
 
 
 @dataclass

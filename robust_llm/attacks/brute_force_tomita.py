@@ -14,6 +14,8 @@ from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
 class BruteForceTomitaAttack(Attack):
     """Brute force attack for Tomita datasets."""
 
+    REQUIRES_INPUT_DATASET = False
+
     def __init__(
         self,
         attack_config: AttackConfig,

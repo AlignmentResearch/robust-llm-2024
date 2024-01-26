@@ -12,7 +12,7 @@ MAX_LANGUAGE_LENGTH = 10
 
 def test_basic_constructor():
     language_generator = make_language_generator(
-        language_name="Tomita1", max_length=MAX_LANGUAGE_LENGTH
+        language_name="tomita1", max_length=MAX_LANGUAGE_LENGTH
     )
     (
         train_dataset,

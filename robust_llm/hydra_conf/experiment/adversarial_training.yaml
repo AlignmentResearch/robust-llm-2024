@@ -1,6 +1,12 @@
-training:
+experiment_type: "training"
+
+environment:
+  language_generator: "tomita4"
+  max_length: 7
   train_set_size: 2
   validation_set_size: 2
+
+training:
   num_train_epochs: 2
 
   iterative:
@@ -9,15 +15,13 @@ training:
       attack_type: "brute_force"
       brute_force_tomita_attack_config:
         length: 7
-    validation_attack:
-      attack_type: "brute_force"
-      brute_force_tomita_attack_config:
-        length: 7
     skip_first_training_round: true
     min_num_new_examples_to_add: 16
     adversarial_example_search_minibatch_size: 16
     num_iterative_training_rounds: 10
 
-environment:
-  language_generator: "tomita4"
-  max_length: 7
+evaluation:
+  evaluation_attack:
+    attack_type: "brute_force"
+    brute_force_tomita_attack_config:
+      length: 7

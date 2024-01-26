@@ -152,3 +152,9 @@ def ask_for_confirmation(prompt: str) -> bool:
             return False
         else:
             print("Please answer with 'y' or 'n'.")
+
+
+def div_maybe_nan(a: int, b: int) -> float:
+    if b == 0:
+        return float("nan")
+    return a / b

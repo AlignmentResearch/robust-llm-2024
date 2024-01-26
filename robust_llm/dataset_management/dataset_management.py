@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 from datasets import Dataset, DatasetDict, IterableDatasetDict, load_dataset
 from transformers import PreTrainedTokenizerBase
 
-from robust_llm.configs import TrainingConfig
+from robust_llm.configs import EnvironmentConfig, TrainingConfig
 from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
     TENSOR_TRUST_MODIFIABLE_CHUNKS_SPEC,
     get_tensor_trust_dataset,
@@ -37,7 +37,8 @@ def generate_robust_llm_datasets(
     dataset_type: str,
     language_generator: Optional[Tomita],
     tokenizer: PreTrainedTokenizerBase,
-    training_args: TrainingConfig,
+    environment_config: EnvironmentConfig,
+    training_config: TrainingConfig,
     dataset_generation_style: str,
     seed: int,
 ) -> RobustLLMDatasets:
@@ -48,23 +49,26 @@ def generate_robust_llm_datasets(
 
     modifiable_chunks_spec = (True,)
 
-    if dataset_type.lower() == "tensor_trust":
+    if dataset_type == "tensor_trust":
         train_set, validation_set = get_tensor_trust_dataset(
-            training_args=training_args,
+            environment_config=environment_config,
             tokenizer=tokenizer,
             dataset_generation_style=dataset_generation_style,
         )
 
         modifiable_chunks_spec = TENSOR_TRUST_MODIFIABLE_CHUNKS_SPEC
 
-    elif dataset_type.lower() == "tomita":
+    elif dataset_type == "tomita":
         assert language_generator is not None and isinstance(language_generator, Tomita)
         if dataset_generation_style == "random_character_edit":
             raise ValueError(
                 "Random character edit is not yet supported for Tomita datasets."
             )
         train_set, validation_set = get_tomita_dataset(
-            training_args, language_generator, tokenizer
+            environment_config=environment_config,
+            training_config=training_config,
+            language_generator=language_generator,
+            tokenizer=tokenizer,
         )
 
     elif dataset_type.startswith("hf/"):
@@ -76,15 +80,17 @@ def generate_robust_llm_datasets(
     else:
         raise ValueError(f"Unknown dataset type {dataset_type}")
 
-    if training_args.shuffle_train_set:
+    if environment_config.shuffle_train_set:
         train_set = train_set.shuffle(seed=seed)
-    if training_args.shuffle_validation_set:
+    if environment_config.shuffle_validation_set:
         validation_set = validation_set.shuffle(seed=seed)
 
-    if training_args.train_set_size is not None:
-        train_set = train_set.select(range(training_args.train_set_size))
-    if training_args.validation_set_size is not None:
-        validation_set = validation_set.select(range(training_args.validation_set_size))
+    if environment_config.train_set_size is not None:
+        train_set = train_set.select(range(environment_config.train_set_size))
+    if environment_config.validation_set_size is not None:
+        validation_set = validation_set.select(
+            range(environment_config.validation_set_size)
+        )
 
     print("Tokenizing datasets...")
     # TODO: is the below necessary?

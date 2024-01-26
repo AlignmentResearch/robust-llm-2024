@@ -161,8 +161,8 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
         proportion_of_validation_in_train = (
             len(overlap) / self.training.eval_dataset["validation"].num_rows
         )
-        to_log[
-            "misc/proportion_of_validation_in_train"
-        ] = proportion_of_validation_in_train
+        to_log["misc/proportion_of_validation_in_train"] = (
+            proportion_of_validation_in_train
+        )
 
         wandb.log(to_log, commit=False)

@@ -344,9 +344,9 @@ class AdversarialTraining(Training):
 
                 if not self.use_probabilistic_robustness_check:
                     # Save the attack dataset as one of the datasets to do eval on
-                    self.eval_dataset[
-                        "validation_attack_dataset"
-                    ] = validation_attack_dataset
+                    self.eval_dataset["validation_attack_dataset"] = (
+                        validation_attack_dataset
+                    )
 
             self.log_datasets()
 
@@ -413,9 +413,9 @@ class AdversarialTraining(Training):
                 examples_to_actually_add_to_train_set["label"],
             ):
                 actual_examples_added_table.add_data(text_string, correct_label)
-            to_log[
-                f"examples_added_to_training_set_after_round_{i}"
-            ] = actual_examples_added_table
+            to_log[f"examples_added_to_training_set_after_round_{i}"] = (
+                actual_examples_added_table
+            )
             wandb.log(to_log, commit=False)
 
             # Save the new examples to the adversarial trainer
@@ -430,9 +430,9 @@ class AdversarialTraining(Training):
             tokenized_new_examples = Dataset.from_dict(
                 tokenize_dataset(adversarial_trainer.new_examples, self.tokenizer)
             )
-            self.eval_dataset[
-                "all_examples_added_during_iterative_training"
-            ] = tokenized_new_examples
+            self.eval_dataset["all_examples_added_during_iterative_training"] = (
+                tokenized_new_examples
+            )
 
     @override
     def log_datasets(self) -> None:

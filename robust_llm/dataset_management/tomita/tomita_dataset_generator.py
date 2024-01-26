@@ -1,7 +1,7 @@
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 
-from robust_llm.configs import TrainingConfig
+from robust_llm.configs import EnvironmentConfig, TrainingConfig
 from robust_llm.dataset_management.tomita import make_language_generator
 from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.file_utils import compute_dataset_path
@@ -67,23 +67,24 @@ def load_adversarial_dataset(language_generator_name: str, length: int) -> Datas
 
 
 def get_tomita_dataset(
-    training_args: TrainingConfig,
+    environment_config: EnvironmentConfig,
+    training_config: TrainingConfig,
     language_generator: Tomita,
     tokenizer: PreTrainedTokenizerBase,
 ) -> tuple[Dataset, Dataset]:
     assert (
-        isinstance(training_args.train_set_size, int)
-        and training_args.train_set_size > 0
+        isinstance(environment_config.train_set_size, int)
+        and environment_config.train_set_size > 0
     )
     assert (
-        isinstance(training_args.validation_set_size, int)
-        and training_args.validation_set_size > 0
+        isinstance(environment_config.validation_set_size, int)
+        and environment_config.validation_set_size > 0
     )
 
-    if training_args.baseline.non_iterative_baseline:
+    if training_config.baseline.non_iterative_baseline:
         brute_force_dataset = load_adversarial_dataset(
             language_generator.name,
-            training_args.iterative.training_attack.brute_force_tomita_attack_config.length,  # noqa: E501
+            training_config.iterative.training_attack.brute_force_tomita_attack_config.length,  # noqa: E501
         )
         tokenized_brute_force_dataset = Dataset.from_dict(
             tokenize_dataset(brute_force_dataset, tokenizer)
@@ -92,7 +93,7 @@ def get_tomita_dataset(
         train_set = shuffled_brute_force_dataset.select(
             range(
                 int(
-                    training_args.baseline.proportion
+                    training_config.baseline.proportion
                     * len(tokenized_brute_force_dataset)
                 )
             )
@@ -101,8 +102,8 @@ def get_tomita_dataset(
 
     else:
         train_set, validation_set, _ = language_generator.generate_dataset(
-            train_size=training_args.train_set_size,
-            validation_size=training_args.validation_set_size,
+            train_size=environment_config.train_set_size,
+            validation_size=environment_config.validation_set_size,
             test_size=0,
         )
 

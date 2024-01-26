@@ -7,7 +7,7 @@ from robust_llm.dataset_management.tomita.tomita import all_binary_strings_of_le
 # true and false examples, but is otherwise arbitrary.
 MAX_LANGUAGE_LENGTH = 100
 
-TOMITA_LANGUAGES = ["Tomita1", "Tomita2", "Tomita4", "Tomita7"]
+TOMITA_LANGUAGES = ["tomita1", "tomita2", "tomita4", "tomita7"]
 
 
 @pytest.mark.parametrize("language_name", TOMITA_LANGUAGES)
@@ -53,7 +53,7 @@ def test_generate_dataset(
 # 1*
 def test_tomita1_examples():
     language_generator = make_language_generator(
-        language_name="Tomita1", max_length=MAX_LANGUAGE_LENGTH
+        language_name="tomita1", max_length=MAX_LANGUAGE_LENGTH
     )
     assert language_generator.is_in_language([1, 1])
     assert not language_generator.is_in_language([0])
@@ -62,7 +62,7 @@ def test_tomita1_examples():
 # (10)*
 def test_tomita2_examples():
     language_generator = make_language_generator(
-        language_name="Tomita2", max_length=MAX_LANGUAGE_LENGTH
+        language_name="tomita2", max_length=MAX_LANGUAGE_LENGTH
     )
     assert language_generator.is_in_language([1, 0, 1, 0])
     assert not language_generator.is_in_language([0, 1])
@@ -71,7 +71,7 @@ def test_tomita2_examples():
 # Does not contain '000'
 def test_tomita4_examples():
     language_generator = make_language_generator(
-        language_name="Tomita4", max_length=MAX_LANGUAGE_LENGTH
+        language_name="tomita4", max_length=MAX_LANGUAGE_LENGTH
     )
     assert language_generator.is_in_language([1, 0, 1, 0])
     assert not language_generator.is_in_language([1, 0, 0, 0, 1])
@@ -80,7 +80,7 @@ def test_tomita4_examples():
 # 0*1*0*1*
 def test_tomita7_examples():
     language_generator = make_language_generator(
-        language_name="Tomita7", max_length=MAX_LANGUAGE_LENGTH
+        language_name="tomita7", max_length=MAX_LANGUAGE_LENGTH
     )
     assert language_generator.is_in_language([0])
     assert language_generator.is_in_language([0, 1, 1, 0])

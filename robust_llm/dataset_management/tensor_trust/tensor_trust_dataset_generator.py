@@ -16,7 +16,7 @@ from textattack.transformations import (
 )
 from transformers import PreTrainedTokenizerBase
 
-from robust_llm.configs import TrainingConfig
+from robust_llm.configs import EnvironmentConfig
 from robust_llm.file_utils import compute_dataset_management_path, compute_dataset_path
 
 DATASET_PATH = f"{compute_dataset_path()}/tensor_trust"
@@ -104,7 +104,7 @@ def _extract_password(context: str) -> str:
 
 
 def get_tensor_trust_dataset(
-    training_args: TrainingConfig,
+    environment_config: EnvironmentConfig,
     tokenizer: PreTrainedTokenizerBase,
     dataset_generation_style: str,
     seed: int = RANDOM_SEED,
@@ -116,8 +116,8 @@ def get_tensor_trust_dataset(
 
     """Generates a dataset in the form [positive, negative, positive, negative, ...]"""
     np.random.seed(seed=seed)
-    train_set_size = training_args.train_set_size
-    validation_set_size = training_args.validation_set_size
+    train_set_size = environment_config.train_set_size
+    validation_set_size = environment_config.validation_set_size
 
     assert isinstance(train_set_size, int) and train_set_size > 0
     assert isinstance(validation_set_size, int) and validation_set_size > 0

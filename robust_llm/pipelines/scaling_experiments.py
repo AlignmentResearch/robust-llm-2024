@@ -1,9 +1,14 @@
+"""Preliminary pipeline to run multiple (scaling) experiments."""
+
 import shlex
 import subprocess
 from datetime import date
 
 import numpy as np
 import wandb.util
+from hydra.core.hydra_config import HydraConfig
+
+from robust_llm.configs import OverallConfig
 
 # Model sizes: 14m, 31m, 70m, 160m, 410m, 1b, 1.4b, 2.8b, 6.9b, 12b
 LIST_OF_PYTHIA_MODELS = [
@@ -61,3 +66,15 @@ def run_experiment(
             command_string = shlex.join(command_list)
 
             subprocess.run(command_string, shell=True)
+
+
+# TODO(michal): deprecate this pipeline. Implement general grid searches instead.
+def run_scaling_experiments_pipeline(args: OverallConfig):
+    print("Running a scaling experiment...")
+
+    hydra_config_name = HydraConfig.get().overrides.task[0].split("=")[1]
+
+    run_experiment(
+        experiment_yaml=hydra_config_name,
+        experiment_name=args.experiment.experiment_name,
+    )

@@ -1,5 +1,4 @@
 import abc
-from enum import Enum, auto
 from typing import Optional
 
 from datasets import Dataset
@@ -9,19 +8,11 @@ from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 
 
-class SingleAttackResult(Enum):
-    """Result of a single trial for a single data point."""
-
-    # Example went from correctly classified into incorrectly classified
-    SUCCESS = auto()
-    # Example remained correctly classified
-    FAILURE = auto()
-    # Example was skipped because it was already incorrectly classified
-    SKIPPED = auto()
-
-
 class Attack(abc.ABC):
     """Base class for all attacks."""
+
+    # Whether the attack always requires an input to `get_attacked_dataset` method.
+    REQUIRES_INPUT_DATASET: bool
 
     def __init__(
         self,
@@ -59,9 +50,10 @@ class Attack(abc.ABC):
                 `max_n_outputs` examples. Defaults to None.
 
         Returns:
-            A dataset of adversarial examples with `text` and `label` columns.
-            Optionally, an `attack_result` column can be included, which contains
-            `SingleAttackResult` values for each example.
+            A dataset of adversarial examples containing at least `text` and `label`
+            columns. If the `dataset` argument was specified, the returned dataset must
+            also contain the `original_text` column, containing unmodified original
+            text.
         """
         pass
 
@@ -72,6 +64,8 @@ class IdentityAttack(Attack):
     A trivial 'attack' that could be used for debugging.
     """
 
+    REQUIRES_INPUT_DATASET = True
+
     @override
     def get_attacked_dataset(
         self,
@@ -79,6 +73,12 @@ class IdentityAttack(Attack):
         max_n_outputs: Optional[int] = None,
     ) -> Dataset:
         assert dataset is not None
+
+        dataset = dataset.add_column(
+            "original_text",
+            dataset["text"],
+            new_fingerprint=None,  # type: ignore
+        )
 
         if max_n_outputs is not None:
             dataset = dataset.select(range(max_n_outputs))
