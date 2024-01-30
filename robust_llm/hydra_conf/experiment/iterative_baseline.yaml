@@ -11,7 +11,7 @@ training:
 
   iterative:
     iterative_training: true
-    non_adversarial_baseline: true
+    only_add_successful_adversarial_examples: false
     training_attack:
       attack_type: "brute_force"
       brute_force_tomita_attack_config:

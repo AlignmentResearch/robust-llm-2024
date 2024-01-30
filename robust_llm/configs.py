@@ -57,8 +57,8 @@ class IterativeTrainingConfig:
 
     # Whether to use iterative training.
     iterative_training: bool = False
-    # Whether to use the non-adversarial baseline or not
-    non_adversarial_baseline: bool = False
+    # Whether to add strictly adversarial examples or not
+    only_add_successful_adversarial_examples: bool = True
     # The minimum number of adversarial examples to add to the train set each
     # attack round.
     min_num_new_examples_to_add: int = 50

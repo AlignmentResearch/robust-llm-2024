@@ -220,9 +220,12 @@ class AdversarialTraining(Training):
             examples from the brute force dataset and testing only on those,
             rather than the default of checking against the entire brute force
             dataset.
-        non_adversarial_baseline:
-            If true, don't train on adversarial examples, just train on random
-            examples, whether or not the models gets them right.
+        only_add_successful_adversarial_examples:
+            If true, then only add examples that the model got wrong. If false,
+            then add random examples irrespective of whether the model got them
+            right or wrong. Note that these random examples are still taken from the
+            attack dataset, so unless the attack is very weak, the model is still
+            likely to get a large proportion of these examples wrong.
     """
 
     tokenizer: PreTrainedTokenizerBase
@@ -237,7 +240,7 @@ class AdversarialTraining(Training):
     adversarial_example_search_minibatch_size: int
     skip_first_training_round: bool = False
     use_probabilistic_robustness_check: bool = False
-    non_adversarial_baseline: bool = False
+    only_add_successful_adversarial_examples: bool = True
 
     def __post_init__(self):
         super().__post_init__()
@@ -372,7 +375,7 @@ class AdversarialTraining(Training):
 
             examples_to_actually_add_to_train_set = incorrect_predictions
 
-            if self.non_adversarial_baseline:
+            if not self.only_add_successful_adversarial_examples:
                 num_examples_to_add = (
                     self.min_num_new_examples_to_add
                     + self.adversarial_example_search_minibatch_size // 2
