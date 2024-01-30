@@ -124,6 +124,9 @@ class TrainingConfig:
     logging_steps: int | float = 500
     # The checkpoint to start from
     checkpoint: int = 142000
+    # Whether to log datasets to wandb. Off by default, as it takes a lot of space.
+    # For now, works only for the training pipeline.
+    log_datasets_to_wandb: bool = False
 
 
 @dataclass

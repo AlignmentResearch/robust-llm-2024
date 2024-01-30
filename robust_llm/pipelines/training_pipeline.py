@@ -1,7 +1,6 @@
 """Pipeline for adversarial training."""
 
 import wandb
-import yaml
 from omegaconf import OmegaConf
 
 from robust_llm.configs import OverallConfig
@@ -11,7 +10,7 @@ from robust_llm.pipelines.utils import (
     prepare_victim_model_and_tokenizer,
 )
 from robust_llm.training import AdversarialTraining, Training
-from robust_llm.utils import get_overlap
+from robust_llm.utils import get_overlap, log_config_to_wandb
 
 
 def run_training_pipeline(args: OverallConfig) -> None:
@@ -43,6 +42,7 @@ def run_training_pipeline(args: OverallConfig) -> None:
         },
         "model": model,
         "train_epochs": experiment.training.num_train_epochs,
+        "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
     }
 
     # Set up the training environment
@@ -68,13 +68,10 @@ def run_training_pipeline(args: OverallConfig) -> None:
     else:
         training = Training(**base_training_args)
 
-    # Log the training arguments to wandb
-    if not wandb.run:
-        raise ValueError("wandb should have been initialized by now, exiting...")
-    config_yaml = yaml.load(OmegaConf.to_yaml(experiment), Loader=yaml.FullLoader)
-    wandb.run.summary["experiment_yaml"] = config_yaml
+    log_config_to_wandb(args.experiment)
 
     # Log the train-val overlap to wandb
+    assert wandb.run is not None
     if (
         experiment.environment.train_set_size is not None
         and experiment.environment.validation_set_size is not None

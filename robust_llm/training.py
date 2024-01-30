@@ -46,6 +46,7 @@ class Training:
     eval_steps: int = 10
     logging_steps: int = 10
     trainer: Optional[Trainer] = None
+    log_datasets_to_wandb: bool = False
 
     def __post_init__(self):
         accuracy = evaluate.load("accuracy")
@@ -92,7 +93,8 @@ class Training:
     def run_trainer(self) -> None:
         trainer = self.setup_trainer()
 
-        self.log_datasets()
+        if self.log_datasets_to_wandb:
+            self.log_datasets()
 
         trainer.evaluate(eval_dataset=self.eval_dataset["validation"])  # type: ignore
 
@@ -348,7 +350,8 @@ class AdversarialTraining(Training):
                         validation_attack_dataset
                     )
 
-            self.log_datasets()
+            if self.log_datasets_to_wandb:
+                self.log_datasets()
 
             incorrect_predictions: dict[str, list[str]]
             number_examples_searched: int

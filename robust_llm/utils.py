@@ -4,6 +4,10 @@ import os
 from typing import TYPE_CHECKING, Any, Generator
 
 import numpy as np
+import yaml
+from omegaconf import OmegaConf
+
+from robust_llm.configs import ExperimentConfig
 
 if TYPE_CHECKING:
     from robust_llm.adversarial_trainer import AdversarialTrainer
@@ -141,6 +145,14 @@ def log_dataset_to_wandb(dataset: Dataset, dataset_name: str) -> None:
         dataset_table.add_data(text, label)
 
     wandb.log({dataset_name: dataset_table}, commit=False)
+
+
+def log_config_to_wandb(config: ExperimentConfig) -> None:
+    """Logs the job config to wandb."""
+    if not wandb.run:
+        raise ValueError("wandb should have been initialized by now, exiting...")
+    config_yaml = yaml.load(OmegaConf.to_yaml(config), Loader=yaml.FullLoader)
+    wandb.run.summary["experiment_yaml"] = config_yaml
 
 
 def ask_for_confirmation(prompt: str) -> bool:
