@@ -1,4 +1,5 @@
 import dataclasses
+import os
 from typing import Optional
 
 import evaluate
@@ -42,6 +43,8 @@ class Training:
     train_dataset: Dataset
     eval_dataset: dict[str, Dataset]
     model: PreTrainedModel
+    tokenizer: PreTrainedTokenizerBase
+    model_name_to_save: str  # Used for saving the model to disk/hf
     train_epochs: int = 3
     eval_steps: int = 10
     logging_steps: int = 10
@@ -56,18 +59,6 @@ class Training:
 
         self.metrics = evaluate.combine([accuracy, precision, recall, f1])
 
-        # TODO: it would be nice to not have to do this manually
-        # I'm concerned that by initializing wandb here, we're losing
-        # information that is stored when we let the trainer
-        # automatically initialize wandb
-        # https://docs.wandb.ai/guides/integrations/huggingface#customize-wandbinit
-        wandb.init(
-            project="robust-llm",
-            group=self.experiment_name,
-            job_type=self.job_type,
-            name=self.run_name,
-        )
-
     def setup_trainer(self) -> Trainer:
         hf_training_args = TrainingArguments(
             output_dir="test_trainer",
@@ -75,6 +66,7 @@ class Training:
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
+            hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
         )
 
         trainer = Trainer(
@@ -168,6 +160,32 @@ class Training:
 
         wandb.log(to_log, commit=False)
 
+    def maybe_save_model_to_path_or_hf(self, path_prefix_or_hf: Optional[str]) -> None:
+        assert self.trainer is not None
+        assert wandb.run is not None
+
+        if path_prefix_or_hf is None:
+            print("Not saving the model/tokenizer since no save path was specified")
+
+        elif path_prefix_or_hf == "hf":
+            hf_name = self.trainer.args.hub_model_id
+            wandb.run.summary["saved_hf_name"] = hf_name
+            print(f"Saving the model/tokenizer to HuggingFace as {hf_name}")
+            self.trainer.push_to_hub()
+            # Even though above line should push both model and tokenizer, in practice
+            # tokenizer sometimes doesn't get pushed, so we do it explicitly here.
+            assert self.trainer.hub_model_id is not None
+            self.tokenizer.push_to_hub(self.trainer.hub_model_id)
+
+        else:
+            output_dir = os.path.join(
+                path_prefix_or_hf, "models", self.model_name_to_save
+            )
+            wandb.run.summary["saved_dir"] = output_dir
+            print(f"Saving the model/tokenizer to {output_dir}")
+            self.trainer.save_model(output_dir)
+            self.tokenizer.save_pretrained(output_dir)
+
 
 @dataclasses.dataclass(kw_only=True)
 # TODO: make sure kw_only is not breaking anything.
@@ -178,9 +196,6 @@ class AdversarialTraining(Training):
     Creates an AdversarialTrainer wrapped for logging, etc.
 
     Parameters:
-        tokenizer:
-            Huggingface tokenizer used for tokenizing the dataset. Should match
-            the model we're using.
         num_iterative_training_rounds:
             One round of adversarial training involves first finding some number
             of adversarial examples, adding them to an "augmented train set",
@@ -228,7 +243,6 @@ class AdversarialTraining(Training):
             likely to get a large proportion of these examples wrong.
     """
 
-    tokenizer: PreTrainedTokenizerBase
     num_iterative_training_rounds: int
     dataset_type: str
     language_generator: Optional[Tomita]
@@ -266,6 +280,7 @@ class AdversarialTraining(Training):
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
+            hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
         )
         trainer = AdversarialTrainer(
             model=self.model,

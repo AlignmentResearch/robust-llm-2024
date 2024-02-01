@@ -62,10 +62,18 @@ If you have your hydra config prepared and want to run an experiment on the clus
 python run_batch_job.py --hydra_config=<HYDRA_CONFIG_NAME> [--experiment_name=<EXP_NAME> --job_type=<JOB_TYPE> --container_tag=<TAG>]
 ```
 
-As a requirement, you have to set up `docker` ([instructions](https://github.com/AlignmentResearch/flamingo/wiki/Docker-tutorial:-secure-credentials-and-basic-use#read-only-credentials-for-your-cluster-account)), `github-credentials` ([instructions](https://github.com/AlignmentResearch/flamingo/wiki/Build-Docker-images-on-the-cluster:-Kaniko#authentication-1-pulling-from-your-private-github-repo)), and `wandb` kubernetes secrets. For `wandb`, use the following command:
+As a requirement, you have to set up `docker` ([instructions](https://github.com/AlignmentResearch/flamingo/wiki/Docker-tutorial:-secure-credentials-and-basic-use#read-only-credentials-for-your-cluster-account)), `github-credentials` ([instructions](https://github.com/AlignmentResearch/flamingo/wiki/Build-Docker-images-on-the-cluster:-Kaniko#authentication-1-pulling-from-your-private-github-repo)), `wandb`, and `huggingface` kubernetes secrets.
+
+For `wandb`, use the following command:
 
 ```
 kubectl create secret generic wandb --from-literal=api-key=<YOUR_WANDB_API_KEY>
+```
+
+For `huggingface`, use the following command:
+
+```
+kubectl create secret generic huggingface --from-literal=token=<YOUR_HF_TOKEN>
 ```
 
 For now, we only support a single job. In the future we will probably add support for multiple jobs (like grid searches).

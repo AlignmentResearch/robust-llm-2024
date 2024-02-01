@@ -3,6 +3,8 @@ from typing import Optional
 
 from omegaconf import MISSING
 
+SHARED_DATA_DIR = "/robust_llm_data"
+
 
 @dataclass
 class BaselineTrainingConfig:
@@ -96,8 +98,10 @@ class IterativeTrainingConfig:
 class EnvironmentConfig:
     """Configs used in environment setup (including dataset)."""
 
-    # Model type
-    model_name: str = "bert-base-uncased"
+    # Either HF name or path to model checkpoint.
+    model_name_or_path: str = "bert-base-uncased"
+    # Whether the architecture is Pythia or not. Needed for loading the model.
+    is_pythia: bool = False
     # Dataset type (tomita, tensor_trust)
     dataset_type: str = "tomita"
     # How to generate the negative examples in the dataset
@@ -135,11 +139,15 @@ class TrainingConfig:
     eval_steps: Optional[int] = None
     # Number of update steps between two logs
     logging_steps: int | float = 500
-    # The checkpoint to start from
+    # The checkpoint to start from (relevant for Pythia only, for now)
     checkpoint: int = 142000
     # Whether to log datasets to wandb. Off by default, as it takes a lot of space.
     # For now, works only for the training pipeline.
     log_datasets_to_wandb: bool = False
+    # Where to save the final checkpoint. If None, the model is not saved.
+    # If "hf", the model is saved to HuggingFace. Otherwise, the model is
+    # saved to a location starting with the specified prefix.
+    model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
 
 
 @dataclass

@@ -10,7 +10,7 @@ from robust_llm.pipelines.utils import (
     prepare_victim_model_and_tokenizer,
 )
 from robust_llm.training import AdversarialTraining, Training
-from robust_llm.utils import get_overlap, log_config_to_wandb
+from robust_llm.utils import get_overlap, log_config_to_wandb, make_unique_name_to_save
 
 
 def run_training_pipeline(args: OverallConfig) -> None:
@@ -28,6 +28,15 @@ def run_training_pipeline(args: OverallConfig) -> None:
 
     robust_llm_datasets = prepare_datasets(args, tokenizer, language_generator)
 
+    # Initialize wandb early so that we have unique ID from wandb that can be used
+    # to set e.g. the HF hub model name.
+    wandb.init(
+        project="robust-llm",
+        group=experiment.experiment_name,
+        job_type=experiment.job_type,
+        name=experiment.run_name,
+    )
+
     # NOTE: the "validation" dataset is one of what will be
     # several datasets that we perform model evaluation on,
     # hence "eval_dataset" is a dict[str, Dataset], not a Dataset.
@@ -41,6 +50,10 @@ def run_training_pipeline(args: OverallConfig) -> None:
             "validation": robust_llm_datasets.tokenized_validation_dataset
         },
         "model": model,
+        "tokenizer": tokenizer,
+        "model_name_to_save": make_unique_name_to_save(
+            experiment.environment.model_name_or_path
+        ),
         "train_epochs": experiment.training.num_train_epochs,
         "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
     }
@@ -52,7 +65,6 @@ def run_training_pipeline(args: OverallConfig) -> None:
         training = AdversarialTraining(
             **base_training_args,
             num_iterative_training_rounds=it.num_iterative_training_rounds,
-            tokenizer=tokenizer,
             dataset_type=args.experiment.environment.dataset_type,
             language_generator=language_generator,
             training_attack_config=it.training_attack,
@@ -90,3 +102,7 @@ def run_training_pipeline(args: OverallConfig) -> None:
 
     # Perform the training
     training.run_trainer()
+
+    training.maybe_save_model_to_path_or_hf(
+        path_prefix_or_hf=experiment.training.model_save_path_prefix_or_hf
+    )

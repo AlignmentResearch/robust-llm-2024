@@ -17,6 +17,9 @@ spec:
         - name: working-storage
           persistentVolumeClaim:
             claimName: devbox-storage
+        - name: robust-llm-storage
+          persistentVolumeClaim:
+            claimName: robust-llm
       containers:
         - name: devbox-container
           image: ghcr.io/alignmentresearch/robust-llm:latest
@@ -30,6 +33,32 @@ spec:
           volumeMounts:
             - name: working-storage
               mountPath: /home/dev
+            - name: robust-llm-storage
+              mountPath: /robust_llm_data
+          env:
+            - name: GIT_ASKPASS
+              value: "true"
+            - name: GITHUB_PAT
+              valueFrom:
+                secretKeyRef:
+                  name: github-credentials
+                  key: pat
+            - name: GIT_CONFIG_PARAMETERS
+              value: "'credential.https://github.com.username=$(GITHUB_PAT)'"
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb
+                  key: api-key
+            - name: WANDB_ENTITY
+              value: "farai"
+            - name: WANDB_PROJECT
+              value: "robust-llm"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: huggingface
+                  key: token
       imagePullSecrets:
         - name: docker
       restartPolicy: Never

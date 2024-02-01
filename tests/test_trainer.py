@@ -40,6 +40,8 @@ def test_basic_constructor():
         train_dataset=tokenized_train_dataset,
         eval_dataset={"validation": tokenized_validation_dataset},
         model=model,
+        tokenizer=tokenizer,
+        model_name_to_save="test_model",
     )
 
 

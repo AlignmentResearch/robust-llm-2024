@@ -26,38 +26,44 @@ def prepare_victim_model_and_tokenizer(
 ) -> Tuple[PreTrainedModel, PreTrainedTokenizer]:
     print("Preparing model and tokenizer...")
 
-    model_name = args.experiment.environment.model_name
-
     # TODO(GH#103): make it compatible with tasks where num_labels > 2.
-    if "bert" in model_name:
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_name, num_labels=2
-        )
-        tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-    elif "pythia" in model_name:
-        checkpoint_step_number: int = args.experiment.training.checkpoint
-        checkpoint_string: str = f"step{checkpoint_step_number}"
-        pythia_version = model_name.split("/")[-1]
-        untyped_model = GPTNeoXForSequenceClassification.from_pretrained(
-            model_name,
-            revision=checkpoint_string,
-            cache_dir=f"./{pythia_version}/{checkpoint_string}",
+
+    model_name_or_path = args.experiment.environment.model_name_or_path
+
+    is_pythia = args.experiment.environment.is_pythia
+    # Note that the implication is only in one direction (i.e. we can have fine-tuned
+    # Pythia-based models that do not have "pythia" in their name).
+    if "pythia" in model_name_or_path:
+        assert is_pythia
+
+    if is_pythia:
+        revision = "main"  # default value for `revision` argument.
+        # One of the original Pythia checkpoints.
+        if model_name_or_path.startswith("EleutherAI/pythia"):
+            checkpoint_step_number: int = args.experiment.training.checkpoint
+            revision = f"step{checkpoint_step_number}"
+
+        model = GPTNeoXForSequenceClassification.from_pretrained(
+            model_name_or_path,
+            revision=revision,
             use_cache=False,  # otherwise returns last key/values attentions
             num_labels=2,
         )
-        assert isinstance(untyped_model, PreTrainedModel)
-        model = untyped_model
+        assert isinstance(model, PreTrainedModel)
+
         tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
-            revision=checkpoint_string,
-            cache_dir=f"./{pythia_version}/{checkpoint_string}",
-            use_fast=True,
+            model_name_or_path,
+            revision=revision,
             model_max_length=512,  # TODO: check this number
         )
         tokenizer.pad_token = tokenizer.eos_token
         model.config.pad_token_id = model.config.eos_token_id
     else:
-        raise ValueError(f"Unknown model name {model_name}")
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_name_or_path, num_labels=2
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
     return model, tokenizer
 

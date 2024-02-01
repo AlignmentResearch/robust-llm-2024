@@ -170,3 +170,11 @@ def div_maybe_nan(a: int, b: int) -> float:
     if b == 0:
         return float("nan")
     return a / b
+
+
+def make_unique_name_to_save(base_name_or_path: str) -> str:
+    """Get a unique name used for saving the model."""
+    base_processed = base_name_or_path.replace("/", "_")
+    # Use wandb run ID as a unique identifier.
+    assert wandb.run is not None
+    return f"{wandb.run.id}_from_{base_processed}"
