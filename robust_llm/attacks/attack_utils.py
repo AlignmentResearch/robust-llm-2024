@@ -3,6 +3,7 @@ import transformers
 
 from robust_llm.attacks.attack import Attack, IdentityAttack
 from robust_llm.attacks.brute_force_tomita import BruteForceTomitaAttack
+from robust_llm.attacks.random_token_attack import RandomTokenAttack
 from robust_llm.attacks.text_attack import TEXT_ATTACK_ATTACK_TYPES, TextAttackAttack
 from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
@@ -27,6 +28,13 @@ def create_attack(
             modifiable_chunks_spec=modifiable_chunks_spec,
             dataset_type=dataset_type,
             language_generator_name=language_generator_name,
+        )
+    elif attack_config.attack_type == "random_token":
+        return RandomTokenAttack(
+            attack_config=attack_config,
+            modifiable_chunks_spec=modifiable_chunks_spec,
+            dataset_type=dataset_type,
+            tokenizer=tokenizer,
         )
     elif attack_config.attack_type in TEXT_ATTACK_ATTACK_TYPES:
         return TextAttackAttack(

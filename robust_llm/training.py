@@ -336,6 +336,14 @@ class AdversarialTraining(Training):
                 )
 
                 self.training_attack_dataset = training_attack_dataset
+                print(
+                    "Training attack dataset has size",
+                    len(training_attack_dataset["text"]),
+                )
+                print(
+                    "The first few examples are:",
+                    training_attack_dataset["text"][:5],
+                )
 
             if i == 0 or self.validation_attack_config.repeat_attack_every_round:
                 validation_attack_dataset = Dataset.from_dict(
@@ -372,6 +380,7 @@ class AdversarialTraining(Training):
             )
 
             print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
+            print("Some examples are:", incorrect_predictions["text"][:5])
 
             examples_to_actually_add_to_train_set = incorrect_predictions
 

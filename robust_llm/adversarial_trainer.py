@@ -153,7 +153,7 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
         assert isinstance(self.training.trainer, AdversarialTrainer)
         augmented_train_set = self.training.trainer.get_augmented_training_set()
 
-        # Record how much of the brute force attack set is in the train set
+        # Record how much of the validation set is in the train set
         overlap = get_overlap(
             self.training.eval_dataset["validation"],
             augmented_train_set,

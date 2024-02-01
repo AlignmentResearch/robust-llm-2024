@@ -34,6 +34,16 @@ class BruteForceTomitaAttackConfig:
 
 
 @dataclass
+class RandomTokenAttackConfig:
+    """Options specific for RandomToken attacks."""
+
+    # Minimum number of tokens to generate.
+    min_tokens: int = 1
+    # Maximum number of tokens to generate.
+    max_tokens: int = 3
+
+
+@dataclass
 class AttackConfig:
     """Configs used in attack setup."""
 
@@ -49,6 +59,9 @@ class AttackConfig:
         BruteForceTomitaAttackConfig()
     )
     text_attack_attack_config: TextAttackAttackConfig = TextAttackAttackConfig()
+    random_token_attack_attack_config: RandomTokenAttackConfig = (
+        RandomTokenAttackConfig()
+    )
 
 
 @dataclass
