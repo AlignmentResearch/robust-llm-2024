@@ -33,7 +33,6 @@ def test_basic_constructor():
     )
 
     Training(
-        hparams={},
         experiment_name="test-experiment",
         job_type="test-job_type",
         run_name="test-run",

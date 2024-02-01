@@ -1,0 +1,13 @@
+experiment_type: "evaluation"
+
+environment:
+  model_name_or_path: "EleutherAI/pythia-14m"
+  is_pythia: true
+  dataset_type: "hf/imdb"
+
+evaluation:
+  batch_size: 64
+  evaluation_attack:
+    attack_type: "textfooler"
+    text_attack_attack_config:
+      query_budget: 300

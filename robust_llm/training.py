@@ -36,7 +36,6 @@ from robust_llm.utils import (
 
 @dataclasses.dataclass
 class Training:
-    hparams: dict
     experiment_name: str
     run_name: str
     job_type: str
@@ -46,6 +45,9 @@ class Training:
     tokenizer: PreTrainedTokenizerBase
     model_name_to_save: str  # Used for saving the model to disk/hf
     train_epochs: int = 3
+    learning_rate: float = 5e-5
+    train_batch_size: int = 8
+    eval_batch_size: int = 8
     eval_steps: int = 10
     logging_steps: int = 10
     trainer: Optional[Trainer] = None
@@ -63,6 +65,9 @@ class Training:
         hf_training_args = TrainingArguments(
             output_dir="test_trainer",
             num_train_epochs=self.train_epochs,
+            learning_rate=self.learning_rate,
+            per_device_train_batch_size=self.train_batch_size,
+            per_device_eval_batch_size=self.eval_batch_size,
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
@@ -277,6 +282,9 @@ class AdversarialTraining(Training):
         hf_training_args = TrainingArguments(
             output_dir="adversarial_trainer",
             num_train_epochs=self.train_epochs,
+            learning_rate=self.learning_rate,
+            per_device_train_batch_size=self.train_batch_size,
+            per_device_eval_batch_size=self.eval_batch_size,
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,

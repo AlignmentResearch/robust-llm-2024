@@ -37,11 +37,14 @@ def run_training_pipeline(args: OverallConfig) -> None:
         name=experiment.run_name,
     )
 
+    model_name_to_save = (
+        args.experiment.training.force_name_to_save
+        or make_unique_name_to_save(experiment.environment.model_name_or_path)
+    )
     # NOTE: the "validation" dataset is one of what will be
     # several datasets that we perform model evaluation on,
     # hence "eval_dataset" is a dict[str, Dataset], not a Dataset.
     base_training_args = {
-        "hparams": {},
         "experiment_name": experiment.experiment_name,
         "run_name": experiment.run_name,
         "job_type": experiment.job_type,
@@ -51,10 +54,13 @@ def run_training_pipeline(args: OverallConfig) -> None:
         },
         "model": model,
         "tokenizer": tokenizer,
-        "model_name_to_save": make_unique_name_to_save(
-            experiment.environment.model_name_or_path
-        ),
+        "model_name_to_save": model_name_to_save,
         "train_epochs": experiment.training.num_train_epochs,
+        "learning_rate": experiment.training.learning_rate,
+        "train_batch_size": experiment.training.batch_size,
+        "eval_batch_size": experiment.evaluation.batch_size,
+        "logging_steps": experiment.training.logging_steps,
+        "eval_steps": experiment.training.eval_steps,
         "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
     }
 

@@ -25,6 +25,8 @@ class TextAttackAttackConfig:
     query_budget: int = 100
     # Number of examples to attack. If -1, attack whole dataset.
     num_examples: int = -1
+    # If silent, TextAttack will only print errors.
+    silent: bool = True
 
 
 @dataclass
@@ -135,6 +137,8 @@ class TrainingConfig:
     iterative: IterativeTrainingConfig = IterativeTrainingConfig()
     baseline: BaselineTrainingConfig = BaselineTrainingConfig()
     num_train_epochs: int = 3
+    learning_rate: float = 5e-5
+    batch_size: int = 8
     # Number of update steps between two evaluations
     eval_steps: Optional[int] = None
     # Number of update steps between two logs
@@ -148,12 +152,16 @@ class TrainingConfig:
     # If "hf", the model is saved to HuggingFace. Otherwise, the model is
     # saved to a location starting with the specified prefix.
     model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
+    # If not specified, a unique id will be created for the saved model. Otherwise,
+    # the specified name will be used and it is responsilibity of the user to make
+    # sure that the name is unique.
+    force_name_to_save: Optional[str] = None
 
 
 @dataclass
 class EvaluationConfig:
     # The mini-batch size used to iterate over the dataset when evaluating.
-    batch_size: int = 4
+    batch_size: int = 8
     # Config for the attack to use in evaluation.
     evaluation_attack: AttackConfig = AttackConfig()
     # The number of examples to generate for the evaluation attack. Should be specified

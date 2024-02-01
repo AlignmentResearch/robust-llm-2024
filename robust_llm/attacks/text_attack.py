@@ -54,6 +54,10 @@ class TextAttackAttack(Attack):
             num_examples=self.attack_config.text_attack_attack_config.num_examples,
             query_budget=self.attack_config.text_attack_attack_config.query_budget,
             random_seed=self.attack_config.seed,
+            # Despite TextAttack's documentation, we need to set both of these
+            # to actually make the attack silent.
+            silent=self.attack_config.text_attack_attack_config.silent,
+            disable_stdout=self.attack_config.text_attack_attack_config.silent,
         )
 
     @override
