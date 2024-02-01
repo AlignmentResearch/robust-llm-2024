@@ -63,7 +63,7 @@ def run_training_pipeline(args: OverallConfig) -> None:
             adversarial_example_search_minibatch_size=it.adversarial_example_search_minibatch_size,  # noqa: E501
             skip_first_training_round=it.skip_first_training_round,
             use_probabilistic_robustness_check=it.use_probabilistic_robustness_check,
-            non_adversarial_baseline=it.non_adversarial_baseline,
+            only_add_successful_adversarial_examples=it.only_add_successful_adversarial_examples,  # noqa: E501
         )
     else:
         training = Training(**base_training_args)

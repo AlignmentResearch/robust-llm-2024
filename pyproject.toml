@@ -43,3 +43,4 @@ known_third_party = ["wandb"]  # necessary because of "wandb" directory
 venvPath = "."
 venv = "venv"
 include = ["robust_llm"]
+pythonVersion = "3.10"

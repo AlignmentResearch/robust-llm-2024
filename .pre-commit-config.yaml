@@ -21,6 +21,6 @@ repos:
     hooks:
       - id: flake8
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.346
+    rev: v1.1.349
     hooks:
       - id: pyright
