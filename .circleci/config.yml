@@ -69,6 +69,11 @@ jobs:
             pyright --version
             pyright .
       - run:
+          name: mypy
+          command: |
+            mypy --version
+            mypy --follow-imports=silent --show-error-codes --check-untyped-defs robust_llm/ tests/
+      - run:
           name: flake8
           command: |
             flake8 --version

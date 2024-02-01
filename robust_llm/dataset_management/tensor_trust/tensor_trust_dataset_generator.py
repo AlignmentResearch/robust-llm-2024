@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from random import seed as py_seed
-from typing import Literal, Optional, Tuple, get_args
+from typing import Literal, Tuple, get_args
 
 import numpy as np
 from datasets import Dataset
@@ -268,8 +268,7 @@ def _generate_and_save_dataset(
     dataset_path: str = DATASET_PATH,
     dataset_size: int = DEFAULT_DATASET_LENGTH,
     seed: int = RANDOM_SEED,
-    return_dataset: bool = False,
-) -> Optional[tuple[list[str], list[str], list[str]]]:
+) -> None:
     """Generates 'dataset_size' examples and writes them to a default path.
 
     Each example consists of both a positive example with the correct password
@@ -296,9 +295,6 @@ def _generate_and_save_dataset(
         f.writelines(line + "\n" for line in queries)
     with open(f"{dataset_path}/labels_{dataset_size}_seed_{seed}.txt", "w") as f:
         f.writelines(line + "\n" for line in labels)
-
-    if return_dataset:
-        return contexts, queries, labels
 
 
 class WordTweaker:

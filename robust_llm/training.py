@@ -269,11 +269,11 @@ class AdversarialTraining(Training):
 
         # Standardize the language generator name
         if self.language_generator is None:
-            self.language_generator_name = (
+            self.language_generator_name: str = (
                 "(no language generator, tensor trust setting)"
             )
         else:
-            self.language_generator_name: str = self.language_generator.name
+            self.language_generator_name = self.language_generator.name
 
         self.current_iterative_training_round: int = 0
 

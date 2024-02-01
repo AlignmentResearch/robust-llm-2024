@@ -44,7 +44,11 @@ class AttackResults:
         Returns:
             `AttackResults` object
         """
-        original_maybe_preds = original_preds or [None] * len(labels)
+        original_maybe_preds: Sequence[Optional[int]]
+        if original_preds:
+            original_maybe_preds = original_preds
+        else:
+            original_maybe_preds = [None] * len(labels)
         assert len(labels) == len(original_maybe_preds) == len(attacked_preds)
 
         n_successes, n_failures, n_mistakes_before_attack = 0, 0, 0

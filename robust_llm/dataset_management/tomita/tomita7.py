@@ -39,7 +39,7 @@ class Tomita7(Tomita):  # 0*1*0*1*
 
             cutoffs_0_to_1 = self.rng.beta(a=2, b=5, size=(4,))
             cutoffs = cutoffs_0_to_1 * self.max_length
-            cutoffs = [int(np.round(el)) for el in cutoffs]
+            rounded_cutoffs = [int(round(el)) for el in cutoffs]
 
             digit_list = []
             for i, star_value in enumerate(star_values):
@@ -47,7 +47,7 @@ class Tomita7(Tomita):  # 0*1*0*1*
                 if star_value == 0:
                     continue
                 elif star_value == 1:
-                    list_to_merge = [current_digit] * cutoffs[i]
+                    list_to_merge = [current_digit] * rounded_cutoffs[i]
                     digit_list += list_to_merge
                 else:
                     raise ValueError("star_value must be 0 or 1")

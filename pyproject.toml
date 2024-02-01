@@ -23,9 +23,11 @@ dependencies = [
 dev = [
     "black",
     "isort",
-    "mypy",
     "pre-commit",
+    "mypy",
     "pyright",
+    # Needed for mypy to type check PyYAML
+    "types-PyYAML",
     "pytest",
     "pytest-cov",
     "flake8",
@@ -44,3 +46,7 @@ venvPath = "."
 venv = "venv"
 include = ["robust_llm"]
 pythonVersion = "3.10"
+
+[tool.mypy]
+ignore_missing_imports = true
+mypy_path = ["robust_llm", "tests"]

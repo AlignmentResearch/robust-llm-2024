@@ -24,3 +24,20 @@ repos:
     rev: v1.1.349
     hooks:
       - id: pyright
+  # Hooks that run in local environment (not isolated venv) as they need
+  # same dependencies as our package.
+  - repo: local
+    hooks:
+      # Run mypy directly from local repo rather than using mirror-mypy
+      # so that it uses installed dependencies. Adapted from:
+      # https://jaredkhan.com/blog/mypy-pre-commit
+      - id: mypy
+        name: mypy
+        language: system
+        types: [python]
+        entry: mypy --follow-imports=silent --show-error-codes --check-untyped-defs
+        # use require_serial so that script
+        # is only called once per commit
+        require_serial: true
+        # Print the number of files as a sanity-check
+        verbose: true

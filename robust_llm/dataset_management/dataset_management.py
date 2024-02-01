@@ -47,7 +47,7 @@ def generate_robust_llm_datasets(
             f"Unknown dataset_generation_style {dataset_generation_style}, exiting..."
         )
 
-    modifiable_chunks_spec = (True,)
+    modifiable_chunks_spec: tuple[bool, ...] = (True,)
 
     if dataset_type == "tensor_trust":
         train_set, validation_set = get_tensor_trust_dataset(

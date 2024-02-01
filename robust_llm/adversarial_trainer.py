@@ -20,11 +20,14 @@ from robust_llm.utils import get_overlap, tokenize_dataset
 
 
 class AdversarialTrainer(Trainer):
+    train_dataset: Dataset | None
+
     def __init__(self, **trainer_kwargs):
         super().__init__(**trainer_kwargs)
 
         # text_chunked is not needed for training.
         # Remove it so that it's possible to merge datasets later on.
+        assert self.train_dataset is not None
         if "text_chunked" in self.train_dataset.features:
             self.train_dataset = self.train_dataset.remove_columns("text_chunked")
 
