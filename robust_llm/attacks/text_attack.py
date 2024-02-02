@@ -11,7 +11,7 @@ from robust_llm.attacks.attack import Attack
 from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 
-TEXT_ATTACK_ATTACK_TYPES = ["textfooler"]
+TEXT_ATTACK_ATTACK_TYPES = ["textfooler", "bae", "checklist", "pso"]
 
 
 class TextAttackAttack(Attack):
@@ -45,6 +45,18 @@ class TextAttackAttack(Attack):
 
         if attack_config.attack_type == "textfooler":
             self._attack = textattack.attack_recipes.TextFoolerJin2019.build(
+                model_wrapper=wrapped_model
+            )
+        elif attack_config.attack_type == "bae":
+            self._attack = textattack.attack_recipes.BAEGarg2019.build(
+                model_wrapper=wrapped_model
+            )
+        elif attack_config.attack_type == "checklist":
+            self._attack = textattack.attack_recipes.CheckList2020.build(
+                model_wrapper=wrapped_model
+            )
+        elif attack_config.attack_type == "pso":
+            self._attack = textattack.attack_recipes.PSOZang2020.build(
                 model_wrapper=wrapped_model
             )
         else:

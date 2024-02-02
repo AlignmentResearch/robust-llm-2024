@@ -1,7 +1,7 @@
 experiment_type: "evaluation"
 
 environment:
-  model_name: "textattack/bert-base-uncased-imdb"
+  model_name_or_path: "textattack/bert-base-uncased-imdb"
   dataset_type: "hf/imdb"
   validation_set_size: 20
   shuffle_validation_set: true
