@@ -20,7 +20,7 @@ def main(args):
         PRIORITY=args.priority,
     )
 
-    launch_jobs([run], dry_run=args.dryrun)
+    launch_jobs([run], dry_run=args.dryrun, experiment_name=args.experiment_name)
 
 
 def parse_args() -> argparse.Namespace:
