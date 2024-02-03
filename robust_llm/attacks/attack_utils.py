@@ -1,4 +1,3 @@
-import torch
 import transformers
 
 from robust_llm.attacks.attack import Attack, IdentityAttack
@@ -7,13 +6,14 @@ from robust_llm.attacks.random_token_attack import RandomTokenAttack
 from robust_llm.attacks.text_attack import TEXT_ATTACK_ATTACK_TYPES, TextAttackAttack
 from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.utils import LanguageModel
 
 
 def create_attack(
     attack_config: AttackConfig,
     modifiable_chunks_spec: ModifiableChunksSpec,
     dataset_type: str,
-    model: torch.nn.Module,
+    model: LanguageModel,
     tokenizer: transformers.PreTrainedTokenizerBase,
     language_generator_name: str,
 ) -> Attack:

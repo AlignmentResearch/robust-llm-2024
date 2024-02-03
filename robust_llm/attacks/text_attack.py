@@ -1,17 +1,44 @@
 import copy
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
 import textattack
-import torch
 import transformers
 from datasets import Dataset
+from transformers import PreTrainedTokenizerBase
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
 from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.defenses.defense import DefendedModel
+from robust_llm.utils import LanguageModel
 
 TEXT_ATTACK_ATTACK_TYPES = ["textfooler", "bae", "checklist", "pso"]
+
+
+class LanguageModelWrapper(textattack.models.wrappers.HuggingFaceModelWrapper):
+    """Wrapper for TextAttack's `HuggingFaceModelWrapper` to allow compatibility with
+    the `DefendedModel` class."""
+
+    def __init__(
+        self,
+        model: Union[transformers.PreTrainedModel, DefendedModel],
+        tokenizer: PreTrainedTokenizerBase,
+    ):
+        assert isinstance(model, (transformers.PreTrainedModel, DefendedModel)), (
+            "`model` must be of type `transformers.PreTrainedModel` "
+            f"or `DefendedModel`, but got type {type(model)}."
+        )
+        assert isinstance(
+            tokenizer,
+            transformers.PreTrainedTokenizerBase,
+        ), (
+            f"`tokenizer` must of type `transformers.PreTrainedTokenizerBase`, "
+            f"but got type {type(tokenizer)}."
+        )
+
+        self.model = model
+        self.tokenizer = tokenizer
 
 
 class TextAttackAttack(Attack):
@@ -23,7 +50,7 @@ class TextAttackAttack(Attack):
         self,
         attack_config: AttackConfig,
         modifiable_chunks_spec: ModifiableChunksSpec,
-        model: torch.nn.Module,
+        model: LanguageModel,
         tokenizer: transformers.PreTrainedTokenizerBase,
     ) -> None:
         """Constructor for TextAttackAttack.
@@ -39,9 +66,11 @@ class TextAttackAttack(Attack):
 
         assert modifiable_chunks_spec == (True,)
 
-        wrapped_model = textattack.models.wrappers.HuggingFaceModelWrapper(
-            model, tokenizer
+        assert isinstance(model, (transformers.PreTrainedModel, DefendedModel)), (
+            "`model` must be of type `transformers.PreTrainedModel` "
+            f"or `DefendedModel`, but got type {type(model)}."
         )
+        wrapped_model = LanguageModelWrapper(model, tokenizer)
 
         if attack_config.attack_type == "textfooler":
             self._attack = textattack.attack_recipes.TextFoolerJin2019.build(

@@ -8,7 +8,7 @@ from robust_llm.pipelines.utils import (
     prepare_attack,
     prepare_datasets,
     prepare_language_generator,
-    prepare_victim_model_and_tokenizer,
+    prepare_victim_models,
 )
 from robust_llm.utils import log_config_to_wandb
 
@@ -23,7 +23,7 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
 
     log_config_to_wandb(args.experiment)
 
-    model, tokenizer = prepare_victim_model_and_tokenizer(args)
+    model, tokenizer, _ = prepare_victim_models(args)
 
     language_generator = prepare_language_generator(args)
 

@@ -1,0 +1,25 @@
+experiment_name: "paraphrase_defense_example"
+job_type: "defense"
+experiment_type: "defense"
+
+training:
+  num_train_epochs: 1
+
+environment:
+  dataset_type: "hf/imdb"
+  model_name: "textattack/bert-base-uncased-imdb"
+  train_set_size: 10
+  validation_set_size: 10
+
+defense:
+  defense_type: "paraphrase"
+  paraphrase_defense_config:
+    model_name: "gpt2"
+    temperature: 0.7
+    meta_prompt: "Paraphrase the following sentences: "
+
+evaluation:
+  evaluation_attack:
+    attack_type: "textfooler"
+    text_attack_attack_config:
+      query_budget: 400

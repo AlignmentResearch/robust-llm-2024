@@ -6,6 +6,7 @@ import hydra
 from hydra.core.config_store import ConfigStore
 
 from robust_llm.configs import OverallConfig
+from robust_llm.pipelines.defense_pipeline import run_defense_pipeline
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 from robust_llm.pipelines.scaling_experiments import run_scaling_experiments_pipeline
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
@@ -16,6 +17,7 @@ cs.store(name="base_config", node=OverallConfig)
 
 EXPERIMENT_TYPE_TO_PIPELINE = {
     "training": run_training_pipeline,
+    "defense": run_defense_pipeline,
     "evaluation": run_evaluation_pipeline,
     "scaling_experiments": run_scaling_experiments_pipeline,
 }

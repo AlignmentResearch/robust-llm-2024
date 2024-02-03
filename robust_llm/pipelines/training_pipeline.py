@@ -1,26 +1,31 @@
 """Pipeline for adversarial training."""
 
+from typing import Tuple
+
 import wandb
 from omegaconf import OmegaConf
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from robust_llm.configs import OverallConfig
 from robust_llm.pipelines.utils import (
     prepare_datasets,
     prepare_language_generator,
-    prepare_victim_model_and_tokenizer,
+    prepare_victim_models,
 )
 from robust_llm.training import AdversarialTraining, Training
 from robust_llm.utils import get_overlap, log_config_to_wandb, make_unique_name_to_save
 
 
-def run_training_pipeline(args: OverallConfig) -> None:
+def run_training_pipeline(
+    args: OverallConfig,
+) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase, PreTrainedModel | None]:
     experiment = args.experiment
 
     print("Configuration arguments:\n")
     print(OmegaConf.to_yaml(experiment))
     print()
 
-    model, tokenizer = prepare_victim_model_and_tokenizer(args)
+    model, tokenizer, decoder = prepare_victim_models(args)
 
     # TODO(michal): Refactor this so that it is not created this early.
     # It is just a specific thing used in Tomita experiments.
@@ -59,8 +64,8 @@ def run_training_pipeline(args: OverallConfig) -> None:
         "learning_rate": experiment.training.learning_rate,
         "train_batch_size": experiment.training.batch_size,
         "eval_batch_size": experiment.evaluation.batch_size,
-        "logging_steps": experiment.training.logging_steps,
         "eval_steps": experiment.training.eval_steps,
+        "logging_steps": experiment.training.logging_steps,
         "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
     }
 
@@ -112,3 +117,5 @@ def run_training_pipeline(args: OverallConfig) -> None:
     training.maybe_save_model_to_path_or_hf(
         path_prefix_or_hf=experiment.training.model_save_path_prefix_or_hf
     )
+
+    return model, tokenizer, decoder

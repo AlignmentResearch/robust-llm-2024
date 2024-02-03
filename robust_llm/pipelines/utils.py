@@ -5,9 +5,11 @@ from typing import Optional, Tuple
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    BertLMHeadModel,
+    GPTNeoXForCausalLM,
     GPTNeoXForSequenceClassification,
     PreTrainedModel,
-    PreTrainedTokenizer,
+    PreTrainedTokenizerBase,
 )
 
 from robust_llm.attacks.attack import Attack
@@ -19,29 +21,22 @@ from robust_llm.dataset_management.dataset_management import (
 )
 from robust_llm.dataset_management.tomita import make_language_generator
 from robust_llm.dataset_management.tomita.tomita import Tomita
+from robust_llm.utils import LanguageModel
 
 
-def prepare_victim_model_and_tokenizer(
-    args: OverallConfig,
-) -> Tuple[PreTrainedModel, PreTrainedTokenizer]:
-    print("Preparing model and tokenizer...")
-
+def _prepare_model(
+    model_name_or_path: str,
+    is_pythia: bool,
+    checkpoint: Optional[int],
+) -> PreTrainedModel:
     # TODO(GH#103): make it compatible with tasks where num_labels > 2.
 
-    model_name_or_path = args.experiment.environment.model_name_or_path
-
-    is_pythia = args.experiment.environment.is_pythia
-    # Note that the implication is only in one direction (i.e. we can have fine-tuned
-    # Pythia-based models that do not have "pythia" in their name).
-    if "pythia" in model_name_or_path:
-        assert is_pythia
-
     if is_pythia:
-        revision = "main"  # default value for `revision` argument.
+        revision = "main"
         # One of the original Pythia checkpoints.
         if model_name_or_path.startswith("EleutherAI/pythia"):
-            checkpoint_step_number: int = args.experiment.training.checkpoint
-            revision = f"step{checkpoint_step_number}"
+            assert checkpoint is not None
+            revision = f"step{checkpoint}"
 
         model = GPTNeoXForSequenceClassification.from_pretrained(
             model_name_or_path,
@@ -50,6 +45,26 @@ def prepare_victim_model_and_tokenizer(
             num_labels=2,
         )
         assert isinstance(model, PreTrainedModel)
+        model.config.pad_token_id = model.config.eos_token_id
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_name_or_path, num_labels=2
+        )
+
+    return model
+
+
+def _prepare_tokenizer(
+    model_name_or_path: str,
+    is_pythia: bool,
+    checkpoint: Optional[int],
+) -> PreTrainedTokenizerBase:
+    if is_pythia:
+        revision = "main"
+        # One of the original Pythia checkpoints.
+        if model_name_or_path.startswith("EleutherAI/pythia"):
+            assert checkpoint is not None
+            revision = f"step{checkpoint}"
 
         tokenizer = AutoTokenizer.from_pretrained(
             model_name_or_path,
@@ -57,15 +72,81 @@ def prepare_victim_model_and_tokenizer(
             model_max_length=512,  # TODO: check this number
         )
         tokenizer.pad_token = tokenizer.eos_token
-        model.config.pad_token_id = model.config.eos_token_id
     else:
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_name_or_path, num_labels=2
-        )
-
         tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
-    return model, tokenizer
+    return tokenizer
+
+
+def _prepare_decoder(
+    decoder_name: str,
+    is_pythia: bool,
+    checkpoint: Optional[int],
+) -> PreTrainedModel:
+    # TODO(GH#103): make it compatible with tasks where num_labels > 2.
+    if "bert" in decoder_name:
+        decoder = BertLMHeadModel.from_pretrained(decoder_name, is_decoder=True)
+        assert isinstance(decoder, PreTrainedModel)
+    elif is_pythia:
+        revision = "main"
+        # One of the original Pythia checkpoints.
+        if decoder_name.startswith("EleutherAI/pythia"):
+            assert checkpoint is not None
+            revision = f"step{checkpoint}"
+        decoder = GPTNeoXForCausalLM.from_pretrained(
+            decoder_name,
+            revision=revision,
+            use_cache=False,  # otherwise returns last key/values attentions
+        )
+        assert isinstance(decoder, PreTrainedModel)
+        decoder.config.pad_token_id = decoder.config.eos_token_id
+    else:
+        raise ValueError(f"Unknown model name {decoder_name}")
+
+    return decoder
+
+
+def prepare_victim_models(
+    args: OverallConfig,
+) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase, Optional[PreTrainedModel]]:
+    """Returns the victim model, tokenizer, and optionally decoder used in defenses."""
+
+    print("Preparing model and tokenizer (and maybe decoder)...")
+
+    model_name_or_path = args.experiment.environment.model_name_or_path
+    decoder_name = args.experiment.environment.decoder_name
+    is_pythia = args.experiment.environment.is_pythia
+    checkpoint = args.experiment.training.checkpoint
+
+    # Note that the implication is only in one direction (i.e. we can have fine-tuned
+    # Pythia-based models that do not have "pythia" in their name).
+    if "pythia" in model_name_or_path or "pythia" in (decoder_name or ""):
+        assert is_pythia
+
+    model = _prepare_model(
+        model_name_or_path=model_name_or_path,
+        is_pythia=is_pythia,
+        checkpoint=checkpoint,
+    )
+    tokenizer = _prepare_tokenizer(
+        model_name_or_path=model_name_or_path,
+        is_pythia=is_pythia,
+        checkpoint=checkpoint,
+    )
+
+    decoder = None
+    if decoder_name is not None:
+        decoder = _prepare_decoder(
+            decoder_name=decoder_name, is_pythia=is_pythia, checkpoint=checkpoint
+        )
+        decoder_tokenizer = _prepare_tokenizer(
+            model_name_or_path=decoder_name, is_pythia=is_pythia, checkpoint=checkpoint
+        )
+
+        # Assert that tokenizers are the same. This check is of course not ideal.
+        assert tokenizer.get_vocab() == decoder_tokenizer.get_vocab()
+
+    return model, tokenizer, decoder
 
 
 def prepare_language_generator(args: OverallConfig) -> Optional[Tomita]:
@@ -82,7 +163,7 @@ def prepare_language_generator(args: OverallConfig) -> Optional[Tomita]:
 
 def prepare_datasets(
     args: OverallConfig,
-    tokenizer: PreTrainedTokenizer,
+    tokenizer: PreTrainedTokenizerBase,
     language_generator: Optional[Tomita],
 ) -> RobustLLMDatasets:
     print("Preparing datasets...")
@@ -100,8 +181,8 @@ def prepare_datasets(
 
 def prepare_attack(
     args: OverallConfig,
-    model: PreTrainedModel,
-    tokenizer: PreTrainedTokenizer,
+    model: LanguageModel,
+    tokenizer: PreTrainedTokenizerBase,
     robust_llm_datasets: RobustLLMDatasets,
     training: bool,
 ) -> Attack:

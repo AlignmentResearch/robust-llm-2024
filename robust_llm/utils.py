@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import abc
 import os
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Protocol
 
 import numpy as np
+import torch
 import yaml
 from omegaconf import OmegaConf
+from torch.nn.parameter import Parameter
 
 from robust_llm.configs import ExperimentConfig
 
@@ -14,16 +17,74 @@ if TYPE_CHECKING:
 
 import wandb
 from datasets import Dataset
-from transformers import PreTrainedTokenizerBase, Trainer
+from transformers import PretrainedConfig, PreTrainedTokenizerBase, Trainer
+
+
+class LanguageModel(Protocol):
+    """Protocol for a language model.
+
+    This is used to unify:
+    1) the defence pipeline's `DefendedModel` class
+    2) HuggingFace's `transformers.PreTrainedModel` class.
+    """
+
+    @abc.abstractmethod
+    def __call__(self, **inputs) -> Any:
+        """Run the inputs through self.model, with required safety considerations."""
+        pass
+
+    @property
+    @abc.abstractmethod
+    def config(self) -> PretrainedConfig:
+        pass
+
+    @abc.abstractmethod
+    def to(self, *args, **kwargs) -> LanguageModel:
+        pass
+
+    @abc.abstractmethod
+    def forward(self, **inputs):
+        pass
+
+    @abc.abstractmethod
+    def train(self) -> LanguageModel:
+        pass
+
+    @abc.abstractmethod
+    def eval(self) -> LanguageModel:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def device(self) -> torch.device:
+        pass
+
+    @property
+    @abc.abstractmethod
+    def training(self) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def parameters(self) -> Iterator[Parameter]:
+        pass
 
 
 def tokenize_dataset(
-    dataset: Dataset | dict[str, Any], tokenizer: PreTrainedTokenizerBase
+    dataset: Dataset | dict[str, Any],
+    tokenizer: PreTrainedTokenizerBase,
+    padding: str = "max_length",
+    truncation: bool = True,
+    return_tensors: Optional[str] = None,
 ) -> dict[str, Any]:
     if isinstance(dataset, Dataset):
         dataset = {key: dataset[key] for key in dataset.features.keys()}
     # Padding seems necessary in order to avoid an error
-    tokenized_data = tokenizer(dataset["text"], padding="max_length", truncation=True)
+    tokenized_data = tokenizer(
+        dataset["text"],
+        padding=padding,
+        truncation=truncation,
+        return_tensors=return_tensors,
+    )
     return {**dataset, **tokenized_data}
 
 

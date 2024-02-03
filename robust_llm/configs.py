@@ -8,57 +8,82 @@ SHARED_DATA_DIR = "/robust_llm_data"
 
 @dataclass
 class BaselineTrainingConfig:
-    """Configs used in baseline training."""
+    """
+    Configs used in baseline training.
 
-    # The proportion of the brute force dataset to use for training, when
-    # running a baseline.
+    Attributes:
+        proportion (float):
+            The proportion of the brute force dataset to use for
+            training, when running a baseline.
+        non_iterative_baseline (bool): Whether to run a non-iterative baseline or not.
+    """
+
     proportion: float = 0.1
-    # Whether to run a non-iterative baseline or not.
     non_iterative_baseline: bool = False
 
 
 @dataclass
 class TextAttackAttackConfig:
-    """Options specific for TextAttack attacks."""
+    """
+    Options specific for TextAttack attacks.
 
-    # Query budget per example.
+    Attributes:
+        query_budget (int): Query budget per example.
+        num_examples (int): Number of examples to attack. If -1, attack whole dataset.
+        silent (bool): If silent, TextAttack will only print errors.
+    """
+
     query_budget: int = 100
-    # Number of examples to attack. If -1, attack whole dataset.
     num_examples: int = -1
-    # If silent, TextAttack will only print errors.
     silent: bool = True
 
 
 @dataclass
 class BruteForceTomitaAttackConfig:
-    """Options specific for BruteForceTomita attacks."""
+    """
+    Options specific for BruteForceTomita attacks.
 
-    # Up to which length strings should be exhaustively tested.
+    Attributes:
+        length (int): Up to which length strings should be exhaustively tested.
+    """
+
     length: int = 5
 
 
 @dataclass
 class RandomTokenAttackConfig:
-    """Options specific for RandomToken attacks."""
+    """Options specific for RandomToken attacks.
 
-    # Minimum number of tokens to generate.
+    Attributes:
+        min_tokens (int): Minimum number of tokens to generate.
+        max_tokens (int): Maximum number of tokens to generate.
+    """
+
     min_tokens: int = 1
-    # Maximum number of tokens to generate.
     max_tokens: int = 3
 
 
 @dataclass
 class AttackConfig:
-    """Configs used in attack setup."""
+    """
+    Configs used in attack setup.
 
-    # The type of attack to use.
+    Attributes:
+        attack_type (str): The type of attack to use.
+        repeat_attack_every_round (bool):
+            Whether to repeat the attack every iterative training round or not.
+        seed (int): Random seed for the attack.
+        brute_force_tomita_attack_config (BruteForceTomitaAttackConfig):
+            Config for BruteForceTomitaAttack.
+        text_attack_attack_config (TextAttackAttackConfig):
+            Config for TextAttackAttack.
+        random_token_attack_attack_config (RandomTokenAttackConfig):
+            Config for RandomTokenAttack.
+    """
+
     attack_type: str = "identity"
-    # Whether to repeat the attack every iterative training round or not.
     repeat_attack_every_round: bool = True
-    # Random seed for the attack.
     seed: int = 0
-
-    # Configs for specific types of attacks.
     brute_force_tomita_attack_config: BruteForceTomitaAttackConfig = (
         BruteForceTomitaAttackConfig()
     )
@@ -69,133 +94,261 @@ class AttackConfig:
 
 
 @dataclass
-class IterativeTrainingConfig:
-    """Configs used in iterative (often adversarial) training."""
+class PerplexityDefenseConfig:
+    """
+    Configs used in perplexity-based defenses.
 
-    # Whether to use iterative training.
+    Attributes:
+        perplexity_threshold (Optional[float]):
+            The perplexity threshold to use.
+            If None, use the max perplexity in the train set.
+        window_size (Optional[int]): Window size (if applicable).
+        batch_size (int): Batch size to use for perplexity calculations.
+        verbose (bool): Whether to print out the perplexity of each example.
+    """
+
+    perplexity_threshold: Optional[float] = None
+    window_size: Optional[int] = None
+    batch_size: int = 4
+    verbose: bool = False
+
+    @property
+    def windowed(self) -> bool:
+        return self.window_size is not None
+
+
+@dataclass
+class RetokenizationDefenseConfig:
+    """
+    Configs used in re-tokenization-based defenses.
+
+    Attributes:
+        drop_percentage (float): Percentage of the byte pair merges to drop.
+        verbose (bool): Whether to print out the tokens of each example.
+    """
+
+    drop_percentage: float = 0.2
+    verbose: bool = False
+
+
+@dataclass
+class ParaphraseDefenseConfig:
+    """
+    Configs used in paraphrase-based defenses.
+
+    Attributes:
+        model_name (str): Model to use for paraphrasing.
+        meta_prompt (str): Meta-prompt to use for paraphrasing.
+        temperature (float): Temperature to use for generation.
+        verbose (bool): Verbosity.
+        device (str): Device to store paraphrase model on.
+        padding_side (str):
+            Padding side when paraphrasing. Should be left for decoder models.
+    """
+
+    model_name: str = "mistralai/Mistral-7B-Instruct-v0.1"
+    meta_prompt: str = "Paraphrase the following sentences: "
+    temperature: float = 0.7
+    verbose: bool = False
+    device: str = "cuda:0"
+    padding_side: str = "left"
+
+
+@dataclass
+class DefenseConfig:
+    """
+    Configs used in defense setup.
+
+    Attributes:
+        defense_type (str): The type of defense.
+        seed (int): Random seed for the defense.
+        perplexity_defense_config (PerplexityDefenseConfig):
+            Configs for perplexity-based defenses.
+        retokenization_defense_config (RetokenizationDefenseConfig):
+            Configs for re-tokenization-based defenses.
+        paraphrase_defense_config (ParaphraseDefenseConfig):
+            Configs for paraphrase-based defenses.
+    """
+
+    defense_type: str = "identity"
+    seed: int = 0
+    perplexity_defense_config: PerplexityDefenseConfig = PerplexityDefenseConfig()
+    retokenization_defense_config: RetokenizationDefenseConfig = (
+        RetokenizationDefenseConfig()
+    )
+    paraphrase_defense_config: ParaphraseDefenseConfig = ParaphraseDefenseConfig()
+
+
+@dataclass
+class IterativeTrainingConfig:
+    """
+    Configs used in iterative (often adversarial) training.
+
+    Attributes:
+        iterative_training (bool): Whether to use iterative training.
+        only_add_successful_adversarial_examples (bool):
+            Whether to add strictly adversarial examples or not.
+        min_num_new_examples_to_add (int):
+            The minimum number of adversarial examples to add to
+            the train set each attack round.
+        max_num_search_for_adversarial_examples (int):
+            The maximum number of examples to search for adversarial examples in
+            each attack round. Think 'compute budget'.
+        adversarial_example_search_minibatch_size (int):
+            The size of the minibatches to use when searching for adversarial examples.
+        num_iterative_training_rounds (int):
+            The number of adversarial training rounds to do.
+        use_probabilistic_robustness_check (bool):
+            If true, only checks robustness on a random subset of the
+            brute force attack dataset.
+        skip_first_training_round (bool):
+            Whether to skip the first training round or not.
+        training_attack (AttackConfig):
+            Config for the attack to use in adversarial training.
+    """
+
     iterative_training: bool = False
-    # Whether to add strictly adversarial examples or not
     only_add_successful_adversarial_examples: bool = True
-    # The minimum number of adversarial examples to add to the train set each
-    # attack round.
     min_num_new_examples_to_add: int = 50
-    # The maximum number of examples to search for adversarial examples in each
-    # attack round. Think 'compute budget'.
     max_num_search_for_adversarial_examples: int = 8192
-    # The size of the minibatches to use when searching for adversarial
-    # examples.
     adversarial_example_search_minibatch_size: int = 64
-    # The number of adversarial training rounds to do.
     num_iterative_training_rounds: int = 3
-    # If true, only checks robustness on a random subset of the brute force
-    # attack dataset.
     use_probabilistic_robustness_check: bool = False
-    # Whether to skip the first training round or not.
     skip_first_training_round: bool = False
-    # Config for the attack to use in adversarial training.
     training_attack: AttackConfig = AttackConfig()
 
 
 @dataclass
 class EnvironmentConfig:
-    """Configs used in environment setup (including dataset)."""
+    """
+    Configs used in environment setup (including dataset).
 
-    # Either HF name or path to model checkpoint.
+    Attributes:
+        model_name_or_path (str): Either HF name or path to model checkpoint.
+        decoder_name (Optional[str]): Decoder model name (used for defenses).
+        is_pythia (bool) : Whether the architecture is Pythia or not. Needed
+            for loading the model.
+        dataset_type (str): Dataset type (tomita, tensor_trust).
+        dataset_generation_style (str):
+            How to generate the negative examples in the dataset.
+            Only works with tensor trust for now.
+        language_generator (str):
+            Choose the regular language to use (tomita1, tomita2, tomita4, tomita7).
+        max_length (int): The maximum length of the strings to generate.
+        seed (int):
+            The seed to use for the random number generator used to make the dataset.
+        train_set_size (Optional[int]):
+            The size of the train set.
+            For generated datasets, must be set to positive integer.
+            For HF datasets, can be set to None to use the full dataset.
+        validation_set_size (Optional[int]):
+            The size of the validation set.
+            For generated datasets, must be set to positive integer.
+            For HF datasets, can be set to None to use the full dataset.
+        shuffle_train_set (bool):
+            Whether to shuffle the train set. Can matter if we subsample.
+        shuffle_validation_set (bool):
+            Whether to shuffle the validation set. Can matter if we subsample.
+    """
+
     model_name_or_path: str = "bert-base-uncased"
-    # Whether the architecture is Pythia or not. Needed for loading the model.
+    decoder_name: Optional[str] = None
     is_pythia: bool = False
-    # Dataset type (tomita, tensor_trust)
     dataset_type: str = "tomita"
-    # How to generate the negative examples in the dataset
-    # (only works with tensor trust for now)
     dataset_generation_style: str = (
         "random_words"  # random_word / random_character_edit
     )
-    # Choose the regular language to use (tomita1, tomita2, tomita4, tomita7).
     language_generator: str = "tomita4"
-    # The maximum length of the strings to generate.
     max_length: int = 50
-    # The seed to use for the random number generator used to make the dataset
     seed: int = 0
-    # The size of the train set. For generated datasets, must be set to positive
-    # integer. For HF datasets, can be set to None to use the full dataset.
     train_set_size: Optional[int] = None
-    # The size of the validation set. For generated datasets, must be set to positive
-    # integer. For HF datasets, can be set to None to use the full dataset.
     validation_set_size: Optional[int] = None
-    # Whether to shuffle the train set. Can matter if we subsample.
     shuffle_train_set: bool = False
-    # Whether to shuffle the validation set. Can matter if we subsample.
     shuffle_validation_set: bool = False
-    # The number of epochs to train for.
 
 
 @dataclass
 class TrainingConfig:
-    """Configs used across different training procedures."""
+    """Configs used across different training procedures.
+
+    Attributes:
+        iterative (IterativeTrainingConfig): Configs for iterative training.
+        baseline (BaselineTrainingConfig): Configs for baseline training.
+        num_train_epochs (int): Number of training epochs.
+        learning_rate (float): Learning rate to use in training.
+        batch_size (int): Batch size to use in training.
+        eval_steps (Optional[int | float]): Number of update steps between two
+            evaluations. Will default to the same value as logging_steps if not set.
+            Should be an integer or a float in range [0,1). If smaller than 1, will
+            be interpreted as ratio of total training steps.
+        logging_steps (int | float): Number of update steps between two logs. Should
+            be an integer or a float in range [0,1). If smaller than 1, will be
+            interpreted as ratio of total training steps.
+        checkpoint (int): The checkpoint to start from.
+        log_datasets_to_wandb (bool): Whether to log datasets to wandb. Off by default,
+            as it takes a lot of space.
+        model_save_path_prefix_or_hf (Optional[str]): Where to save the final
+            checkpoint. If None, the model is not saved. If "hf", the model is saved to
+            HuggingFace. Otherwise, the model is saved to a location starting with the
+            specified prefix.
+
+    For now, works only for the training pipeline.
+    """
 
     iterative: IterativeTrainingConfig = IterativeTrainingConfig()
     baseline: BaselineTrainingConfig = BaselineTrainingConfig()
     num_train_epochs: int = 3
     learning_rate: float = 5e-5
     batch_size: int = 8
-    # Number of update steps between two evaluations
     eval_steps: Optional[int] = None
-    # Number of update steps between two logs
     logging_steps: int | float = 500
-    # The checkpoint to start from (relevant for Pythia only, for now)
     checkpoint: int = 142000
-    # Whether to log datasets to wandb. Off by default, as it takes a lot of space.
-    # For now, works only for the training pipeline.
     log_datasets_to_wandb: bool = False
-    # Where to save the final checkpoint. If None, the model is not saved.
-    # If "hf", the model is saved to HuggingFace. Otherwise, the model is
-    # saved to a location starting with the specified prefix.
     model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
-    # If not specified, a unique id will be created for the saved model. Otherwise,
-    # the specified name will be used and it is responsilibity of the user to make
-    # sure that the name is unique.
     force_name_to_save: Optional[str] = None
 
 
 @dataclass
 class EvaluationConfig:
-    # The mini-batch size used to iterate over the dataset when evaluating.
+    """Configs used in evaluation.
+
+    Attributes:
+        batch_size (int): The mini-batch size used to iterate over the dataset when
+            evaluating.
+        evaluation_attack (AttackConfig): Config for the attack to use in evaluation.
+        num_generated_examples (Optional[int]): Number of examples to generate.
+    """
+
     batch_size: int = 8
-    # Config for the attack to use in evaluation.
     evaluation_attack: AttackConfig = AttackConfig()
-    # The number of examples to generate for the evaluation attack. Should be specified
-    # only if the attack does not require an input dataset. Otherwise, we want the
-    # attack to generate an example per each sample in the input dataset.
     num_generated_examples: Optional[int] = None
 
 
-# TODO(dan) guard against mutually exclusive options
 @dataclass
 class ExperimentConfig:
-    # Experiment type, from the ones defined in __main__.py
+    """
+    Configs used in the experiment.
+
+    Attributes:
+        experiment_type (str): Type of experiment, from the ones defined in __main__.py.
+        experiment_name (str): Name of the overarching experiment. Used to set a "group"
+            in wandb. Each experiment can have several jobs.
+        job_type (str): Name of the sub-experiment.
+        run_name (str): Name of the individual run.
+        environment (EnvironmentConfig): Configs for environment setup.
+        training (TrainingConfig): Configs for training.
+        evaluation (EvaluationConfig): Configs for evaluation.
+        defense (DefenseConfig): Configs for defense setup.
+    """
+
     experiment_type: str = MISSING
-
-    # The name of the overarching experiment being run. Used to set a "group" in
-    # wandb. Each experiment has several jobs.
-    # Example: "scaling-model-size_2023-11-22_1e88j"
     experiment_name: str = "default-experiment"
-
-    # The name of the sub-experiment being run. Used to set a "job_type" in wandb.
-    # Should correspond to one specific sub-experiment.
-    # Each job can have several runs (with different seeds).
-    # Example: "pythia-14m_step17000"
     job_type: str = "default-job"
-
-    # The name of the individual run.
-    # Don't need much here since group and job do most of the work distinguishing.
-    # Random string is fine.
-    # Example: "run_3f4ay"
     run_name: str = "default-run"
-
     environment: EnvironmentConfig = EnvironmentConfig()
     training: TrainingConfig = TrainingConfig()
     evaluation: EvaluationConfig = EvaluationConfig()
+    defense: DefenseConfig = DefenseConfig()
 
 
 @dataclass

@@ -174,3 +174,5 @@ robust_llm/outputs/
 
 # Pythia
 pythia*/
+
+*.ipynb

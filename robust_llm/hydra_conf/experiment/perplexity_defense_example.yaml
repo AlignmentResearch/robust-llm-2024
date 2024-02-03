@@ -1,0 +1,21 @@
+experiment_name: "perplexity_defense_example"
+job_type: "defense"
+experiment_type: "defense"
+
+training:
+  num_train_epochs: 1
+
+evaluation:
+  evaluation_attack:
+    attack_type: "textfooler"
+    text_attack_attack_config:
+      query_budget: 400
+
+environment:
+  dataset_type: "hf/imdb"
+  model_name: "textattack/bert-base-uncased-imdb"
+  train_set_size: 10
+  validation_set_size: 10
+
+defense:
+  defense_type: "perplexity"

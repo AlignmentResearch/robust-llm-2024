@@ -48,8 +48,8 @@ class Training:
     learning_rate: float = 5e-5
     train_batch_size: int = 8
     eval_batch_size: int = 8
-    eval_steps: int = 10
-    logging_steps: int = 10
+    eval_steps: Optional[int | float] = None
+    logging_steps: int | float = 500
     trainer: Optional[Trainer] = None
     log_datasets_to_wandb: bool = False
 
