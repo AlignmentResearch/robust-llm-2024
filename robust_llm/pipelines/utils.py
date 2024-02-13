@@ -200,4 +200,5 @@ def prepare_attack(
         model=model,
         tokenizer=tokenizer,
         language_generator_name=args.experiment.environment.language_generator,
+        ground_truth_label_fn=robust_llm_datasets.ground_truth_label_fn,
     )

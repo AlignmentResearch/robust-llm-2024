@@ -67,6 +67,7 @@ def run_training_pipeline(
         "eval_steps": experiment.training.eval_steps,
         "logging_steps": experiment.training.logging_steps,
         "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
+        "ground_truth_label_fn": robust_llm_datasets.ground_truth_label_fn,
     }
 
     # Set up the training environment

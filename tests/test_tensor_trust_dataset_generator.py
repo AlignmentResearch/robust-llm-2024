@@ -1,5 +1,6 @@
 import numpy as np
 
+from robust_llm.configs import EnvironmentConfig
 from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
     CONTEXT_STRING,
     TWEAK_STYLES,
@@ -8,7 +9,10 @@ from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator i
     _generate_dataset,
     _modify_string,
     _shuffle_tensor_trust_dataset,
+    get_tensor_trust_dataset,
+    tensor_trust_get_ground_truth_label,
 )
+from robust_llm.pipelines.utils import _prepare_tokenizer
 
 HAPPY_PASSWORD_STRING = CONTEXT_STRING.replace("<FIRST_TOKEN>", "myhappypassword")
 TEST_STRING = "happybirthday"
@@ -122,3 +126,27 @@ def test_tweaks_consistently_for_set_seed():
             tweaker = WordTweaker(style, seed)
             second_tweak = tweaker.tweak(word)
             assert first_tweak == second_tweak
+
+
+def test_tensor_trust_get_ground_truth_label():
+    seed = 555
+    environment_config = EnvironmentConfig(
+        dataset_type="tensor_trust",
+        train_set_size=100,
+        validation_set_size=100,
+        seed=seed,
+    )
+    tokenizer = _prepare_tokenizer(
+        "bert-base-uncased", is_pythia=False, checkpoint=None
+    )
+
+    train_set, _ = get_tensor_trust_dataset(
+        environment_config=environment_config,
+        tokenizer=tokenizer,
+        dataset_generation_style="random_words",
+        seed=seed,
+    )
+
+    for example in train_set:
+        assert isinstance(example, dict)
+        assert tensor_trust_get_ground_truth_label(example["text"]) == example["label"]

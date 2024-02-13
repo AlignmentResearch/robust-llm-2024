@@ -30,11 +30,17 @@ class TextAttackAttackConfig:
     Attributes:
         query_budget (int): Query budget per example.
         num_examples (int): Number of examples to attack. If -1, attack whole dataset.
+        num_modifiable_words_per_chunk (Optional[int]): If set to an integer value, the
+            attack will replace all content of each modifiable chunk with
+            `num_modifiable_words_per_chunk` placeholder words which can be then
+            modified by the attack. Otherwise, content is not modified at the start and
+            the attack performs modifications on the original text.
         silent (bool): If silent, TextAttack will only print errors.
     """
 
     query_budget: int = 100
     num_examples: int = -1
+    num_modifiable_words_per_chunk: Optional[int] = None
     silent: bool = True
 
 

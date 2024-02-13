@@ -1,4 +1,7 @@
+from typing import Callable
+
 import transformers
+from git import Optional
 
 from robust_llm.attacks.attack import Attack, IdentityAttack
 from robust_llm.attacks.brute_force_tomita import BruteForceTomitaAttack
@@ -16,6 +19,7 @@ def create_attack(
     model: LanguageModel,
     tokenizer: transformers.PreTrainedTokenizerBase,
     language_generator_name: str,
+    ground_truth_label_fn: Optional[Callable[[str], int]],
 ) -> Attack:
     """Returns an attack object of a proper type."""
     if attack_config.attack_type == "identity":
@@ -42,6 +46,7 @@ def create_attack(
             modifiable_chunks_spec=modifiable_chunks_spec,
             model=model,
             tokenizer=tokenizer,
+            ground_truth_label_fn=ground_truth_label_fn,
         )
     else:
         raise ValueError(f"Attack type {attack_config.attack_type} not recognized.")

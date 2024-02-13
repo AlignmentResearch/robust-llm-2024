@@ -49,6 +49,7 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
         model=model,
         tokenizer=tokenizer,
         dataset=dataset,
+        ground_truth_label_fn=robust_llm_datasets.ground_truth_label_fn,
         num_generated_examples=args.experiment.evaluation.num_generated_examples,
         attack=attack,
         batch_size=args.experiment.evaluation.batch_size,

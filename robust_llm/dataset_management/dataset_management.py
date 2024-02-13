@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 from datasets import Dataset, DatasetDict, IterableDatasetDict, load_dataset
 from transformers import PreTrainedTokenizerBase
@@ -8,6 +8,7 @@ from robust_llm.configs import EnvironmentConfig, TrainingConfig
 from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
     TENSOR_TRUST_MODIFIABLE_CHUNKS_SPEC,
     get_tensor_trust_dataset,
+    tensor_trust_get_ground_truth_label,
 )
 from robust_llm.dataset_management.tomita import Tomita
 from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
@@ -31,6 +32,9 @@ class RobustLLMDatasets:
 
     # Specification for which chunks of the original text can be modified
     modifiable_chunks_spec: ModifiableChunksSpec = (True,)
+    # Function to get the ground truth label from the original text.
+    # Can be specified for some synthetic tasks such as tensor_trust.
+    ground_truth_label_fn: Optional[Callable[[str], int]] = None
 
 
 def generate_robust_llm_datasets(
@@ -48,15 +52,18 @@ def generate_robust_llm_datasets(
         )
 
     modifiable_chunks_spec: tuple[bool, ...] = (True,)
+    ground_truth_label_fn: Optional[Callable[[str], int]] = None
 
     if dataset_type == "tensor_trust":
         train_set, validation_set = get_tensor_trust_dataset(
             environment_config=environment_config,
             tokenizer=tokenizer,
             dataset_generation_style=dataset_generation_style,
+            seed=seed,
         )
 
         modifiable_chunks_spec = TENSOR_TRUST_MODIFIABLE_CHUNKS_SPEC
+        ground_truth_label_fn = tensor_trust_get_ground_truth_label
 
     elif dataset_type == "tomita":
         assert language_generator is not None and isinstance(language_generator, Tomita)
@@ -105,4 +112,5 @@ def generate_robust_llm_datasets(
         tokenized_train_dataset=tokenized_train_dataset,
         tokenized_validation_dataset=tokenized_validation_dataset,
         modifiable_chunks_spec=modifiable_chunks_spec,
+        ground_truth_label_fn=ground_truth_label_fn,
     )

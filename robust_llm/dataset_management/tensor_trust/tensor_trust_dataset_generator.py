@@ -387,3 +387,17 @@ def _generate_dataset(
     print(f"Generated {dataset_size} TensorTrust examples total.")
 
     return contexts, queries, labels
+
+
+def tensor_trust_get_ground_truth_label(text: str) -> int:
+    """Returns the ground truth label for the text."""
+    # String between first and second '"'
+    system_password = text.split('"')[1]
+
+    RESPONSE_SEPARATOR = "\n---\n"
+    # String between first and last "\n---\n"
+    start_response = text.index(RESPONSE_SEPARATOR)
+    end_response = text.rindex(RESPONSE_SEPARATOR)
+    user_password = text[start_response + len(RESPONSE_SEPARATOR) : end_response]
+
+    return int(system_password == user_password)

@@ -50,3 +50,4 @@ pythonVersion = "3.10"
 [tool.mypy]
 ignore_missing_imports = true
 mypy_path = ["robust_llm", "tests"]
+python_version = "3.10"

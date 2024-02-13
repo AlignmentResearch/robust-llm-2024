@@ -2,7 +2,7 @@
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Callable, Dict, List, Optional, Sequence, Union
 
 import wandb
 from datasets import Dataset
@@ -92,14 +92,16 @@ class AttackResults:
     @classmethod
     def from_labels_and_predictions(
         cls,
-        labels: Sequence[int],
+        original_labels: Sequence[int],
+        attacked_labels: Sequence[int],
         original_preds: Optional[Sequence[int | None]],
         attacked_preds: Sequence[int | None],
     ) -> "AttackResults":
         """Generates `AttackResults` from labels and model predictions.
 
         Args:
-            labels: true labels of the examples
+            original_labels: true labels of the original examples (pre-attack)
+            attacked_labels: true labels of the attacked examples (post-attack)
             original_preds: optional predictions of the model pre-attack. Should
                 be provided iff the attack uses input dataset
             attacked_preds: predictions of the model post-attack
@@ -110,17 +112,18 @@ class AttackResults:
         results = cls()
 
         if original_preds is None:
-            for label, attacked_pred in zip(labels, attacked_preds):
+            for attacked_label, attacked_pred in zip(attacked_labels, attacked_preds):
                 results._add_example_with_post_attack_only(
-                    label=label,
+                    attacked_label=attacked_label,
                     attacked_pred=attacked_pred,
                 )
         else:
-            for label, original_pred, attacked_pred in zip(
-                labels, original_preds, attacked_preds
+            for original_label, attacked_label, original_pred, attacked_pred in zip(
+                original_labels, attacked_labels, original_preds, attacked_preds
             ):
                 results._add_example(
-                    label=label,
+                    original_label=original_label,
+                    attacked_label=attacked_label,
                     original_pred=original_pred,
                     attacked_pred=attacked_pred,
                 )
@@ -129,14 +132,14 @@ class AttackResults:
 
     def _add_example_with_post_attack_only(
         self,
-        label: int,
+        attacked_label: int,
         attacked_pred: int | None,
     ) -> None:
         # Filtered out after attack -> true positive.
         if attacked_pred is None:
             self.n_filtered_out_post_attack += 1
         # Correct prediction after attack -> failure.
-        elif label == attacked_pred:
+        elif attacked_label == attacked_pred:
             self.n_failures += 1
         # Incorrect prediction after attack -> success.
         else:
@@ -144,7 +147,8 @@ class AttackResults:
 
     def _add_example(
         self,
-        label: int,
+        original_label: int,
+        attacked_label: int,
         original_pred: int | None,
         attacked_pred: int | None,
     ) -> None:
@@ -153,12 +157,12 @@ class AttackResults:
             self.n_filtered_out_pre_attack += 1
         # Prediction was already incorrect, so we expect this example should have
         # been skipped and we do not consider it either a success or a failure.
-        elif original_pred != label:
+        elif original_pred != original_label:
             self.n_mistakes_pre_attack += 1
         # Prediction was correct pre-attack. Now we need to check the post-attack.
         else:
             self._add_example_with_post_attack_only(
-                label=label, attacked_pred=attacked_pred
+                attacked_label=attacked_label, attacked_pred=attacked_pred
             )
 
     @property
@@ -238,6 +242,7 @@ def _get_predictions(
 def compute_attack_results(
     dataset: Optional[Dataset],
     attacked_dataset: Dataset,
+    ground_truth_label_fn: Optional[Callable[[str], int]],
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     batch_size: int,
@@ -280,8 +285,18 @@ def compute_attack_results(
         batch_size=batch_size,
     )
 
+    # If the dataset allows for recomputation of the ground truth label, use it.
+    if ground_truth_label_fn is not None:
+        attacked_labels = [
+            ground_truth_label_fn(text) for text in attacked_dataset["text"]
+        ]
+    # Otherwise, assume that the labels have not changed (may or may not be accurate).
+    else:
+        attacked_labels = attacked_dataset["label"]
+
     results = AttackResults.from_labels_and_predictions(
-        labels=attacked_dataset["label"],
+        original_labels=attacked_dataset["label"],
+        attacked_labels=attacked_labels,
         original_preds=original_preds,
         attacked_preds=attacked_preds,
     )
@@ -293,6 +308,7 @@ def do_adversarial_evaluation(
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     dataset: Optional[Dataset],
+    ground_truth_label_fn: Optional[Callable[[str], int]],
     num_generated_examples: Optional[int],
     attack: Attack,
     batch_size: int,
@@ -310,6 +326,7 @@ def do_adversarial_evaluation(
     attack_results = compute_attack_results(
         dataset=dataset,
         attacked_dataset=attacked_dataset,
+        ground_truth_label_fn=ground_truth_label_fn,
         model=model,
         tokenizer=tokenizer,
         batch_size=batch_size,

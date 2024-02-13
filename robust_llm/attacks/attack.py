@@ -51,9 +51,10 @@ class Attack(abc.ABC):
 
         Returns:
             A dataset of adversarial examples containing at least `text` and `label`
-            columns. If the `dataset` argument was specified, the returned dataset must
-            also contain the `original_text` column, containing unmodified original
-            text.
+            columns, with `text` containing the attacked text and `label` containing the
+            ORIGINAL label (which might no longer be correct). If the `dataset` argument
+            was specified, the returned dataset must also contain the `original_text`
+            column, containing unmodified original text.
         """
         pass
 

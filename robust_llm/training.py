@@ -1,6 +1,6 @@
 import dataclasses
 import os
-from typing import Optional
+from typing import Callable, Optional
 
 import evaluate
 import numpy as np
@@ -52,6 +52,7 @@ class Training:
     logging_steps: int | float = 500
     trainer: Optional[Trainer] = None
     log_datasets_to_wandb: bool = False
+    ground_truth_label_fn: Optional[Callable[[str], int]] = None
 
     def __post_init__(self):
         accuracy = evaluate.load("accuracy")
@@ -320,6 +321,7 @@ class AdversarialTraining(Training):
             model=self.model,
             tokenizer=self.tokenizer,
             language_generator_name=self.language_generator_name,
+            ground_truth_label_fn=self.ground_truth_label_fn,
         )
         validation_attack = create_attack(
             attack_config=self.validation_attack_config,
@@ -328,6 +330,7 @@ class AdversarialTraining(Training):
             model=self.model,
             tokenizer=self.tokenizer,
             language_generator_name=self.language_generator_name,
+            ground_truth_label_fn=self.ground_truth_label_fn,
         )
 
         training_attack_dataset = Dataset.from_dict({})
