@@ -322,12 +322,18 @@ class EvaluationConfig:
         batch_size (int): The mini-batch size used to iterate over the dataset when
             evaluating.
         evaluation_attack (AttackConfig): Config for the attack to use in evaluation.
-        num_generated_examples (Optional[int]): Number of examples to generate.
+        num_generated_examples (Optional[int]): Number of adversarial examples to
+            generate with the attack. Should be set iff the attack does not take dataset
+            as an input.
+        num_examples_to_log_detailed_info (Optional[int]): Number of adversarial
+            examples for which we want to log detailed info, such as the original and
+            attacked text, attack results and debug info. If None, do not log anything.
     """
 
     batch_size: int = 8
     evaluation_attack: AttackConfig = AttackConfig()
     num_generated_examples: Optional[int] = None
+    num_examples_to_log_detailed_info: Optional[int] = 10
 
 
 @dataclass

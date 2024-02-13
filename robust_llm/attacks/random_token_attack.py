@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 import torch
 import transformers
@@ -51,7 +51,7 @@ class RandomTokenAttack(Attack):
         self,
         dataset: Optional[Dataset] = None,
         max_n_outputs: Optional[int] = None,
-    ) -> Dataset:
+    ) -> Tuple[Dataset, Dict[str, Any]]:
 
         assert dataset is not None and "text_chunked" in dataset.column_names
 
@@ -98,4 +98,4 @@ class RandomTokenAttack(Attack):
             }
         )
 
-        return new_dataset
+        return new_dataset, {}

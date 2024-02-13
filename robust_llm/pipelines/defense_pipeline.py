@@ -51,6 +51,7 @@ def run_defense_pipeline(args: OverallConfig):
         attack=attack,
         batch_size=args.experiment.evaluation.batch_size,
         ground_truth_label_fn=robust_llm_datasets.ground_truth_label_fn,
+        num_examples_to_log_detailed_info=args.experiment.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
     )
     wandb.finish()
     print("Performing adversarial evaluation with defense")
@@ -82,6 +83,7 @@ def run_defense_pipeline(args: OverallConfig):
         attack=new_attack,
         batch_size=args.experiment.evaluation.batch_size,
         ground_truth_label_fn=robust_llm_datasets.ground_truth_label_fn,
+        num_examples_to_log_detailed_info=args.experiment.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
     )
     wandb.finish()
     print("Finished defense pipeline")

@@ -239,6 +239,60 @@ def _get_predictions(
     return preds
 
 
+def _log_examples_to_wandb(
+    original_texts: Optional[Sequence[str]],
+    attacked_texts: Sequence[str],
+    original_labels: Optional[Sequence[int]],
+    attacked_labels: Sequence[int],
+    original_preds: Optional[Sequence[int | None]],
+    attacked_preds: Sequence[int | None],
+    num_examples_to_log_detailed_info: int,
+) -> None:
+    assert (
+        (original_texts is None)
+        == (original_labels is None)
+        == (original_preds is None)
+    )
+
+    if original_texts is not None:
+        # Have those asserts here so that type checker does not complain.
+        assert original_labels is not None
+        assert original_preds is not None
+
+        table = wandb.Table(
+            columns=[
+                "original_text",
+                "attacked_text",
+                "original_label",
+                "attacked_label",
+                "original_pred",
+                "attacked_pred",
+            ]
+        )
+        for i in range(min(num_examples_to_log_detailed_info, len(attacked_texts))):
+            table.add_data(
+                original_texts[i],
+                attacked_texts[i],
+                original_labels[i],
+                attacked_labels[i],
+                original_preds[i],
+                attacked_preds[i],
+            )
+
+    else:
+        table = wandb.Table(
+            columns=["attacked_text", "attacked_label", "attacked_pred"]
+        )
+        for i in range(min(num_examples_to_log_detailed_info, len(attacked_texts))):
+            table.add_data(
+                attacked_texts[i],
+                attacked_labels[i],
+                attacked_preds[i],
+            )
+
+    wandb.log({"adversarial_eval/examples": table}, commit=False)
+
+
 def compute_attack_results(
     dataset: Optional[Dataset],
     attacked_dataset: Dataset,
@@ -246,6 +300,7 @@ def compute_attack_results(
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     batch_size: int,
+    num_examples_to_log_detailed_info: Optional[int],
     device: Optional[str] = None,
 ) -> AttackResults:
     """Performs an attack and reports its results."""
@@ -301,6 +356,17 @@ def compute_attack_results(
         attacked_preds=attacked_preds,
     )
 
+    if num_examples_to_log_detailed_info is not None:
+        _log_examples_to_wandb(
+            original_texts=dataset["text"] if dataset else None,
+            attacked_texts=attacked_dataset["text"],
+            original_labels=dataset["label"] if dataset else None,
+            attacked_labels=attacked_labels,
+            original_preds=original_preds,
+            attacked_preds=attacked_preds,
+            num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
+        )
+
     return results
 
 
@@ -312,6 +378,7 @@ def do_adversarial_evaluation(
     num_generated_examples: Optional[int],
     attack: Attack,
     batch_size: int,
+    num_examples_to_log_detailed_info: Optional[int],
 ) -> Dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
     # Exactly one of these should be provided.
@@ -319,7 +386,7 @@ def do_adversarial_evaluation(
 
     print("Doing adversarial evaluation...")
 
-    attacked_dataset = attack.get_attacked_dataset(
+    attacked_dataset, info_dict = attack.get_attacked_dataset(
         dataset=dataset, max_n_outputs=num_generated_examples
     )
 
@@ -330,10 +397,13 @@ def do_adversarial_evaluation(
         model=model,
         tokenizer=tokenizer,
         batch_size=batch_size,
+        num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
     )
     print(attack_results)
 
     metrics = attack_results.compute_adversarial_evaluation_metrics()
+    assert len(set(metrics.keys()) & set(info_dict.keys())) == 0
+    metrics |= info_dict
 
     # TODO(GH#158): Refactor/unify logging.
     wandb.log(metrics, commit=False)

@@ -53,4 +53,5 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
         num_generated_examples=args.experiment.evaluation.num_generated_examples,
         attack=attack,
         batch_size=args.experiment.evaluation.batch_size,
+        num_examples_to_log_detailed_info=args.experiment.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
     )

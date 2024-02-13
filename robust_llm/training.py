@@ -356,7 +356,7 @@ class AdversarialTraining(Training):
             if i == 0 or self.training_attack_config.repeat_attack_every_round:
                 training_attack_dataset = Dataset.from_dict(
                     tokenize_dataset(
-                        training_attack.get_attacked_dataset(self.train_dataset),
+                        training_attack.get_attacked_dataset(self.train_dataset)[0],
                         self.tokenizer,
                     )
                 )
@@ -376,7 +376,7 @@ class AdversarialTraining(Training):
                     tokenize_dataset(
                         validation_attack.get_attacked_dataset(
                             self.eval_dataset["validation"]
-                        ),
+                        )[0],
                         self.tokenizer,
                     )
                 )

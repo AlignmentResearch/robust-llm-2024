@@ -1,5 +1,5 @@
 import copy
-from typing import Callable, Dict, List, Optional, Sequence, Union
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import textattack
@@ -7,6 +7,12 @@ import transformers
 from datasets import Dataset
 from pyparsing import Any
 from textattack.attack_recipes import AttackRecipe
+from textattack.attack_results import (
+    FailedAttackResult,
+    MaximizedAttackResult,
+    SkippedAttackResult,
+    SuccessfulAttackResult,
+)
 from textattack.constraints.constraint import Constraint
 from textattack.constraints.pre_transformation_constraint import (
     PreTransformationConstraint,
@@ -242,7 +248,7 @@ class TextAttackAttack(Attack):
         self,
         dataset: Optional[Dataset],
         max_n_outputs: Optional[int] = None,
-    ) -> Dataset:
+    ) -> Tuple[Dataset, Dict[str, Any]]:
         assert dataset is not None
 
         dataset = self._preprocess_dataset(dataset)
@@ -259,7 +265,9 @@ class TextAttackAttack(Attack):
             attack_results=attack_results, original_dataset=dataset
         )
 
-        return attacked_dataset
+        info_dict = self._get_info_dict(attack_results)
+
+        return attacked_dataset, info_dict
 
     @staticmethod
     def _get_dataset_from_attack_results(
@@ -315,3 +323,56 @@ class TextAttackAttack(Attack):
             )
         )
         return dataset
+
+    def _get_info_dict(
+        self,
+        attack_results: Sequence[textattack.attack_results.AttackResult],
+    ) -> Dict[str, Any]:
+        """Gather some info for debug purposes."""
+
+        # For any attack trial, we define "modified ratio" as the ratio of words that
+        # have been modified among the words that possibly could have been modified
+        # (i.e., words in modifiable chunks). We gather these ratios, for
+        # individual examples, separately for successes, failures and skipped (as
+        # defined by TextAttack). Rationale for this is that for debug purposes, we
+        # want to look if the ratios can get reasonably high, especially for failures
+        # and when the query budget is set high.
+        ratios_of_modified_words_among_ta_successes = []
+        ratios_of_modified_words_among_ta_failures = []
+        ratios_of_modified_words_among_ta_skipped = []
+
+        for attack_result in attack_results:
+            num_possible_to_modify = self.num_modifiable_words_per_chunk or len(
+                attack_result.perturbed_result.attacked_text.words
+            )
+            assert num_possible_to_modify > 0
+
+            ratio_of_modified_words = (
+                len(
+                    attack_result.perturbed_result.attacked_text.attack_attrs[
+                        "modified_indices"
+                    ]
+                )
+                / num_possible_to_modify
+            )
+
+            if isinstance(
+                attack_result, (SuccessfulAttackResult, MaximizedAttackResult)
+            ):
+                ratios_of_modified_words_among_ta_successes.append(
+                    ratio_of_modified_words
+                )
+            elif isinstance(attack_result, FailedAttackResult):
+                ratios_of_modified_words_among_ta_failures.append(
+                    ratio_of_modified_words
+                )
+            elif isinstance(attack_result, SkippedAttackResult):
+                ratios_of_modified_words_among_ta_skipped.append(
+                    ratio_of_modified_words
+                )
+
+        return {
+            "debug/ratios_of_modified_words_among_ta_successes": ratios_of_modified_words_among_ta_successes,  # noqa: E501
+            "debug/ratios_of_modified_words_among_ta_failures": ratios_of_modified_words_among_ta_failures,  # noqa: E501
+            "debug/ratios_of_modified_words_among_ta_skipped": ratios_of_modified_words_among_ta_skipped,  # noqa: E501
+        }

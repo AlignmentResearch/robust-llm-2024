@@ -1,5 +1,5 @@
 import abc
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 from datasets import Dataset
 from typing_extensions import override
@@ -36,7 +36,7 @@ class Attack(abc.ABC):
         self,
         dataset: Optional[Dataset],
         max_n_outputs: Optional[int] = None,
-    ) -> Dataset:
+    ) -> Tuple[Dataset, Dict[str, Any]]:
         """Produces a dataset of adversarial examples.
 
         Args:
@@ -50,11 +50,14 @@ class Attack(abc.ABC):
                 `max_n_outputs` examples. Defaults to None.
 
         Returns:
-            A dataset of adversarial examples containing at least `text` and `label`
-            columns, with `text` containing the attacked text and `label` containing the
-            ORIGINAL label (which might no longer be correct). If the `dataset` argument
-            was specified, the returned dataset must also contain the `original_text`
-            column, containing unmodified original text.
+            A tuple `(dataset, info_dict)` where:
+            `dataset` is a dataset of adversarial examples containing at least `text`
+            and `label` columns, with `text` containing the attacked text and `label`
+            containing the ORIGINAL label (which might no longer be correct). If the
+            `dataset` argument was specified, the returned dataset must also contain
+            the `original_text` column, containing unmodified original text.
+            `info_dict` is a dictionary of additional information (e.g. metrics) about
+            the attack.
         """
         pass
 
@@ -72,7 +75,7 @@ class IdentityAttack(Attack):
         self,
         dataset: Optional[Dataset],
         max_n_outputs: Optional[int] = None,
-    ) -> Dataset:
+    ) -> Tuple[Dataset, Dict[str, Any]]:
         assert dataset is not None
 
         dataset = dataset.add_column(
@@ -84,4 +87,4 @@ class IdentityAttack(Attack):
         if max_n_outputs is not None:
             dataset = dataset.select(range(max_n_outputs))
 
-        return dataset
+        return dataset, {}

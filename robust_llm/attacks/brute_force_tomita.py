@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 from datasets import Dataset
 from typing_extensions import override
@@ -51,7 +51,7 @@ class BruteForceTomitaAttack(Attack):
         self,
         dataset: Optional[Dataset] = None,
         max_n_outputs: Optional[int] = None,
-    ) -> Dataset:
+    ) -> Tuple[Dataset, Dict[str, Any]]:
         brute_force_dataset = load_adversarial_dataset(
             self.language_generator_name, self.brute_force_length
         ).shuffle(seed=self.attack_config.seed)
@@ -59,4 +59,4 @@ class BruteForceTomitaAttack(Attack):
         if max_n_outputs is not None:
             brute_force_dataset = brute_force_dataset.select(range(max_n_outputs))
 
-        return brute_force_dataset
+        return brute_force_dataset, {}
