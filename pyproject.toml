@@ -17,6 +17,7 @@ dependencies = [
     # TF embeddings are used in some TextAttack attacks, even though models are in pytorch
     "tensorflow==2.9.1",
     "tensorflow_hub",
+    "trl",
     "wandb",
 ]
 [project.optional-dependencies]
@@ -39,7 +40,9 @@ namespaces = false
 
 [tool.isort]
 profile = "black"
-known_third_party = ["wandb"]  # necessary because of "wandb" directory
+# Necessary because of directories with
+# packages with the same name
+known_third_party = ["datasets", "trl", "wandb"]
 
 [tool.pyright]
 venvPath = "."

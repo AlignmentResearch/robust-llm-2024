@@ -2,8 +2,8 @@ experiment_type: "training"
 
 environment:
   dataset_type: "tensor_trust"
-  train_set_size: 1024
-  validation_set_size: 32
+  train_set_size: 10
+  validation_set_size: 10
   shuffle_train_set: true
   shuffle_validation_set: true
 
@@ -13,8 +13,14 @@ training:
   iterative:
     iterative_training: true
     training_attack:
-      attack_type: "random_token"
-    num_iterative_training_rounds: 1
+      attack_type: "trl"
+      train_frequency: null  # only train the first round
+      trl_attack_config:
+        batch_size: 3
+        mini_batch_size: 1
+        gradient_accumulation_steps: 1
+        ppo_epochs: 5
+    num_iterative_training_rounds: 5
     skip_first_training_round: false
     min_num_new_examples_to_add: 50
     adversarial_example_search_minibatch_size: 16

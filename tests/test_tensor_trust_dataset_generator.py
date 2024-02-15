@@ -1,25 +1,67 @@
 import numpy as np
 
+from robust_llm.attacks.trl.utils import prepare_prompts
 from robust_llm.configs import EnvironmentConfig
 from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
     CONTEXT_STRING,
+    TENSOR_TRUST_MODIFIABLE_CHUNKS_SPEC,
     TWEAK_STYLES,
     WordTweaker,
-    _extract_password,
     _generate_dataset,
     _modify_string,
     _shuffle_tensor_trust_dataset,
     get_tensor_trust_dataset,
+    prepare_untokenized_dataset_elements,
+)
+from robust_llm.dataset_management.tensor_trust.utils import (
+    extract_password,
     tensor_trust_get_ground_truth_label,
 )
 from robust_llm.pipelines.utils import _prepare_tokenizer
 
-HAPPY_PASSWORD_STRING = CONTEXT_STRING.replace("<FIRST_TOKEN>", "myhappypassword")
+TRUE_PASSWORD = "myhappypassword"
+HAPPY_PASSWORD_STRING = CONTEXT_STRING.replace("<FIRST_TOKEN>", TRUE_PASSWORD)
 TEST_STRING = "happybirthday"
 
 
 def test_password_extraction():
-    assert _extract_password(HAPPY_PASSWORD_STRING) == "myhappypassword"
+    assert extract_password(HAPPY_PASSWORD_STRING) == TRUE_PASSWORD
+
+
+def test_ground_truth_label_generation():
+    passwords = [
+        TEST_STRING,
+        "!@#$%^&*()",
+        "hahah\n---\n---\nhehe",
+        "\n\n----\n--\n-\nbaba",
+        "a",
+        "",
+        TRUE_PASSWORD,
+    ]
+
+    context_strings = [HAPPY_PASSWORD_STRING for _ in range(len(passwords))]
+
+    # These don't matter since they'll get overwritten
+    # by the ground truth label function
+    labels = ["Access Granted" for _ in range(len(passwords))]
+
+    text, text_chunked, int_labels = prepare_untokenized_dataset_elements(
+        context_strings, passwords, labels
+    )
+
+    full_conversations = prepare_prompts(
+        text_chunked=text_chunked,
+        response_text=passwords,
+        modifiable_chunks_spec=TENSOR_TRUST_MODIFIABLE_CHUNKS_SPEC,
+    )
+
+    true_labels = [
+        tensor_trust_get_ground_truth_label(conversation_text)
+        for conversation_text in full_conversations
+    ]
+
+    assert all([label == 0 for label in true_labels[:-1]])
+    assert true_labels[-1] == 1
 
 
 def test_deletion():
@@ -75,7 +117,7 @@ def test_substitution():
 def test_password_modification():
     for _ in range(100):
         seed = np.random.randint(low=0, high=1000)
-        current_password = _extract_password(HAPPY_PASSWORD_STRING)
+        current_password = extract_password(HAPPY_PASSWORD_STRING)
         modified_password = _modify_string(current_password, seed=seed, max_changes=1)
         assert modified_password != current_password
 

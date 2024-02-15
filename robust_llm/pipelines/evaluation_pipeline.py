@@ -45,6 +45,14 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
         else None
     )
 
+    if attack.REQUIRES_TRAINING:
+        assert dataset is not None
+        print("Training attack before evaluation")
+        # We train the attack on the *validation* dataset here.
+        # In the future, we might want to (also or only) train on a
+        # different dataset, such as the train dataset.
+        attack.train(dataset=dataset)
+
     do_adversarial_evaluation(
         model=model,
         tokenizer=tokenizer,

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+import torch
 from omegaconf import MISSING
 
 SHARED_DATA_DIR = "/robust_llm_data"
@@ -70,6 +71,52 @@ class RandomTokenAttackConfig:
 
 
 @dataclass
+class TRLAttackConfig:
+    """Options specific for TRL attacks.
+
+    Attributes:
+        batch_size (int):
+            The TRL batch size (how many examples are passed
+            to a single call of PPO's "step" function).
+        mini_batch_size (int):
+            The TRL minibatch size (how many examples to load
+            onto the gpu at once).
+        gradient_accumulation_steps (int):
+            The TRL gradient accumulation steps (how many minibatches
+            to accumulate before taking a single gradient update step).
+        ppo_epochs (int):
+            The number of ppo epochs to run TRL on the provided dataset.
+        initial_kl_coefficient (float):
+            The starting KL coefficient for TRL.
+            NOTE: this might not be the optimal value.
+            TODO(niki): vary this value.
+        adversary_base_model_name (str):
+            Which model to use as the adversary.
+        adversary_base_model_checkpoint (int):
+            Which checkpoint to use for the adversary model.
+        min_length (int):
+            The minimum number of tokens to generate.
+            If -1, there is no minimum length.
+            Name and convention copied from trl code.
+        max_new_tokens (int):
+            The maximum number of tokens to generate.
+            Name copied from trl code.
+    """
+
+    batch_size: int = 64
+    mini_batch_size: int = 32
+    gradient_accumulation_steps: int = 1
+    ppo_epochs: int = 10
+    initial_kl_coefficient: float = 0
+
+    adversary_base_model_name: str = "EleutherAI/pythia-14m"
+    adversary_base_model_checkpoint: int = 143000
+
+    min_length: int = -1
+    max_new_tokens: int = 3
+
+
+@dataclass
 class AttackConfig:
     """
     Configs used in attack setup.
@@ -79,6 +126,11 @@ class AttackConfig:
         repeat_attack_every_round (bool):
             Whether to repeat the attack every iterative training round or not.
         seed (int): Random seed for the attack.
+        train_frequency (Optional[int]):
+            If the attack needs training, how often to train it.
+            If None, only train attack after the first training round.
+        victim_inference_batch_size (int):
+            Batch size to use for victim model inference.
         brute_force_tomita_attack_config (BruteForceTomitaAttackConfig):
             Config for BruteForceTomitaAttack.
         text_attack_attack_config (TextAttackAttackConfig):
@@ -90,6 +142,10 @@ class AttackConfig:
     attack_type: str = "identity"
     repeat_attack_every_round: bool = True
     seed: int = 0
+    train_frequency: Optional[int] = None
+    victim_inference_batch_size: int = 8
+
+    # Configs for specific types of attacks.
     brute_force_tomita_attack_config: BruteForceTomitaAttackConfig = (
         BruteForceTomitaAttackConfig()
     )
@@ -97,6 +153,7 @@ class AttackConfig:
     random_token_attack_attack_config: RandomTokenAttackConfig = (
         RandomTokenAttackConfig()
     )
+    trl_attack_config: TRLAttackConfig = TRLAttackConfig()
 
 
 @dataclass
@@ -255,6 +312,7 @@ class EnvironmentConfig:
             Whether to shuffle the train set. Can matter if we subsample.
         shuffle_validation_set (bool):
             Whether to shuffle the validation set. Can matter if we subsample.
+        device (str): Device to use for models.
     """
 
     model_name_or_path: str = "bert-base-uncased"
@@ -271,6 +329,7 @@ class EnvironmentConfig:
     validation_set_size: Optional[int] = None
     shuffle_train_set: bool = False
     shuffle_validation_set: bool = False
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 @dataclass

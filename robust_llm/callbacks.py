@@ -5,7 +5,7 @@ from transformers.training_args import TrainingArguments
 from typing_extensions import override
 
 
-class CrossTrainRunStepRecordingWandbCallback(WandbCallback):
+class GlobalTrainingStepRecordingWandbCallback(WandbCallback):
     @override
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

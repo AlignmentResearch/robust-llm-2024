@@ -15,6 +15,7 @@ class BruteForceTomitaAttack(Attack):
     """Brute force attack for Tomita datasets."""
 
     REQUIRES_INPUT_DATASET = False
+    REQUIRES_TRAINING = False
 
     def __init__(
         self,

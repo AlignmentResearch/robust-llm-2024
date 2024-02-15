@@ -5,9 +5,13 @@ from datasets import Dataset, DatasetDict, IterableDatasetDict, load_dataset
 from transformers import PreTrainedTokenizerBase
 
 from robust_llm.configs import EnvironmentConfig, TrainingConfig
-from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
+from robust_llm.dataset_management.tensor_trust.constants import (
     TENSOR_TRUST_MODIFIABLE_CHUNKS_SPEC,
+)
+from robust_llm.dataset_management.tensor_trust.tensor_trust_dataset_generator import (
     get_tensor_trust_dataset,
+)
+from robust_llm.dataset_management.tensor_trust.utils import (
     tensor_trust_get_ground_truth_label,
 )
 from robust_llm.dataset_management.tomita import Tomita

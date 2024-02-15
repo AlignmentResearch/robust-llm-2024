@@ -13,6 +13,8 @@ class Attack(abc.ABC):
 
     # Whether the attack always requires an input to `get_attacked_dataset` method.
     REQUIRES_INPUT_DATASET: bool
+    # Whether the attack needs to be trained before it can be effectively used.
+    REQUIRES_TRAINING: bool
 
     def __init__(
         self,
@@ -60,6 +62,18 @@ class Attack(abc.ABC):
             the attack.
         """
         pass
+
+    def train(self, dataset: Dataset) -> None:
+        """Trains the attack on the given dataset.
+
+        This method need only be overridden (and called)
+        when `REQUIRES_TRAINING` is True.
+
+        Args:
+            dataset: dataset of examples to train the attack on.
+                Requires `text`, `text_chunked`, and `label` columns.
+        """
+        raise NotImplementedError
 
 
 class IdentityAttack(Attack):

@@ -22,7 +22,7 @@ from robust_llm.adversarial_trainer import (
     AdversarialTrainerLoggingCallback,
 )
 from robust_llm.attacks.attack_utils import create_attack
-from robust_llm.callbacks import CrossTrainRunStepRecordingWandbCallback
+from robust_llm.callbacks import GlobalTrainingStepRecordingWandbCallback
 from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.dataset_management.tomita.tomita import Tomita
@@ -82,7 +82,7 @@ class Training:
             eval_dataset=self.eval_dataset,  # type: ignore
             compute_metrics=self.compute_metrics,
         )
-        trainer.add_callback(CrossTrainRunStepRecordingWandbCallback)
+        trainer.add_callback(GlobalTrainingStepRecordingWandbCallback)
 
         self.trainer = trainer
 
@@ -299,7 +299,7 @@ class AdversarialTraining(Training):
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
         )
-        trainer.add_callback(CrossTrainRunStepRecordingWandbCallback)
+        trainer.add_callback(GlobalTrainingStepRecordingWandbCallback)
         trainer.add_callback(AdversarialTrainerLoggingCallback(self))
         trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
 
@@ -318,8 +318,8 @@ class AdversarialTraining(Training):
             attack_config=self.training_attack_config,
             modifiable_chunks_spec=self.modifiable_chunks_spec,
             dataset_type=self.dataset_type,
-            model=self.model,
-            tokenizer=self.tokenizer,
+            victim_model=self.model,
+            victim_tokenizer=self.tokenizer,
             language_generator_name=self.language_generator_name,
             ground_truth_label_fn=self.ground_truth_label_fn,
         )
@@ -327,8 +327,8 @@ class AdversarialTraining(Training):
             attack_config=self.validation_attack_config,
             modifiable_chunks_spec=self.modifiable_chunks_spec,
             dataset_type=self.dataset_type,
-            model=self.model,
-            tokenizer=self.tokenizer,
+            victim_model=self.model,
+            victim_tokenizer=self.tokenizer,
             language_generator_name=self.language_generator_name,
             ground_truth_label_fn=self.ground_truth_label_fn,
         )
@@ -349,9 +349,22 @@ class AdversarialTraining(Training):
             else:
                 if self.train_epochs == 0:
                     raise ValueError(
-                        "Adversarial training should be done with >0 train epochs, exiting..."  # noqa: E501
+                        "Adversarial training should be done "
+                        "with >0 train epochs, exiting..."
                     )
                 adversarial_trainer.train()
+
+            if training_attack.REQUIRES_TRAINING:
+                train_this_round = False
+                train_frequency = training_attack.attack_config.train_frequency
+                if train_frequency is None and i == 0:
+                    train_this_round = True
+                elif train_frequency is not None and i % train_frequency == 0:
+                    train_this_round = True
+
+                if train_this_round:
+                    print("Training attack on round", i)
+                    training_attack.train(self.train_dataset)
 
             if i == 0 or self.training_attack_config.repeat_attack_every_round:
                 training_attack_dataset = Dataset.from_dict(
@@ -367,8 +380,8 @@ class AdversarialTraining(Training):
                     len(training_attack_dataset["text"]),
                 )
                 print(
-                    "The first few examples are:",
-                    training_attack_dataset["text"][:5],
+                    "The first few training attack dataset examples are:",
+                    training_attack_dataset["text"][:3],
                 )
 
             if i == 0 or self.validation_attack_config.repeat_attack_every_round:
@@ -406,7 +419,7 @@ class AdversarialTraining(Training):
             )
 
             print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
-            print("Some examples are:", incorrect_predictions["text"][:5])
+            print("Some examples are:", incorrect_predictions["text"][:3])
 
             examples_to_actually_add_to_train_set = incorrect_predictions
 

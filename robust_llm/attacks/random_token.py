@@ -17,6 +17,9 @@ class RandomTokenAttack(Attack):
     from the tokenizer's vocabulary.
     """
 
+    REQUIRES_INPUT_DATASET = True
+    REQUIRES_TRAINING = False
+
     def __init__(
         self,
         attack_config: AttackConfig,

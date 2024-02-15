@@ -159,6 +159,7 @@ class TextAttackAttack(Attack):
     """Attack using the TextAttack library."""
 
     REQUIRES_INPUT_DATASET = True
+    REQUIRES_TRAINING = False
 
     def __init__(
         self,
