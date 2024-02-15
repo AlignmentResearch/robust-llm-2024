@@ -159,8 +159,8 @@ robust_llm/wandb/
 # PyCharm
 .idea/
 
-# Datasets
-datasets/
+# Locally stored datasets
+local_datasets/
 
 # Checkpoints
 checkpoint*/
