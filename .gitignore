@@ -175,4 +175,9 @@ robust_llm/outputs/
 # Pythia
 pythia*/
 
+# Jupyter notebooks
 *.ipynb
+
+# Trainer files
+adversarial_trainer/
+test_trainer/
