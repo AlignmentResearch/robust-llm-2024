@@ -18,7 +18,7 @@ from textattack.constraints.pre_transformation_constraint import (
     PreTransformationConstraint,
 )
 from textattack.goal_functions import UntargetedClassification
-from textattack.search_methods import GreedyWordSwapWIR
+from textattack.search_methods import GreedySearch, SearchMethod
 from textattack.shared import AttackedText
 from textattack.transformations import (
     CompositeTransformation,
@@ -101,7 +101,9 @@ class RandomCharacterChanges(AttackRecipe):
         )
         constraints = [ModifyOnlySpecialWordsConstraint()]
         goal_function = UntargetedClassification(model_wrapper)
-        search_method = GreedyWordSwapWIR(wir_method="random")
+        # Use GreedySearch to search until success and do not limit ourselves
+        # to one pass over the words.
+        search_method = GreedySearch()
 
         return textattack.Attack(
             goal_function, constraints, transformation, search_method  # type: ignore
@@ -210,6 +212,13 @@ class TextAttackAttack(Attack):
             self._attack = textattack.attack_recipes.BAEGarg2019.build(
                 model_wrapper=wrapped_model
             )
+            if self.num_modifiable_words_per_chunk is not None:
+                # Use GreedySearch to search until success and do not limit ourselves
+                # to one pass over the words.
+                self._attack = TextAttackAttack._make_modified_attack(
+                    self._attack,
+                    new_search_method=GreedySearch(),
+                )
         elif attack_config.attack_type == "checklist":
             assert self.num_modifiable_words_per_chunk is None, "Not supported."
             self._attack = textattack.attack_recipes.CheckList2020.build(
@@ -230,8 +239,8 @@ class TextAttackAttack(Attack):
         if self.num_modifiable_words_per_chunk is not None:
             # In this case, we drop any regular constraints (e.g. on semantics or
             # avoiding repeats) and only allow replacing the special words.
-            self._attack = TextAttackAttack._make_attack_with_new_constraints(
-                self._attack, [ModifyOnlySpecialWordsConstraint()]
+            self._attack = TextAttackAttack._make_modified_attack(
+                self._attack, new_constraints=[ModifyOnlySpecialWordsConstraint()]
             )
 
         self.attack_args = textattack.AttackArgs(
@@ -296,15 +305,19 @@ class TextAttackAttack(Attack):
         )
 
     @staticmethod
-    def _make_attack_with_new_constraints(
+    def _make_modified_attack(
         attack: textattack.Attack,
-        new_constraints: List[Union[Constraint, PreTransformationConstraint]],
+        new_constraints: Optional[
+            List[Union[Constraint, PreTransformationConstraint]]
+        ] = None,
+        new_search_method: Optional[SearchMethod] = None,
     ):
         return textattack.Attack(
             goal_function=attack.goal_function,
-            constraints=new_constraints,
+            constraints=new_constraints
+            or (attack.constraints + attack.pre_transformation_constraints),
             transformation=attack.transformation,
-            search_method=attack.search_method,
+            search_method=new_search_method or attack.search_method,
         )
 
     def _preprocess_dataset(self, dataset: Dataset) -> Dataset:
