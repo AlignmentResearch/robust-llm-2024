@@ -123,8 +123,6 @@ class AttackConfig:
 
     Attributes:
         attack_type (str): The type of attack to use.
-        repeat_attack_every_round (bool):
-            Whether to repeat the attack every iterative training round or not.
         seed (int): Random seed for the attack.
         train_frequency (Optional[int]):
             If the attack needs training, how often to train it.
@@ -140,7 +138,6 @@ class AttackConfig:
     """
 
     attack_type: str = "identity"
-    repeat_attack_every_round: bool = True
     seed: int = 0
     train_frequency: Optional[int] = None
     victim_inference_batch_size: int = 8

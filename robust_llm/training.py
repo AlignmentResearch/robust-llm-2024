@@ -366,39 +366,36 @@ class AdversarialTraining(Training):
                     print("Training attack on round", i)
                     training_attack.train(self.train_dataset)
 
-            if i == 0 or self.training_attack_config.repeat_attack_every_round:
-                training_attack_dataset = Dataset.from_dict(
-                    tokenize_dataset(
-                        training_attack.get_attacked_dataset(self.train_dataset)[0],
-                        self.tokenizer,
-                    )
+            training_attack_dataset = Dataset.from_dict(
+                tokenize_dataset(
+                    training_attack.get_attacked_dataset(self.train_dataset)[0],
+                    self.tokenizer,
                 )
+            )
+            print(
+                "Training attack dataset has size",
+                len(training_attack_dataset["text"]),
+            )
+            print(
+                "The first few training attack dataset examples are:",
+                training_attack_dataset["text"][:3],
+            )
+            # Save the training attack dataset so we can log it later
+            self.training_attack_dataset = training_attack_dataset
 
-                self.training_attack_dataset = training_attack_dataset
-                print(
-                    "Training attack dataset has size",
-                    len(training_attack_dataset["text"]),
+            validation_attack_dataset = Dataset.from_dict(
+                tokenize_dataset(
+                    validation_attack.get_attacked_dataset(
+                        self.eval_dataset["validation"]
+                    )[0],
+                    self.tokenizer,
                 )
-                print(
-                    "The first few training attack dataset examples are:",
-                    training_attack_dataset["text"][:3],
+            )
+            if not self.use_probabilistic_robustness_check:
+                # Save the attack dataset as one of the datasets to do eval on
+                self.eval_dataset["validation_attack_dataset"] = (
+                    validation_attack_dataset
                 )
-
-            if i == 0 or self.validation_attack_config.repeat_attack_every_round:
-                validation_attack_dataset = Dataset.from_dict(
-                    tokenize_dataset(
-                        validation_attack.get_attacked_dataset(
-                            self.eval_dataset["validation"]
-                        )[0],
-                        self.tokenizer,
-                    )
-                )
-
-                if not self.use_probabilistic_robustness_check:
-                    # Save the attack dataset as one of the datasets to do eval on
-                    self.eval_dataset["validation_attack_dataset"] = (
-                        validation_attack_dataset
-                    )
 
             if self.log_datasets_to_wandb:
                 self.log_datasets()
