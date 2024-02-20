@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import abc
 import os
-from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Protocol, Sequence
 
 import numpy as np
 import torch
@@ -239,3 +239,9 @@ def make_unique_name_to_save(base_name_or_path: str) -> str:
     # Use wandb run ID as a unique identifier.
     assert wandb.run is not None
     return f"{wandb.run.id}_from_{base_processed}"
+
+
+def get_randint_with_exclusions(high: int, exclusions: Sequence[int]) -> int:
+    """Get a random integer from [0, `high`), excluding the integers in `exclusions`."""
+    values = set(range(high)) - set(exclusions)
+    return np.random.choice(list(values))
