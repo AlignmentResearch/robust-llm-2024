@@ -53,13 +53,6 @@ def create_attack(
             victim_tokenizer=victim_tokenizer,
             ground_truth_label_fn=ground_truth_label_fn,
         )
-    elif attack_config.attack_type == "random_token":
-        return RandomTokenAttack(
-            attack_config=attack_config,
-            modifiable_chunks_spec=modifiable_chunks_spec,
-            dataset_type=dataset_type,
-            tokenizer=victim_tokenizer,
-        )
     elif attack_config.attack_type == "gcg":
         return GCGAttack(
             attack_config=attack_config,
