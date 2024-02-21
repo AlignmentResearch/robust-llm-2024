@@ -21,11 +21,13 @@ from robust_llm.adversarial_trainer import (
     AdversarialTrainerDatasetManagementCallback,
     AdversarialTrainerLoggingCallback,
 )
+from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import GlobalTrainingStepRecordingWandbCallback
-from robust_llm.configs import AttackConfig
+from robust_llm.configs import AttackConfig, EvaluationConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.dataset_management.tomita.tomita import Tomita
+from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.utils import (
     log_dataset_to_wandb,
     search_for_adversarial_examples,
@@ -44,6 +46,7 @@ class Training:
     model: PreTrainedModel
     tokenizer: PreTrainedTokenizerBase
     model_name_to_save: str  # Used for saving the model to disk/hf
+    evaluation_config: EvaluationConfig
     train_epochs: int = 3
     learning_rate: float = 5e-5
     train_batch_size: int = 8
@@ -354,17 +357,31 @@ class AdversarialTraining(Training):
                     )
                 adversarial_trainer.train()
 
-            if training_attack.REQUIRES_TRAINING:
-                train_this_round = False
-                train_frequency = training_attack.attack_config.train_frequency
-                if train_frequency is None and i == 0:
-                    train_this_round = True
-                elif train_frequency is not None and i % train_frequency == 0:
-                    train_this_round = True
+            # Train the train/validation attacks if they need training.
+            _maybe_train_attack(
+                training_attack,
+                self.train_dataset,
+                train_or_validation="train",
+                round=i,
+            )
+            _maybe_train_attack(
+                validation_attack,
+                self.eval_dataset["validation"],
+                train_or_validation="validation",
+                round=i,
+            )
 
-                if train_this_round:
-                    print("Training attack on round", i)
-                    training_attack.train(self.train_dataset)
+            # Perform adversarial evaluation every round
+            do_adversarial_evaluation(
+                model=self.model,
+                tokenizer=self.tokenizer,
+                dataset=self.eval_dataset["validation"],
+                ground_truth_label_fn=self.ground_truth_label_fn,
+                num_generated_examples=self.evaluation_config.num_generated_examples,
+                attack=validation_attack,
+                batch_size=self.evaluation_config.batch_size,
+                num_examples_to_log_detailed_info=self.evaluation_config.num_examples_to_log_detailed_info,  # noqa: E501
+            )
 
             training_attack_dataset = Dataset.from_dict(
                 tokenize_dataset(
@@ -493,13 +510,24 @@ class AdversarialTraining(Training):
         if self.use_probabilistic_robustness_check:
             return
 
-        # Save the adversarial datasets to wandb tables
-        if self.eval_dataset.get("validation_attack_dataset", None) is None:
-            raise ValueError(
-                "validation_attack_dataset should have been assigned by now, exiting..."  # noqa: E501
-            )
-
         log_dataset_to_wandb(self.training_attack_dataset, "training_attack_dataset")
-        log_dataset_to_wandb(
-            self.eval_dataset["validation_attack_dataset"], "validation_attack_dataset"
-        )
+
+
+def _maybe_train_attack(
+    attack: Attack,
+    dataset: Dataset,
+    train_or_validation: str,
+    round: int,
+) -> None:
+    assert train_or_validation in ["train", "validation"]
+    if attack.REQUIRES_TRAINING:
+        train_this_round = False
+        train_frequency = attack.attack_config.train_frequency
+        if train_frequency is None and round == 0:
+            train_this_round = True
+        elif train_frequency is not None and round % train_frequency == 0:
+            train_this_round = True
+
+        if train_this_round:
+            print(f"Training the {train_or_validation} attack on round {round}")
+            attack.train(dataset)

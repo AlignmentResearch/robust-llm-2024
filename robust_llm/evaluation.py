@@ -301,7 +301,6 @@ def compute_attack_results(
     tokenizer: PreTrainedTokenizerBase,
     batch_size: int,
     num_examples_to_log_detailed_info: Optional[int],
-    device: Optional[str] = None,
 ) -> AttackResults:
     """Performs an attack and reports its results."""
 
@@ -319,7 +318,7 @@ def compute_attack_results(
     hf_pipeline = FilteredEvaluationPipeline(
         model=model,
         tokenizer=tokenizer,
-        device=device,
+        device=model.device,
         return_all_scores=False,
         framework="pt",
     )
