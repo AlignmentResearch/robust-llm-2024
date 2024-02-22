@@ -48,16 +48,6 @@ class Tomita:
         self.rng = np.random.default_rng(seed=self.seed)
         assert self.max_length <= self.largest_string_the_model_can_handle
 
-    def label_and_shuffle(
-        self, trues: list[str], falses: list[str]
-    ) -> dict[str, list[str]]:
-        labelled_trues = [(el, 1) for el in trues]
-        labelled_falses = [(el, 0) for el in falses]
-        labelled_dataset = labelled_trues + labelled_falses
-        self.rng.shuffle(labelled_dataset)  # type: ignore
-        data, labels = zip(*labelled_dataset)
-        return {"text": list(data), "label": list(labels)}
-
     @abc.abstractmethod
     def is_in_language(self, digits: list[int]) -> bool:
         pass
@@ -92,22 +82,25 @@ class Tomita:
         half_test_size = test_size // 2
 
         train_set: dict[str, list[str]]
-        train_set = self.label_and_shuffle(
-            trues[:half_train_size], falses[:half_train_size]
+        train_set = label_and_shuffle(
+            trues[:half_train_size], falses[:half_train_size], rng=self.rng
         )
 
         # The test and validation sets areallowed to be empty,
         # which would otherwise cause bugs for this form of indexing.
         val_set: dict[str, list[str]] = {"text": [], "label": []}
         if validation_size > 0:
-            val_set = self.label_and_shuffle(
+            val_set = label_and_shuffle(
                 trues[half_train_size : half_train_size + half_validation_size],
                 falses[half_train_size : half_train_size + half_validation_size],
+                rng=self.rng,
             )
         test_set: dict[str, list[str]] = {"text": [], "label": []}
         if test_size > 0:
-            test_set = self.label_and_shuffle(
-                trues[-half_test_size:], falses[-half_test_size:]
+            test_set = label_and_shuffle(
+                trues[-half_test_size:],
+                falses[-half_test_size:],
+                rng=self.rng,
             )
 
         return (
@@ -146,3 +139,29 @@ class Tomita:
     def string_to_digit_list(self, string: str) -> list[int]:
         """Converts a space separated digit string into a list of ints."""
         return [int(c) for c in string.split(" ")]
+
+
+def label_and_shuffle(
+    trues: list[str],
+    falses: list[str],
+    rng: np.random.Generator,
+) -> dict[str, list[str]]:
+    """Given a list of true and false strings, returns a labelled, shufffled dataset.
+
+    Args:
+        trues: list of strings belonging to the regular langauge.
+        falses: list of strings not belonging to the regular language.
+        rng: NumPy random number generator.
+
+    Returns:
+        A dictionary with keys "text" and "label". The "text" field
+        contains a shuffled list of strings, and the "label" field
+        contains their corresponding integer labels
+        (1 if in the regular language, 0 if not in the regular language).
+    """
+    labelled_trues = [(el, 1) for el in trues]
+    labelled_falses = [(el, 0) for el in falses]
+    labelled_dataset = labelled_trues + labelled_falses
+    rng.shuffle(labelled_dataset)  # type: ignore
+    data, labels = zip(*labelled_dataset)
+    return {"text": list(data), "label": list(labels)}
