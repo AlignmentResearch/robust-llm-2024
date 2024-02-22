@@ -97,6 +97,7 @@ class RandomTokenAttack(Attack):
         new_dataset = Dataset.from_dict(
             {
                 "text": attacked_text,
+                "original_text": dataset["text"],
                 "label": dataset["label"],
             }
         )
