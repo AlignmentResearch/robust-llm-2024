@@ -83,6 +83,7 @@ class IdentityAttack(Attack):
     """
 
     REQUIRES_INPUT_DATASET = True
+    REQUIRES_TRAINING = False
 
     @override
     def get_attacked_dataset(
