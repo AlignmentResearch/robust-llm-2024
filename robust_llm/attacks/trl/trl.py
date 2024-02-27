@@ -4,12 +4,12 @@ import torch
 from datasets import Dataset
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
-from trl import PPOTrainer
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.trl.utils import (
     LogitTextClassificationPipeline,
+    PPOTrainerWithModifiedLogging,
     make_ppo_trainer,
     prepare_adversary_model_and_tokenizer,
     prepare_prompts,
@@ -102,7 +102,7 @@ class TRLAttack(Attack):
             "pad_token_id": self.adversary_tokenizer.eos_token_id,
             "max_new_tokens": self.attack_config.trl_attack_config.max_new_tokens,
         }
-        self.ppo_trainer: Optional[PPOTrainer] = None
+        self.ppo_trainer: Optional[PPOTrainerWithModifiedLogging] = None
 
     def train(
         self,

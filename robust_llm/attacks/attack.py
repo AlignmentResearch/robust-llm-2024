@@ -70,7 +70,7 @@ class Attack(abc.ABC):
         when `REQUIRES_TRAINING` is True.
 
         Args:
-            dataset: dataset of examples to train the attack on.
+            dataset: Dataset of examples to train the attack on.
                 Requires `text`, `text_chunked`, and `label` columns.
         """
         raise NotImplementedError

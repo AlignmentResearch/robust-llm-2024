@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, Union
 
 if TYPE_CHECKING:
     from robust_llm.training import AdversarialTraining
 
+import torch
 import wandb
 from datasets import Dataset, concatenate_datasets
 from transformers import (
@@ -19,7 +20,34 @@ from typing_extensions import override
 from robust_llm.utils import get_overlap, tokenize_dataset
 
 
-class AdversarialTrainer(Trainer):
+class TrainerWithBatchSizeStoring(Trainer):
+    """A Trainer that also stores the batch size of the current batch.
+
+    This is necessary because when we do logging, we want to know not
+    only how many batches we've seen, but also how many datapoints that
+    corresponds to. In particular, the final batch will usually be
+    smaller than the others, so in order to not over-count, we need
+    to manually record how many datapoints were in a given batch.
+    """
+
+    def __init__(self, **trainer_kwargs):
+        super().__init__(**trainer_kwargs)
+        self._current_batch_size: int = -1
+
+    @override
+    def training_step(  # type: ignore[misc]
+        self, model: torch.nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
+    ) -> torch.Tensor:
+        loss = super().training_step(model=model, inputs=inputs)
+        self._current_batch_size = inputs["input_ids"].shape[0]
+        return loss
+
+    @property
+    def current_batch_size(self) -> int:
+        return self._current_batch_size
+
+
+class AdversarialTrainer(TrainerWithBatchSizeStoring):
     train_dataset: Dataset | None
 
     def __init__(self, **trainer_kwargs):

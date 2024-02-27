@@ -11,16 +11,10 @@ from transformers import (
     EvalPrediction,
     PreTrainedModel,
     PreTrainedTokenizerBase,
-    Trainer,
     TrainingArguments,
 )
 from typing_extensions import override
 
-from robust_llm.adversarial_trainer import (
-    AdversarialTrainer,
-    AdversarialTrainerDatasetManagementCallback,
-    AdversarialTrainerLoggingCallback,
-)
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import GlobalTrainingStepRecordingWandbCallback
@@ -28,6 +22,13 @@ from robust_llm.configs import AttackConfig, EvaluationConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.evaluation import do_adversarial_evaluation
+from robust_llm.logging_utils import LoggingCounter
+from robust_llm.trainer import (
+    AdversarialTrainer,
+    AdversarialTrainerDatasetManagementCallback,
+    AdversarialTrainerLoggingCallback,
+    TrainerWithBatchSizeStoring,
+)
 from robust_llm.utils import (
     log_dataset_to_wandb,
     search_for_adversarial_examples,
@@ -53,7 +54,7 @@ class Training:
     eval_batch_size: int = 8
     eval_steps: Optional[int | float] = None
     logging_steps: int | float = 500
-    trainer: Optional[Trainer] = None
+    trainer: Optional[TrainerWithBatchSizeStoring] = None
     log_datasets_to_wandb: bool = False
     ground_truth_label_fn: Optional[Callable[[str], int]] = None
 
@@ -65,7 +66,7 @@ class Training:
 
         self.metrics = evaluate.combine([accuracy, precision, recall, f1])
 
-    def setup_trainer(self) -> Trainer:
+    def setup_trainer(self) -> TrainerWithBatchSizeStoring:
         hf_training_args = TrainingArguments(
             output_dir="test_trainer",
             num_train_epochs=self.train_epochs,
@@ -78,18 +79,19 @@ class Training:
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
         )
 
-        trainer = Trainer(
+        self.trainer = TrainerWithBatchSizeStoring(
             model=self.model,
             args=hf_training_args,
             train_dataset=self.train_dataset,  # type: ignore
             eval_dataset=self.eval_dataset,  # type: ignore
             compute_metrics=self.compute_metrics,
         )
-        trainer.add_callback(GlobalTrainingStepRecordingWandbCallback)
+        self.victim_training_logging_counter = LoggingCounter(
+            _name="victim_training",
+        )
+        self.trainer.add_callback(GlobalTrainingStepRecordingWandbCallback(self))
 
-        self.trainer = trainer
-
-        return trainer
+        return self.trainer
 
     def run_trainer(self) -> None:
         trainer = self.setup_trainer()
@@ -294,7 +296,7 @@ class AdversarialTraining(Training):
             logging_steps=self.logging_steps,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
         )
-        trainer = AdversarialTrainer(
+        self.trainer = AdversarialTrainer(
             model=self.model,
             args=hf_training_args,
             train_dataset=self.train_dataset,
@@ -302,14 +304,14 @@ class AdversarialTraining(Training):
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
         )
-        trainer.add_callback(GlobalTrainingStepRecordingWandbCallback)
-        trainer.add_callback(AdversarialTrainerLoggingCallback(self))
-        trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
+        self.victim_training_logging_counter = LoggingCounter(
+            _name="victim_training",
+        )
+        self.trainer.add_callback(GlobalTrainingStepRecordingWandbCallback(self))
+        self.trainer.add_callback(AdversarialTrainerLoggingCallback(self))
+        self.trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
 
-        # Save the trainer as an attribute
-        self.trainer = trainer
-
-        return trainer
+        return self.trainer
 
     @override
     def run_trainer(self) -> None:
@@ -338,13 +340,15 @@ class AdversarialTraining(Training):
 
         training_attack_dataset = Dataset.from_dict({})
 
+        # At present, we always log training information to wandb
+        assert wandb.run is not None
+
         # Run the adversarial training loop
         for i in range(self.num_iterative_training_rounds):
-            print("Starting training round", i)
             self.current_iterative_training_round = i
 
-            # Train for "one round" (i.e., num_train_epochs) on the (eventually,
-            # adversarial example-augmented) train set
+            # Train for "one round" (i.e., num_train_epochs)
+            # on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
             # NOTE: this is where wandb.init() is called by default
             if i == 0 and self.skip_first_training_round:
@@ -501,6 +505,8 @@ class AdversarialTraining(Training):
             self.eval_dataset["all_examples_added_during_iterative_training"] = (
                 tokenized_new_examples
             )
+
+            print(f"Iterative training round {i} finished")
 
     @override
     def log_datasets(self) -> None:

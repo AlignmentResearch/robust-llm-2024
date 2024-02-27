@@ -13,7 +13,7 @@ from torch.nn.parameter import Parameter
 from robust_llm.configs import ExperimentConfig
 
 if TYPE_CHECKING:
-    from robust_llm.adversarial_trainer import AdversarialTrainer
+    from robust_llm.trainer import AdversarialTrainer
 
 import wandb
 from datasets import Dataset
