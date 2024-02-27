@@ -32,6 +32,7 @@ class FlamingoRun:
     script_path: str
     hydra_config: str
     override_args: dict
+    n_max_parallel: int = 1
     CONTAINER_TAG: str = "latest"
     COMMIT_HASH: str = dataclasses.field(default_factory=git_latest_commit)
     CPU: Union[int, str] = 4
@@ -43,8 +44,75 @@ class FlamingoRun:
         return {
             f.name: getattr(self, f.name)
             for f in dataclasses.fields(self)
-            if f.name not in ["script_path", "hydra_config", "override_args"]
+            if f.name
+            not in ["script_path", "hydra_config", "override_args", "n_max_parallel"]
         }
+
+
+def organize_by_containers(runs: Sequence[FlamingoRun]) -> list[list[FlamingoRun]]:
+    """Splits runs into groups that will be run together in a single k8s container."""
+    # Sort from "less demanding" to "more demanding" jobs.
+    runs = list(sorted(runs, key=lambda x: -x.n_max_parallel))
+    current_container: list[FlamingoRun] = []
+    runs_by_containers = [current_container]
+    for run in runs:
+        # Run can fit into the current container.
+        if len(current_container) + 1 <= run.n_max_parallel:
+            current_container.append(run)
+        else:
+            current_container = [run]
+            runs_by_containers.append(current_container)
+    return runs_by_containers
+
+
+def create_job_for_multiple_runs(
+    runs: Sequence[FlamingoRun],
+    name: str,
+    index: int,
+    launch_id: str,
+    project: str,
+    entity: str,
+    wandb_mode: str,
+) -> str:
+    # K8s job/pod names should be short for readability (hence cutting the name).
+    k8s_job_name = (
+        f"rllm-{name[:16]}-{index}"
+        if len(runs) == 1
+        else f"rllm-{name[:16]}-{index}-{index+len(runs)-1}"
+    )
+
+    single_commands = []
+    for i, run in enumerate(runs):
+        aux_args = [f"{k}={v}" for k, v in run.override_args.items()]
+        split_command = [
+            "PYTHONPATH=.",
+            "python",
+            run.script_path,
+            f"+experiment={run.hydra_config}",
+            f"experiment.run_name={name}-{index+i}",
+            *aux_args,
+        ]
+        single_commands.append(shlex.join(split_command))
+    single_commands.append("wait")
+    command = "(" + " & ".join(single_commands) + ")"
+
+    # Currently, we keep too much info in the FlamingoRun, including info that should be
+    # shared across all runs. Hence, we check below that it is indeed the same.
+    # TODO(michal): refactor to make it reasonable.
+    for run in runs:
+        assert runs[0].format_args() == run.format_args()
+
+    job = JOB_TEMPLATE.format(
+        NAME=k8s_job_name,
+        LAUNCH_ID=launch_id,
+        WANDB_ENTITY=entity,
+        WANDB_PROJECT=project,
+        WANDB_MODE=wandb_mode,
+        COMMAND=command,
+        **runs[0].format_args(),
+    )
+
+    return job
 
 
 def create_jobs(
@@ -58,32 +126,17 @@ def create_jobs(
 
     jobs = []
     name = (experiment_name or generate_name(style="hyphen")).replace("_", "-")
-    for i, run in enumerate(runs):
-        # Set random job_name. experiment_name and job_type are either specified
-        # by the user or taken from hydra config.
-        wandb_job_name = f"{name}-{i}"
-        # K8s job/pod names should be short for readability.
-        job_name = f"rllm-{name[:16]}-{i}"
 
-        aux_args = [f"{k}={v}" for k, v in run.override_args.items()]
-        split_command = [
-            "PYTHONPATH=.",
-            "python",
-            run.script_path,
-            f"+experiment={run.hydra_config}",
-            f"experiment.run_name={wandb_job_name}",
-            *aux_args,
-        ]
-        job = JOB_TEMPLATE.format(
-            NAME=job_name,
-            LAUNCH_ID=launch_id,
-            WANDB_ENTITY=entity,
-            WANDB_PROJECT=project,
-            WANDB_MODE=wandb_mode,
-            COMMAND=shlex.join(split_command),
-            **run.format_args(),
+    runs_by_containers = organize_by_containers(runs)
+
+    index = 0
+    for runs in runs_by_containers:
+        jobs.append(
+            create_job_for_multiple_runs(
+                runs, name, index, launch_id, project, entity, wandb_mode
+            )
         )
-        jobs.append(job)
+        index += len(runs)
 
     return jobs, launch_id
 
@@ -108,7 +161,10 @@ def launch_jobs(
             sys.exit(1)
 
     jobs, launch_id = create_jobs(
-        runs, project=project, entity=entity, experiment_name=experiment_name
+        runs,
+        project=project,
+        entity=entity,
+        experiment_name=experiment_name,
     )
     yamls_for_all_jobs = "\n\n---\n\n".join(jobs)
 
@@ -133,6 +189,7 @@ def run_multiple(
     experiment_name: str,
     hydra_config: str,
     override_args_list: Sequence[dict],
+    n_max_parallel: Optional[Sequence[int]] = None,
     script_path: str = "robust_llm",
     container_tag: str = "latest",
     cpu: int = 4,
@@ -140,21 +197,46 @@ def run_multiple(
     gpu: int = 1,
     priority: str = "normal-batch",
 ) -> None:
+    """Run an experiment containing multiple runs and multiple k8s jobs.
+
+    Potentially, several runs can be fit into a single k8s job and share a GPU.
+
+    Args:
+        experiment_name: descriptive name of the experiment, used to set wandb group.
+        hydra_config: hydra config name.
+        override_args_list: list of dictionaries with override arguments for each run.
+        n_max_parallel: If provided, each element `n_max_parallel[i]` denotes the
+            maximum number of runs that can be fit together in the container that
+            includes a run corresponding to `override_args_list[i]`. If None, every run
+            will be allocated a separate container.
+        script_path: path of the Python script to run.
+        container_tag: Docker container tag to use.
+        cpu: number of cpu cores per container.
+        memory: memory per container.
+        gpu: GPUs per container.
+        priority: K8s priority.
+    """
+    if n_max_parallel is not None:
+        assert len(n_max_parallel) == len(override_args_list)
+
     runs = [
-        FlamingoRun(
-            script_path=script_path,
-            hydra_config=hydra_config,
-            override_args={
-                "experiment.experiment_name": experiment_name,
-                **override_args,
-            },
-            CONTAINER_TAG=container_tag,
-            CPU=cpu,
-            MEMORY=memory,
-            GPU=gpu,
-            PRIORITY=priority,
+        (
+            FlamingoRun(
+                script_path=script_path,
+                hydra_config=hydra_config,
+                override_args={
+                    "experiment.experiment_name": experiment_name,
+                    **override_args,
+                },
+                n_max_parallel=n_max_parallel[i] if n_max_parallel else 1,
+                CONTAINER_TAG=container_tag,
+                CPU=cpu,
+                MEMORY=memory,
+                GPU=gpu,
+                PRIORITY=priority,
+            )
         )
-        for override_args in override_args_list
+        for (i, override_args) in enumerate(override_args_list)
     ]
 
     launch_jobs(runs, experiment_name=experiment_name)
