@@ -5,6 +5,7 @@ from typing import Literal, Sequence, Tuple, get_args
 
 import numpy as np
 from datasets import Dataset
+from filelock import FileLock
 from numpy.random import Generator
 from textattack.augmentation import Augmenter
 from textattack.transformations import (
@@ -245,24 +246,32 @@ def load_dataset(
     seed: int = RANDOM_SEED,
     generate_if_not_found: bool = True,
 ) -> Tuple[Sequence[str], Sequence[str], Sequence[str]]:
-    if not Path(f"{dataset_path}/contexts_{dataset_size}_seed_{seed}.txt").exists():
-        if not generate_if_not_found:
-            raise ValueError(
-                f"Dataset of size {dataset_size} with seed {seed} does not exist"
+    os.makedirs(dataset_path, exist_ok=True)
+
+    # Acquire a lock in case there are multiple processes started in the same container.
+    lock = FileLock(f"{dataset_path}/lock")
+
+    with lock:
+        if not Path(f"{dataset_path}/contexts_{dataset_size}_seed_{seed}.txt").exists():
+            if not generate_if_not_found:
+                raise ValueError(
+                    f"Dataset of size {dataset_size} with seed {seed} does not exist"
+                )
+
+            print(
+                f"Dataset of size {dataset_size} with seed {seed} does not *yet* exist."
             )
+            print(
+                f"Generating (and saving) dataset of size {dataset_size} with seed {seed}"  # noqa: E501
+            )
+            _generate_and_save_dataset(dataset_path, dataset_size, seed)
 
-        print(f"Dataset of size {dataset_size} with seed {seed} does not *yet* exist.")
-        print(
-            f"Generating (and saving) dataset of size {dataset_size} with seed {seed}"
-        )
-        _generate_and_save_dataset(dataset_path, dataset_size, seed)
-
-    with open(f"{dataset_path}/contexts_{dataset_size}_seed_{seed}.txt", "r") as f:
-        contexts = f.read().splitlines()
-    with open(f"{dataset_path}/queries_{dataset_size}_seed_{seed}.txt", "r") as f:
-        queries = f.read().splitlines()
-    with open(f"{dataset_path}/labels_{dataset_size}_seed_{seed}.txt", "r") as f:
-        labels = f.read().splitlines()
+        with open(f"{dataset_path}/contexts_{dataset_size}_seed_{seed}.txt", "r") as f:
+            contexts = f.read().splitlines()
+        with open(f"{dataset_path}/queries_{dataset_size}_seed_{seed}.txt", "r") as f:
+            queries = f.read().splitlines()
+        with open(f"{dataset_path}/labels_{dataset_size}_seed_{seed}.txt", "r") as f:
+            labels = f.read().splitlines()
 
     return contexts, queries, labels
 
@@ -302,8 +311,6 @@ def _generate_and_save_dataset(
         raise ValueError(f"dataset_size must be <= {len(words)}")
 
     contexts, queries, labels = _generate_dataset(words, dataset_size, seed)
-
-    os.makedirs(dataset_path, exist_ok=True)
 
     with open(f"{dataset_path}/contexts_{dataset_size}_seed_{seed}.txt", "w") as f:
         f.writelines(line + "\n" for line in contexts)
