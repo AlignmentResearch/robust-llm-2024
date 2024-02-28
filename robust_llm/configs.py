@@ -415,6 +415,8 @@ class TrainingConfig:
     num_train_epochs: int = 3
     learning_rate: float = 5e-5
     batch_size: int = 8
+    optimizer: str = "adamw_torch"
+    gradient_checkpointing: bool = False
     eval_steps: Optional[int] = None
     logging_steps: int | float = 500
     checkpoint: int = 142000

@@ -52,6 +52,8 @@ class Training:
     learning_rate: float = 5e-5
     train_batch_size: int = 8
     eval_batch_size: int = 8
+    optimizer: str = "adamw_torch"
+    gradient_checkpointing: bool = False
     eval_steps: Optional[int | float] = None
     logging_steps: int | float = 500
     trainer: Optional[TrainerWithBatchSizeStoring] = None
@@ -73,6 +75,8 @@ class Training:
             learning_rate=self.learning_rate,
             per_device_train_batch_size=self.train_batch_size,
             per_device_eval_batch_size=self.eval_batch_size,
+            optim=self.optimizer,
+            gradient_checkpointing=self.gradient_checkpointing,
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
@@ -291,6 +295,8 @@ class AdversarialTraining(Training):
             learning_rate=self.learning_rate,
             per_device_train_batch_size=self.train_batch_size,
             per_device_eval_batch_size=self.eval_batch_size,
+            optim=self.optimizer,
+            gradient_checkpointing=self.gradient_checkpointing,
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,

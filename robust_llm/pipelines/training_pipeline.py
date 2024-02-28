@@ -65,6 +65,8 @@ def run_training_pipeline(
         "learning_rate": experiment.training.learning_rate,
         "train_batch_size": experiment.training.batch_size,
         "eval_batch_size": experiment.evaluation.batch_size,
+        "optimizer": experiment.training.optimizer,
+        "gradient_checkpointing": experiment.training.gradient_checkpointing,
         "eval_steps": experiment.training.eval_steps,
         "logging_steps": experiment.training.logging_steps,
         "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
