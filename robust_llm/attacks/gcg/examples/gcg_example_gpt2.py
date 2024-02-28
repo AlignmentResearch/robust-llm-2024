@@ -27,15 +27,15 @@ def main():
 
     # run the attack with the parameters specified above
     attack_text = runner.run_gcg()
-    print(f"{attack_text = }")
+    print(f"{attack_text=}")
 
     full_prompt = prompt_template.build_prompt(attack_text=attack_text, target="")
-    print(f"{full_prompt = }")
+    print(f"{full_prompt=}")
     # confirm that the suffix works by using it to generate a continuation
     tokens = tokenizer(full_prompt, return_tensors="pt").input_ids.to(device=device)
     all_tokens = model.generate(tokens, max_new_tokens=5)
-    print(f"{all_tokens = }")
-    print(f"{tokenizer.decode(all_tokens[0]) = } ")
+    print(f"{all_tokens=}")
+    print(f"{tokenizer.decode(all_tokens[0])=} ")
 
 
 if __name__ == "__main__":

@@ -51,6 +51,7 @@ def make_ppo_trainer(
         # Needed to properly process "text_chunked"
         data_collator=trl_data_collator,
     )
+    assert isinstance(ppo_trainer, PPOTrainerWithModifiedLogging)
     return ppo_trainer
 
 
@@ -148,7 +149,7 @@ class PPOTrainerWithModifiedLogging(PPOTrainer):
             rewards = torch.tensor(rewards).to(self.current_device)  # type: ignore
         rewards = self.accelerator.gather(rewards).flatten()  # type: ignore
 
-        if self.config.log_with == "wandb":
+        if self.config.log_with == "wandb":  # type: ignore
             if any(
                 [column_to_log not in batch.keys() for column_to_log in columns_to_log]
             ):
@@ -173,7 +174,7 @@ class PPOTrainerWithModifiedLogging(PPOTrainer):
             # NOTE(niki): previously, this required the batch to contain
             # "query" and "response" keys. I've removed that requirement
             # because does not seem necessary or helpful for our use case.
-            if self.config.log_with == "wandb":
+            if self.config.log_with == "wandb":  # type: ignore
                 table_rows = [list(r) for r in zip(*batch_list, rewards.cpu().tolist())]  # type: ignore # noqa: E501
                 logs.update(
                     {

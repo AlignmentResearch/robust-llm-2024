@@ -40,7 +40,7 @@ def get_wrapped_model(
     elif model.config.model_type == "bert":
         return GCGBERTModel(model, tokenizer)
     else:
-        raise ValueError(f"Unknown model type: {model.config.type = }")
+        raise ValueError(f"Unknown model type: {model.config.type=}")
 
 
 @dataclass(frozen=True)

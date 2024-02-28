@@ -4,6 +4,7 @@ import torch
 from datasets import Dataset
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
+from trl import PPOConfig
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
@@ -119,7 +120,9 @@ class TRLAttack(Attack):
         )
 
         assert self.ppo_trainer is not None
-        for epoch in tqdm(range(self.ppo_trainer.config.ppo_epochs), "epoch: "):
+        assert isinstance(self.ppo_trainer.config, PPOConfig)
+        ppo_epochs: int = self.ppo_trainer.config.ppo_epochs
+        for epoch in tqdm(range(ppo_epochs), "epoch: "):
             epoch_rewards = []
             for batch in tqdm(self.ppo_trainer.dataloader):
                 # Get the attacks from the adversary

@@ -28,18 +28,18 @@ def main():
             prompt_template=prompt_template,
         )
 
-        print(f"For {clf_target = }:")
+        print(f"For {clf_target=}:")
         # run the attack with the parameters specified above
         attack_text = runner.run_gcg()
-        print(f"{attack_text = }")
+        print(f"{attack_text=}")
 
         # confirm that the suffix works by using it to generate a continuation
         prompt = runner.prompt_template.build_prompt(attack_text=attack_text)
         tokens = tokenizer(prompt, return_tensors="pt").input_ids.to(device=device)
         print(tokens)
         logits = model(tokens).logits
-        print(f"{logits = }")
-        print(f"{torch.softmax(logits, dim=1) = }")
+        print(f"{logits=}")
+        print(f"{torch.softmax(logits, dim=1)=}")
 
     run_with_target(0)
     run_with_target(1)
