@@ -21,7 +21,7 @@ repos:
     hooks:
       - id: flake8
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.349
+    rev: v1.1.351
     hooks:
       - id: pyright
   # Hooks that run in local environment (not isolated venv) as they need
