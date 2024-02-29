@@ -434,8 +434,9 @@ class EvaluationConfig:
             evaluating.
         evaluation_attack (AttackConfig): Config for the attack to use in evaluation.
         num_generated_examples (Optional[int]): Number of adversarial examples to
-            generate with the attack. Should be set iff the attack does not take dataset
-            as an input.
+            generate with the attack. Needs to be set if the attack does not take
+            dataset as an input. If there is dataset, this option will limit the number
+            of examples to attack.
         num_examples_to_log_detailed_info (Optional[int]): Number of adversarial
             examples for which we want to log detailed info, such as the original and
             attacked text, attack results and debug info. If None, do not log anything.

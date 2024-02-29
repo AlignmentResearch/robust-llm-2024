@@ -380,8 +380,15 @@ def do_adversarial_evaluation(
     num_examples_to_log_detailed_info: Optional[int],
 ) -> Dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
-    # Exactly one of these should be provided.
-    assert (dataset is None) != (num_generated_examples is None)
+    if dataset is None:
+        assert num_generated_examples is not None
+
+    if dataset is not None and num_generated_examples is not None:
+        dataset = dataset.select(range(min(num_generated_examples, len(dataset))))
+        # We have already limited the dataset, so do not pass this value into
+        # the `get_attacked_dataset` call below (note also that some some
+        # attacks do not support passing it into `get_attacked_dataset`).
+        num_generated_examples = None
 
     print("Doing adversarial evaluation...")
 
