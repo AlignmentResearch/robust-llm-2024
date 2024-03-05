@@ -1,16 +1,16 @@
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import torch
+import wandb
 from datasets import Dataset
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
-from trl import PPOConfig
+from trl import PPOConfig, PPOTrainer
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.trl.utils import (
     LogitTextClassificationPipeline,
-    PPOTrainerWithModifiedLogging,
     make_ppo_trainer,
     prepare_adversary_model_and_tokenizer,
     prepare_prompts,
@@ -37,6 +37,7 @@ class TRLAttack(Attack):
         self,
         attack_config: AttackConfig,
         modifiable_chunks_spec: ModifiableChunksSpec,
+        logging_name: str,
         dataset_type: str,
         victim_model: LanguageModel,
         victim_tokenizer: PreTrainedTokenizerBase,
@@ -48,12 +49,27 @@ class TRLAttack(Attack):
             attack_config: config of the attack
             modifiable_chunks_spec: Specification for which chunks of the
                 original text can be modified
+            logging_name: name of the attack; used for logging
             dataset_type: used dataset type
             victim_model: the model to be attacked
             victim_tokenizer: tokenizer used by the victim model
         """
 
-        super().__init__(attack_config, modifiable_chunks_spec)
+        super().__init__(
+            attack_config=attack_config,
+            modifiable_chunks_spec=modifiable_chunks_spec,
+            logging_name=logging_name,
+        )
+
+        # Check the logging frequency
+        if self.attack_config.log_frequency is None:
+            print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+            print(
+                "If you want to log trl training stats, "
+                "you need to set a positive log_frequency. "
+                "As is, no trl train stats will be logged."
+            )
+            print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
         # At present, the trl attack is set up to only work
         # with one modifiable chunk
@@ -103,8 +119,9 @@ class TRLAttack(Attack):
             "pad_token_id": self.adversary_tokenizer.eos_token_id,
             "max_new_tokens": self.attack_config.trl_attack_config.max_new_tokens,
         }
-        self.ppo_trainer: Optional[PPOTrainerWithModifiedLogging] = None
+        self.ppo_trainer: Optional[PPOTrainer] = None
 
+    @override
     def train(
         self,
         dataset: Dataset,
@@ -156,18 +173,38 @@ class TRLAttack(Attack):
                         reward = detached_logit_pair[0] - detached_logit_pair[1]
                     rewards.append(reward)
 
-                self.ppo_trainer.step(
+                train_stats = self.ppo_trainer.step(
                     queries=context_tensor_list,  # type: ignore
                     responses=responses,  # type: ignore
-                    scores=rewards,  # type: ignore
+                    scores=rewards,
                 )
-
                 epoch_rewards.extend(rewards)
 
-                # TODO(niki): add logging here
+                # Update step and datapoints trained
+                assert len(rewards) == len(context_tensor_list) == len(responses)
+
+                # Log the ppo stats and update the logging counters
+                self._maybe_log_trl(train_stats, rewards)
 
             average_reward = torch.Tensor(epoch_rewards).squeeze().mean()
             print(f"Training TRL; epoch {epoch} had average reward {average_reward}")
+
+    def _maybe_log_trl(
+        self, train_stats: Dict[str, Any], rewards: Sequence[torch.Tensor]
+    ):
+        self.logging_counter.increment(
+            step_count_to_add=1,
+            datapoint_count_to_add=len(rewards),
+            commit=False,
+        )
+
+        if self.attack_config.log_frequency is not None:
+            if self.logging_counter.step_count % self.attack_config.log_frequency == 0:
+                prepended_train_stats = {
+                    f"{self.logging_name}/{key}": value
+                    for key, value in train_stats.items()
+                }
+                wandb.log(prepended_train_stats, commit=True)
 
     @override
     def get_attacked_dataset(

@@ -6,6 +6,7 @@ from typing_extensions import override
 
 from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.logging_utils import LoggingCounter
 
 
 class Attack(abc.ABC):
@@ -20,18 +21,26 @@ class Attack(abc.ABC):
         self,
         attack_config: AttackConfig,
         modifiable_chunks_spec: ModifiableChunksSpec,
+        logging_name: Optional[str] = None,
     ) -> None:
         """Constructor for the Attack class.
 
         Args:
-            attack_config: configuration for the attack
+            attack_config: Configuration for the attack.
             modifiable_chunks_spec: Tuple of bools specifying which chunks of the
                 original text can be modified. For example, when (True,), the whole
                 text can be modified. When (False, True), only the second part of
                 the text can be modified for each example.
+            logging_name: Name of the attack, for the purposes of logging. Possible
+                examples include "training_attack" or "validation_attack".
         """
         self.attack_config = attack_config
         self.modifiable_chunks_spec = modifiable_chunks_spec
+        self.logging_name = logging_name
+
+        if self.REQUIRES_TRAINING and self.attack_config.log_frequency is not None:
+            assert logging_name is not None
+            self.logging_counter = LoggingCounter(_name=logging_name)
 
     @abc.abstractmethod
     def get_attacked_dataset(

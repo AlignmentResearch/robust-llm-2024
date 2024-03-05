@@ -17,7 +17,7 @@ from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
-from robust_llm.callbacks import GlobalTrainingStepRecordingWandbCallback
+from robust_llm.callbacks import CustomLoggingWandbCallback
 from robust_llm.configs import AttackConfig, EvaluationConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.dataset_management.tomita.tomita import Tomita
@@ -100,7 +100,7 @@ class Training:
         self.victim_training_logging_counter = LoggingCounter(
             _name="victim_training",
         )
-        self.trainer.add_callback(GlobalTrainingStepRecordingWandbCallback(self))
+        self.trainer.add_callback(CustomLoggingWandbCallback(self))
 
         return self.trainer
 
@@ -320,7 +320,7 @@ class AdversarialTraining(Training):
         self.victim_training_logging_counter = LoggingCounter(
             _name="victim_training",
         )
-        self.trainer.add_callback(GlobalTrainingStepRecordingWandbCallback(self))
+        self.trainer.add_callback(CustomLoggingWandbCallback(self))
         self.trainer.add_callback(AdversarialTrainerLoggingCallback(self))
         self.trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
 
@@ -335,6 +335,7 @@ class AdversarialTraining(Training):
         training_attack = create_attack(
             attack_config=self.training_attack_config,
             modifiable_chunks_spec=self.modifiable_chunks_spec,
+            logging_name="training_attack",
             dataset_type=self.dataset_type,
             victim_model=self.model,
             victim_tokenizer=self.tokenizer,
@@ -344,6 +345,7 @@ class AdversarialTraining(Training):
         validation_attack = create_attack(
             attack_config=self.validation_attack_config,
             modifiable_chunks_spec=self.modifiable_chunks_spec,
+            logging_name="validation_attack",
             dataset_type=self.dataset_type,
             victim_model=self.model,
             victim_tokenizer=self.tokenizer,
@@ -358,6 +360,10 @@ class AdversarialTraining(Training):
 
         # Run the adversarial training loop
         for i in range(self.num_iterative_training_rounds):
+            print(
+                f"Iterative training round {i} started "
+                f"at logging counts: {self.victim_training_logging_counter._parent}"
+            )
             self.current_iterative_training_round = i
 
             # Train for "one round" (i.e., num_train_epochs)
@@ -372,18 +378,34 @@ class AdversarialTraining(Training):
                         "Adversarial training should be done "
                         "with >0 train epochs, exiting..."
                     )
+                print(
+                    f"Victim started training in round {i} "
+                    f"at logging counts: {self.victim_training_logging_counter._parent}"
+                )
                 adversarial_trainer.train()
+                print(
+                    f"Victim finished training in round {i} "
+                    f"at logging counts: {self.victim_training_logging_counter._parent}"
+                )
 
             # Train the train/validation attacks if they need training.
+            print(
+                f"Adversary started training in round {i} "
+                f"at logging counts: {self.victim_training_logging_counter._parent}"
+            )
             _maybe_train_attack(
-                training_attack,
-                self.train_dataset,
+                attack=training_attack,
+                dataset=self.train_dataset,
                 train_or_validation="train",
                 round=i,
             )
+            print(
+                f"Adversary finished training in round {i} "
+                f"at logging counts: {self.victim_training_logging_counter._parent}"
+            )
             _maybe_train_attack(
-                validation_attack,
-                self.eval_dataset["validation"],
+                attack=validation_attack,
+                dataset=self.eval_dataset["validation"],
                 train_or_validation="validation",
                 round=i,
             )
@@ -519,7 +541,10 @@ class AdversarialTraining(Training):
                 tokenized_new_examples
             )
 
-            print(f"Iterative training round {i} finished")
+            print(
+                f"Iterative training round {i} finished "
+                f"at logging counts: {self.victim_training_logging_counter._parent}"
+            )
 
     @override
     def log_datasets(self) -> None:
@@ -549,4 +574,4 @@ def _maybe_train_attack(
 
         if train_this_round:
             print(f"Training the {train_or_validation} attack on round {round}")
-            attack.train(dataset)
+            attack.train(dataset=dataset)

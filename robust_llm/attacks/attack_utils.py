@@ -17,6 +17,7 @@ from robust_llm.utils import LanguageModel
 def create_attack(
     attack_config: AttackConfig,
     modifiable_chunks_spec: ModifiableChunksSpec,
+    logging_name: str,
     dataset_type: str,
     victim_model: LanguageModel,
     victim_tokenizer: transformers.PreTrainedTokenizerBase,
@@ -49,6 +50,7 @@ def create_attack(
         return TRLAttack(
             attack_config=attack_config,
             modifiable_chunks_spec=modifiable_chunks_spec,
+            logging_name=logging_name,
             dataset_type=dataset_type,
             victim_model=victim_model,
             victim_tokenizer=victim_tokenizer,

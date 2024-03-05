@@ -194,8 +194,13 @@ class AttackConfig:
         attack_type (str): The type of attack to use.
         seed (int): Random seed for the attack.
         train_frequency (Optional[int]):
-            If the attack needs training, how often to train it.
-            If None, only train attack after the first training round.
+            If the attack needs training, how often to train it,
+            counted in number of victim iterative training rounds.
+            If None, only train attack after the first victim training round.
+            Must be positive or None.
+        log_frequency (Optional[int]):
+            If the attack needs training, how often to log training progress.
+            If None, no training progress is logged. Must be positive or None.
         victim_inference_batch_size (int):
             Batch size to use for victim model inference.
         append_to_modifiable_chunk: if False, the modifiable chunk is replaced by dummy
@@ -217,6 +222,7 @@ class AttackConfig:
     attack_type: str = "identity"
     seed: int = 0
     train_frequency: Optional[int] = None
+    log_frequency: Optional[int] = 1
     victim_inference_batch_size: int = 8
     append_to_modifiable_chunk: bool = False
 
@@ -232,6 +238,12 @@ class AttackConfig:
     def __post_init__(self):
         if self.attack_type in TEXT_ATTACK_ATTACK_TYPES:
             assert not self.append_to_modifiable_chunk, "Not supported!"
+
+        if self.train_frequency is not None and self.train_frequency <= 0:
+            raise ValueError("train_frequency must be positive or None.")
+
+        if self.log_frequency is not None and self.log_frequency <= 0:
+            raise ValueError("log_frequency must be positive or None.")
 
 
 @dataclass

@@ -39,7 +39,7 @@ def run_training_pipeline(
     # (which logged values can be used as x-axes, and what the default x-axes
     # are set to be) because HuggingFace sets up its own metrics when we initialize
     # the Trainer, and we wait until that is done to overwrite them with our own.
-    # We do this in the `GlobalTrainingStepRecordingWandbCallback`'s `setup` method.
+    # We do this in the `CustomLoggingWandbCallback`'s `setup` method.
     wandb.init(
         project="robust-llm",
         group=experiment.experiment_name,

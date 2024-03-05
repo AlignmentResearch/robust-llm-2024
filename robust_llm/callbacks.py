@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 from robust_llm.logging_utils import setup_wandb_metrics
 
 
-class GlobalTrainingStepRecordingWandbCallback(WandbCallback):
+class CustomLoggingWandbCallback(WandbCallback):
     """WandbCallback that sets up custom steps for wandb logging.
 
     Since it is hard to control the behavior of the default wandb's step,
@@ -86,7 +86,7 @@ class GlobalTrainingStepRecordingWandbCallback(WandbCallback):
         state: TrainerState,
         control: TrainerControl,
         **kwargs,
-    ):
+    ) -> None:
         super().on_train_end(args, state, control, **kwargs)
 
         assert self.logging_counter.step_count == self.start_step + state.global_step

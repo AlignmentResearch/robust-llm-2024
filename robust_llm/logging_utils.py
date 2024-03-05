@@ -9,7 +9,12 @@ import wandb
 class LoggingCounter:
     """Class for logging precise step and datapoint counts.
 
-    Currently only supports victim training.
+    Used to keep track of the number of batches seen during training,
+    as well as the precise number of datapoints that corresponds to.
+    Individual models can each have their own logging counter, and
+    all point to the same global counter, which is used to keep track
+    of the total number of batches and datapoints seen across all models
+    during the current experiment.
     """
 
     _name: str

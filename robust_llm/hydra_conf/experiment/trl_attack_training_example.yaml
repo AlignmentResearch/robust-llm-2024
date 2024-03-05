@@ -1,0 +1,30 @@
+experiment_type: "training"
+experiment_name: "trl_attack_training_example"
+
+environment:
+  model_name_or_path: "bert-base-uncased"
+  dataset_type: "tensor_trust"
+  train_set_size: 20
+  validation_set_size: 20
+  shuffle_train_set: true
+  shuffle_validation_set: true
+
+training:
+  num_train_epochs: 5
+  logging_steps: 1
+  eval_steps: 10
+
+  iterative:
+    iterative_training: true
+    training_attack:
+      attack_type: "trl"
+      train_frequency: 1
+      trl_attack_config:
+        batch_size: 4
+        mini_batch_size: 4
+        gradient_accumulation_steps: 1
+        ppo_epochs: 1
+    num_iterative_training_rounds: 2
+    skip_first_training_round: false
+    min_num_new_examples_to_add: 10
+    adversarial_example_search_minibatch_size: 4

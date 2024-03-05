@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, List, Mapping, Sequence, Tuple
+from typing import Any, Mapping, Sequence, Tuple
 
 import torch
-import wandb
-from accelerate.utils import gather_object
 from datasets import Dataset
 from transformers import (
     PreTrainedModel,
@@ -23,7 +21,7 @@ def make_ppo_trainer(
     adversary_model: PreTrainedModel,
     adversary_tokenizer: PreTrainedTokenizerBase,
     dataset: Dataset,
-) -> PPOTrainerWithModifiedLogging:
+) -> PPOTrainer:
     ppo_config = {
         "exp_name": "rl-adversary",
         "batch_size": attack_config.trl_attack_config.batch_size,
@@ -43,7 +41,7 @@ def make_ppo_trainer(
     print("the RLAdversary config is", config)
     print("the dataset is", dataset)
     print("dataset size", len(dataset["text"]))
-    ppo_trainer = PPOTrainerWithModifiedLogging(
+    ppo_trainer = PPOTrainer(
         config=config,
         model=adversary_model,  # type: ignore
         tokenizer=adversary_tokenizer,
@@ -51,7 +49,7 @@ def make_ppo_trainer(
         # Needed to properly process "text_chunked"
         data_collator=trl_data_collator,
     )
-    assert isinstance(ppo_trainer, PPOTrainerWithModifiedLogging)
+    assert isinstance(ppo_trainer, PPOTrainer)
     return ppo_trainer
 
 
@@ -109,99 +107,6 @@ def prepare_adversary_model_and_tokenizer(
     )
 
     return adversary_model, adversary_tokenizer
-
-
-class PPOTrainerWithModifiedLogging(PPOTrainer):
-    """A PPOTrainer with customized log_stats for our use case.
-
-    This code is heavily based on that of the original PPOTrainer,
-    found at https://github.com/huggingface/trl/blob/1bfe0b8fcb02d91d842cdc64e8810871d2d5fd91/trl/trainer/ppo_trainer.py#L109  # noqa: E501
-    """
-
-    @override
-    def log_stats(  # type: ignore
-        self,
-        stats: dict,
-        batch: dict,
-        rewards: List[torch.FloatTensor],
-        columns_to_log: List[str],
-    ) -> None:
-        """
-        A function that logs all the training stats. Call it at the end of each epoch.
-
-        Args:
-            stats (dict[str, Any]):
-                A dictionary of training stats.
-            batch (dict[str, Any]):
-                A dictionary of batch data, this contains the queries and responses.
-            rewards (`List[torch.FloatTensor]`):
-                A tensor of rewards.
-            columns_to_log (`List[str]`):
-                Which columns to log from the `batch` dictionary. Behaves slightly
-                differently from original PPOTrainer.log_stats in that it does not
-                require the batch to contain "query" and "response" keys.
-        """
-
-        prepend_string = "trl_training/"
-
-        # all gather stats
-        if not isinstance(rewards, torch.Tensor):
-            rewards = torch.tensor(rewards).to(self.current_device)  # type: ignore
-        rewards = self.accelerator.gather(rewards).flatten()  # type: ignore
-
-        if self.config.log_with == "wandb":  # type: ignore
-            if any(
-                [column_to_log not in batch.keys() for column_to_log in columns_to_log]
-            ):
-                raise ValueError(
-                    f"Columns to log {columns_to_log} are not "
-                    "present in the batch {batch.keys()}."
-                )
-
-            batch_list = [batch[column_to_log] for column_to_log in columns_to_log]
-            if self.is_distributed:
-                gathered_batch_list = []
-                for b in batch_list:
-                    flattened = gather_object(b)
-                    gathered_batch_list.append(flattened)
-                batch_list = gathered_batch_list
-
-        # Log only if we are in the main process
-        if self.accelerator.is_main_process:
-            logs = {}
-
-            # Log stats
-            # NOTE(niki): previously, this required the batch to contain
-            # "query" and "response" keys. I've removed that requirement
-            # because does not seem necessary or helpful for our use case.
-            if self.config.log_with == "wandb":  # type: ignore
-                table_rows = [list(r) for r in zip(*batch_list, rewards.cpu().tolist())]  # type: ignore # noqa: E501
-                logs.update(
-                    {
-                        "game_log": wandb.Table(
-                            columns=[*columns_to_log, "reward"], rows=table_rows
-                        )
-                    }
-                )
-
-            logs.update(stats)
-
-            # manually cast in fp32 for bf16 torch tensors
-            for k, v in logs.items():
-                if isinstance(v, torch.Tensor) and v.dtype == torch.bfloat16:
-                    logs[k] = v.float()
-
-            logs["env/reward_mean"] = torch.mean(rewards).cpu().numpy().item()  # type: ignore # noqa: E501
-            logs["env/reward_std"] = torch.std(rewards).cpu().numpy().item()  # type: ignore # noqa: E501
-            logs["env/reward_dist"] = rewards.cpu().numpy()  # type: ignore
-
-            # NOTE(niki): I added this prepend step to make it easier
-            # to tell which logs are from the TRL training.
-            prepended_logs = {prepend_string + k: v for k, v in logs.items()}
-
-            self.accelerator.log(
-                prepended_logs,
-            )
 
 
 def prepare_prompts(

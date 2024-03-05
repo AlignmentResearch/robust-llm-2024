@@ -104,13 +104,16 @@ def prepare_attack(
     print("Preparing attack...")
 
     if training:
+        logging_name = "training_attack"
         attack_config = args.experiment.training.iterative.training_attack
     else:
+        logging_name = "eval_attack"
         attack_config = args.experiment.evaluation.evaluation_attack
 
     return create_attack(
         attack_config=attack_config,
         modifiable_chunks_spec=robust_llm_datasets.modifiable_chunks_spec,
+        logging_name=logging_name,
         dataset_type=args.experiment.environment.dataset_type,
         victim_model=model,
         victim_tokenizer=tokenizer,
