@@ -25,7 +25,7 @@ def _call_model(
     raise ValueError("exactly one of inp, inputs_embeds must be provided")
 
 
-class GCGWrappedModel(ABC):
+class SearchBasedAttackWrappedModel(ABC):
     """Combines a model and a tokenizer and includes model-specific settings for GCG."""
 
     def __init__(
@@ -136,7 +136,7 @@ class GCGWrappedModel(ABC):
         return self.model.device
 
 
-class GCGBERTModel(GCGWrappedModel):
+class WrappedBERTModel(SearchBasedAttackWrappedModel):
     def __init__(
         self,
         model: PreTrainedModel,
@@ -180,7 +180,7 @@ class GCGBERTModel(GCGWrappedModel):
         return self.model.bert.embeddings.word_embeddings.weight
 
 
-class GCGGPT2Model(GCGWrappedModel):
+class WrappedGPT2Model(SearchBasedAttackWrappedModel):
     def __init__(
         self,
         model: PreTrainedModel,
@@ -211,7 +211,7 @@ class GCGGPT2Model(GCGWrappedModel):
         return self.model.transformer.wte.weight
 
 
-class GCGGPTNeoXModel(GCGWrappedModel):
+class WrappedGPTNeoXModel(SearchBasedAttackWrappedModel):
     # NOTE: Pythia models are based on GPTNeoX
 
     def __init__(

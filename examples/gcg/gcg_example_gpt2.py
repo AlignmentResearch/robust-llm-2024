@@ -1,8 +1,8 @@
 import torch
 from transformers import AutoTokenizer, GPT2LMHeadModel, PreTrainedModel
 
-from robust_llm.attacks.gcg.gcg import GCGRunner
-from robust_llm.attacks.gcg.utils import PromptTemplate, get_wrapped_model
+from robust_llm.attacks.search_based.runners import GCGRunner
+from robust_llm.attacks.search_based.utils import PromptTemplate, get_wrapped_model
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
     )
 
     # run the attack with the parameters specified above
-    attack_text = runner.run_gcg()
+    attack_text = runner.run()
     print(f"{attack_text=}")
 
     full_prompt = prompt_template.build_prompt(attack_text=attack_text, target="")

@@ -1,194 +1,72 @@
+import abc
 import logging
 import random
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Optional, Sequence, Tuple
 
 import torch
 import torch.utils.data
-import transformers
-from datasets import Dataset
 from tqdm import tqdm
-from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack
-from robust_llm.attacks.gcg.models import GCGWrappedModel
-from robust_llm.attacks.gcg.utils import (
+from robust_llm.attacks.search_based.models import SearchBasedAttackWrappedModel
+from robust_llm.attacks.search_based.utils import (
     AttackIndices,
     AttackTokenizationChangeException,
     PromptTemplate,
     ReplacementCandidate,
     create_onehot_embedding,
-    get_gcg_chunking,
-    get_wrapped_model,
 )
-from robust_llm.configs import AttackConfig
-from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
-from robust_llm.utils import LanguageModel, get_randint_with_exclusions
 
 logger = logging.getLogger(__name__)
 
 
-class GCGAttack(Attack):
-    """Implementation of the Greedy Coordinate Gradient attack.
+@dataclass
+class SearchBasedRunner(abc.ABC):
+    """Runs search based attack on a single model and a single prompt/target pair.
 
-    For now, we allow only one modifiable chunk, so the inputs are of the form
-    <unmodifiable_prefix><modifiable_infix><unmodifiable_suffix>. The attack will either
-    completely replace modifiable infix with optimized tokens (if
-    `attack_config.gcg_attack_config.wipe_out_modifiable_chunk` is True) or, otherwise,
-    will add the tokens after the modifiable infix.
+    Base class for the runners of search-based attacks. All the logic of iteration,
+    search, filtering, etc. is implemented mostly here, with the approach-specific
+    methods being implemented in subclasses.
+
+    Attributes:
+        wrapped_model: The model to attack paired with a tokenizer
+            and some model-specific methods
+        n_candidates_per_it: the total number of token replacements
+            to consider in each iteration (in GCG, this must be less than
+            top_k * n_attack_tokens, which is the total number of candidates)
+        n_its: Total number of iterations to run
+        n_attack_tokens: number of attack tokens to optimize
+        forward_pass_batch_size: batch size used for forward pass when evaluating
+            candidates. If None, defaults to n_candidates_per_it
+        target: If using a CausalLM, it's the target string to optimize for.
+            If using a SequenceClassification model, it's ignored in favor of
+            the target specified by clf_target
+        prompt_template: The PromptTemplate defines the format of the prompt,
+            and its `build_prompt` method is used for producing full prompts
+        seq_clf: Whether we are using a SequenceClassification model
+            (default alternative is a CausalLM)
+        clf_target: Only used for sequence classification, specifies the class
+            to optimize for
+        random_seed: initial seed for a random.Random object used to sample
+            replacement candidates
     """
 
-    REQUIRES_INPUT_DATASET = True
-    REQUIRES_TRAINING = False
+    wrapped_model: SearchBasedAttackWrappedModel
+    n_candidates_per_it: int
+    n_its: int
+    n_attack_tokens: int
+    forward_pass_batch_size: Optional[int] = None
+    target: str = ""
+    prompt_template: PromptTemplate = PromptTemplate()
+    seq_clf: bool = False
+    clf_target: Optional[int] = None
+    random_seed: int = 0
 
-    def __init__(
-        self,
-        attack_config: AttackConfig,
-        modifiable_chunks_spec: ModifiableChunksSpec,
-        model: LanguageModel,
-        tokenizer: transformers.PreTrainedTokenizerBase,
-        ground_truth_label_fn: Optional[Callable[[str], int]],
-    ) -> None:
-        super().__init__(attack_config, modifiable_chunks_spec)
-
-        assert isinstance(
-            model, transformers.PreTrainedModel
-        ), "DefendedModel is not supported"
-
-        assert sum(modifiable_chunks_spec) == 1
-
-        self.model = model
-        self.tokenizer = tokenizer
-        self.wrapped_model = get_wrapped_model(self.model, self.tokenizer)
-        self.ground_truth_label_fn = ground_truth_label_fn
-
-    @override
-    def get_attacked_dataset(
-        self,
-        dataset: Optional[Dataset],
-        max_n_outputs: Optional[int] = None,
-    ) -> Tuple[Dataset, Dict[str, Any]]:
-        """Run a GCG attack separately on each example in the dataset.
-
-        TODO(GH#113): consider multi-model attacks in the future.
-        TODO(GH#114): consider multi-prompt attacks in the future.
-        """
-        # preconditions
-        assert dataset is not None, "GCGAttack requires dataset input"
-        assert max_n_outputs is None, "GCGAttack does not support max_n_outputs"
-
-        options = self.attack_config.gcg_attack_config
-
-        attacked_input_texts = []
-        for example in dataset:
-            assert isinstance(example, dict)
-
-            unmodifiable_prefix, modifiable_infix, unmodifiable_suffix = (
-                get_gcg_chunking(example["text_chunked"], self.modifiable_chunks_spec)
-            )
-            if options.wipe_out_modifiable_chunk:
-                modifiable_infix = ""
-
-            prompt_template = PromptTemplate(
-                before_attack=unmodifiable_prefix + modifiable_infix,
-                after_attack=unmodifiable_suffix,
-            )
-
-            if self.ground_truth_label_fn is not None:
-                # Update GT label after possible wiping out of the modifiable chunk.
-                true_label = self.ground_truth_label_fn(prompt_template.build_prompt())
-            else:
-                true_label = example["label"]
-
-            # TODO(GH#106): make it work with multi-class classification
-            num_possible_classes = 2
-            target_label = get_randint_with_exclusions(
-                high=num_possible_classes, exclusions=[true_label]
-            )
-
-            runner = GCGRunner(
-                wrapped_model=self.wrapped_model,
-                prompt_template=prompt_template,
-                clf_target=target_label,
-                top_k=options.top_k,
-                n_candidates_per_it=options.n_candidates_per_it,
-                n_its=options.n_its,
-                n_attack_tokens=options.n_attack_tokens,
-                seq_clf=options.seq_clf,
-                forward_pass_batch_size=options.forward_pass_batch_size,
-                random_seed=options.random_seed,
-            )
-            attack_text = runner.run_gcg()
-            attacked_input_text = prompt_template.build_prompt(
-                attack_text=attack_text,
-            )
-            attacked_input_texts.append(attacked_input_text)
-
-        return (
-            Dataset.from_dict(
-                {
-                    "text": attacked_input_texts,
-                    "original_text": dataset["text"],
-                    "label": dataset["label"],
-                }
-            ),
-            {},
+    def __post_init__(self):
+        self.forward_pass_batch_size = (
+            self.forward_pass_batch_size or self.n_candidates_per_it
         )
-
-
-class GCGRunner:
-    """Run GCG on a single model and a single prompt/target pair"""
-
-    def __init__(
-        self,
-        wrapped_model: GCGWrappedModel,
-        top_k: int,
-        n_candidates_per_it: int,
-        n_its: int,
-        n_attack_tokens: int,
-        target: str = "",
-        prompt_template: PromptTemplate = PromptTemplate(),
-        seq_clf: bool = False,
-        clf_target: Optional[int] = None,
-        forward_pass_batch_size: Optional[int] = None,
-        random_seed: int = 42,
-    ) -> None:
-        """Initializes the GCGRunner on a single model & prompt/target pair.
-
-        Args:
-            wrapped_model: The model to attack paired with a tokenizer
-                and some model-specific methods.
-            top_k: The number of token replacements to consider at each position
-            n_candidates_per_it: The total number of token replacements
-                to consider in each iteration of GCG (this must be less than
-                top_k * n_attack_tokens, which is the total number of candidates).
-            n_its: Total number of iterations of GCG to run.
-            n_attack_tokens: number of attack tokens to optimize
-            target: If using a CausalLM, it's the target string to optimize for.
-                If using a SequenceClassification model, it's ignored in favor of
-                the target specified by clf_target.
-            prompt_template: The PromptTemplate defines the format of the prompt,
-                and its `build_prompt` method is used for producing full prompts.
-            seq_clf: Whether we are using a SequenceClassification model
-                (default alternative is a CausalLM)
-            clf_target: Only used for sequence classification, specifies the class
-                to optimize for.
-            forward_pass_batch_size: batch size used for forward pass when evaluating
-                candidates. If None, defaults to n_candidates_per_it.
-            random_seed: initial seed for a random.Random object used to sample
-                replacement candidates
-        """
-        self.wrapped_model = wrapped_model
-        self.top_k = top_k
-        self.n_candidates_per_it = n_candidates_per_it
-        self.n_its = n_its
-        self.target = target
-        self.n_attack_tokens = n_attack_tokens
-        self.prompt_template = prompt_template
-        self.seq_clf = seq_clf
-        self.clf_target = clf_target
-        self.forward_pass_batch_size = forward_pass_batch_size or n_candidates_per_it
-        self.initial_seed = random_seed
-        self.candidate_sample_rng = random.Random(self.initial_seed)
+        self.candidate_sample_rng = random.Random(self.random_seed)
 
         # TODO(GH#119): clean up if/elses for seq clf
         if self.seq_clf:
@@ -204,6 +82,50 @@ class GCGRunner:
         self.initial_attack_text, self.attack_indices = (
             self._get_initial_attack_text_and_indices(self.n_attack_tokens)
         )
+
+    def run(self) -> str:
+        """Runs the attack and returns the adversarial text."""
+        attack_text = self.initial_attack_text
+        candidate_texts = [attack_text]
+
+        for _ in (pbar := tqdm(range(self.n_its))):
+            candidate_texts_and_replacements = (
+                self._get_candidate_texts_and_replacements(candidate_texts)
+            )
+            candidate_texts_and_replacements = self._filter_candidates(
+                candidate_texts_and_replacements
+            )
+            evaluated_candidates = self._apply_replacements_and_eval_candidates(
+                candidate_texts_and_replacements
+            )
+            candidate_texts = self._select_next_candidates(evaluated_candidates)
+            attack_text = candidate_texts[0]
+
+            # TODO(GH#112): track progress more cleanly
+            pbar.set_description(f"Attack text: {attack_text}")
+
+        return attack_text
+
+    @abc.abstractmethod
+    def _get_candidate_texts_and_replacements(
+        self,
+        candidate_texts: Sequence[str],
+    ) -> list[Tuple[str, ReplacementCandidate]]:
+        """Proposes a set of (attack_text, replacement) candidate pairs to consider."""
+        pass
+
+    def _select_next_candidates(self, candidates: list[Tuple[float, str]]) -> list[str]:
+        """Selects text candidates for the next round, based on (score, text) pairs."""
+        sorted_candidates = list(sorted(candidates, key=lambda x: x[0]))
+        next_candidates = [
+            text for _, text in sorted_candidates[: self.n_best_candidates_to_keep]
+        ]
+        return next_candidates
+
+    @property
+    @abc.abstractmethod
+    def n_best_candidates_to_keep(self) -> int:
+        pass
 
     def _get_initial_attack_text_and_indices(
         self, n_attack_tokens: int
@@ -230,7 +152,7 @@ class GCGRunner:
         assert len(attack_tokens[0]) == n_attack_tokens
 
         try:
-            attack_indices = self.get_attack_indices(attack_text)
+            attack_indices = self._get_attack_indices(attack_text)
             return attack_text, attack_indices
         # Note that we only catch the exception in case of retokenization issue caused
         # by the attack tokens. If there is an issue because of target tokens, it means
@@ -257,7 +179,7 @@ class GCGRunner:
                 )
                 attack_text = self.wrapped_model.decode_tokens(attack_tokens)
                 try:
-                    attack_indices = self.get_attack_indices(attack_text)
+                    attack_indices = self._get_attack_indices(attack_text)
                     return attack_text, attack_indices
                 except AttackTokenizationChangeException:
                     pass
@@ -265,29 +187,17 @@ class GCGRunner:
         # We exceeded the maximum number of trials, so we raise an exception.
         raise AttackTokenizationChangeException
 
-    def run_gcg(self) -> str:
-        """Run the GCG attack and return the adversarial text"""
-        attack_text = self.initial_attack_text
-        for it in (pbar := tqdm(range(self.n_its))):
-            gradients = self.compute_gradients(self.target, attack_text)
-            candidates = self._candidates_from_gradients(gradients)
-            filtered_candidates = self._filter_candidates(attack_text, candidates)
-            evaluated_candidates = self._evaluate_candidates(
-                attack_text, filtered_candidates
-            )
-            attack_text = self.update_attack_text(attack_text, evaluated_candidates)
-
-            # TODO(GH#112): track progress more cleanly
-            pbar.set_description(f"Attack text: {attack_text}")
-        return attack_text
-
-    def get_tokens(
+    def _get_tokens(
         self, inp: str | list[str], add_special: bool = False
     ) -> torch.Tensor:
-        """Handle all the arguments we have to add to the tokenizer"""
+        """Tokenize the inputs and return the token ids.
+
+        Use tokenizer which is part of the wrapped model. Handle all the arguments we
+        have to add to the tokenizer.
+        """
         return self.wrapped_model.get_tokens(inp, add_special=add_special)
 
-    def decode_tokens(
+    def _decode_tokens(
         self,
         inp: torch.Tensor,
         skip_special_tokens: bool = True,
@@ -300,21 +210,7 @@ class GCGRunner:
         )
         return string
 
-    def update_attack_text(
-        self,
-        attack_text: str,
-        evaluated_candidates: Sequence[tuple[float, ReplacementCandidate]],
-    ) -> str:
-        """Pick the best candidate from the pool"""
-        _score, best_candidate = min(evaluated_candidates, key=lambda x: x[0])
-        attack_tokens = self.get_tokens(attack_text)
-        new_attack_tokens = best_candidate.compute_tokens_after_replacement(
-            attack_tokens
-        )
-        new_attack_text = self.decode_tokens(new_attack_tokens)
-        return new_attack_text
-
-    def get_attack_indices(self, attack_text: str) -> AttackIndices:
+    def _get_attack_indices(self, attack_text: str) -> AttackIndices:
         """Computes the start-end indices of the attack & target.
 
         Indices are relative to the tokenized string. Returns an object containing
@@ -333,13 +229,13 @@ class GCGRunner:
             TargetTokenizationChangeException: If the tokenization changes after
                 concatenating the strings because of the target tokens.
         """
-        before_attack_tokens = self.get_tokens(self.prompt_template.before_attack)
+        before_attack_tokens = self._get_tokens(self.prompt_template.before_attack)
         attack_start = before_attack_tokens.shape[1]
         attack_end = self.n_attack_tokens + attack_start
 
-        after_attack_tokens = self.get_tokens(self.prompt_template.after_attack)
+        after_attack_tokens = self._get_tokens(self.prompt_template.after_attack)
         target_start = attack_end + after_attack_tokens.shape[1]
-        target_tokens = self.get_tokens(self.target)
+        target_tokens = self._get_tokens(self.target)
         target_end = target_start + target_tokens.shape[1]
 
         attack_indices = AttackIndices(
@@ -354,8 +250,8 @@ class GCGRunner:
             attack_text=attack_text,
             target=self.target,
         )
-        full_tokens = self.get_tokens(full_prompt)
-        attack_tokens = self.get_tokens(attack_text)
+        full_tokens = self._get_tokens(full_prompt)
+        attack_tokens = self._get_tokens(attack_text)
 
         attack_indices.assert_attack_and_target_tokens_validity(
             full_tokens, attack_tokens, target_tokens
@@ -364,19 +260,20 @@ class GCGRunner:
         return attack_indices
 
     @torch.no_grad()
-    def _evaluate_candidates(
+    def _apply_replacements_and_eval_candidates(
         self,
-        attack_text: str,
-        candidates: Sequence[ReplacementCandidate],
-    ) -> list[tuple[float, ReplacementCandidate]]:
-        """Evaluate the candidates exactly using a forward pass through the model."""
-        attack_tokens = self.get_tokens(attack_text)
+        text_replacement_pairs: Sequence[Tuple[str, ReplacementCandidate]],
+    ) -> list[tuple[float, str]]:
+        """Evaluate the candidates using a forward pass through the model."""
         candidate_attack_texts = [
-            self.decode_tokens(
-                candidate.compute_tokens_after_replacement(attack_tokens)
+            self._decode_tokens(
+                candidate.compute_tokens_after_replacement(
+                    self._get_tokens(attack_text)
+                )
             )
-            for candidate in candidates
+            for attack_text, candidate in text_replacement_pairs
         ]
+
         full_prompts = [
             self.prompt_template.build_prompt(
                 attack_text=attack_text,
@@ -384,7 +281,7 @@ class GCGRunner:
             )
             for attack_text in candidate_attack_texts
         ]
-        full_prompts_tokens = self.get_tokens(full_prompts)
+        full_prompts_tokens = self._get_tokens(full_prompts)
         if self.seq_clf:
             assert self.clf_target is not None
             targets = torch.full(
@@ -404,18 +301,19 @@ class GCGRunner:
             all_logits_list.append(self.wrapped_model.call_model(inp))
         all_logits = torch.cat(all_logits_list, dim=0)
 
+        assert len(all_logits) == len(text_replacement_pairs)
+
         evaluated_candidates = []
         candidate_losses = self._compute_loss_from_logits(all_logits, targets)
-        for candidate, candidate_loss in zip(candidates, candidate_losses):
-            evaluated_candidates.append((float(candidate_loss), candidate))
+        for text, loss in zip(candidate_attack_texts, candidate_losses):
+            evaluated_candidates.append((float(loss), text))
 
         return evaluated_candidates
 
     def _filter_candidates(
         self,
-        attack_text: str,
-        candidates: Sequence[ReplacementCandidate],
-    ) -> list[ReplacementCandidate]:
+        text_replacement_pairs: Sequence[Tuple[str, ReplacementCandidate]],
+    ) -> list[Tuple[str, ReplacementCandidate]]:
         """Removes candidates where tokenization changes, or the attack is unchanged.
 
         By default, it's possible for replacements to lead to changes in
@@ -436,14 +334,15 @@ class GCGRunner:
             A list of the candidates that didn't result in a change in tokenization
                 and that changed the attack text
         """
-        attack_tokens = self.get_tokens(attack_text)
-        full_prompt = self.prompt_template.build_prompt(
-            attack_text=attack_text,
-            target=self.target,
-        )
-        original_full_prompt_tokens = self.get_tokens(full_prompt)
         filtered_candidates = []
-        for candidate in candidates:
+        for attack_text, candidate in text_replacement_pairs:
+            attack_tokens = self._get_tokens(attack_text)
+            full_prompt = self.prompt_template.build_prompt(
+                attack_text=attack_text,
+                target=self.target,
+            )
+            original_full_prompt_tokens = self._get_tokens(full_prompt)
+
             candidate_attack_tokens = candidate.compute_tokens_after_replacement(
                 attack_tokens
             )
@@ -465,9 +364,11 @@ class GCGRunner:
             ):
                 continue
 
-            filtered_candidates.append(candidate)
+            filtered_candidates.append((attack_text, candidate))
 
-        logger.debug(f"Filtered from {len(candidates)} to {len(filtered_candidates)}")
+        logger.debug(
+            f"Filtered from {len(text_replacement_pairs)} to {len(filtered_candidates)}"
+        )
         return filtered_candidates
 
     def _tokenization_changed(
@@ -483,8 +384,8 @@ class GCGRunner:
         that each individual section (attack, target) is the same before and after.
         """
 
-        decoded = self.decode_tokens(candidate_full_prompt_tokens)
-        encoded_decoded = self.get_tokens(decoded)
+        decoded = self._decode_tokens(candidate_full_prompt_tokens)
+        encoded_decoded = self._get_tokens(decoded)
 
         # check if length changes when decoding and encoding, since
         # that would imply that two tokens merged
@@ -511,73 +412,6 @@ class GCGRunner:
             return True
 
         return False
-
-    def _candidates_from_gradients(
-        self,
-        gradients: torch.Tensor,
-    ) -> list[ReplacementCandidate]:
-        """Gets the top k candidates from the gradients.
-
-        `gradients` is a tensor of shape (n_attack_tokens, vocab_size).
-
-        We take the top k from each position, and then randomly sample a
-        batch of self.n_candidates_per_it < (top k * n_attack_tokens) replacements
-        from the resulting pool.
-        """
-        # we disallow sep and cls tokens
-        cls_token_id = self.wrapped_model.cls_token_id
-        sep_token_id = self.wrapped_model.sep_token_id
-        if cls_token_id is not None:
-            gradients[:, cls_token_id] = float("inf")
-        if sep_token_id is not None:
-            gradients[:, sep_token_id] = float("inf")
-
-        # For each position, find the 'top_k' tokens with the largest negative gradient;
-        # i.e. the tokens which if substituted are estimated to decrease loss the most.
-        top_k_by_position = torch.topk(-gradients, self.top_k, dim=1)
-        top_k_indices = top_k_by_position.indices
-        # TODO(naimenz): do this in pytorch if possible
-        pool = []
-        for attack_position in range(len(top_k_indices)):
-            for token_id in top_k_indices[attack_position]:
-                pool.append(
-                    ReplacementCandidate(
-                        attack_position=attack_position,
-                        token_id=token_id.item(),  # type: ignore
-                    )
-                )
-        candidates = self.candidate_sample_rng.sample(pool, self.n_candidates_per_it)
-        return candidates
-
-    def compute_gradients(
-        self,
-        target: str,
-        attack_text: str,
-    ) -> torch.Tensor:
-        full_prompt = self.prompt_template.build_prompt(
-            attack_text=attack_text,
-            target=target,
-        )
-
-        # only need specials if we're doing BERT
-        full_prompt_tokens = self.get_tokens(full_prompt, add_special=self.seq_clf)
-        full_prompt_embeddings = self.wrapped_model.get_embeddings(
-            full_prompt_tokens
-        ).detach()
-
-        attack_tokens = self.get_tokens(attack_text)
-        attack_onehot = self._get_attack_onehot(attack_tokens)
-        attack_embeddings = attack_onehot @ self.wrapped_model.get_embedding_weights()
-
-        combined_embeddings = self._get_combined_embeddings(
-            full_prompt_embeddings, attack_embeddings
-        )
-
-        # doesn't matter what shape full_prompt_tokens is for seq clf
-        loss = self._compute_loss(combined_embeddings, full_prompt_tokens)
-        loss.backward()
-        assert attack_onehot.grad is not None
-        return attack_onehot.grad.clone()
 
     def _compute_loss(
         self, combined_embeddings: torch.Tensor, full_prompt_tokens: torch.Tensor

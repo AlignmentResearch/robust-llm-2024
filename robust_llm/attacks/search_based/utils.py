@@ -4,11 +4,11 @@ from typing import Tuple
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from robust_llm.attacks.gcg.models import (
-    GCGBERTModel,
-    GCGGPT2Model,
-    GCGGPTNeoXModel,
-    GCGWrappedModel,
+from robust_llm.attacks.search_based.models import (
+    SearchBasedAttackWrappedModel,
+    WrappedBERTModel,
+    WrappedGPT2Model,
+    WrappedGPTNeoXModel,
 )
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 
@@ -30,15 +30,15 @@ class TargetTokenizationChangeException(TokenizationChangeException):
 
 def get_wrapped_model(
     model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase
-) -> GCGWrappedModel:
+) -> SearchBasedAttackWrappedModel:
     # we just assume that the tokenizer matches
     if model.config.model_type == "gpt2":
-        return GCGGPT2Model(model, tokenizer)
+        return WrappedGPT2Model(model, tokenizer)
     # pythia models are gpt_neox models
     elif model.config.model_type == "gpt_neox":
-        return GCGGPTNeoXModel(model, tokenizer)
+        return WrappedGPTNeoXModel(model, tokenizer)
     elif model.config.model_type == "bert":
-        return GCGBERTModel(model, tokenizer)
+        return WrappedBERTModel(model, tokenizer)
     else:
         raise ValueError(f"Unknown model type: {model.config.type=}")
 
@@ -172,7 +172,7 @@ def create_onehot_embedding(
     return one_hot
 
 
-def get_gcg_chunking(
+def get_chunking_for_search_based(
     text_chunked: str, modifiable_chunks_spec: ModifiableChunksSpec
 ) -> Tuple[str, str, str]:
     """Returns the unmodifiable prefix, the modifiable infix, & the unmodifiable suffix.

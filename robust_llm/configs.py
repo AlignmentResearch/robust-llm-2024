@@ -118,47 +118,71 @@ class TRLAttackConfig:
 
 @dataclass
 class GCGAttackConfig:
-    """
-    Required options with defaults for the GCG attack.
+    """Required options with defaults for the GCG attack.
 
     Args:
         top_k: the number of token replacements to consider at each
-            position in the attack tokens
+            position in the attack tokens.
+    """
+
+    top_k: int = 256
+
+
+@dataclass
+class BeamSearchAttackConfig:
+    """Required options with defaults for the beam search attack.
+
+    Args:
+        beam_search_width: how many candidates to keep after each iteration.
+    """
+
+    beam_search_width: int = 5
+
+
+@dataclass
+class SearchBasedAttackConfig:
+    """
+    Required options with defaults for the search based attack.
+
+    Args:
         n_candidates_per_it: the total number of token replacements
-            to consider in each iteration of GCG (this must be less than
-            top_k * n_attack_tokens, which is the total number of candidates)
-        n_its: total number of iterations of GCG to run
+            to consider in each iteration (in GCG, this must be less than
+            top_k * n_attack_tokens, which is the total number of candidates).
+        n_its: total number of iterations to run
         n_attack_tokens: number of attack tokens to optimize
+        forward_pass_batch_size: batch size used for forward pass when evaluating
+            candidates. If None, defaults to n_candidates_per_it.
         seq_clf: whether we are using a SequenceClassification model
             (default alternative is a CausalLM)
         wipe_out_modifiable_chunk: if True, the modifiable chunk is replaced by dummy
             attack tokens. Otherwise, dummy attack tokens are added after the original
-            content of the modifiable chunk. GCG then operates on these attack tokens.
-        forward_pass_batch_size: batch size used for forward pass when evaluating
-            candidates. If None, defaults to n_candidates_per_it.
-        random_seed: initial seed for a random.Random object used to sample
-            replacement candidates
+            content of the modifiable chunk. Our attack then operates on these attack
+            tokens.
     """
 
-    top_k: int = 256
     n_candidates_per_it: int = 512
     n_its: int = 50
     n_attack_tokens: int = 10
+    forward_pass_batch_size: Optional[int] = None
     seq_clf: bool = True
     wipe_out_modifiable_chunk: bool = True
-    forward_pass_batch_size: Optional[int] = None
-    random_seed: int = 42
+    search_type: str = "gcg"  # we currently support "gcg" and "beam_search"
+    gcg_attack_config: GCGAttackConfig = GCGAttackConfig()
+    beam_search_attack_config: BeamSearchAttackConfig = BeamSearchAttackConfig()
 
     def __post_init__(self):
-        if self.n_candidates_per_it > self.top_k * self.n_attack_tokens:
+        if (
+            self.search_type == "gcg"
+            and self.n_candidates_per_it
+            > self.gcg_attack_config.top_k * self.n_attack_tokens
+        ):
             raise ValueError(
                 "n_candidates_per_it must be at most top_k * suffix_length"
             )
 
-        if (
-            self.forward_pass_batch_size is not None
-            and self.forward_pass_batch_size > self.n_candidates_per_it
-        ):
+        if self.forward_pass_batch_size is None:
+            self.forward_pass_batch_size = self.n_candidates_per_it
+        elif self.forward_pass_batch_size > self.n_candidates_per_it:
             raise ValueError(
                 "forward_pass_batch_size must be at most n_candidates_per_it"
             )
@@ -203,7 +227,7 @@ class AttackConfig:
         RandomTokenAttackConfig()
     )
     trl_attack_config: TRLAttackConfig = TRLAttackConfig()
-    gcg_attack_config: GCGAttackConfig = GCGAttackConfig()
+    search_based_attack_config: SearchBasedAttackConfig = SearchBasedAttackConfig()
 
 
 @dataclass
@@ -482,10 +506,11 @@ class ExperimentConfig:
             self.environment.dataset_type == "tensor_trust"
             and evaluation_attack.attack_type == "gcg"
         ):
-            # This is especially important for examples with True label;
-            # after wiping out, the label changes to False (which is desirable).
+            # This is especially important for examples with True label; after wiping
+            # out contents of modifiable chunk (the user's guess), the label changes
+            # to False (which is desirable).
             assert (
-                evaluation_attack.gcg_attack_config.wipe_out_modifiable_chunk
+                evaluation_attack.search_based_attack_config.wipe_out_modifiable_chunk
             ), "For tensor_trust, we want to forget about the original password guess."
 
 

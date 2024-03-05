@@ -4,8 +4,8 @@ import transformers
 
 from robust_llm.attacks.attack import Attack, IdentityAttack
 from robust_llm.attacks.brute_force_tomita import BruteForceTomitaAttack
-from robust_llm.attacks.gcg.gcg import GCGAttack
 from robust_llm.attacks.random_token import RandomTokenAttack
+from robust_llm.attacks.search_based.search_based import SearchBasedAttack
 from robust_llm.attacks.text_attack import TEXT_ATTACK_ATTACK_TYPES, TextAttackAttack
 from robust_llm.attacks.trl.trl import TRLAttack
 from robust_llm.configs import AttackConfig
@@ -53,8 +53,8 @@ def create_attack(
             victim_tokenizer=victim_tokenizer,
             ground_truth_label_fn=ground_truth_label_fn,
         )
-    elif attack_config.attack_type == "gcg":
-        return GCGAttack(
+    elif attack_config.attack_type == "search_based":
+        return SearchBasedAttack(
             attack_config=attack_config,
             modifiable_chunks_spec=modifiable_chunks_spec,
             model=victim_model,

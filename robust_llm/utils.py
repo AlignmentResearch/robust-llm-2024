@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import abc
 import os
+import random
+from argparse import Namespace
 from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Protocol, Sequence
 
 import numpy as np
@@ -241,7 +243,39 @@ def make_unique_name_to_save(base_name_or_path: str) -> str:
     return f"{wandb.run.id}_from_{base_processed}"
 
 
-def get_randint_with_exclusions(high: int, exclusions: Sequence[int]) -> int:
+def get_randint_with_exclusions(
+    high: int, exclusions: Sequence[int], rng: Optional[random.Random] = None
+) -> int:
     """Get a random integer from [0, `high`), excluding the integers in `exclusions`."""
-    values = set(range(high)) - set(exclusions)
-    return np.random.choice(list(values))
+    assert len(exclusions) < high, "Too many excluded values!"
+    MAX_NUM_ITERS = 1000
+
+    value: Optional[int] = None
+    randint_fn = rng.randint if rng else random.randint
+
+    # Replaced a previous implementation where we explicitly create a set of allowed
+    # values. It was super slow when `high` was large and `exclusions` was small.
+    iter = 0
+    while value is None or value in exclusions:
+        value = randint_fn(0, high - 1)
+        iter += 1
+        if iter > MAX_NUM_ITERS:
+            raise ValueError("Too many iterations!")
+
+    return value
+
+
+class FakeModel:
+    """Fake model class used in tests."""
+
+    @property
+    def device(self) -> torch.device:
+        return torch.device("cpu")
+
+    @property
+    def num_labels(self) -> int:
+        return 2
+
+    @property
+    def config(self):
+        return Namespace(pad_token_id=1, eos_token_id=2)

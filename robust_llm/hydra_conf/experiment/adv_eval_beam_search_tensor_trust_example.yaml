@@ -13,5 +13,5 @@ evaluation:
   evaluation_attack:
     attack_type: "search_based"
     search_based_attack_config:
-      search_type: "gcg"
+      search_type: "beam_search"
       n_its: 10

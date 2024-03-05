@@ -3,27 +3,26 @@ import pytest
 import torch
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoTokenizer
 
-from robust_llm.attacks.gcg.gcg import GCGRunner
-from robust_llm.attacks.gcg.models import GCGBERTModel, GCGGPT2Model, GCGGPTNeoXModel
-from robust_llm.attacks.gcg.utils import (
+from robust_llm.attacks.search_based.models import (
+    WrappedBERTModel,
+    WrappedGPT2Model,
+    WrappedGPTNeoXModel,
+)
+from robust_llm.attacks.search_based.runners import GCGRunner
+from robust_llm.attacks.search_based.utils import (
     AttackIndices,
     PromptTemplate,
     ReplacementCandidate,
     TokenizationChangeException,
 )
-
-
-class FakeModel:
-    @property
-    def device(self) -> torch.device:
-        return torch.device("cpu")
+from robust_llm.utils import FakeModel
 
 
 def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    wrapped_model = GCGGPT2Model(FakeModel(), tokenizer)  # type: ignore
+    wrapped_model = WrappedGPT2Model(FakeModel(), tokenizer)  # type: ignore
     gcg_runner = GCGRunner(
         wrapped_model=wrapped_model,
         top_k=1,
@@ -40,7 +39,7 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
 
 def bert_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    wrapped_model = GCGBERTModel(FakeModel(), tokenizer)  # type: ignore
+    wrapped_model = WrappedBERTModel(FakeModel(), tokenizer)  # type: ignore
     gcg_runner = GCGRunner(
         wrapped_model=wrapped_model,
         top_k=1,
@@ -56,11 +55,9 @@ def bert_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
 
 
 def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
-    model_name = "EleutherAI/pythia-70m-deduped"
     # we need a model for pythia because we access the config
-    model = AutoModelForSequenceClassification.from_pretrained(model_name)
     tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped")
-    wrapped_model = GCGGPTNeoXModel(model, tokenizer)
+    wrapped_model = WrappedGPTNeoXModel(FakeModel(), tokenizer)  # type: ignore
     gcg_runner = GCGRunner(
         wrapped_model=wrapped_model,
         top_k=1,
@@ -93,7 +90,7 @@ def get_gcg_runner(
 def maybe_preprocess_str(gcg_runner: GCGRunner, s: str) -> str:
     """BERT tokenizer is not case or space sensitive
     so before we compare strings, we should preprocess them to match"""
-    if isinstance(gcg_runner.wrapped_model, GCGBERTModel):
+    if isinstance(gcg_runner.wrapped_model, WrappedBERTModel):
         return s.lower().replace(" ", "")
     else:
         return s
@@ -140,16 +137,16 @@ def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     full_prompt = gcg_runner.prompt_template.build_prompt(
         attack_text=initial_attack_text, target=target
     )
-    full_tokens = gcg_runner.get_tokens(full_prompt)
+    full_tokens = gcg_runner._get_tokens(full_prompt)
 
-    before_attack_tokens = gcg_runner.get_tokens(
+    before_attack_tokens = gcg_runner._get_tokens(
         gcg_runner.prompt_template.before_attack
     )
-    attack_tokens = gcg_runner.get_tokens(initial_attack_text)
-    after_attack_tokens = gcg_runner.get_tokens(
+    attack_tokens = gcg_runner._get_tokens(initial_attack_text)
+    after_attack_tokens = gcg_runner._get_tokens(
         gcg_runner.prompt_template.after_attack,
     )
-    target_tokens = gcg_runner.get_tokens(target)
+    target_tokens = gcg_runner._get_tokens(target)
 
     concat_tokens = torch.cat(
         [before_attack_tokens, attack_tokens, after_attack_tokens, target_tokens],
@@ -160,22 +157,22 @@ def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     attack_indices = None
     if not torch.equal(concat_tokens, full_tokens):
         with pytest.raises(TokenizationChangeException):
-            attack_indices = gcg_runner.get_attack_indices(initial_attack_text)
+            attack_indices = gcg_runner._get_attack_indices(initial_attack_text)
         return
 
-    attack_indices = gcg_runner.get_attack_indices(initial_attack_text)
+    attack_indices = gcg_runner._get_attack_indices(initial_attack_text)
     assert attack_indices is not None
     assert attack_indices.attack_length == gcg_runner.n_attack_tokens
-    assert attack_indices.target_length == gcg_runner.get_tokens(target).shape[1]
+    assert attack_indices.target_length == gcg_runner._get_tokens(target).shape[1]
 
-    new_attack_text = gcg_runner.decode_tokens(
+    new_attack_text = gcg_runner._decode_tokens(
         full_tokens[:, attack_indices.attack_slice]
     )
     assert maybe_preprocess_str(gcg_runner, new_attack_text) == maybe_preprocess_str(
         gcg_runner, initial_attack_text
     )
 
-    new_target = gcg_runner.decode_tokens(full_tokens[:, attack_indices.target_slice])
+    new_target = gcg_runner._decode_tokens(full_tokens[:, attack_indices.target_slice])
     assert maybe_preprocess_str(gcg_runner, new_target) == maybe_preprocess_str(
         gcg_runner, target
     )
@@ -190,14 +187,14 @@ def test_filter_candidates(model_name: str, before_attack_text: str) -> None:
     gcg_runner = get_gcg_runner(model_name, before_attack_text)
 
     def get_token_id(s: str) -> int:
-        tokens = gcg_runner.get_tokens(s)
+        tokens = gcg_runner._get_tokens(s)
         assert tokens.shape == (1, 1)
         return tokens.squeeze().item()  # type: ignore
 
     # most tokenizers will merge adjacent '@'s so we use those for testing
     merge_char = "@"
     # need to update the attack indices if we change the user prompt
-    gcg_runner.attack_indices = gcg_runner.get_attack_indices(
+    gcg_runner.attack_indices = gcg_runner._get_attack_indices(
         gcg_runner.initial_attack_text
     )
     n_attack_tokens = gcg_runner.n_attack_tokens
@@ -216,9 +213,12 @@ def test_filter_candidates(model_name: str, before_attack_text: str) -> None:
         merge_with_target_candidate,
         doesnt_change_candidate,
     ]
-    suffix = gcg_runner.initial_attack_text
-    bad_filtered_candidates = gcg_runner._filter_candidates(suffix, bad_candidates)
-    if isinstance(gcg_runner.wrapped_model, GCGBERTModel):
+    attack_text = gcg_runner.initial_attack_text
+    text_bad_replacement_pairs = [
+        (attack_text, candidate) for candidate in bad_candidates
+    ]
+    bad_filtered_candidates = gcg_runner._filter_candidates(text_bad_replacement_pairs)
+    if isinstance(gcg_runner.wrapped_model, WrappedBERTModel):
         # BERT tokenizer doesn't merge adjacent @'s so only the unchanging
         # candidate should be filtered
         assert len(bad_filtered_candidates) == 3
@@ -231,11 +231,16 @@ def test_filter_candidates(model_name: str, before_attack_text: str) -> None:
     good_candidate_1 = ReplacementCandidate(0, nonmerge_char_token_id)
     good_candidate_2 = ReplacementCandidate(1, nonmerge_char_token_id)
     good_candidates = [good_candidate_1, good_candidate_2]
-    good_filtered_candidates = gcg_runner._filter_candidates(suffix, good_candidates)
+    text_good_replacement_pairs = [
+        (attack_text, candidate) for candidate in good_candidates
+    ]
+    good_filtered_candidates = gcg_runner._filter_candidates(
+        text_good_replacement_pairs
+    )
     assert len(good_filtered_candidates) == 2
 
 
-def test_candidates_from_gradients(gcg_runner: GCGRunner) -> None:
+def test_get_replacement_candidates_from_gradients(gcg_runner: GCGRunner) -> None:
     gcg_runner.top_k = 2
     gcg_runner.n_candidates_per_it = 4
 
@@ -257,15 +262,17 @@ def test_candidates_from_gradients(gcg_runner: GCGRunner) -> None:
             ReplacementCandidate(1, 3),
         ]
     )
-    actual_candidates = set(gcg_runner._candidates_from_gradients(gradients))
+    actual_candidates = set(
+        gcg_runner._get_replacement_candidates_from_gradients(gradients)
+    )
     assert actual_candidates == expected_candidates
 
 
-def test_update_attack_text(gcg_runner: GCGRunner) -> None:
+def test_replacements(gcg_runner: GCGRunner) -> None:
     initial_attack_text = "a!a!a"
 
     def get_token_id(s: str) -> int:
-        tokens = gcg_runner.get_tokens(s)
+        tokens = gcg_runner._get_tokens(s)
         assert tokens.shape == (1, 1)
         return tokens.squeeze().item()  # type: ignore
 
@@ -276,8 +283,12 @@ def test_update_attack_text(gcg_runner: GCGRunner) -> None:
     ]
 
     for candidate, expected in replacement_candidates:
-        suffix = gcg_runner.update_attack_text(initial_attack_text, [(0.0, candidate)])
-        assert maybe_preprocess_str(gcg_runner, suffix) == maybe_preprocess_str(
+        updated = gcg_runner._decode_tokens(
+            candidate.compute_tokens_after_replacement(
+                gcg_runner._get_tokens(initial_attack_text)
+            )
+        )
+        assert maybe_preprocess_str(gcg_runner, updated) == maybe_preprocess_str(
             gcg_runner, expected
         )
 
@@ -306,3 +317,7 @@ def test_prompt_template(before_attack, attack_text, after_attack, target):
     actual = prompt_template.build_prompt(attack_text=attack_text, target=target)
     expected = before_attack + attack_text + after_attack + target
     assert actual == expected
+
+
+def test_n_best_candidates_to_keep(gcg_runner: GCGRunner) -> None:
+    assert gcg_runner.n_best_candidates_to_keep == 1
