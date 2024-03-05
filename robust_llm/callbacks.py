@@ -51,7 +51,7 @@ class GlobalTrainingStepRecordingWandbCallback(WandbCallback):
     def setup(self, args, state, model, **kwargs):
         super().setup(args, state, model, **kwargs)
 
-        # We wait until now to set up the wandb metrics
+        # We wait until now to set up the wandb step metrics
         # (which logged values can be used as x-axes,
         # and what the default x-axes are set to be)
         # because when we initialize the HuggingFace Trainer,

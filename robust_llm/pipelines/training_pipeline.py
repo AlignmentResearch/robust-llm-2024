@@ -35,7 +35,7 @@ def run_training_pipeline(
 
     # Initialize wandb early so that we have unique ID from wandb that can be used
     # to set e.g. the HF hub model name.
-    # Unlike in the evaluation pipeline, we don't set up our wandb metrics here
+    # Unlike in the evaluation pipeline, we don't set up our wandb step metrics here
     # (which logged values can be used as x-axes, and what the default x-axes
     # are set to be) because HuggingFace sets up its own metrics when we initialize
     # the Trainer, and we wait until that is done to overwrite them with our own.
