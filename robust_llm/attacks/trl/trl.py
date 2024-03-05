@@ -229,6 +229,7 @@ class TRLAttack(Attack):
             text_chunked=text_chunked,
             response_text=TRL_RESPONSE_STR,
             modifiable_chunks_spec=self.modifiable_chunks_spec,
+            append_to_modifiable_chunk=self.attack_config.append_to_modifiable_chunk,  # noqa: E501
         )
         context_tensors = self.adversary_tokenizer(
             contexts, padding="max_length", truncation=True, return_tensors="pt"  # type: ignore # noqa: E501
@@ -259,6 +260,7 @@ class TRLAttack(Attack):
             text_chunked=text_chunked,
             response_text=adversary_generated_responses_txt,
             modifiable_chunks_spec=self.modifiable_chunks_spec,
+            append_to_modifiable_chunk=self.attack_config.append_to_modifiable_chunk,  # noqa: E501
         )
 
         return (

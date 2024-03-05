@@ -61,8 +61,8 @@ class RandomTokenAttack(Attack):
         text_chunked = dataset["text_chunked"]
         attacked_text_chunked = []
 
-        min_tokens = self.attack_config.random_token_attack_attack_config.min_tokens
-        max_tokens = self.attack_config.random_token_attack_attack_config.max_tokens
+        min_tokens = self.attack_config.random_token_attack_config.min_tokens
+        max_tokens = self.attack_config.random_token_attack_config.max_tokens
 
         # Replace all the modifiable text with random tokens
         # from the tokenizer's vocabulary.
@@ -86,6 +86,8 @@ class RandomTokenAttack(Attack):
                     )
 
                     random_token_text = self.tokenizer.decode(random_tokens)
+                    if self.attack_config.append_to_modifiable_chunk:  # noqa: E501
+                        new_line.append(text)
                     new_line.append(random_token_text)
                 else:
                     new_line.append(text)

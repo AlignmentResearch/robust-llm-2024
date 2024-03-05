@@ -4,6 +4,8 @@ from typing import Optional
 import torch
 from omegaconf import MISSING
 
+from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
+
 SHARED_DATA_DIR = "/robust_llm_data"
 
 
@@ -154,10 +156,6 @@ class SearchBasedAttackConfig:
             candidates. If None, defaults to n_candidates_per_it.
         seq_clf: whether we are using a SequenceClassification model
             (default alternative is a CausalLM)
-        wipe_out_modifiable_chunk: if True, the modifiable chunk is replaced by dummy
-            attack tokens. Otherwise, dummy attack tokens are added after the original
-            content of the modifiable chunk. Our attack then operates on these attack
-            tokens.
     """
 
     n_candidates_per_it: int = 512
@@ -165,8 +163,7 @@ class SearchBasedAttackConfig:
     n_attack_tokens: int = 10
     forward_pass_batch_size: Optional[int] = None
     seq_clf: bool = True
-    wipe_out_modifiable_chunk: bool = True
-    search_type: str = "gcg"  # we currently support "gcg" and "beam_search"
+    search_type: str = "gcg"  # We currently support "gcg" and "beam_search"
     gcg_attack_config: GCGAttackConfig = GCGAttackConfig()
     beam_search_attack_config: BeamSearchAttackConfig = BeamSearchAttackConfig()
 
@@ -201,11 +198,15 @@ class AttackConfig:
             If None, only train attack after the first training round.
         victim_inference_batch_size (int):
             Batch size to use for victim model inference.
+        append_to_modifiable_chunk: if False, the modifiable chunk is replaced by dummy
+            attack tokens. Otherwise, dummy attack tokens are added after the original
+            content of the modifiable chunk. Our attack then operates on these attack
+            tokens.
         brute_force_tomita_attack_config (BruteForceTomitaAttackConfig):
             Config for BruteForceTomitaAttack.
         text_attack_attack_config (TextAttackAttackConfig):
             Config for TextAttackAttack.
-        random_token_attack_attack_config (RandomTokenAttackConfig):
+        random_token_attack_config (RandomTokenAttackConfig):
             Config for RandomTokenAttack.
         trl_attack_config (TRLAttackConfig):
             Config for TRLAttack.
@@ -217,17 +218,20 @@ class AttackConfig:
     seed: int = 0
     train_frequency: Optional[int] = None
     victim_inference_batch_size: int = 8
+    append_to_modifiable_chunk: bool = False
 
     # Configs for specific types of attacks.
     brute_force_tomita_attack_config: BruteForceTomitaAttackConfig = (
         BruteForceTomitaAttackConfig()
     )
     text_attack_attack_config: TextAttackAttackConfig = TextAttackAttackConfig()
-    random_token_attack_attack_config: RandomTokenAttackConfig = (
-        RandomTokenAttackConfig()
-    )
+    random_token_attack_config: RandomTokenAttackConfig = RandomTokenAttackConfig()
     trl_attack_config: TRLAttackConfig = TRLAttackConfig()
     search_based_attack_config: SearchBasedAttackConfig = SearchBasedAttackConfig()
+
+    def __post_init__(self):
+        if self.attack_type in TEXT_ATTACK_ATTACK_TYPES:
+            assert not self.append_to_modifiable_chunk, "Not supported!"
 
 
 @dataclass
@@ -504,13 +508,13 @@ class ExperimentConfig:
 
         if (
             self.environment.dataset_type == "tensor_trust"
-            and evaluation_attack.attack_type == "gcg"
+            and evaluation_attack.attack_type == "search_based"
         ):
             # This is especially important for examples with True label; after wiping
             # out contents of modifiable chunk (the user's guess), the label changes
             # to False (which is desirable).
             assert (
-                evaluation_attack.search_based_attack_config.wipe_out_modifiable_chunk
+                not evaluation_attack.append_to_modifiable_chunk
             ), "For tensor_trust, we want to forget about the original password guess."
 
 

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from datasets import Dataset, DatasetDict, IterableDatasetDict, load_dataset
 from transformers import PreTrainedTokenizerBase
@@ -55,7 +55,7 @@ def generate_robust_llm_datasets(
             f"Unknown dataset_generation_style {dataset_generation_style}, exiting..."
         )
 
-    modifiable_chunks_spec: tuple[bool, ...] = (True,)
+    modifiable_chunks_spec: ModifiableChunksSpec = (True,)
     ground_truth_label_fn: Optional[Callable[[str], int]] = None
 
     if dataset_type == "tensor_trust":
@@ -103,6 +103,9 @@ def generate_robust_llm_datasets(
             range(environment_config.validation_set_size)
         )
 
+    train_set = _maybe_add_trivial_chunking(train_set, modifiable_chunks_spec)
+    validation_set = _maybe_add_trivial_chunking(validation_set, modifiable_chunks_spec)
+
     print("Tokenizing datasets...")
     # TODO: is the below necessary?
     # Seems like the datasets are already tokenized by now.
@@ -118,3 +121,19 @@ def generate_robust_llm_datasets(
         modifiable_chunks_spec=modifiable_chunks_spec,
         ground_truth_label_fn=ground_truth_label_fn,
     )
+
+
+def _maybe_add_trivial_chunking(
+    dataset: Dataset, modifiable_chunks_spec: ModifiableChunksSpec
+) -> Dataset:
+    if modifiable_chunks_spec == (True,) and "text_chunked" not in dataset.features:
+        return dataset.map(_add_trivial_text_chunked_to_example)
+    return dataset
+
+
+def _add_trivial_text_chunked_to_example(
+    example: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Add a `text_chunked` field to the example that is a list containing `text`."""
+    example["text_chunked"] = [example["text"]]
+    return example

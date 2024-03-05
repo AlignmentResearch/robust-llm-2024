@@ -35,14 +35,6 @@ from robust_llm.dataset_management.dataset_management import ModifiableChunksSpe
 from robust_llm.defenses.defense import DefendedModel
 from robust_llm.utils import LanguageModel
 
-TEXT_ATTACK_ATTACK_TYPES = [
-    "textfooler",
-    "bae",
-    "checklist",
-    "pso",
-    "random_character_changes",
-]
-
 SPECIAL_MODIFIABLE_WORD = "special_modifiable_word"
 
 

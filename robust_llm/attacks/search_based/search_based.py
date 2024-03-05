@@ -30,8 +30,8 @@ class SearchBasedAttack(Attack):
     For now, we allow only one modifiable chunk, so the inputs are of the form
     <unmodifiable_prefix><modifiable_infix><unmodifiable_suffix>. The attack will either
     completely replace modifiable infix with optimized tokens (if
-    `attack_config.gcg_attack_config.wipe_out_modifiable_chunk` is True) or, otherwise,
-    will add the tokens after the modifiable infix.
+    `attack_config.append_to_modifiable_chunk` is False) or, otherwise, will add the
+    tokens after the modifiable infix.
     """
 
     REQUIRES_INPUT_DATASET = True
@@ -84,7 +84,7 @@ class SearchBasedAttack(Attack):
                     example["text_chunked"], self.modifiable_chunks_spec
                 )
             )
-            if config.wipe_out_modifiable_chunk:
+            if not self.attack_config.append_to_modifiable_chunk:
                 modifiable_infix = ""
 
             prompt_template = PromptTemplate(

@@ -6,7 +6,8 @@ from robust_llm.attacks.attack import Attack, IdentityAttack
 from robust_llm.attacks.brute_force_tomita import BruteForceTomitaAttack
 from robust_llm.attacks.random_token import RandomTokenAttack
 from robust_llm.attacks.search_based.search_based import SearchBasedAttack
-from robust_llm.attacks.text_attack import TEXT_ATTACK_ATTACK_TYPES, TextAttackAttack
+from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
+from robust_llm.attacks.text_attack.text_attack import TextAttackAttack
 from robust_llm.attacks.trl.trl import TRLAttack
 from robust_llm.configs import AttackConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec

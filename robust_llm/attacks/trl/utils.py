@@ -208,6 +208,7 @@ def prepare_prompts(
     text_chunked: Sequence[Sequence[str]],
     modifiable_chunks_spec: Sequence[bool],
     response_text: str | Sequence[str],
+    append_to_modifiable_chunk: bool = False,
 ) -> Sequence[str]:
     """Prepare prompts either for the adversary model or for the victim model.
 
@@ -220,8 +221,13 @@ def prepare_prompts(
         text_chunked: Sequence of chunked texts. Each chunked text is
             a sequence of strings, one of which is modifiable, the others
             of which are not, as determined by modifiable_chunks_spec.
+        modifiable_chunks_spec: Specification for which chunks of the original text can
+            be modified.
         response_text:
             The text or sequence of texts to replace the modifiable chunks with.
+        append_to_modifiable_chunk: if False, the modifiable chunk is replaced by the
+            response text. Otherwise, response text is added after the original
+            content of the modifiable chunk.
 
     Returns:
         A sequence of prompts with the modifiable chunks replaced by the
@@ -239,6 +245,8 @@ def prepare_prompts(
             if is_modifiable:
                 replacement_text = response_text if one_response else response_text[i]
                 assert isinstance(replacement_text, str)
+                if append_to_modifiable_chunk:
+                    context_list.append(text)
                 context_list.append(replacement_text)
             else:
                 context_list.append(text)
