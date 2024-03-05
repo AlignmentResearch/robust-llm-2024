@@ -4,6 +4,7 @@ import wandb
 
 from robust_llm.configs import OverallConfig
 from robust_llm.evaluation import do_adversarial_evaluation
+from robust_llm.logging_utils import setup_wandb_metrics
 from robust_llm.pipelines.utils import (
     prepare_attack,
     prepare_datasets,
@@ -20,7 +21,7 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
         job_type=args.experiment.job_type,
         name=args.experiment.run_name,
     )
-
+    setup_wandb_metrics()
     log_config_to_wandb(args.experiment)
 
     model, tokenizer, _ = prepare_victim_models(args)

@@ -81,6 +81,13 @@ class Training:
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
+            # This defaults to "all", which sets up several callbacks, including
+            # a WandbCallback which increments the wandb internal step whenever
+            # it logs. While this does not strictly break our logging setup,
+            # it makes it harder to debug logging and makes the wandb plots with
+            # wandb internal step on the horizontal axis less easily interpretable.
+            # Thus, we set it to "none" here.
+            report_to=["none"],
         )
 
         self.trainer = TrainerWithBatchSizeStoring(

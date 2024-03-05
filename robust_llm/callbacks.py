@@ -10,6 +10,8 @@ from typing_extensions import override
 if TYPE_CHECKING:
     from robust_llm.training import Training
 
+from robust_llm.logging_utils import setup_wandb_metrics
+
 
 class GlobalTrainingStepRecordingWandbCallback(WandbCallback):
     """WandbCallback that sets up custom steps for wandb logging.
@@ -49,18 +51,14 @@ class GlobalTrainingStepRecordingWandbCallback(WandbCallback):
     def setup(self, args, state, model, **kwargs):
         super().setup(args, state, model, **kwargs)
 
-        # Set the default horizontal axis on wandb
-        # NOTE: Older versions of wandb don't have "define_metric",
-        # so try updating wandb if you get an error here.
-        assert hasattr(self._wandb, "define_metric")
-        self._wandb.define_metric(
-            "*", step_metric="victim_training_datapoint_count", step_sync=True
-        )
-        self._wandb.define_metric(
-            "*",
-            step_metric="victim_training_datapoint_count",
-            step_sync=True,
-        )
+        # We wait until now to set up the wandb metrics
+        # (which logged values can be used as x-axes,
+        # and what the default x-axes are set to be)
+        # because when we initialize the HuggingFace Trainer,
+        # it sets up its own `global_step` default metric, which would
+        # overwrite anything we had set earlier. Thus, we wait until
+        # that happens and then set up our own metrics.
+        setup_wandb_metrics()
 
     @override
     def on_train_begin(  # type: ignore[misc]
@@ -109,9 +107,21 @@ class GlobalTrainingStepRecordingWandbCallback(WandbCallback):
         assert state.global_step - self.previous_global_step == 1
         assert self.training.trainer is not None
 
+        # We do not commit here, since the train loss and other stats are
+        # logged by the HuggingFace Trainer _after_ `on_step_end` is called,
+        # so we would be logging with an off-by-one error if we committed here.
+        # Instead, we rely on the HuggingFace Trainer to commit the logs at the
+        # same time that it commits the train loss and other stats.
+        # In the case where we `logging_steps` > 1, this means that we
+        # will call `wandb.log` with `commit=False` multiple times before
+        # committing. This is okay because while wandb will overwrite
+        # the old counts with the new ones, when it is time to commit,
+        # the currently stored counts will be the ones that correctly
+        # correspond to the current train loss and other stats.
         self.logging_counter.increment(
             step_count_to_add=1,
             datapoint_count_to_add=self.training.trainer.current_batch_size,
+            commit=False,
         )
 
         self.previous_global_step = state.global_step
