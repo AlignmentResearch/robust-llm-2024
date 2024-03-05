@@ -268,6 +268,9 @@ def get_randint_with_exclusions(
 class FakeModel:
     """Fake model class used in tests."""
 
+    def __init__(self, vocab_size: int):
+        self.vocab_size = vocab_size
+
     @property
     def device(self) -> torch.device:
         return torch.device("cpu")
@@ -279,3 +282,8 @@ class FakeModel:
     @property
     def config(self):
         return Namespace(pad_token_id=1, eos_token_id=2)
+
+    def __call__(self, input: torch.Tensor) -> Namespace:
+        return Namespace(
+            logits=torch.rand((input.shape[0], input.shape[1], self.vocab_size))
+        )

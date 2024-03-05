@@ -57,13 +57,15 @@ class GCGRunner(SearchBasedRunner):
             target=target,
         )
 
-        # Only need special tokens if we're doing BERT
-        full_prompt_tokens = self._get_tokens(full_prompt, add_special=self.seq_clf)
+        # Only need specials if we're doing BERT
+        full_prompt_tokens = self._get_tokens(full_prompt, add_special=self.seq_clf).to(
+            self.wrapped_model.device
+        )
         full_prompt_embeddings = self.wrapped_model.get_embeddings(
             full_prompt_tokens
         ).detach()
 
-        attack_tokens = self._get_tokens(attack_text)
+        attack_tokens = self._get_tokens(attack_text).to(self.wrapped_model.device)
         attack_onehot = self._get_attack_onehot(attack_tokens)
         attack_embeddings = attack_onehot @ self.wrapped_model.get_embedding_weights()
 

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
@@ -43,14 +44,17 @@ class SearchBasedAttackWrappedModel(ABC):
     def get_tokens(
         self,
         inp: str | list[str],
+        return_tensors: Optional[str] = "pt",
         add_special: bool = False,
     ) -> torch.Tensor:
         """Handles all the arguments we have to add to the tokenizer."""
         tokens = self.tokenizer(
             inp,
-            return_tensors="pt",
+            return_tensors=return_tensors,
             add_special_tokens=add_special,
-        ).input_ids.to(dtype=torch.int64, device=self.device)
+        ).input_ids
+        if return_tensors == "pt":
+            tokens = tokens.to(dtype=torch.int64)
         return tokens
 
     def decode_tokens(

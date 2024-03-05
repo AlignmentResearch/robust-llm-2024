@@ -22,7 +22,9 @@ from robust_llm.utils import FakeModel
 
 def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    wrapped_model = WrappedGPT2Model(FakeModel(), tokenizer)  # type: ignore
+    wrapped_model = WrappedGPT2Model(
+        FakeModel(vocab_size=tokenizer.vocab_size), tokenizer  # type: ignore
+    )
     gcg_runner = GCGRunner(
         wrapped_model=wrapped_model,
         top_k=1,
@@ -39,7 +41,9 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
 
 def bert_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    wrapped_model = WrappedBERTModel(FakeModel(), tokenizer)  # type: ignore
+    wrapped_model = WrappedBERTModel(
+        FakeModel(vocab_size=tokenizer.vocab_size), tokenizer  # type: ignore
+    )
     gcg_runner = GCGRunner(
         wrapped_model=wrapped_model,
         top_k=1,
@@ -57,7 +61,9 @@ def bert_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
 def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     # we need a model for pythia because we access the config
     tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped")
-    wrapped_model = WrappedGPTNeoXModel(FakeModel(), tokenizer)  # type: ignore
+    wrapped_model = WrappedGPTNeoXModel(
+        FakeModel(vocab_size=tokenizer.vocab_size), tokenizer  # type: ignore
+    )
     gcg_runner = GCGRunner(
         wrapped_model=wrapped_model,
         top_k=1,
@@ -291,6 +297,26 @@ def test_replacements(gcg_runner: GCGRunner) -> None:
         assert maybe_preprocess_str(gcg_runner, updated) == maybe_preprocess_str(
             gcg_runner, expected
         )
+
+
+def test_apply_replacements_and_eval_candidates(gcg_runner: GCGRunner) -> None:
+    def get_token_id(s: str) -> int:
+        tokens = gcg_runner._get_tokens(s)
+        assert tokens.shape == (1, 1)
+        return tokens.squeeze().item()  # type: ignore
+
+    text_replacement_pairs = [
+        ("@!@!@!", ReplacementCandidate(0, get_token_id("b"))),  # b!@!@!
+        ("@!@!@!", ReplacementCandidate(1, get_token_id("c"))),  # @c@!@!
+    ]
+    expected_final_texts = ["b!@!@!", "@c@!@!"]
+
+    scores_and_final_texts = gcg_runner._apply_replacements_and_eval_candidates(
+        text_replacement_pairs
+    )
+    assert expected_final_texts == [
+        maybe_preprocess_str(gcg_runner, t) for _, t in scores_and_final_texts
+    ]
 
 
 def test_chat_prompt_template():

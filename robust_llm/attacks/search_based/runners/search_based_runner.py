@@ -188,14 +188,19 @@ class SearchBasedRunner(abc.ABC):
         raise AttackTokenizationChangeException
 
     def _get_tokens(
-        self, inp: str | list[str], add_special: bool = False
+        self,
+        inputs: str | list[str],
+        return_tensors: Optional[str] = "pt",
+        add_special: bool = False,
     ) -> torch.Tensor:
         """Tokenize the inputs and return the token ids.
 
         Use tokenizer which is part of the wrapped model. Handle all the arguments we
         have to add to the tokenizer.
         """
-        return self.wrapped_model.get_tokens(inp, add_special=add_special)
+        return self.wrapped_model.get_tokens(
+            inputs, return_tensors=return_tensors, add_special=add_special
+        )
 
     def _decode_tokens(
         self,
@@ -264,15 +269,25 @@ class SearchBasedRunner(abc.ABC):
         self,
         text_replacement_pairs: Sequence[Tuple[str, ReplacementCandidate]],
     ) -> list[tuple[float, str]]:
-        """Evaluate the candidates using a forward pass through the model."""
-        candidate_attack_texts = [
-            self._decode_tokens(
-                candidate.compute_tokens_after_replacement(
-                    self._get_tokens(attack_text)
-                )
-            )
-            for attack_text, candidate in text_replacement_pairs
+        """Evaluates the candidates using a forward pass through the model."""
+        attack_tokens_list = [
+            self._get_tokens(text, return_tensors=None)
+            for text, _ in text_replacement_pairs
         ]
+
+        candidate_attack_texts = self.wrapped_model.tokenizer.batch_decode(
+            torch.cat(
+                [
+                    candidate.compute_tokens_after_replacement(
+                        torch.tensor([attack_tokens])
+                    )
+                    for attack_tokens, (_, candidate) in zip(
+                        attack_tokens_list, text_replacement_pairs
+                    )
+                ]
+            ),
+            skip_special_tokens=True,
+        )
 
         full_prompts = [
             self.prompt_template.build_prompt(
@@ -281,7 +296,9 @@ class SearchBasedRunner(abc.ABC):
             )
             for attack_text in candidate_attack_texts
         ]
-        full_prompts_tokens = self._get_tokens(full_prompts)
+        full_prompts_tokens = self._get_tokens(full_prompts).to(
+            self.wrapped_model.device
+        )
         if self.seq_clf:
             assert self.clf_target is not None
             targets = torch.full(
@@ -334,20 +351,35 @@ class SearchBasedRunner(abc.ABC):
             A list of the candidates that didn't result in a change in tokenization
                 and that changed the attack text
         """
-        filtered_candidates = []
-        for attack_text, candidate in text_replacement_pairs:
-            attack_tokens = self._get_tokens(attack_text)
-            full_prompt = self.prompt_template.build_prompt(
+
+        # The following code is written in a way so that we process whole lists, hence
+        # tokenization (which is most costly) can be batched.
+
+        attack_text_list = [attack_text for attack_text, _ in text_replacement_pairs]
+        replacement_list = [replacement for _, replacement in text_replacement_pairs]
+
+        attack_tokens_list = self._get_tokens(attack_text_list, return_tensors=None)
+
+        original_full_prompt_list = [
+            self.prompt_template.build_prompt(
                 attack_text=attack_text,
                 target=self.target,
             )
-            original_full_prompt_tokens = self._get_tokens(full_prompt)
-
-            candidate_attack_tokens = candidate.compute_tokens_after_replacement(
-                attack_tokens
+            for attack_text in attack_text_list
+        ]
+        original_full_prompt_tokens_list = [
+            torch.tensor([tokens])
+            for tokens in self._get_tokens(
+                original_full_prompt_list, return_tensors=None
             )
+        ]
 
-            candidate_full_prompt_tokens = torch.cat(
+        candidate_attack_tokens_list = [
+            replacement.compute_tokens_after_replacement(torch.tensor([attack_tokens]))
+            for replacement, attack_tokens in zip(replacement_list, attack_tokens_list)
+        ]
+        candidate_full_prompt_tokens_list = [
+            torch.cat(
                 [
                     original_full_prompt_tokens[:, : self.attack_indices.attack_start],
                     candidate_attack_tokens,
@@ -355,12 +387,42 @@ class SearchBasedRunner(abc.ABC):
                 ],
                 dim=1,
             )
+            for candidate_attack_tokens, original_full_prompt_tokens in zip(
+                candidate_attack_tokens_list, original_full_prompt_tokens_list
+            )
+        ]
 
+        decoded_list = self.wrapped_model.tokenizer.batch_decode(
+            torch.cat([tokens for tokens in candidate_full_prompt_tokens_list]),
+            skip_special_tokens=True,
+        )
+        encoded_decoded_list = [
+            torch.tensor([tokens])
+            for tokens in self._get_tokens(decoded_list, return_tensors=None)
+        ]
+
+        filtered_candidates = []
+
+        for (
+            attack_text,
+            candidate,
+            candidate_full_prompt_tokens,
+            original_full_prompt_tokens,
+            encoded_decoded,
+        ) in zip(
+            attack_text_list,
+            replacement_list,
+            candidate_full_prompt_tokens_list,
+            original_full_prompt_tokens_list,
+            encoded_decoded_list,
+        ):
             if torch.equal(candidate_full_prompt_tokens, original_full_prompt_tokens):
                 continue
 
             if self._tokenization_changed(
-                candidate_full_prompt_tokens, original_full_prompt_tokens
+                candidate_full_prompt_tokens,
+                original_full_prompt_tokens,
+                encoded_decoded,
             ):
                 continue
 
@@ -375,6 +437,7 @@ class SearchBasedRunner(abc.ABC):
         self,
         candidate_full_prompt_tokens: torch.Tensor,
         original_full_prompt_tokens: torch.Tensor,
+        encoded_decoded: torch.Tensor,
     ) -> bool:
         """Returns True if the tokenization changed after the replacement.
 
@@ -383,12 +446,6 @@ class SearchBasedRunner(abc.ABC):
         length of the whole token sequence is the same after decoding and encoding, and
         that each individual section (attack, target) is the same before and after.
         """
-
-        decoded = self._decode_tokens(candidate_full_prompt_tokens)
-        encoded_decoded = self._get_tokens(decoded)
-
-        # check if length changes when decoding and encoding, since
-        # that would imply that two tokens merged
         if encoded_decoded.shape[1] != candidate_full_prompt_tokens.shape[1]:
             return True
 

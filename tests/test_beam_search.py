@@ -45,13 +45,14 @@ def _get_runner(
 
 WRAPPED_MODELS = {
     "gpt2": WrappedGPT2Model(
-        FakeModel(), AutoTokenizer.from_pretrained("gpt2")  # type: ignore
+        FakeModel(1000), AutoTokenizer.from_pretrained("gpt2")  # type: ignore
     ),
     "bert": WrappedBERTModel(
-        FakeModel(), AutoTokenizer.from_pretrained("bert-base-uncased")  # type: ignore
+        FakeModel(1000),  # type: ignore
+        AutoTokenizer.from_pretrained("bert-base-uncased"),
     ),
     "pythia": WrappedGPTNeoXModel(
-        FakeModel(),  # type: ignore
+        FakeModel(1000),  # type: ignore
         AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped"),
     ),
 }
