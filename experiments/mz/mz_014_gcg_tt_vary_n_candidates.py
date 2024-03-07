@@ -13,19 +13,21 @@ MODELS_AND_N_MAX_PARALLEL = [
     ("AlignmentResearch/robust_llm_pythia-tt-410m-mz-v0", 1),
     ("AlignmentResearch/robust_llm_pythia-tt-1b-mz-v0", 1),
 ]
-N_ITS = [10, 50]
+N_ITS = 10
+N_CANDIDATES_PER_IT = [256, 512, 1024]
 OVERRIDE_ARGS_LIST_AND_N_MAX_PARALLEL = [
     (
         {
-            "experiment.environment.train_set_size": 100,
-            "experiment.environment.validation_set_size": 100,
+            # We limit ourselves to 500 examples per evaluation.
+            "experiment.evaluation.num_generated_examples": 500,
             "experiment.environment.model_name_or_path": model,
-            "experiment.evaluation.evaluation_attack.gcg_attack_config.n_its": n_its,
+            "experiment.evaluation.evaluation_attack.search_based_attack_config.n_its": N_ITS,  # noqa: E501
+            "experiment.evaluation.evaluation_attack.search_based_attack_config.n_candidates_per_it": n_candidates_per_it,  # noqa: E501
         },
         n_max_parallel,
     )
     for (model, n_max_parallel) in MODELS_AND_N_MAX_PARALLEL
-    for n_its in N_ITS
+    for n_candidates_per_it in N_CANDIDATES_PER_IT
 ]
 
 OVERRIDE_ARGS_LIST = [x[0] for x in OVERRIDE_ARGS_LIST_AND_N_MAX_PARALLEL]

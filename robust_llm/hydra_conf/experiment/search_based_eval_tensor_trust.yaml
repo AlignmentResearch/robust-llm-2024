@@ -11,6 +11,7 @@ environment:
 evaluation:
   batch_size: 128
   evaluation_attack:
-    attack_type: "gcg"
-    gcg_attack_config:
+    attack_type: "search_based"
+    search_based_attack_config:
+      search_type: "gcg"
       forward_pass_batch_size: 128
