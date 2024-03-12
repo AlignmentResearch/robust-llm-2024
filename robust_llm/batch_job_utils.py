@@ -29,6 +29,7 @@ def git_latest_commit() -> str:
 
 @dataclass
 class FlamingoRun:
+    base_command: str
     script_path: str
     hydra_config: str
     override_args: dict
@@ -45,7 +46,13 @@ class FlamingoRun:
             f.name: getattr(self, f.name)
             for f in dataclasses.fields(self)
             if f.name
-            not in ["script_path", "hydra_config", "override_args", "n_max_parallel"]
+            not in [
+                "base_command",
+                "script_path",
+                "hydra_config",
+                "override_args",
+                "n_max_parallel",
+            ]
         }
 
 
@@ -86,7 +93,7 @@ def create_job_for_multiple_runs(
         aux_args = [f"{k}={v}" for k, v in run.override_args.items()]
         split_command = [
             "PYTHONPATH=.",
-            "python",
+            *run.base_command.split(" "),
             run.script_path,
             f"+experiment={run.hydra_config}",
             f"experiment.run_name={name}-{index+i}",
@@ -190,12 +197,14 @@ def run_multiple(
     hydra_config: str,
     override_args_list: Sequence[dict],
     n_max_parallel: Optional[Sequence[int]] = None,
+    use_accelerate: bool = False,
     script_path: str = "robust_llm",
     container_tag: str = "latest",
     cpu: int = 4,
     memory: str = "20G",
     gpu: int = 1,
     priority: str = "normal-batch",
+    dry_run: bool = False,
 ) -> None:
     """Run an experiment containing multiple runs and multiple k8s jobs.
 
@@ -209,19 +218,30 @@ def run_multiple(
             maximum number of runs that can be fit together in the container that
             includes a run corresponding to `override_args_list[i]`. If None, every run
             will be allocated a separate container.
+        accelerate: whether to use accelerate for distributed training.
         script_path: path of the Python script to run.
         container_tag: Docker container tag to use.
         cpu: number of cpu cores per container.
         memory: memory per container.
         gpu: GPUs per container.
         priority: K8s priority.
+        dry_run: if True, only print the k8s job yaml files without launching them.
     """
     if n_max_parallel is not None:
         assert len(n_max_parallel) == len(override_args_list)
 
+    assert use_accelerate == (gpu > 1)
+
+    base_command = (
+        f"accelerate launch --config_file=accelerate_config.yaml --num_processes={gpu}"
+        if use_accelerate
+        else "python"
+    )
+
     runs = [
         (
             FlamingoRun(
+                base_command=base_command,
                 script_path=script_path,
                 hydra_config=hydra_config,
                 override_args={
@@ -239,4 +259,4 @@ def run_multiple(
         for (i, override_args) in enumerate(override_args_list)
     ]
 
-    launch_jobs(runs, experiment_name=experiment_name)
+    launch_jobs(runs, experiment_name=experiment_name, dry_run=dry_run)

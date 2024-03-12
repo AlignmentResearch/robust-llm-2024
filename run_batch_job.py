@@ -7,6 +7,7 @@ from robust_llm.batch_job_utils import FlamingoRun, launch_jobs
 
 def main(args):
     run = FlamingoRun(
+        base_command="python",
         script_path=args.script_path,
         hydra_config=args.hydra_config,
         override_args={

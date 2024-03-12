@@ -38,8 +38,6 @@ def prepare_victim_models(
         model_name_or_path=model_name_or_path,
         is_pythia=is_pythia,
         checkpoint=checkpoint,
-    ).to(
-        args.experiment.environment.device  # type: ignore
     )
     tokenizer = _prepare_tokenizer(
         model_name_or_path=model_name_or_path,
@@ -51,8 +49,6 @@ def prepare_victim_models(
     if decoder_name is not None:
         decoder = _prepare_decoder(
             decoder_name=decoder_name, is_pythia=is_pythia, checkpoint=checkpoint
-        ).to(
-            args.experiment.environment.device  # type: ignore
         )
         decoder_tokenizer = _prepare_tokenizer(
             model_name_or_path=decoder_name, is_pythia=is_pythia, checkpoint=checkpoint

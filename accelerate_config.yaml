@@ -1,0 +1,34 @@
+# Generated with `accelerate config` and mostly stayed with default values.
+# See comments for deviations from default and notes of things to possibly try in
+# the future.
+compute_environment: LOCAL_MACHINE
+debug: false
+# We want FSDP to shard model parameters between devices.
+distributed_type: FSDP
+downcast_bf16: "no"
+fsdp_config:
+  # Could also consider "TRANSFORMER_BASED_WRAP" but it was hard to get it to work,
+  # there were some issues about getting state_dict for Embedding layer only
+  # (which we need in search based approaches).
+  fsdp_auto_wrap_policy: SIZE_BASED_WRAP
+  fsdp_backward_prefetch: BACKWARD_PRE
+  fsdp_cpu_ram_efficient_loading: true
+  fsdp_forward_prefetch: false
+  fsdp_min_num_params: 1000
+  fsdp_offload_params: false
+  fsdp_sharding_strategy: FULL_SHARD
+  fsdp_state_dict_type: SHARDED_STATE_DICT
+  fsdp_sync_module_states: true
+  fsdp_use_orig_params: true
+machine_rank: 0
+main_training_function: main
+mixed_precision: "no"
+num_machines: 1
+# We overwrite this with a CLI argument
+num_processes: 1
+rdzv_backend: static
+same_network: true
+tpu_env: []
+tpu_use_cluster: false
+tpu_use_sudo: false
+use_cpu: false

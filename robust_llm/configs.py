@@ -431,7 +431,7 @@ class TrainingConfig:
         baseline (BaselineTrainingConfig): Configs for baseline training.
         num_train_epochs (int): Number of training epochs.
         learning_rate (float): Learning rate to use in training.
-        batch_size (int): Batch size to use in training.
+        batch_size (int): Batch size to use in training (PER DEVICE!).
         eval_steps (Optional[int | float]): Number of update steps between two
             evaluations. Will default to the same value as logging_steps if not set.
             Should be an integer or a float in range [0,1). If smaller than 1, will
@@ -471,7 +471,7 @@ class EvaluationConfig:
 
     Attributes:
         batch_size (int): The mini-batch size used to iterate over the dataset when
-            evaluating.
+            evaluating (PER DEVICE!).
         evaluation_attack (AttackConfig): Config for the attack to use in evaluation.
         num_generated_examples (Optional[int]): Number of adversarial examples to
             generate with the attack. Needs to be set if the attack does not take

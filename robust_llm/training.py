@@ -105,12 +105,11 @@ class Training:
         return self.trainer
 
     def run_trainer(self) -> None:
-        trainer = self.setup_trainer()
+        trainer = self.trainer
+        assert trainer is not None
 
         if self.log_datasets_to_wandb:
             self.log_datasets()
-
-        trainer.evaluate(eval_dataset=self.eval_dataset["validation"])  # type: ignore
 
         if self.train_epochs <= 0:
             print(f"Not training, since train_epochs={self.train_epochs}.")
@@ -184,29 +183,31 @@ class Training:
 
     def maybe_save_model_to_path_or_hf(self, path_prefix_or_hf: Optional[str]) -> None:
         assert self.trainer is not None
-        assert wandb.run is not None
 
-        if path_prefix_or_hf is None:
-            print("Not saving the model/tokenizer since no save path was specified")
+        if self.trainer.is_world_process_zero():
+            assert wandb.run is not None
+            if path_prefix_or_hf is None:
+                print("Not saving the model/tokenizer since no save path was specified")
 
-        elif path_prefix_or_hf == "hf":
-            hf_name = self.trainer.args.hub_model_id
-            wandb.run.summary["saved_hf_name"] = hf_name
-            print(f"Saving the model/tokenizer to HuggingFace as {hf_name}")
-            self.trainer.push_to_hub()
-            # Even though above line should push both model and tokenizer, in practice
-            # tokenizer sometimes doesn't get pushed, so we do it explicitly here.
-            assert self.trainer.hub_model_id is not None
-            self.tokenizer.push_to_hub(self.trainer.hub_model_id)
+            elif path_prefix_or_hf == "hf":
+                hf_name = self.trainer.args.hub_model_id
+                wandb.run.summary["saved_hf_name"] = hf_name
+                print(f"Saving the model/tokenizer to HuggingFace as {hf_name}")
+                self.trainer.push_to_hub()
+                # Even though above line should push both model and tokenizer, in
+                # practice tokenizer sometimes doesn't get pushed, so we do it
+                # explicitly here.
+                assert self.trainer.hub_model_id is not None
+                self.tokenizer.push_to_hub(self.trainer.hub_model_id)
 
-        else:
-            output_dir = os.path.join(
-                path_prefix_or_hf, "models", self.model_name_to_save
-            )
-            wandb.run.summary["saved_dir"] = output_dir
-            print(f"Saving the model/tokenizer to {output_dir}")
-            self.trainer.save_model(output_dir)
-            self.tokenizer.save_pretrained(output_dir)
+            else:
+                output_dir = os.path.join(
+                    path_prefix_or_hf, "models", self.model_name_to_save
+                )
+                wandb.run.summary["saved_dir"] = output_dir
+                print(f"Saving the model/tokenizer to {output_dir}")
+                self.trainer.save_model(output_dir)
+                self.tokenizer.save_pretrained(output_dir)
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -328,8 +329,8 @@ class AdversarialTraining(Training):
 
     @override
     def run_trainer(self) -> None:
-        # Set up the trainer
-        adversarial_trainer = self.setup_trainer()
+        adversarial_trainer = self.trainer
+        assert isinstance(adversarial_trainer, AdversarialTrainer)
 
         # Prepare attacks
         training_attack = create_attack(

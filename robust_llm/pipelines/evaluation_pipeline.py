@@ -1,6 +1,7 @@
 """Pipeline to evaluate a fixed model under attack."""
 
 import wandb
+from accelerate import Accelerator
 
 from robust_llm.configs import OverallConfig
 from robust_llm.evaluation import do_adversarial_evaluation
@@ -24,7 +25,10 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
     setup_wandb_metrics()
     log_config_to_wandb(args.experiment)
 
+    accelerator = Accelerator()
+
     model, tokenizer, _ = prepare_victim_models(args)
+    model = accelerator.prepare(model)
 
     language_generator = prepare_language_generator(args)
 

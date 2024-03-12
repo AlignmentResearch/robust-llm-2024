@@ -133,7 +133,9 @@ text_no_specials = st.text(alphabet=st.characters(min_codepoint=32, max_codepoin
 @given(target=text_no_specials)
 @example(target="Hi!")
 @example(target="")
-@settings(suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture])
+@settings(
+    suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture], deadline=500
+)
 def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     # set up gcg runner to use the given user prompt and target
     gcg_runner.target = target

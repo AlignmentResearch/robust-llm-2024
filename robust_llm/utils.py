@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import os
 import random
+import uuid
 from argparse import Namespace
 from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Protocol, Sequence
 
@@ -238,9 +239,9 @@ def div_maybe_nan(a: int, b: int) -> float:
 def make_unique_name_to_save(base_name_or_path: str) -> str:
     """Get a unique name used for saving the model."""
     base_processed = base_name_or_path.replace("/", "_")
-    # Use wandb run ID as a unique identifier.
-    assert wandb.run is not None
-    return f"{wandb.run.id}_from_{base_processed}"
+    # Create a long random id.
+    id = uuid.uuid1().hex
+    return f"{id}_from_{base_processed}"
 
 
 def get_randint_with_exclusions(

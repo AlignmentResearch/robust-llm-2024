@@ -51,14 +51,23 @@ class CustomLoggingWandbCallback(WandbCallback):
     def setup(self, args, state, model, **kwargs):
         super().setup(args, state, model, **kwargs)
 
-        # We wait until now to set up the wandb step metrics
-        # (which logged values can be used as x-axes,
-        # and what the default x-axes are set to be)
-        # because when we initialize the HuggingFace Trainer,
-        # it sets up its own `global_step` default metric, which would
-        # overwrite anything we had set earlier. Thus, we wait until
-        # that happens and then set up our own metrics.
-        setup_wandb_metrics()
+        assert self.training.trainer is not None
+
+        # Note: Currently, when using distributed training, datapoint-based steps are
+        # not being correctly computed. We only log from the main process, and use the
+        # batch sizes from the main process to compute the number of datapoints.
+        # Consequently, the datapoint-based steps won't be correct when using
+        # distributed training. Regardless, the values of "standard" metrics such as
+        # loss etc. should be logged correctly.
+        if self.training.trainer.is_world_process_zero():
+            # We wait until now to set up the wandb step metrics
+            # (which logged values can be used as x-axes,
+            # and what the default x-axes are set to be)
+            # because when we initialize the HuggingFace Trainer,
+            # it sets up its own `global_step` default metric, which would
+            # overwrite anything we had set earlier. Thus, we wait until
+            # that happens and then set up our own metrics.
+            setup_wandb_metrics()
 
     @override
     def on_train_begin(  # type: ignore[misc]
@@ -89,10 +98,14 @@ class CustomLoggingWandbCallback(WandbCallback):
     ) -> None:
         super().on_train_end(args, state, control, **kwargs)
 
-        assert self.logging_counter.step_count == self.start_step + state.global_step
+        assert self.training.trainer is not None
+        if self.training.trainer.is_world_process_zero():
+            assert (
+                self.logging_counter.step_count == self.start_step + state.global_step
+            )
 
-        # TODO: would be nice to have a way to check that we added the
-        # correct number of datapoints too
+            # TODO: would be nice to have a way to check that we added the
+            # correct number of datapoints too
 
     @override
     def on_step_end(  # type: ignore[misc]
@@ -104,24 +117,26 @@ class CustomLoggingWandbCallback(WandbCallback):
     ):
         super().on_step_end(args, state, control, **kwargs)
 
-        assert state.global_step - self.previous_global_step == 1
         assert self.training.trainer is not None
+        if self.training.trainer.is_world_process_zero():
+            assert state.global_step - self.previous_global_step == 1
+            assert self.training.trainer is not None
 
-        # We do not commit here, since the train loss and other stats are
-        # logged by the HuggingFace Trainer _after_ `on_step_end` is called,
-        # so we would be logging with an off-by-one error if we committed here.
-        # Instead, we rely on the HuggingFace Trainer to commit the logs at the
-        # same time that it commits the train loss and other stats.
-        # In the case where we `logging_steps` > 1, this means that we
-        # will call `wandb.log` with `commit=False` multiple times before
-        # committing. This is okay because while wandb will overwrite
-        # the old counts with the new ones, when it is time to commit,
-        # the currently stored counts will be the ones that correctly
-        # correspond to the current train loss and other stats.
-        self.logging_counter.increment(
-            step_count_to_add=1,
-            datapoint_count_to_add=self.training.trainer.current_batch_size,
-            commit=False,
-        )
+            # We do not commit here, since the train loss and other stats are
+            # logged by the HuggingFace Trainer _after_ `on_step_end` is called,
+            # so we would be logging with an off-by-one error if we committed here.
+            # Instead, we rely on the HuggingFace Trainer to commit the logs at the
+            # same time that it commits the train loss and other stats.
+            # In the case where we `logging_steps` > 1, this means that we
+            # will call `wandb.log` with `commit=False` multiple times before
+            # committing. This is okay because while wandb will overwrite
+            # the old counts with the new ones, when it is time to commit,
+            # the currently stored counts will be the ones that correctly
+            # correspond to the current train loss and other stats.
+            self.logging_counter.increment(
+                step_count_to_add=1,
+                datapoint_count_to_add=self.training.trainer.current_batch_size,
+                commit=False,
+            )
 
-        self.previous_global_step = state.global_step
+            self.previous_global_step = state.global_step

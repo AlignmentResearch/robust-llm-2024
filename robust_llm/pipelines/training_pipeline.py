@@ -33,20 +33,6 @@ def run_training_pipeline(
 
     robust_llm_datasets = prepare_datasets(args, tokenizer, language_generator)
 
-    # Initialize wandb early so that we have unique ID from wandb that can be used
-    # to set e.g. the HF hub model name.
-    # Unlike in the evaluation pipeline, we don't set up our wandb step metrics here
-    # (which logged values can be used as x-axes, and what the default x-axes
-    # are set to be) because HuggingFace sets up its own metrics when we initialize
-    # the Trainer, and we wait until that is done to overwrite them with our own.
-    # We do this in the `CustomLoggingWandbCallback`'s `setup` method.
-    wandb.init(
-        project="robust-llm",
-        group=experiment.experiment_name,
-        job_type=experiment.job_type,
-        name=experiment.run_name,
-    )
-
     model_name_to_save = (
         args.experiment.training.force_name_to_save
         or make_unique_name_to_save(experiment.environment.model_name_or_path)
@@ -100,25 +86,40 @@ def run_training_pipeline(
     else:
         training = Training(**base_training_args)
 
-    log_config_to_wandb(args.experiment)
+    trainer = training.setup_trainer()
 
-    # Log the train-val overlap to wandb
-    assert wandb.run is not None
-    if (
-        experiment.environment.train_set_size is not None
-        and experiment.environment.validation_set_size is not None
-    ):
-        train_val_overlap = get_overlap(
-            smaller_dataset=robust_llm_datasets.validation_dataset,
-            larger_dataset=robust_llm_datasets.train_dataset,
+    if trainer.is_world_process_zero():
+        # Unlike in the evaluation pipeline, we don't set up our wandb step metrics here
+        # (which logged values can be used as x-axes, and what the default x-axes
+        # are set to be) because HuggingFace sets up its own metrics when we initialize
+        # the Trainer, and we wait until that is done to overwrite them with our own.
+        # We do this in the `CustomLoggingWandbCallback`'s `setup` method.
+        wandb.init(
+            project="robust-llm",
+            group=experiment.experiment_name,
+            job_type=experiment.job_type,
+            name=experiment.run_name,
         )
-        wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)
-        wandb.run.summary["train_val_overlap_over_train_set_size"] = len(
-            train_val_overlap
-        ) / len(robust_llm_datasets.train_dataset["text"])
-        wandb.run.summary["train_val_overlap_over_val_set_size"] = len(
-            train_val_overlap
-        ) / len(robust_llm_datasets.validation_dataset["text"])
+
+        log_config_to_wandb(args.experiment)
+
+        # Log the train-val overlap to wandb
+        assert wandb.run is not None
+        if (
+            experiment.environment.train_set_size is not None
+            and experiment.environment.validation_set_size is not None
+        ):
+            train_val_overlap = get_overlap(
+                smaller_dataset=robust_llm_datasets.validation_dataset,
+                larger_dataset=robust_llm_datasets.train_dataset,
+            )
+            wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)
+            wandb.run.summary["train_val_overlap_over_train_set_size"] = len(
+                train_val_overlap
+            ) / len(robust_llm_datasets.train_dataset["text"])
+            wandb.run.summary["train_val_overlap_over_val_set_size"] = len(
+                train_val_overlap
+            ) / len(robust_llm_datasets.validation_dataset["text"])
 
     # Perform the training
     training.run_trainer()

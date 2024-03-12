@@ -20,6 +20,10 @@ spec:
         - name: robust-llm-storage
           persistentVolumeClaim:
             claimName: robust-llm
+        - name: devshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi
       containers:
         - name: devbox-container
           image: "ghcr.io/alignmentresearch/robust-llm:{CONTAINER_TAG}"
@@ -37,6 +41,10 @@ spec:
           volumeMounts:
             - name: robust-llm-storage
               mountPath: /robust_llm_data
+            # This is needed as for multi-GPU training, accelerate needs to write
+            # to /dev/shm and the default size is too small
+            - name: devshm
+              mountPath: /dev/shm
           env:
             - name: GIT_ASKPASS
               value: "true"

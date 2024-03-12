@@ -11,6 +11,7 @@ This pipeline does the following:
 """
 
 import wandb
+from accelerate import Accelerator
 
 from robust_llm.configs import OverallConfig
 from robust_llm.defenses import make_defended_model
@@ -24,7 +25,9 @@ from robust_llm.pipelines.utils import (
 
 
 def run_defense_pipeline(args: OverallConfig):
+    accelerator = Accelerator()
     model, tokenizer, decoder = run_training_pipeline(args)
+    model, decoder = accelerator.prepare(model, decoder)
     language_generator = prepare_language_generator(args)
     robust_llm_datasets = prepare_datasets(
         args, tokenizer=tokenizer, language_generator=language_generator
