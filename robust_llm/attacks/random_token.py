@@ -295,5 +295,7 @@ class RandomTokenAttack(Attack):
                 commit=True,
             )
 
-            print("num_attack_success", sum(attack_success))
-            print("attack_success_rate", sum(attack_success) / len(attack_success))
+            print(
+                f"iteration {iteration} attack_success_rate: "
+                f"{sum(attack_success) / len(attack_success)}"
+            )
