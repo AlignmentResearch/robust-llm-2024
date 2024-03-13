@@ -30,7 +30,7 @@ def main():
 
         print(f"For {clf_target=}:")
         # run the attack with the parameters specified above
-        attack_text = runner.run()
+        attack_text, _ = runner.run()
         print(f"{attack_text=}")
 
         # confirm that the suffix works by using it to generate a continuation

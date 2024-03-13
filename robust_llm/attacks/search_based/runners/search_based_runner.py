@@ -2,7 +2,7 @@ import abc
 import logging
 import random
 from dataclasses import dataclass
-from typing import Optional, Sequence, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 import torch
 import torch.utils.data
@@ -83,10 +83,13 @@ class SearchBasedRunner(abc.ABC):
             self._get_initial_attack_text_and_indices(self.n_attack_tokens)
         )
 
-    def run(self) -> str:
-        """Runs the attack and returns the adversarial text."""
+    def run(self) -> Tuple[str, Dict[str, Any]]:
+        """Runs the attack and returns the adversarial text and debug info dict."""
         attack_text = self.initial_attack_text
         candidate_texts = [attack_text]
+
+        # In how many iterations it happened that all candidates were filtered out
+        all_filtered_out_count = 0
 
         for _ in (pbar := tqdm(range(self.n_its))):
             candidate_texts_and_replacements = (
@@ -95,6 +98,9 @@ class SearchBasedRunner(abc.ABC):
             candidate_texts_and_replacements = self._filter_candidates(
                 candidate_texts_and_replacements
             )
+            if len(candidate_texts_and_replacements) == 0:
+                all_filtered_out_count += 1
+                continue
             evaluated_candidates = self._apply_replacements_and_eval_candidates(
                 candidate_texts_and_replacements
             )
@@ -104,7 +110,9 @@ class SearchBasedRunner(abc.ABC):
             # TODO(GH#112): track progress more cleanly
             pbar.set_description(f"Attack text: {attack_text}")
 
-        return attack_text
+        info_dict = {"all_filtered_out_count": all_filtered_out_count}
+
+        return attack_text, info_dict
 
     @abc.abstractmethod
     def _get_candidate_texts_and_replacements(
@@ -431,6 +439,9 @@ class SearchBasedRunner(abc.ABC):
         logger.debug(
             f"Filtered from {len(text_replacement_pairs)} to {len(filtered_candidates)}"
         )
+        if len(filtered_candidates) == 0:
+            logger.warning("All candidates were filtered out!")
+
         return filtered_candidates
 
     def _tokenization_changed(

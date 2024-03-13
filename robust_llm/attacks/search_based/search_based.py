@@ -1,6 +1,7 @@
 import logging
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import numpy as np
 import transformers
 from datasets import Dataset
 from typing_extensions import override
@@ -75,6 +76,8 @@ class SearchBasedAttack(Attack):
 
         config = self.attack_config.search_based_attack_config
 
+        all_filtered_out_counts: List[int] = []
+
         attacked_input_texts = []
         for example in dataset:
             assert isinstance(example, dict)
@@ -111,11 +114,12 @@ class SearchBasedAttack(Attack):
                 random_seed=self.attack_config.seed,
                 config=config,
             )
-            attack_text = runner.run()
+            attack_text, example_debug_info = runner.run()
             attacked_input_text = prompt_template.build_prompt(
                 attack_text=attack_text,
             )
             attacked_input_texts.append(attacked_input_text)
+            all_filtered_out_counts.append(example_debug_info["all_filtered_out_count"])
 
         attacked_dataset = Dataset.from_dict(
             {
@@ -124,5 +128,19 @@ class SearchBasedAttack(Attack):
                 "label": dataset["label"],
             }
         )
+        info_dict = _create_info_dict(all_filtered_out_counts)
 
-        return attacked_dataset, {}
+        return attacked_dataset, info_dict
+
+
+def _create_info_dict(all_filtered_out_counts: List[int]) -> Dict[str, Any]:
+    return {
+        # The number of examples for which there was some iteration where all
+        # candidates were filtered out
+        "debug/num_examples_all_filtered_out_happened": len(
+            [c for c in all_filtered_out_counts if c > 0]
+        ),
+        # The average number of iterations (across examples) where all candidates
+        # were filtered out
+        "debug/avg_num_its_all_filtered_out": float(np.mean(all_filtered_out_counts)),
+    }

@@ -26,7 +26,7 @@ def main():
     )
 
     # run the attack with the parameters specified above
-    attack_text = runner.run()
+    attack_text, _ = runner.run()
     print(f"{attack_text=}")
 
     full_prompt = prompt_template.build_prompt(attack_text=attack_text, target="")
