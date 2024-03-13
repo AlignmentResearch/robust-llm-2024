@@ -2,14 +2,17 @@ experiment_type: "evaluation"
 experiment_name: "random_token_attack_evaluation_example"
 
 environment:
-  model_name_or_path: "AlignmentResearch/robust_llm_pythia-tt-70m-mz-v0"
+  model_name_or_path: "AlignmentResearch/robust_llm_pythia-tt-14m-mz-v0"
   is_pythia: true
   dataset_type: "tensor_trust"
   # For tensor trust we need non-None train set for now
   train_set_size: 2
-  validation_set_size: 20
+  validation_set_size: 200
   shuffle_validation_set: true
 
 evaluation:
   evaluation_attack:
     attack_type: "random_token"
+    random_token_attack_config:
+      max_iterations: 10
+      logging_frequency: 1

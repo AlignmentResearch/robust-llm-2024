@@ -44,7 +44,9 @@ def create_attack(
             attack_config=attack_config,
             modifiable_chunks_spec=modifiable_chunks_spec,
             dataset_type=dataset_type,
-            tokenizer=victim_tokenizer,
+            victim_model=victim_model,
+            victim_tokenizer=victim_tokenizer,
+            ground_truth_label_fn=ground_truth_label_fn,
         )
     elif attack_config.attack_type == "trl":
         return TRLAttack(

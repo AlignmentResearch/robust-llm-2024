@@ -66,10 +66,17 @@ class RandomTokenAttackConfig:
     Attributes:
         min_tokens (int): Minimum number of tokens to generate.
         max_tokens (int): Maximum number of tokens to generate.
+        max_iterations (int): Maximum number of iterations to run the attack.
+        logging_frequency (int): How often to log the attack.
+        batch_size (int): Batch size to use for the victim pipeline used
+            to check whether the attack was successful.
     """
 
     min_tokens: int = 1
     max_tokens: int = 3
+    max_iterations: int = 100
+    logging_frequency: int = 10
+    batch_size: int = 8
 
 
 @dataclass
