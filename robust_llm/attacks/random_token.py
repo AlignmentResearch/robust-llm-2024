@@ -183,12 +183,14 @@ class RandomTokenAttack(Attack):
         )
 
         new_chunked_datapoints = []
+        failed_datapoint_idx = 0
         for chunked_datapoint, success in zip(chunked_datapoints, successes):
             if success:
                 assert isinstance(chunked_datapoint, list)
                 new_chunked_datapoints.append(chunked_datapoint)
             else:
                 new_chunked_datapoint = []
+                modifiable_chunk_idx = 0
                 for text, is_modifiable in zip(
                     chunked_datapoint, self.modifiable_chunks_spec
                 ):
@@ -197,10 +199,17 @@ class RandomTokenAttack(Attack):
                     else:
                         if self.attack_config.append_to_modifiable_chunk:
                             new_chunked_datapoint.append(text)
-                        new_chunked_datapoint.append(
-                            decoded_flat_random_tokens.popleft()
-                        )
+                        tokens_to_add = []
+                        for _ in range(
+                            all_num_tokens[failed_datapoint_idx, modifiable_chunk_idx]
+                        ):
+                            tokens_to_add.append(decoded_flat_random_tokens.popleft())
+                        new_chunked_datapoint.append("".join(tokens_to_add))
+                        modifiable_chunk_idx += 1
                 new_chunked_datapoints.append(new_chunked_datapoint)
+                failed_datapoint_idx += 1
+
+        assert len(decoded_flat_random_tokens) == 0
 
         return new_chunked_datapoints
 
