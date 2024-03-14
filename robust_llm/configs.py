@@ -409,6 +409,10 @@ class EnvironmentConfig:
             Whether to shuffle the train set. Can matter if we subsample.
         shuffle_validation_set (bool):
             Whether to shuffle the validation set. Can matter if we subsample.
+        filter_out_longer_than_n_tokens_train (Optional[int]): if set, filter out
+            examples longer than this number of tokens from the train set.
+        filter_out_longer_than_n_tokens_validation (Optional[int]): if set, filter out
+            examples longer than this number of tokens from the validation set.
         device (str): Device to use for models.
     """
 
@@ -426,6 +430,10 @@ class EnvironmentConfig:
     validation_set_size: Optional[int] = None
     shuffle_train_set: bool = False
     shuffle_validation_set: bool = False
+    # Default to 2000 as 2048 is context length for Pythia models;
+    # we are leaving some slack for the attack to add tokens.
+    filter_out_longer_than_n_tokens_train: Optional[int] = 2000
+    filter_out_longer_than_n_tokens_validation: Optional[int] = 2000
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
 

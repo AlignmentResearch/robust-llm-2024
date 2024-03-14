@@ -58,7 +58,7 @@ def _prepare_tokenizer(
             model_name_or_path,
             revision=revision,
             padding_side=padding_side,
-            model_max_length=512,  # TODO: remove if not needed
+            model_max_length=2048,
         )
         tokenizer.pad_token = tokenizer.eos_token
     else:

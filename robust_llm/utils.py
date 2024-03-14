@@ -75,7 +75,7 @@ class LanguageModel(Protocol):
 def tokenize_dataset(
     dataset: Dataset | dict[str, Any],
     tokenizer: PreTrainedTokenizerBase,
-    padding: str = "max_length",
+    padding: str = "do_not_pad",
     truncation: bool = True,
     return_tensors: Optional[str] = None,
 ) -> dict[str, Any]:

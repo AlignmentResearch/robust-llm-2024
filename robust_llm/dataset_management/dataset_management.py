@@ -91,6 +91,16 @@ def generate_robust_llm_datasets(
     else:
         raise ValueError(f"Unknown dataset type {dataset_type}")
 
+    # Filter before adjusting dataset sizes
+    train_set = _maybe_filter_out_long_inputs(
+        train_set, environment_config.filter_out_longer_than_n_tokens_train, tokenizer
+    )
+    validation_set = _maybe_filter_out_long_inputs(
+        validation_set,
+        environment_config.filter_out_longer_than_n_tokens_validation,
+        tokenizer,
+    )
+
     if environment_config.shuffle_train_set:
         train_set = train_set.shuffle(seed=seed)
     if environment_config.shuffle_validation_set:
@@ -137,3 +147,14 @@ def _add_trivial_text_chunked_to_example(
     """Add a `text_chunked` field to the example that is a list containing `text`."""
     example["text_chunked"] = [example["text"]]
     return example
+
+
+def _maybe_filter_out_long_inputs(
+    dataset: Dataset, max_n_tokens: Optional[int], tokenizer: PreTrainedTokenizerBase
+) -> Dataset:
+    if max_n_tokens is not None:
+        tokenized = tokenizer(dataset["text"], return_tensors=None).input_ids
+        return dataset.select(
+            [i for i, t in enumerate(tokenized) if len(t) <= max_n_tokens]
+        )
+    return dataset

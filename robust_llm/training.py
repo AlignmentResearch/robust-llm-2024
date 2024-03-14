@@ -4,6 +4,7 @@ from typing import Callable, Optional
 
 import evaluate
 import numpy as np
+import transformers
 import wandb
 import wandb.util
 from datasets import Dataset
@@ -95,6 +96,7 @@ class Training:
             args=hf_training_args,
             train_dataset=self.train_dataset,  # type: ignore
             eval_dataset=self.eval_dataset,  # type: ignore
+            data_collator=transformers.DataCollatorWithPadding(self.tokenizer),
             compute_metrics=self.compute_metrics,
         )
         self.victim_training_logging_counter = LoggingCounter(
@@ -315,6 +317,7 @@ class AdversarialTraining(Training):
             args=hf_training_args,
             train_dataset=self.train_dataset,
             eval_dataset=self.eval_dataset,
+            data_collator=transformers.DataCollatorWithPadding(self.tokenizer),
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
         )
@@ -427,6 +430,8 @@ class AdversarialTraining(Training):
                 tokenize_dataset(
                     training_attack.get_attacked_dataset(self.train_dataset)[0],
                     self.tokenizer,
+                    # TODO(michal): make it "do_not_pad" (some refactor needed for that)
+                    padding="max_length",
                 )
             )
             print(
@@ -439,20 +444,6 @@ class AdversarialTraining(Training):
             )
             # Save the training attack dataset so we can log it later
             self.training_attack_dataset = training_attack_dataset
-
-            validation_attack_dataset = Dataset.from_dict(
-                tokenize_dataset(
-                    validation_attack.get_attacked_dataset(
-                        self.eval_dataset["validation"]
-                    )[0],
-                    self.tokenizer,
-                )
-            )
-            if not self.use_probabilistic_robustness_check:
-                # Save the attack dataset as one of the datasets to do eval on
-                self.eval_dataset["validation_attack_dataset"] = (
-                    validation_attack_dataset
-                )
 
             if self.log_datasets_to_wandb:
                 self.log_datasets()
