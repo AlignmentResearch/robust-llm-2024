@@ -27,10 +27,7 @@ def make_ppo_trainer(
         "batch_size": attack_config.trl_attack_config.batch_size,
         "mini_batch_size": attack_config.trl_attack_config.mini_batch_size,
         "gradient_accumulation_steps": attack_config.trl_attack_config.gradient_accumulation_steps,  # noqa: E501
-        "init_kl_coef": attack_config.trl_attack_config.initial_kl_coefficient,
         "seed": attack_config.seed,
-        # TODO(niki): try not False
-        "adap_kl_ctrl": False,
         "ppo_epochs": attack_config.trl_attack_config.ppo_epochs,
         # Needed in order to not delete "text_chunked"
         "remove_unused_columns": False,

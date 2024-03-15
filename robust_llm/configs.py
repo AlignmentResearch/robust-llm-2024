@@ -95,10 +95,6 @@ class TRLAttackConfig:
             to accumulate before taking a single gradient update step).
         ppo_epochs (int):
             The number of ppo epochs to run TRL on the provided dataset.
-        initial_kl_coefficient (float):
-            The starting KL coefficient for TRL.
-            NOTE: this might not be the optimal value.
-            TODO(niki): vary this value.
         adversary_base_model_name (str):
             Which model to use as the adversary.
         adversary_base_model_checkpoint (int):
@@ -116,7 +112,6 @@ class TRLAttackConfig:
     mini_batch_size: int = 32
     gradient_accumulation_steps: int = 1
     ppo_epochs: int = 10
-    initial_kl_coefficient: float = 0
 
     adversary_base_model_name: str = "EleutherAI/pythia-14m"
     adversary_base_model_checkpoint: int = 143000
