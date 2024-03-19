@@ -47,6 +47,10 @@ def _prepare_tokenizer(
     checkpoint: Optional[int],
     padding_side: str = "right",
 ) -> PreTrainedTokenizerBase:
+    # When this setting is on, one undesired consequence can be that
+    # decode(encode(text)) != text.
+    clean_up_tokenization_spaces = False
+
     if is_pythia:
         revision = "main"
         # One of the original Pythia checkpoints.
@@ -59,10 +63,14 @@ def _prepare_tokenizer(
             revision=revision,
             padding_side=padding_side,
             model_max_length=2048,
+            clean_up_tokenization_spaces=clean_up_tokenization_spaces,
         )
         tokenizer.pad_token = tokenizer.eos_token
     else:
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_name_or_path,
+            clean_up_tokenization_spaces=clean_up_tokenization_spaces,
+        )
 
     return tokenizer
 

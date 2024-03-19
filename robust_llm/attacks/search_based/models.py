@@ -87,7 +87,6 @@ class SearchBasedAttackWrappedModel(ABC):
         if len(inp.shape) == 2 and inp.shape[0] == 1 and try_squeeze:
             inp = inp.squeeze()
 
-        # TODO(GH#120): work out whether to keep clean_up_tokenization_spaces
         string = self.tokenizer.decode(
             inp,
             skip_special_tokens=skip_special_tokens,
