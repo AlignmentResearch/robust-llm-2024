@@ -431,6 +431,26 @@ class SearchBasedRunner(abc.ABC):
             for tokens in self._get_tokens(decoded_list, return_tensors=None)
         ]
 
+        # In the checks prepared above, we construct candidate full prompts by modifying
+        # tokens in the original full prompt.
+        # Below, we instead first decode candidate attacks into strings, and build
+        # candidate full prompts from strings. This is the way it is actually done
+        # later in the code. It turns out that in some rare cases these two ways do not
+        # coincide, and so the checks relying on the first way are not sufficient.
+        # TODO(michal): refactor this so that we only have one type of check.
+        candidate_attack_texts = self.wrapped_model.tokenizer.batch_decode(
+            torch.cat(candidate_attack_tokens_list)
+        )
+        candidate_full_prompt_list_alt = [
+            self.prompt_template.build_prompt(
+                attack_text=attack_text, target=self.target
+            )
+            for attack_text in candidate_attack_texts
+        ]
+        candidate_full_prompt_tokens_list_alt = self._get_tokens(
+            candidate_full_prompt_list_alt, return_tensors=None
+        )
+
         filtered_candidates = []
 
         for (
@@ -439,12 +459,14 @@ class SearchBasedRunner(abc.ABC):
             candidate_full_prompt_tokens,
             original_full_prompt_tokens,
             encoded_decoded,
+            candidate_full_prompt_tokens_alt,
         ) in zip(
             attack_text_list,
             replacement_list,
             candidate_full_prompt_tokens_list,
             original_full_prompt_tokens_list,
             encoded_decoded_list,
+            candidate_full_prompt_tokens_list_alt,
         ):
             if torch.equal(candidate_full_prompt_tokens, original_full_prompt_tokens):
                 continue
@@ -453,6 +475,11 @@ class SearchBasedRunner(abc.ABC):
                 candidate_full_prompt_tokens,
                 original_full_prompt_tokens,
                 encoded_decoded,
+            ):
+                continue
+
+            if len(candidate_full_prompt_tokens_alt) != len(
+                original_full_prompt_tokens[0]
             ):
                 continue
 
