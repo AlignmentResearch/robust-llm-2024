@@ -57,6 +57,8 @@ class Training:
     gradient_checkpointing: bool = False
     eval_steps: Optional[int | float] = None
     logging_steps: int | float = 500
+    save_strategy: str = "steps"
+    save_steps: int | float = 500
     trainer: Optional[TrainerWithBatchSizeStoring] = None
     log_datasets_to_wandb: bool = False
     ground_truth_label_fn: Optional[Callable[[str], int]] = None
@@ -81,6 +83,8 @@ class Training:
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
+            save_strategy=self.save_strategy,
+            save_steps=self.save_steps,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
             # This defaults to "all", which sets up several callbacks, including
             # a WandbCallback which increments the wandb internal step whenever
@@ -310,6 +314,8 @@ class AdversarialTraining(Training):
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
+            save_strategy=self.save_strategy,
+            save_steps=self.save_steps,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
         )
         self.trainer = AdversarialTrainer(
@@ -343,6 +349,7 @@ class AdversarialTraining(Training):
             dataset_type=self.dataset_type,
             victim_model=self.model,
             victim_tokenizer=self.tokenizer,
+            accelerator=adversarial_trainer.accelerator,
             language_generator_name=self.language_generator_name,
             ground_truth_label_fn=self.ground_truth_label_fn,
         )
@@ -353,6 +360,7 @@ class AdversarialTraining(Training):
             dataset_type=self.dataset_type,
             victim_model=self.model,
             victim_tokenizer=self.tokenizer,
+            accelerator=adversarial_trainer.accelerator,
             language_generator_name=self.language_generator_name,
             ground_truth_label_fn=self.ground_truth_label_fn,
         )
@@ -418,6 +426,7 @@ class AdversarialTraining(Training):
             do_adversarial_evaluation(
                 model=self.model,
                 tokenizer=self.tokenizer,
+                accelerator=adversarial_trainer.accelerator,
                 dataset=self.eval_dataset["validation"],
                 ground_truth_label_fn=self.ground_truth_label_fn,
                 num_generated_examples=self.evaluation_config.num_generated_examples,

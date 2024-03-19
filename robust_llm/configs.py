@@ -449,6 +449,14 @@ class TrainingConfig:
         logging_steps (int | float): Number of update steps between two logs. Should
             be an integer or a float in range [0,1). If smaller than 1, will be
             interpreted as ratio of total training steps.
+        save_strategy (str): The checkpoint save strategy to adopt during training.
+            Possible values are:
+            - "no": No save is done during training.
+            - "epoch": Save is done at the end of each epoch.
+            - "steps": Save is done every save_steps.
+        save_steps (int | float): Number of updates steps before two checkpoint saves if
+            save_strategy="steps". Should be an integer or a float in range [0,1). If
+            smaller than 1, will be interpreted as ratio of total training steps.
         checkpoint (int): The checkpoint to start from.
         log_datasets_to_wandb (bool): Whether to log datasets to wandb. Off by default,
             as it takes a lot of space.
@@ -469,6 +477,8 @@ class TrainingConfig:
     gradient_checkpointing: bool = False
     eval_steps: Optional[int] = None
     logging_steps: int | float = 500
+    save_strategy: str = "steps"
+    save_steps: int | float = 500
     checkpoint: int = 142000
     log_datasets_to_wandb: bool = False
     model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR

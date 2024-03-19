@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Tuple
 
 import torch
+from accelerate import Accelerator
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from robust_llm.attacks.search_based.models import (
@@ -29,16 +30,16 @@ class TargetTokenizationChangeException(TokenizationChangeException):
 
 
 def get_wrapped_model(
-    model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase
+    model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, accelerator: Accelerator
 ) -> SearchBasedAttackWrappedModel:
     # we just assume that the tokenizer matches
     if model.config.model_type == "gpt2":
-        return WrappedGPT2Model(model, tokenizer)
+        return WrappedGPT2Model(model, tokenizer, accelerator)
     # pythia models are gpt_neox models
     elif model.config.model_type == "gpt_neox":
-        return WrappedGPTNeoXModel(model, tokenizer)
+        return WrappedGPTNeoXModel(model, tokenizer, accelerator)
     elif model.config.model_type == "bert":
-        return WrappedBERTModel(model, tokenizer)
+        return WrappedBERTModel(model, tokenizer, accelerator)
     else:
         raise ValueError(f"Unknown model type: {model.config.type=}")
 

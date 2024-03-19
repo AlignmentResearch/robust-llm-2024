@@ -60,6 +60,8 @@ def run_training_pipeline(
         "gradient_checkpointing": experiment.training.gradient_checkpointing,
         "eval_steps": experiment.training.eval_steps,
         "logging_steps": experiment.training.logging_steps,
+        "save_strategy": experiment.training.save_strategy,
+        "save_steps": experiment.training.save_steps,
         "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
         "ground_truth_label_fn": robust_llm_datasets.ground_truth_label_fn,
     }

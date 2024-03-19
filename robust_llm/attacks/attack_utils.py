@@ -1,6 +1,7 @@
 from typing import Callable, Optional
 
 import transformers
+from accelerate import Accelerator
 
 from robust_llm.attacks.attack import Attack, IdentityAttack
 from robust_llm.attacks.brute_force_tomita import BruteForceTomitaAttack
@@ -21,6 +22,7 @@ def create_attack(
     dataset_type: str,
     victim_model: LanguageModel,
     victim_tokenizer: transformers.PreTrainedTokenizerBase,
+    accelerator: Accelerator,
     language_generator_name: Optional[str] = None,
     ground_truth_label_fn: Optional[Callable[[str], int]] = None,
 ) -> Attack:
@@ -64,6 +66,7 @@ def create_attack(
             modifiable_chunks_spec=modifiable_chunks_spec,
             model=victim_model,
             tokenizer=victim_tokenizer,
+            accelerator=accelerator,
             ground_truth_label_fn=ground_truth_label_fn,
         )
     elif attack_config.attack_type in TEXT_ATTACK_ATTACK_TYPES:

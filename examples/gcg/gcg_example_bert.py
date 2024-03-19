@@ -1,20 +1,21 @@
 import torch
-from transformers import AutoTokenizer, BertForSequenceClassification, PreTrainedModel
+from accelerate import Accelerator
+from transformers import AutoTokenizer, BertForSequenceClassification
 
 from robust_llm.attacks.search_based.runners import GCGRunner
 from robust_llm.attacks.search_based.utils import PromptTemplate, get_wrapped_model
+from robust_llm.utils import prepare_model_with_accelerate
 
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    accelerator = Accelerator()
     model = BertForSequenceClassification.from_pretrained("bert-base-uncased")
-    assert isinstance(model, PreTrainedModel)
-    model = model.to(device=device)  # type: ignore
+    model = prepare_model_with_accelerate(accelerator, model)  # type: ignore
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     user_prompt = "Hello there."
     prompt_template = PromptTemplate(before_attack=user_prompt)
     # specify parameters for the attack
-    wrapped_model = get_wrapped_model(model, tokenizer)
+    wrapped_model = get_wrapped_model(model, tokenizer, accelerator)
 
     def run_with_target(clf_target: int):
         runner = GCGRunner(
@@ -35,7 +36,9 @@ def main():
 
         # confirm that the suffix works by using it to generate a continuation
         prompt = runner.prompt_template.build_prompt(attack_text=attack_text)
-        tokens = tokenizer(prompt, return_tensors="pt").input_ids.to(device=device)
+        tokens = tokenizer(prompt, return_tensors="pt").input_ids.to(
+            device=accelerator.device
+        )
         print(tokens)
         logits = model(tokens).logits
         print(f"{logits=}")

@@ -43,12 +43,14 @@ def run_defense_pipeline(args: OverallConfig):
         args=args,
         model=model,
         tokenizer=tokenizer,
+        accelerator=accelerator,
         robust_llm_datasets=robust_llm_datasets,
         training=False,
     )
     do_adversarial_evaluation(
         model=model,
         tokenizer=tokenizer,
+        accelerator=accelerator,
         dataset=robust_llm_datasets.validation_dataset,
         num_generated_examples=args.experiment.evaluation.num_generated_examples,
         attack=attack,
@@ -75,12 +77,14 @@ def run_defense_pipeline(args: OverallConfig):
         args=args,
         model=defended_model,
         tokenizer=defended_model.tokenizer,
+        accelerator=accelerator,
         robust_llm_datasets=robust_llm_datasets,
         training=False,
     )
     do_adversarial_evaluation(
         model=defended_model,
         tokenizer=tokenizer,
+        accelerator=accelerator,
         dataset=robust_llm_datasets.validation_dataset,
         num_generated_examples=args.experiment.evaluation.num_generated_examples,
         attack=new_attack,

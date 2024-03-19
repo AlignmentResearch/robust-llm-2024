@@ -2,6 +2,7 @@
 
 from typing import Optional, Tuple
 
+from accelerate import Accelerator
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from robust_llm.attacks.attack import Attack
@@ -94,6 +95,7 @@ def prepare_attack(
     args: OverallConfig,
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
+    accelerator: Accelerator,
     robust_llm_datasets: RobustLLMDatasets,
     training: bool,
 ) -> Attack:
@@ -113,6 +115,7 @@ def prepare_attack(
         dataset_type=args.experiment.environment.dataset_type,
         victim_model=model,
         victim_tokenizer=tokenizer,
+        accelerator=accelerator,
         language_generator_name=args.experiment.environment.language_generator,
         ground_truth_label_fn=robust_llm_datasets.ground_truth_label_fn,
     )

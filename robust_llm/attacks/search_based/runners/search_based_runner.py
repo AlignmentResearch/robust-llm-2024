@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 
 import torch
 import torch.utils.data
+from datasets import Dataset
 from tqdm import tqdm
 
 from robust_llm.attacks.search_based.models import SearchBasedAttackWrappedModel
@@ -318,20 +319,41 @@ class SearchBasedRunner(abc.ABC):
             # NOTE: target is the same for each candidate
             targets = full_prompts_tokens[:, self.attack_indices.target_slice]
 
-        all_logits_list = []
-        for (inp,) in torch.utils.data.DataLoader(
-            dataset=torch.utils.data.TensorDataset(full_prompts_tokens),
-            batch_size=self.forward_pass_batch_size,
-        ):
-            all_logits_list.append(self.wrapped_model.call_model(inp))
-        all_logits = torch.cat(all_logits_list, dim=0)
+        accelerator = self.wrapped_model.accelerator
 
-        assert len(all_logits) == len(text_replacement_pairs)
+        candidates_dataset = Dataset.from_dict(
+            {
+                "full_prompt_tokens": full_prompts_tokens,
+                "target": targets,
+                "candidate_attack_text": candidate_attack_texts,
+            }
+        ).with_format("torch")
+        candidates_dataloader = accelerator.prepare(
+            torch.utils.data.DataLoader(
+                dataset=candidates_dataset,  # type: ignore
+                batch_size=self.forward_pass_batch_size,
+            )
+        )
 
         evaluated_candidates = []
-        candidate_losses = self._compute_loss_from_logits(all_logits, targets)
-        for text, loss in zip(candidate_attack_texts, candidate_losses):
-            evaluated_candidates.append((float(loss), text))
+
+        for batch in candidates_dataloader:
+            full_prompt_tokens = batch["full_prompt_tokens"]
+            target = batch["target"]
+            candidate_attack_text = batch["candidate_attack_text"]
+
+            logits = self.wrapped_model.call_model(full_prompt_tokens)
+            loss = self._compute_loss_from_logits(logits, target)
+
+            candidate_attack_text = accelerator.gather_for_metrics(
+                candidate_attack_text
+            )
+            loss = accelerator.gather_for_metrics(loss)
+
+            for text, loss in zip(candidate_attack_text, loss):
+                evaluated_candidates.append((float(loss), text))
+
+        assert len(evaluated_candidates) == len(text_replacement_pairs)
 
         return evaluated_candidates
 

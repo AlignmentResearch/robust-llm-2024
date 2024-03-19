@@ -2,9 +2,10 @@
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional, Sequence, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
 import wandb
+from accelerate import Accelerator
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase, TextClassificationPipeline
 
@@ -299,6 +300,7 @@ def compute_attack_results(
     ground_truth_label_fn: Optional[Callable[[str], int]],
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
+    accelerator: Accelerator,
     batch_size: int,
     num_examples_to_log_detailed_info: Optional[int],
 ) -> AttackResults:
@@ -355,7 +357,7 @@ def compute_attack_results(
         attacked_preds=attacked_preds,
     )
 
-    if num_examples_to_log_detailed_info is not None:
+    if num_examples_to_log_detailed_info is not None and accelerator.is_main_process:
         _log_examples_to_wandb(
             original_texts=dataset["text"] if dataset else None,
             attacked_texts=attacked_dataset["text"],
@@ -372,6 +374,7 @@ def compute_attack_results(
 def do_adversarial_evaluation(
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
+    accelerator: Accelerator,
     dataset: Optional[Dataset],
     ground_truth_label_fn: Optional[Callable[[str], int]],
     num_generated_examples: Optional[int],
@@ -390,6 +393,14 @@ def do_adversarial_evaluation(
         # attacks do not support passing it into `get_attacked_dataset`).
         num_generated_examples = None
 
+    if dataset:
+        # Sanity check in case of a distributed run (with accelerate): check if every
+        # process has the same dataset.
+        # TODO(michal): Look into datasets code and make sure the dataset creation is
+        # deterministic given seeds; this is especially important when using accelerate.
+        _assert_same_data_between_processes(accelerator, dataset["text"])
+        _assert_same_data_between_processes(accelerator, dataset["label"])
+
     print("Doing adversarial evaluation...")
 
     attacked_dataset, info_dict = attack.get_attacked_dataset(
@@ -402,6 +413,7 @@ def do_adversarial_evaluation(
         ground_truth_label_fn=ground_truth_label_fn,
         model=model,
         tokenizer=tokenizer,
+        accelerator=accelerator,
         batch_size=batch_size,
         num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
     )
@@ -412,8 +424,18 @@ def do_adversarial_evaluation(
     metrics |= info_dict
 
     # TODO(GH#158): Refactor/unify logging.
-    wandb.log(metrics, commit=False)
-    print("Adversarial evaluation metrics:")
-    print(metrics)
+    if accelerator.is_main_process:
+        wandb.log(metrics, commit=False)
+        print("Adversarial evaluation metrics:")
+        print(metrics)
 
     return metrics
+
+
+def _assert_same_data_between_processes(
+    accelerator: Accelerator, data: Sequence[Any]
+) -> None:
+    length = len(data)
+    data_gathered = accelerator.gather_for_metrics(data)
+    for i in range(accelerator.num_processes):
+        assert data_gathered[i * length : (i + 1) * length] == data

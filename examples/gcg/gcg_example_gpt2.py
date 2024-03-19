@@ -1,20 +1,20 @@
-import torch
-from transformers import AutoTokenizer, GPT2LMHeadModel, PreTrainedModel
+from accelerate import Accelerator
+from transformers import AutoTokenizer, GPT2LMHeadModel
 
 from robust_llm.attacks.search_based.runners import GCGRunner
 from robust_llm.attacks.search_based.utils import PromptTemplate, get_wrapped_model
+from robust_llm.utils import prepare_model_with_accelerate
 
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    accelerator = Accelerator()
     model = GPT2LMHeadModel.from_pretrained("gpt2")
-    assert isinstance(model, PreTrainedModel)
-    model.to(device=device)  # type: ignore
+    model = prepare_model_with_accelerate(accelerator, model)  # type: ignore
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     user_prompt = "Hello there."
     prompt_template = PromptTemplate(before_attack=user_prompt)
     # specify parameters for the attack
-    wrapped_model = get_wrapped_model(model, tokenizer)
+    wrapped_model = get_wrapped_model(model, tokenizer, accelerator)
     runner = GCGRunner(
         wrapped_model=wrapped_model,
         top_k=8,
@@ -32,7 +32,9 @@ def main():
     full_prompt = prompt_template.build_prompt(attack_text=attack_text, target="")
     print(f"{full_prompt=}")
     # confirm that the suffix works by using it to generate a continuation
-    tokens = tokenizer(full_prompt, return_tensors="pt").input_ids.to(device=device)
+    tokens = tokenizer(full_prompt, return_tensors="pt").input_ids.to(
+        device=accelerator.device
+    )
     all_tokens = model.generate(tokens, max_new_tokens=5)
     print(f"{all_tokens=}")
     print(f"{tokenizer.decode(all_tokens[0])=} ")

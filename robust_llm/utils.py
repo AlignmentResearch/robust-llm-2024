@@ -19,8 +19,14 @@ if TYPE_CHECKING:
     from robust_llm.trainer import AdversarialTrainer
 
 import wandb
+from accelerate import Accelerator
 from datasets import Dataset
-from transformers import PretrainedConfig, PreTrainedTokenizerBase, Trainer
+from transformers import (
+    PretrainedConfig,
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
+    Trainer,
+)
 
 
 class LanguageModel(Protocol):
@@ -264,6 +270,18 @@ def get_randint_with_exclusions(
             raise ValueError("Too many iterations!")
 
     return value
+
+
+def prepare_model_with_accelerate(
+    accelerator: Accelerator, model: PreTrainedModel
+) -> PreTrainedModel:
+    model = accelerator.prepare(model)
+    # When using FSDP, there is some lazy initialization that happens. Enforce it here
+    # to avoid issues from lack of proper initialization (e.g. when accessing embedding
+    # layer in GCG).
+    _ = model(torch.tensor([[0]], device=accelerator.device))
+
+    return model
 
 
 class FakeModel:

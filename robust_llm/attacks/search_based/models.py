@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 import torch
+from accelerate import Accelerator, DistributedType
+from torch.distributed import fsdp
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from typing_extensions import override
 
@@ -26,6 +28,23 @@ def _call_model(
     raise ValueError("exactly one of inp, inputs_embeds must be provided")
 
 
+def _get_embedding_weights(
+    accelerator: Accelerator, embedding: torch.nn.Module
+) -> torch.Tensor:
+    if accelerator.distributed_type == DistributedType.FSDP:
+        # Implementation based on Accelerator.get_state_dict(); however, we want to load
+        # parameters in all processes, not just in the rank 0 process.
+        full_state_dict_config = fsdp.FullStateDictConfig(
+            offload_to_cpu=False, rank0_only=False
+        )
+        with fsdp.FullyShardedDataParallel.state_dict_type(
+            embedding, fsdp.StateDictType.FULL_STATE_DICT, full_state_dict_config
+        ):
+            return embedding.state_dict()["weight"]
+
+    return embedding.weight
+
+
 class SearchBasedAttackWrappedModel(ABC):
     """Combines a model and a tokenizer and includes model-specific settings for GCG."""
 
@@ -33,11 +52,13 @@ class SearchBasedAttackWrappedModel(ABC):
         self,
         model: PreTrainedModel,
         tokenizer: PreTrainedTokenizerBase,
+        accelerator: Accelerator,
         cls_token_id: int | None = None,
         sep_token_id: int | None = None,
     ) -> None:
         self.model = model
         self.tokenizer = tokenizer
+        self.accelerator = accelerator
         self.cls_token_id = cls_token_id
         self.sep_token_id = sep_token_id
 
@@ -145,12 +166,13 @@ class WrappedBERTModel(SearchBasedAttackWrappedModel):
         self,
         model: PreTrainedModel,
         tokenizer: PreTrainedTokenizerBase,
+        accelerator: Accelerator,
     ) -> None:
         cls_token_id = tokenizer.cls_token_id
         sep_token_id = tokenizer.sep_token_id
         assert cls_token_id is not None
         assert sep_token_id is not None
-        super().__init__(model, tokenizer, cls_token_id, sep_token_id)
+        super().__init__(model, tokenizer, accelerator, cls_token_id, sep_token_id)
 
     @override
     def call_model(
@@ -181,7 +203,9 @@ class WrappedBERTModel(SearchBasedAttackWrappedModel):
 
     def get_embedding_weights(self) -> torch.Tensor:
         # TODO: work out if we should be adding positional embeddings
-        return self.model.bert.embeddings.word_embeddings.weight
+        return _get_embedding_weights(
+            self.accelerator, self.model.bert.embeddings.word_embeddings
+        )
 
 
 class WrappedGPT2Model(SearchBasedAttackWrappedModel):
@@ -189,10 +213,15 @@ class WrappedGPT2Model(SearchBasedAttackWrappedModel):
         self,
         model: PreTrainedModel,
         tokenizer: PreTrainedTokenizerBase,
+        accelerator: Accelerator,
     ) -> None:
         cls_token_id = None
         sep_token_id = None
-        super().__init__(model, tokenizer, cls_token_id, sep_token_id)
+        super().__init__(model, tokenizer, accelerator, cls_token_id, sep_token_id)
+
+        # GPT-2 was crashing when using FSDP. In the (unlikely) case we want to run FSDP
+        # with GPT-2 in the future, investigate this.
+        assert accelerator.distributed_type != DistributedType.FSDP, "not supported!"
 
     @override
     def call_model(
@@ -212,7 +241,7 @@ class WrappedGPT2Model(SearchBasedAttackWrappedModel):
 
     def get_embedding_weights(self) -> torch.Tensor:
         # TODO: work out if we should be adding positional embeddings
-        return self.model.transformer.wte.weight
+        return _get_embedding_weights(self.accelerator, self.model.transformer.wte)
 
 
 class WrappedGPTNeoXModel(SearchBasedAttackWrappedModel):
@@ -222,10 +251,11 @@ class WrappedGPTNeoXModel(SearchBasedAttackWrappedModel):
         self,
         model: PreTrainedModel,
         tokenizer: PreTrainedTokenizerBase,
+        accelerator: Accelerator,
     ) -> None:
         cls_token_id = None
         sep_token_id = None
-        super().__init__(model, tokenizer, cls_token_id, sep_token_id)
+        super().__init__(model, tokenizer, accelerator, cls_token_id, sep_token_id)
         # special setup needed for pythia
         self.tokenizer.pad_token = tokenizer.eos_token
         self.model.config.pad_token_id = model.config.eos_token_id
@@ -248,4 +278,4 @@ class WrappedGPTNeoXModel(SearchBasedAttackWrappedModel):
 
     def get_embedding_weights(self) -> torch.Tensor:
         # TODO: work out if we should be adding positional embeddings
-        return self.model.gpt_neox.embed_in.weight
+        return _get_embedding_weights(self.accelerator, self.model.gpt_neox.embed_in)

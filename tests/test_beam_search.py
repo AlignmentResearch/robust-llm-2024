@@ -1,5 +1,6 @@
 import hypothesis
 import pytest
+from accelerate import Accelerator
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from transformers import AutoTokenizer
@@ -43,17 +44,23 @@ def _get_runner(
     return runner
 
 
+ACCELERATOR = Accelerator(cpu=True)
+
 WRAPPED_MODELS = {
     "gpt2": WrappedGPT2Model(
-        FakeModel(1000), AutoTokenizer.from_pretrained("gpt2")  # type: ignore
+        FakeModel(1000),  # type: ignore
+        AutoTokenizer.from_pretrained("gpt2"),
+        accelerator=ACCELERATOR,
     ),
     "bert": WrappedBERTModel(
         FakeModel(1000),  # type: ignore
         AutoTokenizer.from_pretrained("bert-base-uncased"),
+        accelerator=ACCELERATOR,
     ),
     "pythia": WrappedGPTNeoXModel(
         FakeModel(1000),  # type: ignore
         AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped"),
+        accelerator=ACCELERATOR,
     ),
 }
 

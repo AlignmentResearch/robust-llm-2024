@@ -12,23 +12,24 @@ from robust_llm.pipelines.utils import (
     prepare_language_generator,
     prepare_victim_models,
 )
-from robust_llm.utils import log_config_to_wandb
+from robust_llm.utils import log_config_to_wandb, prepare_model_with_accelerate
 
 
 def run_evaluation_pipeline(args: OverallConfig) -> None:
-    wandb.init(
-        project="robust-llm",
-        group=args.experiment.experiment_name,
-        job_type=args.experiment.job_type,
-        name=args.experiment.run_name,
-    )
-    setup_wandb_metrics()
-    log_config_to_wandb(args.experiment)
-
     accelerator = Accelerator()
 
+    if accelerator.is_main_process:
+        wandb.init(
+            project="robust-llm",
+            group=args.experiment.experiment_name,
+            job_type=args.experiment.job_type,
+            name=args.experiment.run_name,
+        )
+        setup_wandb_metrics()
+        log_config_to_wandb(args.experiment)
+
     model, tokenizer, _ = prepare_victim_models(args)
-    model = accelerator.prepare(model)
+    model = prepare_model_with_accelerate(accelerator, model)
 
     language_generator = prepare_language_generator(args)
 
@@ -40,6 +41,7 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
         args=args,
         model=model,
         tokenizer=tokenizer,
+        accelerator=accelerator,
         robust_llm_datasets=robust_llm_datasets,
         training=False,
     )
@@ -61,6 +63,7 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
     do_adversarial_evaluation(
         model=model,
         tokenizer=tokenizer,
+        accelerator=accelerator,
         dataset=dataset,
         ground_truth_label_fn=robust_llm_datasets.ground_truth_label_fn,
         num_generated_examples=args.experiment.evaluation.num_generated_examples,

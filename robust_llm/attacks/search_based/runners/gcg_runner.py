@@ -76,7 +76,7 @@ class GCGRunner(SearchBasedRunner):
         # full_prompt_tokens are only used to determine the target in the generation
         # case; they are not used in the classification case.
         loss = self._compute_loss(combined_embeddings, full_prompt_tokens)
-        loss.backward()
+        self.wrapped_model.accelerator.backward(loss)
         assert attack_onehot.grad is not None
         return attack_onehot.grad.clone()
 

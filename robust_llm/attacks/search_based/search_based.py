@@ -3,6 +3,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 import transformers
+from accelerate import Accelerator, DistributedType
 from datasets import Dataset
 from typing_extensions import override
 
@@ -44,19 +45,22 @@ class SearchBasedAttack(Attack):
         modifiable_chunks_spec: ModifiableChunksSpec,
         model: LanguageModel,
         tokenizer: transformers.PreTrainedTokenizerBase,
+        accelerator: Accelerator,
         ground_truth_label_fn: Optional[Callable[[str], int]],
     ) -> None:
         super().__init__(attack_config, modifiable_chunks_spec)
 
-        assert isinstance(
-            model, transformers.PreTrainedModel
-        ), "DefendedModel is not supported"
+        if accelerator.distributed_type == DistributedType.NO:
+            assert isinstance(model, transformers.PreTrainedModel)
 
         assert sum(modifiable_chunks_spec) == 1
 
         self.model = model
         self.tokenizer = tokenizer
-        self.wrapped_model = get_wrapped_model(self.model, self.tokenizer)
+        self.accelerator = accelerator
+        self.wrapped_model = get_wrapped_model(
+            self.model, self.tokenizer, self.accelerator  # type: ignore
+        )
         self.ground_truth_label_fn = ground_truth_label_fn
 
     @override
