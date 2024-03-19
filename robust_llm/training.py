@@ -190,12 +190,21 @@ class Training:
     def maybe_save_model_to_path_or_hf(self, path_prefix_or_hf: Optional[str]) -> None:
         assert self.trainer is not None
 
+        # Make sure everything is in sync before saving.
+        self.trainer.accelerator.wait_for_everyone()
+        # In case of FSDP, we need to make sure we get correct state_dict to save.
+        state_dict = self.trainer.accelerator.get_state_dict(self.trainer.model)
+
         if self.trainer.is_world_process_zero():
             assert wandb.run is not None
             if path_prefix_or_hf is None:
                 print("Not saving the model/tokenizer since no save path was specified")
 
             elif path_prefix_or_hf == "hf":
+                # Make sure the model is saved before pushing to HuggingFace;
+                # without that, it does not work with accelerate. The model is saved
+                # here to default local directory.
+                self.trainer._save(state_dict=state_dict)
                 hf_name = self.trainer.args.hub_model_id
                 wandb.run.summary["saved_hf_name"] = hf_name
                 print(f"Saving the model/tokenizer to HuggingFace as {hf_name}")
@@ -212,7 +221,7 @@ class Training:
                 )
                 wandb.run.summary["saved_dir"] = output_dir
                 print(f"Saving the model/tokenizer to {output_dir}")
-                self.trainer.save_model(output_dir)
+                self.trainer._save(output_dir=output_dir, state_dict=state_dict)
                 self.tokenizer.save_pretrained(output_dir)
 
 
