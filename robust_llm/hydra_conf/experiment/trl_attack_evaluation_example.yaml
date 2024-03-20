@@ -7,13 +7,14 @@ environment:
   dataset_type: "tensor_trust"
   # For tensor trust we need non-None train set for now
   train_set_size: 2
-  validation_set_size: 20
+  validation_set_size: 2
   shuffle_validation_set: true
 
 evaluation:
   evaluation_attack:
     attack_type: "trl"
     trl_attack_config:
-      batch_size: 4
-      mini_batch_size: 4
-      ppo_epochs: 3
+      batch_size: 2
+      mini_batch_size: 2
+      ppo_epochs: 1
+      model_name_to_save: "14m_tt_2_2"

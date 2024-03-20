@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence, Tuple
+from typing import Any, Dict, Mapping, Sequence, Tuple
 
+import numpy as np
 import torch
 from datasets import Dataset
 from transformers import (
@@ -155,3 +156,12 @@ def prepare_prompts(
         contexts.append("".join(context_list))
 
     return contexts
+
+
+def check_for_not_finite(prepended_train_stats: Dict[str, Any]) -> None:
+    """Check for not finite values in the training stats."""
+    for key, value in prepended_train_stats.items():
+        if not np.isfinite(value).all():
+            raise ValueError(
+                f"Training stats contain non-finite values for key {key}: {value}"
+            )

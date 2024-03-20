@@ -1,3 +1,4 @@
+import os
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import torch
@@ -11,6 +12,7 @@ from typing_extensions import override
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.trl.utils import (
     LogitTextClassificationPipeline,
+    check_for_not_finite,
     make_ppo_trainer,
     prepare_adversary_model_and_tokenizer,
     prepare_prompts,
@@ -91,6 +93,8 @@ class TRLAttack(Attack):
 
         self.seed = attack_config.seed
         self.device = victim_model.device
+
+        self.model_name_to_save = attack_config.trl_attack_config.model_name_to_save
 
         if dataset_type == "tomita":
             raise ValueError(
@@ -180,6 +184,9 @@ class TRLAttack(Attack):
                 )
                 epoch_rewards.extend(rewards)
 
+                # Check for not-finite values in the training stats
+                check_for_not_finite(train_stats)
+
                 # Update step and datapoints trained
                 assert len(rewards) == len(context_tensor_list) == len(responses)
 
@@ -188,6 +195,8 @@ class TRLAttack(Attack):
 
             average_reward = torch.Tensor(epoch_rewards).squeeze().mean()
             print(f"Training TRL; epoch {epoch} had average reward {average_reward}")
+
+        self._maybe_save_model_to_path_or_hf()
 
     def _maybe_log_trl(
         self, train_stats: Dict[str, Any], rewards: Sequence[torch.Tensor]
@@ -204,14 +213,13 @@ class TRLAttack(Attack):
                     f"{self.logging_name}/{key}": value
                     for key, value in train_stats.items()
                 }
+
                 wandb.log(prepended_train_stats, commit=True)
 
     @override
     def get_attacked_dataset(
         self, dataset: Optional[Dataset], max_n_outputs: Optional[int] = None
     ) -> Tuple[Dataset, Dict[str, Any]]:
-        if max_n_outputs is not None:
-            raise ValueError("For now, max_n_outputs is not supported by TRLAttack")
 
         if dataset is None:
             raise ValueError("For now, dataset cannot be None for TRLAttack")
@@ -220,6 +228,9 @@ class TRLAttack(Attack):
             raise ValueError(
                 "Dataset must contain a 'text_chunked' column for TRLAttack"
             )
+
+        if max_n_outputs is not None:
+            dataset = dataset.select(range(max_n_outputs))
 
         attacked_texts, _, _ = self._get_attacked_texts(
             text_chunked=dataset["text_chunked"]
@@ -305,3 +316,20 @@ class TRLAttack(Attack):
             context_tensor_list,
             adversary_generated_responses,
         )
+
+    def _maybe_save_model_to_path_or_hf(self) -> None:
+
+        model_save_path_prefix = (
+            self.attack_config.trl_attack_config.model_save_path_prefix
+        )
+
+        assert model_save_path_prefix is not None
+        assert wandb.run is not None
+        output_dir = os.path.join(
+            model_save_path_prefix, "models", self.model_name_to_save
+        )
+        wandb.run.summary["saved_dir"] = output_dir
+        print(f"Saving the trl model to {output_dir}")
+
+        self.adversary_model.save_pretrained(output_dir)
+        self.adversary_tokenizer.save_pretrained(output_dir)

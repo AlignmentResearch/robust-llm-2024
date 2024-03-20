@@ -106,10 +106,16 @@ class TRLAttackConfig:
         max_new_tokens (int):
             The maximum number of tokens to generate.
             Name copied from trl code.
+        model_name_to_save (str):
+            The name to use for saving the model.
+        model_save_path_prefix (Optional[str]): Where to save the final
+            checkpoint. If None, the model is not saved.
+            Otherwise, the model is saved to a location starting with the
+            specified prefix.
     """
 
-    batch_size: int = 64
-    mini_batch_size: int = 32
+    batch_size: int = 128
+    mini_batch_size: int = 128
     gradient_accumulation_steps: int = 1
     ppo_epochs: int = 10
 
@@ -118,6 +124,14 @@ class TRLAttackConfig:
 
     min_length: int = -1
     max_new_tokens: int = 3
+
+    model_name_to_save: str = "trl"
+    model_save_path_prefix: Optional[str] = SHARED_DATA_DIR
+
+    def __post_init__(self):
+        assert (
+            self.batch_size == self.mini_batch_size * self.gradient_accumulation_steps
+        )
 
 
 @dataclass
