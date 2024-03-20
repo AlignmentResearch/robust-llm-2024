@@ -1,9 +1,12 @@
 """Code for evaluating an attack on a single model. Used by multiple pipelines."""
 
+import dataclasses
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
+import numpy as np
+import torch
 import wandb
 from accelerate import Accelerator
 from datasets import Dataset
@@ -82,6 +85,12 @@ class AttackResults:
             defender.
         n_failures: Number of examples that were not successfully attacked.
         n_successes: Number of examples that were successfully attacked.
+        post_attack_losses: Losses of the model on the attacked examples
+            (only considers examples that were failures or successes, not ones that were
+            mistakes pre attack or filtered out pre or post-attack).
+        post_attack_correct_class_probs: Probabilities of the correct class for the
+            attacked examples (only considers examples that were failures or successes,
+            not ones that were mistakes pre attack or filtered out pre or post-attack).
     """
 
     n_filtered_out_pre_attack: int = 0
@@ -89,44 +98,64 @@ class AttackResults:
     n_filtered_out_post_attack: int = 0
     n_failures: int = 0
     n_successes: int = 0
+    post_attack_losses: List[float] = dataclasses.field(default_factory=list)
+    post_attack_correct_class_probs: List[float] = dataclasses.field(
+        default_factory=list
+    )
 
     @classmethod
     def from_labels_and_predictions(
         cls,
         original_labels: Sequence[int],
         attacked_labels: Sequence[int],
-        original_preds: Optional[Sequence[int | None]],
-        attacked_preds: Sequence[int | None],
+        original_pred_labels: Optional[Sequence[int | None]],
+        attacked_pred_labels: Sequence[int | None],
+        attacked_pred_logits: Sequence[Sequence[float | None]],
     ) -> "AttackResults":
         """Generates `AttackResults` from labels and model predictions.
 
         Args:
             original_labels: true labels of the original examples (pre-attack)
             attacked_labels: true labels of the attacked examples (post-attack)
-            original_preds: optional predictions of the model pre-attack. Should
+            original_pred_labels: optional predictions of the model pre-attack. Should
                 be provided iff the attack uses input dataset
-            attacked_preds: predictions of the model post-attack
+            attacked_pred_labels: predictions of the model post-attack
+            attacked_pred_logits: logits of the model post-attack
 
         Returns:
             `AttackResults` object
         """
         results = cls()
 
-        if original_preds is None:
-            for attacked_label, attacked_pred in zip(attacked_labels, attacked_preds):
+        if original_pred_labels is None:
+            for attacked_label, attacked_pred_label, logits in zip(
+                attacked_labels, attacked_pred_labels, attacked_pred_logits
+            ):
                 results._add_example_with_post_attack_only(
                     attacked_label=attacked_label,
-                    attacked_pred=attacked_pred,
+                    attacked_pred_label=attacked_pred_label,
+                    logits=logits,
                 )
         else:
-            for original_label, attacked_label, original_pred, attacked_pred in zip(
-                original_labels, attacked_labels, original_preds, attacked_preds
+            for (
+                original_label,
+                attacked_label,
+                original_pred_label,
+                attacked_pred_label,
+                logits,
+            ) in zip(
+                original_labels,
+                attacked_labels,
+                original_pred_labels,
+                attacked_pred_labels,
+                attacked_pred_logits,
             ):
                 results._add_example(
                     original_label=original_label,
                     attacked_label=attacked_label,
-                    original_pred=original_pred,
-                    attacked_pred=attacked_pred,
+                    original_pred_label=original_pred_label,
+                    attacked_pred_label=attacked_pred_label,
+                    logits=logits,
                 )
 
         return results
@@ -134,36 +163,50 @@ class AttackResults:
     def _add_example_with_post_attack_only(
         self,
         attacked_label: int,
-        attacked_pred: int | None,
+        attacked_pred_label: int | None,
+        logits: Sequence[float | None],
     ) -> None:
         # Filtered out after attack -> true positive.
-        if attacked_pred is None:
+        if attacked_pred_label is None:
             self.n_filtered_out_post_attack += 1
-        # Correct prediction after attack -> failure.
-        elif attacked_label == attacked_pred:
-            self.n_failures += 1
-        # Incorrect prediction after attack -> success.
         else:
-            self.n_successes += 1
+            # Correct prediction after attack -> failure.
+            if attacked_label == attacked_pred_label:
+                self.n_failures += 1
+            # Incorrect prediction after attack -> success.
+            else:
+                self.n_successes += 1
+
+            # In case of failure or success, compute the loss and the probability of
+            # the correct class.
+            assert all(logit is not None for logit in logits)
+            logprobs = torch.nn.functional.log_softmax(torch.tensor(logits), dim=0)
+            loss = float(-logprobs[attacked_label])
+            correct_class_prob = float(torch.exp(logprobs[attacked_label]))
+            self.post_attack_losses.append(loss)
+            self.post_attack_correct_class_probs.append(correct_class_prob)
 
     def _add_example(
         self,
         original_label: int,
         attacked_label: int,
-        original_pred: int | None,
-        attacked_pred: int | None,
+        original_pred_label: int | None,
+        attacked_pred_label: int | None,
+        logits: Sequence[float | None],
     ) -> None:
         # Example was filtered out pre-attack -> false positive.
-        if original_pred is None:
+        if original_pred_label is None:
             self.n_filtered_out_pre_attack += 1
         # Prediction was already incorrect, so we expect this example should have
         # been skipped and we do not consider it either a success or a failure.
-        elif original_pred != original_label:
+        elif original_pred_label != original_label:
             self.n_mistakes_pre_attack += 1
         # Prediction was correct pre-attack. Now we need to check the post-attack.
         else:
             self._add_example_with_post_attack_only(
-                attacked_label=attacked_label, attacked_pred=attacked_pred
+                attacked_label=attacked_label,
+                attacked_pred_label=attacked_pred_label,
+                logits=logits,
             )
 
     @property
@@ -184,6 +227,12 @@ class AttackResults:
 
     def compute_adversarial_evaluation_metrics(self) -> Dict[str, float]:
         """Computes final metrics to report."""
+
+        assert (
+            len(self.post_attack_losses)
+            == len(self.post_attack_correct_class_probs)
+            == self.n_failures + self.n_successes
+        )
 
         return {
             # TODO(michal): Rethink how to compute those statistics if we care about
@@ -209,35 +258,59 @@ class AttackResults:
                 self.n_filtered_out_post_attack,
                 self.n_attempted,
             ),
+            "adversarial_eval/avg_post_attack_loss": float(
+                np.mean(self.post_attack_losses)
+            ),
+            "adversarial_eval/avg_post_attack_correct_class_prob": float(
+                np.mean(self.post_attack_correct_class_probs)
+            ),
         }
 
 
-def _get_predictions(
+def _get_prediction_logits(
     hf_pipeline: FilteredEvaluationPipeline,
     dataset: Dataset,
-    model: LanguageModel,
     batch_size: int,
-) -> Sequence[int | None]:
+) -> list[list[float | None]]:
+    """Returns prediction logits, of shape (n_examples, n_classes)."""
+
+    # TODO(michal): consider dropping HF pipelines and instead use data loaders + direct
+    # model calls. Pipelines complicate the code without a clear benefit.
     preds = hf_pipeline(
         dataset["text"],
         batch_size=batch_size,
-        padding="max_length",
         truncation=True,
+        function_to_apply="none",
     )
-
     assert preds is not None
-    preds = list(preds)
-    num_preds = len(preds)
-    # If in the line below is needed so that type checker does not complain.
-    pred_labels = [pred.get("label") for pred in preds if isinstance(pred, dict)]
-    preds = [
-        model.config.label2id[label] if label is not None else None
-        for label in pred_labels
-    ]
-    # Check if nothing was filtered out.
-    assert len(preds) == num_preds
 
-    return preds
+    # We use explicit loops below instead of list comprehension to be able to have type
+    # asserts so that typechecker does not complain.
+    prediction_logits = []
+    for pred in preds:
+        # `pred` contains prediction information for a single example. It is a list of
+        # dictionaries, each dictionary contains information about a single class.
+        # Specifically, this dictionary includes a "score" for each class given
+        # by the model. Dicts appear in the order of the classes in the model.
+        assert type(pred) is list
+        logits = []
+        for i, cls_dict in enumerate(pred):
+            assert type(cls_dict) is dict
+            assert type(cls_dict["score"]) is float or cls_dict["score"] is None
+            assert cls_dict["label"] == f"LABEL_{i}"
+            logits.append(cls_dict["score"])
+        prediction_logits.append(logits)
+
+    return prediction_logits
+
+
+def _get_prediction_labels(
+    prediction_logits: Sequence[Sequence[float | None]],
+) -> Sequence[int | None]:
+    return [
+        (None if None in logits else int(np.argmax(logits)))  # type: ignore
+        for logits in prediction_logits
+    ]
 
 
 def _log_examples_to_wandb(
@@ -245,20 +318,21 @@ def _log_examples_to_wandb(
     attacked_texts: Sequence[str],
     original_labels: Optional[Sequence[int]],
     attacked_labels: Sequence[int],
-    original_preds: Optional[Sequence[int | None]],
-    attacked_preds: Sequence[int | None],
+    original_pred_labels: Optional[Sequence[int | None]],
+    attacked_pred_labels: Sequence[int | None],
+    attacked_pred_logits: Sequence[Sequence[float | None]],
     num_examples_to_log_detailed_info: int,
 ) -> None:
     assert (
         (original_texts is None)
         == (original_labels is None)
-        == (original_preds is None)
+        == (original_pred_labels is None)
     )
 
     if original_texts is not None:
         # Have those asserts here so that type checker does not complain.
         assert original_labels is not None
-        assert original_preds is not None
+        assert original_pred_labels is not None
 
         table = wandb.Table(
             columns=[
@@ -268,6 +342,7 @@ def _log_examples_to_wandb(
                 "attacked_label",
                 "original_pred",
                 "attacked_pred",
+                "attacked_logits",
             ]
         )
         for i in range(min(num_examples_to_log_detailed_info, len(attacked_texts))):
@@ -276,19 +351,26 @@ def _log_examples_to_wandb(
                 attacked_texts[i],
                 original_labels[i],
                 attacked_labels[i],
-                original_preds[i],
-                attacked_preds[i],
+                original_pred_labels[i],
+                attacked_pred_labels[i],
+                attacked_pred_logits[i],
             )
 
     else:
         table = wandb.Table(
-            columns=["attacked_text", "attacked_label", "attacked_pred"]
+            columns=[
+                "attacked_text",
+                "attacked_label",
+                "attacked_pred",
+                "attacked_logits",
+            ]
         )
         for i in range(min(num_examples_to_log_detailed_info, len(attacked_texts))):
             table.add_data(
                 attacked_texts[i],
                 attacked_labels[i],
-                attacked_preds[i],
+                attacked_pred_labels[i],
+                attacked_pred_logits[i],
             )
 
     wandb.log({"adversarial_eval/examples": table}, commit=False)
@@ -321,25 +403,28 @@ def compute_attack_results(
         model=model,
         tokenizer=tokenizer,
         device=model.device,
-        return_all_scores=False,
+        # Even though this option is deprecated, we use it instead of setting
+        # `top_k=None`. They differ by the order of returned classes. In the following
+        # option, we get classes in the order of the classes defined in the model.
+        return_all_scores=True,
         framework="pt",
     )
 
-    original_preds = None
+    original_pred_labels = None
     if dataset is not None:
-        original_preds = _get_predictions(
+        original_pred_logits = _get_prediction_logits(
             hf_pipeline=hf_pipeline,
             dataset=dataset,
-            model=model,
             batch_size=batch_size,
         )
+        original_pred_labels = _get_prediction_labels(original_pred_logits)
 
-    attacked_preds = _get_predictions(
+    attacked_pred_logits = _get_prediction_logits(
         hf_pipeline=hf_pipeline,
         dataset=attacked_dataset,
-        model=model,
         batch_size=batch_size,
     )
+    attacked_pred_labels = _get_prediction_labels(attacked_pred_logits)
 
     # If the dataset allows for recomputation of the ground truth label, use it.
     if ground_truth_label_fn is not None:
@@ -353,8 +438,9 @@ def compute_attack_results(
     results = AttackResults.from_labels_and_predictions(
         original_labels=attacked_dataset["label"],
         attacked_labels=attacked_labels,
-        original_preds=original_preds,
-        attacked_preds=attacked_preds,
+        original_pred_labels=original_pred_labels,
+        attacked_pred_labels=attacked_pred_labels,
+        attacked_pred_logits=attacked_pred_logits,
     )
 
     if num_examples_to_log_detailed_info is not None and accelerator.is_main_process:
@@ -363,8 +449,9 @@ def compute_attack_results(
             attacked_texts=attacked_dataset["text"],
             original_labels=dataset["label"] if dataset else None,
             attacked_labels=attacked_labels,
-            original_preds=original_preds,
-            attacked_preds=attacked_preds,
+            original_pred_labels=original_pred_labels,
+            attacked_pred_labels=attacked_pred_labels,
+            attacked_pred_logits=attacked_pred_logits,
             num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
         )
 
