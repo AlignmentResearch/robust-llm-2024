@@ -95,3 +95,6 @@ def setup_wandb_metrics():
         "validation_attack/*",
         step_metric="validation_attack_datapoint_count",
     )
+
+    # Make sure step metrics for global counter are logged at least once.
+    GLOBAL_LOGGING_COUNTER._log_to_wandb()
