@@ -18,6 +18,12 @@ from robust_llm.dataset_management.tomita import Tomita
 from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
     get_tomita_dataset,
 )
+from robust_llm.dataset_management.word_length.constants import (
+    WORD_LENGTH_MODIFIABLE_CHUNKS_SPEC,
+)
+from robust_llm.dataset_management.word_length.word_length_dataset_generator import (
+    get_word_length_datasets,
+)
 from robust_llm.utils import tokenize_dataset
 
 # Tuple of bools specifying which chunks of the original text can be modified.
@@ -68,6 +74,15 @@ def generate_robust_llm_datasets(
 
         modifiable_chunks_spec = TENSOR_TRUST_MODIFIABLE_CHUNKS_SPEC
         ground_truth_label_fn = tensor_trust_get_ground_truth_label
+
+    elif dataset_type == "word_length":
+        train_set, validation_set = get_word_length_datasets(
+            train_set_size=environment_config.train_set_size,
+            validation_set_size=environment_config.validation_set_size,
+            seed=seed,
+        )
+
+        modifiable_chunks_spec = WORD_LENGTH_MODIFIABLE_CHUNKS_SPEC
 
     elif dataset_type == "tomita":
         assert language_generator is not None and isinstance(language_generator, Tomita)

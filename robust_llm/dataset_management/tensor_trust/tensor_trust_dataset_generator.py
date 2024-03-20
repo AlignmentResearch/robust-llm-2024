@@ -29,7 +29,7 @@ from robust_llm.dataset_management.tensor_trust.utils import extract_password
 from robust_llm.file_utils import compute_dataset_management_path, compute_dataset_path
 
 DATASET_PATH = f"{compute_dataset_path()}/tensor_trust"
-DATASET_MANAGEMENT_PATH = f"{compute_dataset_management_path()}/tensor_trust"
+RESOURCES_PATH = f"{compute_dataset_management_path()}/resources"
 # TODO: if we do a generative task too, need to change the context string to
 # "Access Granted" and "Access Denied" instead of 1 and 0.
 
@@ -303,7 +303,7 @@ def _generate_and_save_dataset(
 
     # words.txt is from
     # https://svnweb.freebsd.org/csrg/share/dict/words?revision=61569
-    word_filename = f"{DATASET_MANAGEMENT_PATH}/words.txt"
+    word_filename = f"{RESOURCES_PATH}/words.txt"
     with open(word_filename, "r") as f:
         words = f.read().splitlines()
 
