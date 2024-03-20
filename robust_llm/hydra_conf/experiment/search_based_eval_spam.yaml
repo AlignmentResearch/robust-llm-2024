@@ -1,0 +1,16 @@
+experiment_type: "evaluation"
+
+environment:
+  model_name_or_path: "EleutherAI/pythia-14m"
+  is_pythia: true
+  dataset_type: "hf/SetFit/enron_spam"
+  shuffle_validation_set: true
+
+evaluation:
+  batch_size: 32
+  evaluation_attack:
+    attack_type: "search_based"
+    append_to_modifiable_chunk: true
+    search_based_attack_config:
+      search_type: "gcg"
+      forward_pass_batch_size: 32
