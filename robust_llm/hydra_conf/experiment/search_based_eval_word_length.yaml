@@ -1,0 +1,17 @@
+experiment_type: "evaluation"
+
+environment:
+  model_name_or_path: "EleutherAI/pythia-14m"
+  is_pythia: true
+  dataset_type: "word_length"
+  train_set_size: 20000
+  validation_set_size: 2000
+  seed: 0
+
+evaluation:
+  batch_size: 128
+  evaluation_attack:
+    attack_type: "search_based"
+    search_based_attack_config:
+      search_type: "gcg"
+      forward_pass_batch_size: 128
