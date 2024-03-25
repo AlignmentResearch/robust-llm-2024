@@ -7,6 +7,7 @@ from omegaconf import OmegaConf
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from robust_llm.configs import OverallConfig
+from robust_llm.logging_utils import wandb_set_really_finished
 from robust_llm.pipelines.utils import (
     prepare_datasets,
     prepare_language_generator,
@@ -130,5 +131,8 @@ def run_training_pipeline(
     training.maybe_save_model_to_path_or_hf(
         path_prefix_or_hf=experiment.training.model_save_path_prefix_or_hf
     )
+
+    if trainer.is_world_process_zero():
+        wandb_set_really_finished()
 
     return model, tokenizer, decoder

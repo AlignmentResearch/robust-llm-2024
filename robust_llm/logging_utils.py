@@ -98,3 +98,12 @@ def setup_wandb_metrics():
 
     # Make sure step metrics for global counter are logged at least once.
     GLOBAL_LOGGING_COUNTER._log_to_wandb()
+
+
+def wandb_set_really_finished():
+    # Sometimes wandb runs are marked as finished even though in fact they are not.
+    # In order to know for sure whether a run finished properly, we manually
+    # call this function at the end of the run. This way, we have the guarantee
+    # that the run finished properly iff we see `really_finished=1` on wandb.
+    assert wandb.run is not None
+    wandb.run.log({"really_finished": 1}, commit=True)

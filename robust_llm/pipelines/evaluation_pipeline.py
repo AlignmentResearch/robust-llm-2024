@@ -5,7 +5,7 @@ from accelerate import Accelerator
 
 from robust_llm.configs import OverallConfig
 from robust_llm.evaluation import do_adversarial_evaluation
-from robust_llm.logging_utils import setup_wandb_metrics
+from robust_llm.logging_utils import setup_wandb_metrics, wandb_set_really_finished
 from robust_llm.pipelines.utils import (
     prepare_attack,
     prepare_datasets,
@@ -71,3 +71,6 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
         batch_size=args.experiment.evaluation.batch_size,
         num_examples_to_log_detailed_info=args.experiment.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
     )
+
+    if accelerator.is_main_process:
+        wandb_set_really_finished()
