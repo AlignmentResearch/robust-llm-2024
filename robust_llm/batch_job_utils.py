@@ -138,6 +138,7 @@ def create_jobs(
     entity: str = "farai",
     wandb_mode: str = "online",
     experiment_name: Optional[str] = None,
+    only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
 ) -> tuple[Sequence[str], str]:
     launch_id = generate_name(style="hyphen")
 
@@ -148,11 +149,17 @@ def create_jobs(
 
     index = 0
     for runs in runs_by_containers:
-        jobs.append(
-            create_job_for_multiple_runs(
-                runs, name, index, launch_id, project, entity, wandb_mode
+        # If only_jobs_with_starting_indices is specified, we only launch jobs with
+        # a starting index in this list.
+        if (
+            only_jobs_with_starting_indices is None
+            or index in only_jobs_with_starting_indices
+        ):
+            jobs.append(
+                create_job_for_multiple_runs(
+                    runs, name, index, launch_id, project, entity, wandb_mode
+                )
             )
-        )
         index += len(runs)
 
     return jobs, launch_id
@@ -163,8 +170,24 @@ def launch_jobs(
     project: str = "robust-llm",
     entity: str = "farai",
     experiment_name: Optional[str] = None,
+    only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     dry_run: bool = False,
 ) -> tuple[str, str]:
+    """Launch k8s jobs for the given runs.
+
+    Args:
+        runs: a list of FlamingoRun objects.
+        project: wandb project to use.
+        entity: wandb entity to use.
+        experiment_name: descriptive name of the experiment, used to set wandb group.
+        only_jobs_with_starting_indices: if not None, only jobs with starting indices
+            contained in this list will be launched. Useful for rerunning a small subset
+            of jobs from an experiment.
+        dry_run: if True, only print the k8s job yaml files without launching them.
+
+    Returns:
+        pair of strings -- yaml file with k8s jobs definitions, and the launch_id.
+    """
     repo = Repo(".")
     # Push to git as we want to run the code with the current commit.
     repo.remote("origin").push(repo.active_branch.name).raise_if_error()
@@ -182,6 +205,7 @@ def launch_jobs(
         project=project,
         entity=entity,
         experiment_name=experiment_name,
+        only_jobs_with_starting_indices=only_jobs_with_starting_indices,
     )
     yamls_for_all_jobs = "\n\n---\n\n".join(jobs)
 
@@ -214,6 +238,7 @@ def run_multiple(
     memory: str = "20G",
     gpu: int = 1,
     priority: str = "normal-batch",
+    only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     dry_run: bool = False,
 ) -> None:
     """Run an experiment containing multiple runs and multiple k8s jobs.
@@ -235,6 +260,9 @@ def run_multiple(
         memory: memory per container.
         gpu: GPUs per container.
         priority: K8s priority.
+        only_jobs_with_starting_indices: if not None, only jobs with starting indices
+            contained in this list will be launched. Useful for rerunning a small subset
+            of jobs from an experiment (for example, if a few jobs failed).
         dry_run: if True, only print the k8s job yaml files without launching them.
     """
     if n_max_parallel is not None:
@@ -269,4 +297,9 @@ def run_multiple(
         for (i, override_args) in enumerate(override_args_list)
     ]
 
-    launch_jobs(runs, experiment_name=experiment_name, dry_run=dry_run)
+    launch_jobs(
+        runs,
+        experiment_name=experiment_name,
+        only_jobs_with_starting_indices=only_jobs_with_starting_indices,
+        dry_run=dry_run,
+    )
