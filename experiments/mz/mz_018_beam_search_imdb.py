@@ -3,7 +3,7 @@ import os
 from robust_llm.batch_job_utils import run_multiple
 
 EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
-HYDRA_CONFIG = "gcg_eval_imdb"
+HYDRA_CONFIG = "search_based_eval_imdb"
 
 MODELS_AND_N_MAX_PARALLEL = [
     ("AlignmentResearch/robust_llm_pythia-imdb-14m-mz-v1", 4),

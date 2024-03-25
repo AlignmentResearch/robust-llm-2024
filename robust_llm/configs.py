@@ -478,6 +478,9 @@ class TrainingConfig:
             checkpoint. If None, the model is not saved. If "hf", the model is saved to
             HuggingFace. Otherwise, the model is saved to a location starting with the
             specified prefix.
+        seed: seed to use for training. It will be set at the beginning of huggingface
+            Trainer's training. In particular, it may affect random initialization
+            (if any).
 
     For now, works only for the training pipeline.
     """
@@ -497,6 +500,7 @@ class TrainingConfig:
     log_datasets_to_wandb: bool = False
     model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
     force_name_to_save: Optional[str] = None
+    seed: int = 42
 
 
 @dataclass

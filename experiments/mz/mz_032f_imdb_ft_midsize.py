@@ -6,7 +6,8 @@ EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
 HYDRA_CONFIG = "simple_train_imdb"
 
 PYTHIA_NAMES_AND_FINETUNED_TARGET_NAMES = [
-    ("EleutherAI/pythia-6.9b-deduped", "pythia-imdb-6.9b-mz-ada-v2"),
+    ("EleutherAI/pythia-2.8b-deduped", "pythia-imdb-2.8b-mz-ada-v3"),
+    ("EleutherAI/pythia-6.9b-deduped", "pythia-imdb-6.9b-mz-ada-v3"),
 ]
 OVERRIDE_ARGS_LIST = [
     {
@@ -17,10 +18,12 @@ OVERRIDE_ARGS_LIST = [
         "experiment.evaluation.batch_size": 32,
         # Disable saving during training, we were getting some crashes here.
         "experiment.training.save_strategy": "no",
+        "experiment.training.gradient_checkpointing": True,
     }
     for (base_model_name, target_model_name) in PYTHIA_NAMES_AND_FINETUNED_TARGET_NAMES
 ]
 
+# Run on h100
 if __name__ == "__main__":
     run_multiple(
         EXPERIMENT_NAME,
@@ -28,5 +31,5 @@ if __name__ == "__main__":
         OVERRIDE_ARGS_LIST,
         gpu=2,
         use_accelerate=True,
-        memory="100G",
+        memory="200G",
     )

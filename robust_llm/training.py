@@ -62,6 +62,7 @@ class Training:
     trainer: Optional[TrainerWithBatchSizeStoring] = None
     log_datasets_to_wandb: bool = False
     ground_truth_label_fn: Optional[Callable[[str], int]] = None
+    seed: int = 42
 
     def __post_init__(self):
         accuracy = evaluate.load("accuracy")
@@ -85,6 +86,7 @@ class Training:
             logging_steps=self.logging_steps,
             save_strategy=self.save_strategy,
             save_steps=self.save_steps,
+            seed=self.seed,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
             # This defaults to "all", which sets up several callbacks, including
             # a WandbCallback which increments the wandb internal step whenever
@@ -325,6 +327,7 @@ class AdversarialTraining(Training):
             logging_steps=self.logging_steps,
             save_strategy=self.save_strategy,
             save_steps=self.save_steps,
+            seed=self.seed,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
         )
         self.trainer = AdversarialTrainer(

@@ -62,6 +62,7 @@ def run_training_pipeline(
         "logging_steps": experiment.training.logging_steps,
         "save_strategy": experiment.training.save_strategy,
         "save_steps": experiment.training.save_steps,
+        "seed": experiment.training.seed,
         "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
         "ground_truth_label_fn": robust_llm_datasets.ground_truth_label_fn,
     }

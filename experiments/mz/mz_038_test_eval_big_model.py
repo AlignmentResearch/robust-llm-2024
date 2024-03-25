@@ -6,17 +6,14 @@ EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
 HYDRA_CONFIG = "search_based_eval_imdb"
 
 MODELS_AND_N_MAX_PARALLEL = [
-    ("AlignmentResearch/robust_llm_pythia-imdb-160m-mz-ada-v2", 1),
-    ("AlignmentResearch/robust_llm_pythia-imdb-1b-mz-ada-v2", 1),
-    ("AlignmentResearch/robust_llm_pythia-imdb-2.8b-mz-ada-v2", 1),
+    ("EleutherAI/pythia-12b-deduped", 1),
 ]
-N_ITS = 10
+N_ITS = 3
 SEARCH_TYPES = ["gcg", "beam_search"]
 OVERRIDE_ARGS_LIST_AND_N_MAX_PARALLEL = [
     (
         {
-            # We limit ourselves to 200 examples per evaluation.
-            "experiment.evaluation.num_generated_examples": 200,
+            "experiment.evaluation.num_generated_examples": 100,
             "experiment.evaluation.evaluation_attack.search_based_attack_config.search_type": search_type,  # noqa: E501
             "experiment.environment.model_name_or_path": model,
             "experiment.evaluation.evaluation_attack.search_based_attack_config.n_its": N_ITS,  # noqa: E501
@@ -39,6 +36,8 @@ if __name__ == "__main__":
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         N_MAX_PARALLEL,
-        memory="50G",
+        memory="220G",
+        gpu=4,
         cpu=12,
+        use_accelerate=True,
     )
