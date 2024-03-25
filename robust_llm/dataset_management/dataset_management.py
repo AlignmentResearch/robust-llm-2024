@@ -103,6 +103,15 @@ def generate_robust_llm_datasets(
         assert isinstance(hf_dataset, (DatasetDict, IterableDatasetDict))
         train_set, validation_set = hf_dataset["train"], hf_dataset["test"]
 
+        # In case of the following datasets, columns are not properly named so we rename
+        # them appropriately.
+        if dataset_name == "sst2":
+            train_set = train_set.rename_column("sentence", "text")
+            validation_set = validation_set.rename_column("sentence", "text")
+        if dataset_name == "carblacac/twitter-sentiment-analysis":
+            train_set = train_set.rename_column("feeling", "label")
+            validation_set = validation_set.rename_column("feeling", "label")
+
     else:
         raise ValueError(f"Unknown dataset type {dataset_type}")
 

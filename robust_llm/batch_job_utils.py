@@ -8,7 +8,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Sequence, Union
+from typing import Any, Dict, Optional, Sequence, Union
 
 from git.repo import Repo
 from names_generator import generate_name
@@ -90,7 +90,7 @@ def create_job_for_multiple_runs(
 
     single_commands = []
     for i, run in enumerate(runs):
-        aux_args = [f"{k}={v}" for k, v in run.override_args.items()]
+        aux_args = _prepare_override_args(run.override_args)
         split_command = [
             "PYTHONPATH=.",
             *run.base_command.split(" "),
@@ -120,6 +120,16 @@ def create_job_for_multiple_runs(
     )
 
     return job
+
+
+def _prepare_override_args(override_args: Dict[str, Any]) -> list[str]:
+    args = []
+    for k, v in override_args.items():
+        if v is None:
+            args.append(f"{k}=null")
+        else:
+            args.append(f"{k}={v}")
+    return args
 
 
 def create_jobs(
