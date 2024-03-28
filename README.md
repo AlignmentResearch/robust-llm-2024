@@ -142,6 +142,16 @@ Currently, we use the following datasets in our experiments:
 - *tensor_trust*, synthetic binary classification task, where the label is True iff two passwords given in the input match. You can use it by setting `environment.dataset_type="tensor_trust"`
 - *IMDB*, a task to classify whether movie review is positive or negative. You can use it by setting `environment.dataset_type="hf/imdb"`
 - *spam*, a task to classify whether an email is spam or not. You can use it by setting `environment.dataset_type="hf/SetFit/enron_spam"`
+- *word_length*, synthetic binary classification task to predict which of the two words is longer.
+
+### Dataset-attack compatibility
+
+"Standard natural language tasks" (IMDB, spam) are compatible with GCG, beam search, random token, TRL*. Make sure to set `experiment.evaluation.evaluation_attack.append_to_modifiable_chunk=True` when running those combinations (with this setting, the attack will just append some tokens at the end instead of removing the whole text and then adding tokens).
+On IMDB, also TextFooler can be run. (We could try on spam as well but it is not clear how much the semantics of the text would change -- and hence, if the attacks will be correct most of the time.)
+
+"Algorithmic tasks" (tensor_trust, word_length) are compatible with GCG, beam search, random token, TRL*. Make sure to set `experiment.evaluation.evaluation_attack.append_to_modifiable_chunk=False` when running those combinations. (For those datasets, there are defined small parts of text which will be replaced with attack tokens).
+
+*TRL: Note that this algorithm's performance is still unstable in many cases.
 
 ### Tomita [DEPRECATED]
 
