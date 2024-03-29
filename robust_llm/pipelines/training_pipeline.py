@@ -7,14 +7,14 @@ from omegaconf import OmegaConf
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from robust_llm.configs import OverallConfig
-from robust_llm.logging_utils import wandb_set_really_finished
+from robust_llm.logging_utils import wandb_cleanup, wandb_initialize
 from robust_llm.pipelines.utils import (
     prepare_datasets,
     prepare_language_generator,
     prepare_victim_models,
 )
 from robust_llm.training import AdversarialTraining, Training
-from robust_llm.utils import get_overlap, log_config_to_wandb, make_unique_name_to_save
+from robust_llm.utils import get_overlap, make_unique_name_to_save
 
 
 def run_training_pipeline(
@@ -98,14 +98,7 @@ def run_training_pipeline(
         # are set to be) because HuggingFace sets up its own metrics when we initialize
         # the Trainer, and we wait until that is done to overwrite them with our own.
         # We do this in the `CustomLoggingWandbCallback`'s `setup` method.
-        wandb.init(
-            project="robust-llm",
-            group=experiment.experiment_name,
-            job_type=experiment.job_type,
-            name=experiment.run_name,
-        )
-
-        log_config_to_wandb(args.experiment)
+        wandb_initialize(experiment, set_up_step_metrics=False)
 
         # Log the train-val overlap to wandb
         assert wandb.run is not None
@@ -133,6 +126,6 @@ def run_training_pipeline(
     )
 
     if trainer.is_world_process_zero():
-        wandb_set_really_finished()
+        wandb_cleanup()
 
     return model, tokenizer, decoder

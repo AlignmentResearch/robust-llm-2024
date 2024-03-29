@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import wandb
+import yaml
+from datasets import Dataset
+from omegaconf import OmegaConf
+
+from robust_llm.configs import ExperimentConfig
 
 
 @dataclass
@@ -107,3 +112,50 @@ def wandb_set_really_finished():
     # that the run finished properly iff we see `really_finished=1` on wandb.
     assert wandb.run is not None
     wandb.run.log({"really_finished": 1}, commit=True)
+
+
+def log_dataset_to_wandb(dataset: Dataset, dataset_name: str) -> None:
+    dataset_table = wandb.Table(columns=["text", "label"])
+
+    for text, label in zip(
+        dataset["text"],
+        dataset["label"],
+    ):
+        dataset_table.add_data(text, label)
+
+    wandb.log({dataset_name: dataset_table}, commit=False)
+
+
+def log_config_to_wandb(config: ExperimentConfig) -> None:
+    """Logs the job config to wandb."""
+    if not wandb.run:
+        raise ValueError("wandb should have been initialized by now, exiting...")
+    config_yaml = yaml.load(OmegaConf.to_yaml(config), Loader=yaml.FullLoader)
+    wandb.run.summary["experiment_yaml"] = config_yaml
+
+
+def wandb_initialize(
+    config: ExperimentConfig, set_up_step_metrics: bool = True
+) -> None:
+    """Initializes wandb run and does appropriate setup.
+
+    Args:
+        config: config of the experiment
+        set_up_step_metrics: whether to set up wandb step metrics which are used to
+            define default x-axes for logged values
+    """
+    wandb.init(
+        project="robust-llm",
+        group=config.experiment_name,
+        job_type=config.job_type,
+        name=config.run_name,
+    )
+    if set_up_step_metrics:
+        setup_wandb_metrics()
+    log_config_to_wandb(config)
+
+
+def wandb_cleanup() -> None:
+    """Does necessary cleanup for wandb before the experiment ends."""
+    wandb_set_really_finished()
+    wandb.finish()

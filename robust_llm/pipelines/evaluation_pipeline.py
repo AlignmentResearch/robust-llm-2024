@@ -1,32 +1,24 @@
 """Pipeline to evaluate a fixed model under attack."""
 
-import wandb
 from accelerate import Accelerator
 
 from robust_llm.configs import OverallConfig
 from robust_llm.evaluation import do_adversarial_evaluation
-from robust_llm.logging_utils import setup_wandb_metrics, wandb_set_really_finished
+from robust_llm.logging_utils import wandb_cleanup, wandb_initialize
 from robust_llm.pipelines.utils import (
     prepare_attack,
     prepare_datasets,
     prepare_language_generator,
     prepare_victim_models,
 )
-from robust_llm.utils import log_config_to_wandb, prepare_model_with_accelerate
+from robust_llm.utils import prepare_model_with_accelerate
 
 
 def run_evaluation_pipeline(args: OverallConfig) -> None:
     accelerator = Accelerator()
 
     if accelerator.is_main_process:
-        wandb.init(
-            project="robust-llm",
-            group=args.experiment.experiment_name,
-            job_type=args.experiment.job_type,
-            name=args.experiment.run_name,
-        )
-        setup_wandb_metrics()
-        log_config_to_wandb(args.experiment)
+        wandb_initialize(args.experiment)
 
     model, tokenizer, _ = prepare_victim_models(args)
     model = prepare_model_with_accelerate(accelerator, model)
@@ -73,4 +65,4 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
     )
 
     if accelerator.is_main_process:
-        wandb_set_really_finished()
+        wandb_cleanup()

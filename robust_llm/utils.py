@@ -9,16 +9,11 @@ from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Protocol, 
 
 import numpy as np
 import torch
-import yaml
-from omegaconf import OmegaConf
 from torch.nn.parameter import Parameter
-
-from robust_llm.configs import ExperimentConfig
 
 if TYPE_CHECKING:
     from robust_llm.trainer import AdversarialTrainer
 
-import wandb
 from accelerate import Accelerator
 from datasets import Dataset
 from transformers import (
@@ -203,26 +198,6 @@ def yield_minibatch(
     for i in range(0, shuffled_dataset.num_rows, minibatch_size):
         upper_limit = min(i + minibatch_size, shuffled_dataset.num_rows)
         yield shuffled_dataset.select(range(i, upper_limit))
-
-
-def log_dataset_to_wandb(dataset: Dataset, dataset_name: str) -> None:
-    dataset_table = wandb.Table(columns=["text", "label"])
-
-    for text, label in zip(
-        dataset["text"],
-        dataset["label"],
-    ):
-        dataset_table.add_data(text, label)
-
-    wandb.log({dataset_name: dataset_table}, commit=False)
-
-
-def log_config_to_wandb(config: ExperimentConfig) -> None:
-    """Logs the job config to wandb."""
-    if not wandb.run:
-        raise ValueError("wandb should have been initialized by now, exiting...")
-    config_yaml = yaml.load(OmegaConf.to_yaml(config), Loader=yaml.FullLoader)
-    wandb.run.summary["experiment_yaml"] = config_yaml
 
 
 def ask_for_confirmation(prompt: str) -> bool:

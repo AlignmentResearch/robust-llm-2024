@@ -23,7 +23,7 @@ from robust_llm.configs import AttackConfig, EvaluationConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.evaluation import do_adversarial_evaluation
-from robust_llm.logging_utils import LoggingCounter
+from robust_llm.logging_utils import LoggingCounter, log_dataset_to_wandb
 from robust_llm.trainer import (
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,
@@ -31,7 +31,6 @@ from robust_llm.trainer import (
     TrainerWithBatchSizeStoring,
 )
 from robust_llm.utils import (
-    log_dataset_to_wandb,
     search_for_adversarial_examples,
     tokenize_dataset,
     yield_minibatch,
