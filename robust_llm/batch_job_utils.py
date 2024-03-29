@@ -10,9 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Sequence, Union
 
+import hydra
 from git.repo import Repo
+from hydra.core.config_store import ConfigStore
+from hydra.errors import HydraException
 from names_generator import generate_name
 
+from robust_llm.configs import OverallConfig
 from robust_llm.utils import ask_for_confirmation
 
 JOB_TEMPLATE_PATH = Path(__file__).parent.parent / "k8s" / "batch_job.yaml"
@@ -40,6 +44,26 @@ class FlamingoRun:
     MEMORY: str = "20G"
     GPU: int = 1
     PRIORITY: str = "normal-batch"
+
+    def __post_init__(self):
+        """Validate the override_args by using the Hydra Compose API.
+
+        We validate the override_args by using hydra.compose to build a full
+        config, and if it errors then we know there was a mistake in the args.
+        However, we can't use this Hydra config to run the experiment since
+        there's no straightforward way to pass it to k8s, so we throw it
+        away and pass the override args like normal anyway."""
+        # since the entry point is not __main__.py, we need to initialize Hydra
+        with hydra.initialize(version_base=None, config_path="hydra_conf"):
+            cs = ConfigStore.instance()
+            cs.store(name="base_config", node=OverallConfig)
+            formatted_overrides = []
+            formatted_overrides.append(f"+experiment={self.hydra_config}")
+            formatted_overrides.extend(_prepare_override_args(self.override_args))
+            try:
+                hydra.compose("default_config", overrides=formatted_overrides)
+            except HydraException as e:
+                raise ValueError("override_args are invalid, aborting.") from e
 
     def format_args(self) -> dict[str, Union[str, int]]:
         return {
@@ -172,6 +196,7 @@ def launch_jobs(
     experiment_name: Optional[str] = None,
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     dry_run: bool = False,
+    skip_git_checks: bool = False,
 ) -> tuple[str, str]:
     """Launch k8s jobs for the given runs.
 
@@ -184,21 +209,24 @@ def launch_jobs(
             contained in this list will be launched. Useful for rerunning a small subset
             of jobs from an experiment.
         dry_run: if True, only print the k8s job yaml files without launching them.
+        skip_git_checks: if True, skip the remote push and the check for dirty git repo.
+            This is useful when running unit tests.
 
     Returns:
         pair of strings -- yaml file with k8s jobs definitions, and the launch_id.
     """
     repo = Repo(".")
-    # Push to git as we want to run the code with the current commit.
-    repo.remote("origin").push(repo.active_branch.name).raise_if_error()
-    # Check if repo is dirty.
-    if repo.is_dirty(untracked_files=True):
-        should_continue = ask_for_confirmation(
-            "Git repo is dirty. Are you sure you want to continue?"
-        )
-        if not should_continue:
-            print("Aborting")
-            sys.exit(1)
+    if not skip_git_checks:
+        # Push to git as we want to run the code with the current commit.
+        repo.remote("origin").push(repo.active_branch.name).raise_if_error()
+        # Check if repo is dirty.
+        if repo.is_dirty(untracked_files=True):
+            should_continue = ask_for_confirmation(
+                "Git repo is dirty. Are you sure you want to continue?"
+            )
+            if not should_continue:
+                print("Aborting")
+                sys.exit(1)
 
     jobs, launch_id = create_jobs(
         runs,
@@ -240,6 +268,7 @@ def run_multiple(
     priority: str = "normal-batch",
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     dry_run: bool = False,
+    skip_git_checks: bool = False,
 ) -> None:
     """Run an experiment containing multiple runs and multiple k8s jobs.
 
@@ -264,6 +293,7 @@ def run_multiple(
             contained in this list will be launched. Useful for rerunning a small subset
             of jobs from an experiment (for example, if a few jobs failed).
         dry_run: if True, only print the k8s job yaml files without launching them.
+        skip_git_checks: if True, skip the remote push and the check for dirty git repo.
     """
     if n_max_parallel is not None:
         assert len(n_max_parallel) == len(override_args_list)
@@ -302,4 +332,5 @@ def run_multiple(
         experiment_name=experiment_name,
         only_jobs_with_starting_indices=only_jobs_with_starting_indices,
         dry_run=dry_run,
+        skip_git_checks=skip_git_checks,
     )
