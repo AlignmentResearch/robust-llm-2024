@@ -1,0 +1,15 @@
+experiment_type: "evaluation"
+
+environment:
+  model_name_or_path: "EleutherAI/pythia-14m"
+  is_pythia: true
+  dataset_type: "word_length"
+  train_set_size: 20_000
+  validation_set_size: 2000
+  shuffle_validation_set: true
+
+evaluation:
+  evaluation_attack:
+    attack_type: "random_token"
+    random_token_attack_config:
+      logging_frequency: 10
