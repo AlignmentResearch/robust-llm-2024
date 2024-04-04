@@ -36,6 +36,8 @@ dev = [
     "pytest-cov",
     "flake8",
     "names-generator",
+    # For checking GPU memory usage
+    "nvidia-ml-py3",
 ]
 
 [tool.setuptools.packages.find]
