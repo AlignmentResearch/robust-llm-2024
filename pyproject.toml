@@ -13,6 +13,8 @@ dependencies = [
     "transformers[accelerate]",
     "simple_parsing",
     "scikit-learn",
+    # Bigger than this will break TextAttack
+    "scipy<1.13.0",
     "textattack",
     # TF embeddings are used in some TextAttack attacks, even though models are in pytorch
     "tensorflow>=2.9.1",
