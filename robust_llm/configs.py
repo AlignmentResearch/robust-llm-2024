@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Literal, Optional
 
 import torch
 from omegaconf import MISSING
@@ -8,6 +8,7 @@ from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.attacks.trl.constants import TRL_REWARD_TYPES
 
 SHARED_DATA_DIR = "/robust_llm_data"
+ModelFamily = Literal["gpt2", "pythia", "bert"]
 
 
 @dataclass
@@ -401,9 +402,9 @@ class EnvironmentConfig:
 
     Attributes:
         model_name_or_path (str): Either HF name or path to model checkpoint.
+        model_family (str) : Which model family to load (e.g. "gpt2").
         decoder_name (Optional[str]): Decoder model name (used for defenses).
-        is_pythia (bool) : Whether the architecture is Pythia or not. Needed
-            for loading the model.
+        decoder_family (Optional[str]): Which model family the decoder belongs to.
         dataset_type (str): Dataset type (tomita, tensor_trust).
         num_classes (Optional[int]): Number of classes in the dataset, if specified.
             Otherwise, number of classes is inferred from the dataset.
@@ -435,8 +436,9 @@ class EnvironmentConfig:
     """
 
     model_name_or_path: str = "bert-base-uncased"
+    model_family: str = "gpt2"
     decoder_name: Optional[str] = None
-    is_pythia: bool = False
+    decoder_family: Optional[str] = None
     dataset_type: str = "tomita"
     num_classes: Optional[int] = None
     dataset_generation_style: str = (
@@ -481,7 +483,7 @@ class TrainingConfig:
         save_steps (int | float): Number of updates steps before two checkpoint saves if
             save_strategy="steps". Should be an integer or a float in range [0,1). If
             smaller than 1, will be interpreted as ratio of total training steps.
-        checkpoint (int): The checkpoint to start from.
+        revision (str): The huggingface revision to start from.
         log_datasets_to_wandb (bool): Whether to log datasets to wandb. Off by default,
             as it takes a lot of space.
         model_save_path_prefix_or_hf (Optional[str]): Where to save the final
@@ -506,7 +508,7 @@ class TrainingConfig:
     logging_steps: int | float = 500
     save_strategy: str = "steps"
     save_steps: int | float = 500
-    checkpoint: int = 142000
+    revision: str = "main"
     log_datasets_to_wandb: bool = False
     model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
     force_name_to_save: Optional[str] = None

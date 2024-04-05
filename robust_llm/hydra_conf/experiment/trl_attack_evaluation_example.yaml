@@ -3,7 +3,7 @@ experiment_name: "trl_attack_evaluation_example"
 
 environment:
   model_name_or_path: "AlignmentResearch/robust_llm_pythia-tt-70m-mz-v0"
-  is_pythia: true
+  model_family: "pythia"
   dataset_type: "tensor_trust"
   # For tensor trust we need non-None train set for now
   train_set_size: 2

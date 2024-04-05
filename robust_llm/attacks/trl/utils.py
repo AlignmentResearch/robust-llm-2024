@@ -100,8 +100,8 @@ def prepare_adversary_model_and_tokenizer(
 
     adversary_tokenizer = _prepare_tokenizer(
         model_name_or_path=base_model_name,
-        is_pythia=True,
-        checkpoint=checkpoint,
+        model_family="pythia",
+        revision=checkpoint_string,
         padding_side="left",
     )
 

@@ -201,7 +201,8 @@ def test_tensor_trust_get_ground_truth_label():
         seed=seed,
     )
     tokenizer = _prepare_tokenizer(
-        "bert-base-uncased", is_pythia=False, checkpoint=None
+        model_name_or_path="bert-base-uncased",
+        model_family="bert",
     )
 
     train_set, _ = get_tensor_trust_dataset(

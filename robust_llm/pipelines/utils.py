@@ -28,33 +28,33 @@ def prepare_victim_models(
 
     model_name_or_path = args.experiment.environment.model_name_or_path
     decoder_name = args.experiment.environment.decoder_name
-    is_pythia = args.experiment.environment.is_pythia
-    checkpoint = args.experiment.training.checkpoint
 
-    # Note that the implication is only in one direction (i.e. we can have fine-tuned
-    # Pythia-based models that do not have "pythia" in their name).
-    if "pythia" in model_name_or_path or "pythia" in (decoder_name or ""):
-        assert is_pythia
+    model_family = args.experiment.environment.model_family
+    revision = args.experiment.training.revision
 
     model = _prepare_model(
         model_name_or_path=model_name_or_path,
-        is_pythia=is_pythia,
-        checkpoint=checkpoint,
-        num_classes=get_num_classes(args.experiment.environment.dataset_type),
+        model_family=model_family,
+        revision=revision,
+        num_labels=get_num_classes(args.experiment.environment.dataset_type),
     )
     tokenizer = _prepare_tokenizer(
         model_name_or_path=model_name_or_path,
-        is_pythia=is_pythia,
-        checkpoint=checkpoint,
+        model_family=model_family,
+        revision=revision,
     )
 
     decoder = None
     if decoder_name is not None:
         decoder = _prepare_decoder(
-            decoder_name=decoder_name, is_pythia=is_pythia, checkpoint=checkpoint
+            decoder_name=decoder_name,
+            model_family=model_family,
+            revision=revision,
         )
         decoder_tokenizer = _prepare_tokenizer(
-            model_name_or_path=decoder_name, is_pythia=is_pythia, checkpoint=checkpoint
+            model_name_or_path=decoder_name,
+            model_family=model_family,
+            revision=revision,
         )
 
         # Assert that tokenizers are the same. This check is of course not ideal.

@@ -3,7 +3,7 @@ experiment_name: "trl_eval_imdb_example"
 
 environment:
   model_name_or_path: "AlignmentResearch/robust_llm_pythia-imdb-14m-mz-v1"
-  is_pythia: true
+  model_family: "pythia"
   dataset_type: "hf/imdb"
   shuffle_validation_set: true
   train_set_size: 10

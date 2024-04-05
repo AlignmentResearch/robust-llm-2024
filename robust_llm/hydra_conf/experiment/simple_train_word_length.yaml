@@ -9,7 +9,7 @@ environment:
   seed: 0
 
 training:
-  checkpoint: 143000
+  revision: "main"
   model_save_path_prefix_or_hf: "hf"
   num_train_epochs: 1
   learning_rate: 1e-5
