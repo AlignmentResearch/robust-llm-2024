@@ -510,7 +510,7 @@ class TrainingConfig:
     log_datasets_to_wandb: bool = False
     model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
     force_name_to_save: Optional[str] = None
-    seed: int = 42
+    seed: int = 0
 
 
 @dataclass
