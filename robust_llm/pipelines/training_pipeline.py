@@ -67,6 +67,7 @@ def run_training_pipeline(
         "seed": experiment.training.seed,
         "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
         "ground_truth_label_fn": robust_llm_datasets.ground_truth_label_fn,
+        "use_cpu": experiment.environment.device == "cpu",
     }
 
     # Set up the training environment
@@ -111,13 +112,17 @@ def run_training_pipeline(
                 smaller_dataset=robust_llm_datasets.validation_dataset,
                 larger_dataset=robust_llm_datasets.train_dataset,
             )
-            wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)
-            wandb.run.summary["train_val_overlap_over_train_set_size"] = len(
+            wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)  # type: ignore  # noqa: E501
+            wandb.run.summary["train_val_overlap_over_train_set_size"] = len(  # type: ignore  # noqa: E501
                 train_val_overlap
-            ) / len(robust_llm_datasets.train_dataset["text"])
-            wandb.run.summary["train_val_overlap_over_val_set_size"] = len(
+            ) / len(
+                robust_llm_datasets.train_dataset["text"]
+            )
+            wandb.run.summary["train_val_overlap_over_val_set_size"] = len(  # type: ignore  # noqa: E501
                 train_val_overlap
-            ) / len(robust_llm_datasets.validation_dataset["text"])
+            ) / len(
+                robust_llm_datasets.validation_dataset["text"]
+            )
 
     # Perform the training
     training.run_trainer()

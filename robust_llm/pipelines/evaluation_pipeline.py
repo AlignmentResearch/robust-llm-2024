@@ -15,7 +15,8 @@ from robust_llm.utils import prepare_model_with_accelerate
 
 
 def run_evaluation_pipeline(args: OverallConfig) -> None:
-    accelerator = Accelerator()
+    use_cpu = args.experiment.environment.device == "cpu"
+    accelerator = Accelerator(cpu=use_cpu)
 
     if accelerator.is_main_process:
         wandb_initialize(args.experiment)

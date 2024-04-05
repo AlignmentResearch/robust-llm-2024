@@ -25,7 +25,8 @@ from robust_llm.pipelines.utils import (
 
 
 def run_defense_pipeline(args: OverallConfig):
-    accelerator = Accelerator()
+    use_cpu = args.experiment.environment.device == "cpu"
+    accelerator = Accelerator(cpu=use_cpu)
     model, tokenizer, decoder = run_training_pipeline(args)
     model, decoder = accelerator.prepare(model, decoder)
     language_generator = prepare_language_generator(args)
