@@ -52,6 +52,7 @@ def run_training_pipeline(
         "model": model,
         "tokenizer": tokenizer,
         "model_name_to_save": model_name_to_save,
+        "environment_config": experiment.environment,
         "evaluation_config": experiment.evaluation,
         "train_epochs": experiment.training.num_train_epochs,
         "learning_rate": experiment.training.learning_rate,

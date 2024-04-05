@@ -4,7 +4,7 @@ from datasets import Dataset
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
-from robust_llm.configs import AttackConfig
+from robust_llm.configs import AttackConfig, EnvironmentConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.dataset_management.tomita.tomita_dataset_generator import (
     load_adversarial_dataset,
@@ -20,6 +20,7 @@ class BruteForceTomitaAttack(Attack):
     def __init__(
         self,
         attack_config: AttackConfig,
+        environment_config: EnvironmentConfig,
         modifiable_chunks_spec: ModifiableChunksSpec,
         dataset_type: str,
         language_generator_name: str,
@@ -28,13 +29,14 @@ class BruteForceTomitaAttack(Attack):
 
         Args:
             attack_config: config of the attack
+            environment_config: config of the environment
             modifiable_chunks_spec: Specification for which chunks of the
                 original text can be modified
             dataset_type: used dataset type
             language_generator_name: regular language used with tomita dataset
                 (tomita1, tomita2, tomita4, or tomita7)
         """
-        super().__init__(attack_config, modifiable_chunks_spec)
+        super().__init__(attack_config, environment_config, modifiable_chunks_spec)
 
         assert modifiable_chunks_spec == (True,)
 

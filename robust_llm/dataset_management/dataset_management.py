@@ -115,6 +115,9 @@ def generate_robust_llm_datasets(
     else:
         raise ValueError(f"Unknown dataset type {dataset_type}")
 
+    _check_if_correct_labels(train_set, dataset_type)
+    _check_if_correct_labels(validation_set, dataset_type)
+
     # Filter before adjusting dataset sizes
     train_set = _maybe_filter_out_long_inputs(
         train_set, environment_config.filter_out_longer_than_n_tokens_train, tokenizer
@@ -182,3 +185,30 @@ def _maybe_filter_out_long_inputs(
             [i for i, t in enumerate(tokenized) if len(t) <= max_n_tokens]
         )
     return dataset
+
+
+_DATASET_TYPE_TO_NUM_CLASSES = {
+    "hf/carblacac/twitter-sentiment-analysis": 2,
+    "hf/climatebert/climate_detection": 2,
+    "hf/imdb": 2,
+    "hf/mteb/tweet_sentiment_extraction": 3,
+    "hf/rotten_tomatoes": 2,
+    "hf/SetFit/enron_spam": 2,
+    "hf/sst2": 2,
+    "hf/yelp_polarity": 2,
+    "tensor_trust": 2,
+    "tomita": 2,
+    "word_length": 2,
+}
+
+
+def get_num_classes(dataset_type: str) -> int:
+    return _DATASET_TYPE_TO_NUM_CLASSES[dataset_type]
+
+
+def _check_if_correct_labels(dataset: Dataset, dataset_type: str) -> None:
+    num_classes = get_num_classes(dataset_type)
+
+    for label in dataset["label"]:
+        assert isinstance(label, int)
+        assert 0 <= label < num_classes

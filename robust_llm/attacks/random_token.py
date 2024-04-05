@@ -9,7 +9,7 @@ from transformers import PreTrainedTokenizerBase, pipeline
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
-from robust_llm.configs import AttackConfig
+from robust_llm.configs import AttackConfig, EnvironmentConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.logging_utils import LoggingCounter
 from robust_llm.utils import LanguageModel
@@ -33,6 +33,7 @@ class RandomTokenAttack(Attack):
     def __init__(
         self,
         attack_config: AttackConfig,
+        environment_config: EnvironmentConfig,
         modifiable_chunks_spec: ModifiableChunksSpec,
         dataset_type: str,
         victim_model: LanguageModel,
@@ -43,6 +44,7 @@ class RandomTokenAttack(Attack):
 
         Args:
             attack_config: config of the attack
+            environment_config: config of the environment
             modifiable_chunks_spec: Specification for which chunks of the
                 original text can be modified
             dataset_type: used dataset type
@@ -50,7 +52,7 @@ class RandomTokenAttack(Attack):
             victim_tokenizer: tokenizer used by the victim model
             ground_truth_label_fn: function to get the ground truth label
         """
-        super().__init__(attack_config, modifiable_chunks_spec)
+        super().__init__(attack_config, environment_config, modifiable_chunks_spec)
 
         assert True in modifiable_chunks_spec
 

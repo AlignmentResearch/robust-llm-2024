@@ -14,8 +14,11 @@ from robust_llm.attacks.search_based.utils import (
     get_chunking_for_search_based,
     get_wrapped_model,
 )
-from robust_llm.configs import AttackConfig
-from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.configs import AttackConfig, EnvironmentConfig
+from robust_llm.dataset_management.dataset_management import (
+    ModifiableChunksSpec,
+    get_num_classes,
+)
 from robust_llm.utils import LanguageModel, get_randint_with_exclusions
 
 logger = logging.getLogger(__name__)
@@ -42,13 +45,14 @@ class SearchBasedAttack(Attack):
     def __init__(
         self,
         attack_config: AttackConfig,
+        environment_config: EnvironmentConfig,
         modifiable_chunks_spec: ModifiableChunksSpec,
         model: LanguageModel,
         tokenizer: transformers.PreTrainedTokenizerBase,
         accelerator: Accelerator,
         ground_truth_label_fn: Optional[Callable[[str], int]],
     ) -> None:
-        super().__init__(attack_config, modifiable_chunks_spec)
+        super().__init__(attack_config, environment_config, modifiable_chunks_spec)
 
         if accelerator.distributed_type == DistributedType.NO:
             assert isinstance(model, transformers.PreTrainedModel)
@@ -80,6 +84,8 @@ class SearchBasedAttack(Attack):
 
         config = self.attack_config.search_based_attack_config
 
+        num_classes = get_num_classes(self.environment_config.dataset_type)
+
         all_filtered_out_counts: List[int] = []
 
         attacked_input_texts = []
@@ -105,10 +111,8 @@ class SearchBasedAttack(Attack):
             else:
                 true_label = example["label"]
 
-            # TODO(GH#106): make it work with multi-class classification
-            num_possible_classes = 2
             target_label = get_randint_with_exclusions(
-                high=num_possible_classes, exclusions=[true_label]
+                high=num_classes, exclusions=[true_label]
             )
 
             runner = make_runner(

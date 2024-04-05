@@ -5,6 +5,7 @@ import torch
 from omegaconf import MISSING
 
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
+from robust_llm.attacks.trl.constants import TRL_REWARD_TYPES
 
 SHARED_DATA_DIR = "/robust_llm_data"
 
@@ -106,6 +107,8 @@ class TRLAttackConfig:
         max_new_tokens (int):
             The maximum number of tokens to generate.
             Name copied from trl code.
+        reward_type (str):
+            determines reward funtion to use in TRL.
         model_name_to_save (str):
             The name to use for saving the model.
         model_save_path_prefix (Optional[str]): Where to save the final
@@ -125,6 +128,8 @@ class TRLAttackConfig:
     min_length: int = -1
     max_new_tokens: int = 3
 
+    reward_type: str = "minus_correct_logit_plus_incorrect_logits"
+
     model_name_to_save: str = "trl"
     model_save_path_prefix: Optional[str] = SHARED_DATA_DIR
 
@@ -132,6 +137,8 @@ class TRLAttackConfig:
         assert (
             self.batch_size == self.mini_batch_size * self.gradient_accumulation_steps
         )
+
+        assert self.reward_type in TRL_REWARD_TYPES
 
 
 @dataclass
@@ -398,6 +405,8 @@ class EnvironmentConfig:
         is_pythia (bool) : Whether the architecture is Pythia or not. Needed
             for loading the model.
         dataset_type (str): Dataset type (tomita, tensor_trust).
+        num_classes (Optional[int]): Number of classes in the dataset, if specified.
+            Otherwise, number of classes is inferred from the dataset.
         dataset_generation_style (str):
             How to generate the negative examples in the dataset.
             Only works with tensor trust for now.
@@ -429,6 +438,7 @@ class EnvironmentConfig:
     decoder_name: Optional[str] = None
     is_pythia: bool = False
     dataset_type: str = "tomita"
+    num_classes: Optional[int] = None
     dataset_generation_style: str = (
         "random_words"  # random_word / random_character_edit
     )

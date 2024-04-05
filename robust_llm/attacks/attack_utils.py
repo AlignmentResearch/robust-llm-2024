@@ -10,13 +10,14 @@ from robust_llm.attacks.search_based.search_based import SearchBasedAttack
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.attacks.text_attack.text_attack import TextAttackAttack
 from robust_llm.attacks.trl.trl import TRLAttack
-from robust_llm.configs import AttackConfig
+from robust_llm.configs import AttackConfig, EnvironmentConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.utils import LanguageModel
 
 
 def create_attack(
     attack_config: AttackConfig,
+    environment_config: EnvironmentConfig,
     modifiable_chunks_spec: ModifiableChunksSpec,
     logging_name: str,
     dataset_type: str,
@@ -30,12 +31,15 @@ def create_attack(
     # TODO(niki): simplify so everything has same args?
     if attack_config.attack_type == "identity":
         return IdentityAttack(
-            attack_config=attack_config, modifiable_chunks_spec=modifiable_chunks_spec
+            attack_config=attack_config,
+            environment_config=environment_config,
+            modifiable_chunks_spec=modifiable_chunks_spec,
         )
     elif attack_config.attack_type == "brute_force":
         assert language_generator_name is not None
         return BruteForceTomitaAttack(
             attack_config=attack_config,
+            environment_config=environment_config,
             modifiable_chunks_spec=modifiable_chunks_spec,
             dataset_type=dataset_type,
             # TODO(niki): put this in the config?
@@ -44,6 +48,7 @@ def create_attack(
     elif attack_config.attack_type == "random_token":
         return RandomTokenAttack(
             attack_config=attack_config,
+            environment_config=environment_config,
             modifiable_chunks_spec=modifiable_chunks_spec,
             dataset_type=dataset_type,
             victim_model=victim_model,
@@ -53,6 +58,7 @@ def create_attack(
     elif attack_config.attack_type == "trl":
         return TRLAttack(
             attack_config=attack_config,
+            environment_config=environment_config,
             modifiable_chunks_spec=modifiable_chunks_spec,
             logging_name=logging_name,
             dataset_type=dataset_type,
@@ -63,6 +69,7 @@ def create_attack(
     elif attack_config.attack_type == "search_based":
         return SearchBasedAttack(
             attack_config=attack_config,
+            environment_config=environment_config,
             modifiable_chunks_spec=modifiable_chunks_spec,
             model=victim_model,
             tokenizer=victim_tokenizer,
@@ -72,6 +79,7 @@ def create_attack(
     elif attack_config.attack_type in TEXT_ATTACK_ATTACK_TYPES:
         return TextAttackAttack(
             attack_config=attack_config,
+            environment_config=environment_config,
             modifiable_chunks_spec=modifiable_chunks_spec,
             model=victim_model,
             tokenizer=victim_tokenizer,

@@ -1,7 +1,7 @@
 from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from robust_llm.configs import EvaluationConfig
+from robust_llm.configs import EnvironmentConfig, EvaluationConfig
 from robust_llm.dataset_management.tomita import make_language_generator
 from robust_llm.training import Training
 from robust_llm.utils import tokenize_dataset
@@ -42,6 +42,7 @@ def test_basic_constructor():
         model=model,
         tokenizer=tokenizer,
         model_name_to_save="test_model",
+        environment_config=EnvironmentConfig(),
         evaluation_config=EvaluationConfig(),
     )
 

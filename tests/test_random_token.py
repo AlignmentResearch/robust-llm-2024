@@ -17,6 +17,7 @@ victim_model, victim_tokenizer, _ = prepare_victim_models(overall_config)
 # Set up the attack
 attack = RandomTokenAttack(
     attack_config=attack_config,
+    environment_config=overall_config.experiment.environment,
     modifiable_chunks_spec=[True, False, True],  # type: ignore
     dataset_type="tensor_trust",
     victim_model=victim_model,

@@ -19,8 +19,11 @@ from typing_extensions import override
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import CustomLoggingWandbCallback
-from robust_llm.configs import AttackConfig, EvaluationConfig
-from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.configs import AttackConfig, EnvironmentConfig, EvaluationConfig
+from robust_llm.dataset_management.dataset_management import (
+    ModifiableChunksSpec,
+    get_num_classes,
+)
 from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import LoggingCounter, log_dataset_to_wandb
@@ -47,6 +50,7 @@ class Training:
     model: PreTrainedModel
     tokenizer: PreTrainedTokenizerBase
     model_name_to_save: str  # Used for saving the model to disk/hf
+    environment_config: EnvironmentConfig
     evaluation_config: EvaluationConfig
     train_epochs: int = 3
     learning_rate: float = 5e-5
@@ -64,12 +68,19 @@ class Training:
     seed: int = 42
 
     def __post_init__(self):
-        accuracy = evaluate.load("accuracy")
-        precision = evaluate.load("precision")
-        recall = evaluate.load("recall")
-        f1 = evaluate.load("f1")
+        metrics = [evaluate.load("accuracy")]
 
-        self.metrics = evaluate.combine([accuracy, precision, recall, f1])
+        num_classes = get_num_classes(self.environment_config.dataset_type)
+        if num_classes == 2:
+            metrics.extend(
+                [
+                    evaluate.load("precision"),
+                    evaluate.load("recall"),
+                    evaluate.load("f1"),
+                ]
+            )
+
+        self.metrics = evaluate.combine(metrics)
 
     def setup_trainer(self) -> TrainerWithBatchSizeStoring:
         hf_training_args = TrainingArguments(
@@ -355,6 +366,7 @@ class AdversarialTraining(Training):
         # Prepare attacks
         training_attack = create_attack(
             attack_config=self.training_attack_config,
+            environment_config=self.environment_config,
             modifiable_chunks_spec=self.modifiable_chunks_spec,
             logging_name="training_attack",
             dataset_type=self.dataset_type,
@@ -366,6 +378,7 @@ class AdversarialTraining(Training):
         )
         validation_attack = create_attack(
             attack_config=self.validation_attack_config,
+            environment_config=self.environment_config,
             modifiable_chunks_spec=self.modifiable_chunks_spec,
             logging_name="validation_attack",
             dataset_type=self.dataset_type,

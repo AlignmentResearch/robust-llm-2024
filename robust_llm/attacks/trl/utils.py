@@ -78,6 +78,7 @@ def trl_data_collator(datapoints: Sequence[Any]) -> Mapping[str, Any]:
 
 def prepare_adversary_model_and_tokenizer(
     attack_config: AttackConfig,
+    num_classes: int,
     device: torch.device,
 ) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
     base_model_name = attack_config.trl_attack_config.adversary_base_model_name
@@ -93,7 +94,7 @@ def prepare_adversary_model_and_tokenizer(
         base_model_name,
         revision=checkpoint_string,
         use_cache=False,  # otherwise returns last key/values attentions
-        num_labels=2,
+        num_labels=num_classes,
     ).to(device)
     adversary_model.config.pad_token_id = adversary_model.config.eos_token_id
 

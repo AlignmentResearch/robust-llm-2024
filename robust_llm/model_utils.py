@@ -15,6 +15,7 @@ def _prepare_model(
     model_name_or_path: str,
     is_pythia: bool,
     checkpoint: Optional[int],
+    num_classes: int,
 ) -> PreTrainedModel:
     # TODO(GH#103): make it compatible with tasks where num_labels > 2.
 
@@ -29,13 +30,13 @@ def _prepare_model(
             model_name_or_path,
             revision=revision,
             use_cache=False,  # otherwise returns last key/values attentions
-            num_labels=2,
+            num_labels=num_classes,
         )
         assert isinstance(model, PreTrainedModel)
         model.config.pad_token_id = model.config.eos_token_id
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
-            model_name_or_path, num_labels=2
+            model_name_or_path, num_labels=num_classes
         )
 
     return model

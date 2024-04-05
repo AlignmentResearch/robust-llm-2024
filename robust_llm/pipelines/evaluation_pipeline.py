@@ -24,7 +24,6 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
     model = prepare_model_with_accelerate(accelerator, model)
 
     language_generator = prepare_language_generator(args)
-
     robust_llm_datasets = prepare_datasets(
         args, tokenizer=tokenizer, language_generator=language_generator
     )

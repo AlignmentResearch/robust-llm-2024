@@ -17,7 +17,7 @@ from robust_llm.attacks.trl.utils import (
     prepare_adversary_model_and_tokenizer,
     prepare_prompts,
 )
-from robust_llm.configs import AttackConfig
+from robust_llm.configs import AttackConfig, EnvironmentConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.utils import LanguageModel
 
@@ -38,6 +38,7 @@ class TRLAttack(Attack):
     def __init__(
         self,
         attack_config: AttackConfig,
+        environment_config: EnvironmentConfig,
         modifiable_chunks_spec: ModifiableChunksSpec,
         logging_name: str,
         dataset_type: str,
@@ -49,6 +50,7 @@ class TRLAttack(Attack):
 
         Args:
             attack_config: config of the attack
+            environment_config: config of the environment
             modifiable_chunks_spec: Specification for which chunks of the
                 original text can be modified
             logging_name: name of the attack; used for logging
@@ -59,6 +61,7 @@ class TRLAttack(Attack):
 
         super().__init__(
             attack_config=attack_config,
+            environment_config=environment_config,
             modifiable_chunks_spec=modifiable_chunks_spec,
             logging_name=logging_name,
         )
@@ -106,7 +109,9 @@ class TRLAttack(Attack):
             self.adversary_model,
             self.adversary_tokenizer,
         ) = prepare_adversary_model_and_tokenizer(
-            self.attack_config, device=self.device
+            self.attack_config,
+            num_classes=victim_model.config.num_labels,
+            device=self.device,
         )
 
         # NOTE: these values are taken from the TRL quickstart example
@@ -169,12 +174,9 @@ class TRLAttack(Attack):
                     ]
 
                 rewards = []
-                for label, logit_pair in zip(labels, logits):
-                    detached_logit_pair = logit_pair.clone().detach()
-                    if label == 0:
-                        reward = detached_logit_pair[1] - detached_logit_pair[0]
-                    else:
-                        reward = detached_logit_pair[0] - detached_logit_pair[1]
+                for label, example_logits in zip(labels, logits):
+                    example_logits = example_logits.clone().detach()
+                    reward = self._get_reward(label, example_logits)
                     rewards.append(reward)
 
                 train_stats = self.ppo_trainer.step(
@@ -197,6 +199,22 @@ class TRLAttack(Attack):
             print(f"Training TRL; epoch {epoch} had average reward {average_reward}")
 
         self._maybe_save_model_to_path_or_hf()
+
+    def _get_reward(self, label: int, logits: torch.Tensor) -> torch.Tensor:
+        reward_type = self.attack_config.trl_attack_config.reward_type
+
+        if reward_type == "minus_correct_logit_plus_incorrect_logits":
+            return logits.sum() - 2 * logits[label]
+
+        if reward_type == "minus_correct_logprob":
+            logprobs = torch.nn.functional.log_softmax(logits, dim=0)
+            return -logprobs[label]
+
+        if reward_type == "minus_correct_prob":
+            probs = torch.nn.functional.softmax(logits, dim=0)
+            return -probs[label]
+
+        raise ValueError(f"Reward type {reward_type} not recognized")
 
     def _maybe_log_trl(
         self, train_stats: Dict[str, Any], rewards: Sequence[torch.Tensor]

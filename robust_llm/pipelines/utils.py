@@ -11,6 +11,7 @@ from robust_llm.configs import OverallConfig
 from robust_llm.dataset_management.dataset_management import (
     RobustLLMDatasets,
     generate_robust_llm_datasets,
+    get_num_classes,
 )
 from robust_llm.dataset_management.tomita import make_language_generator
 from robust_llm.dataset_management.tomita.tomita import Tomita
@@ -39,6 +40,7 @@ def prepare_victim_models(
         model_name_or_path=model_name_or_path,
         is_pythia=is_pythia,
         checkpoint=checkpoint,
+        num_classes=get_num_classes(args.experiment.environment.dataset_type),
     )
     tokenizer = _prepare_tokenizer(
         model_name_or_path=model_name_or_path,
@@ -110,6 +112,7 @@ def prepare_attack(
 
     return create_attack(
         attack_config=attack_config,
+        environment_config=args.experiment.environment,
         modifiable_chunks_spec=robust_llm_datasets.modifiable_chunks_spec,
         logging_name=logging_name,
         dataset_type=args.experiment.environment.dataset_type,

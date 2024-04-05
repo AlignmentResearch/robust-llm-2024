@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, Tuple
 from datasets import Dataset
 from typing_extensions import override
 
-from robust_llm.configs import AttackConfig
+from robust_llm.configs import AttackConfig, EnvironmentConfig
 from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
 from robust_llm.logging_utils import LoggingCounter
 
@@ -20,6 +20,7 @@ class Attack(abc.ABC):
     def __init__(
         self,
         attack_config: AttackConfig,
+        environment_config: EnvironmentConfig,
         modifiable_chunks_spec: ModifiableChunksSpec,
         logging_name: Optional[str] = None,
     ) -> None:
@@ -27,6 +28,7 @@ class Attack(abc.ABC):
 
         Args:
             attack_config: Configuration for the attack.
+            environment_config: Configuration for the environment.
             modifiable_chunks_spec: Tuple of bools specifying which chunks of the
                 original text can be modified. For example, when (True,), the whole
                 text can be modified. When (False, True), only the second part of
@@ -35,6 +37,7 @@ class Attack(abc.ABC):
                 examples include "training_attack" or "validation_attack".
         """
         self.attack_config = attack_config
+        self.environment_config = environment_config
         self.modifiable_chunks_spec = modifiable_chunks_spec
         self.logging_name = logging_name
 
