@@ -5,7 +5,11 @@ from accelerate import Accelerator
 
 from robust_llm.attacks.attack import Attack, IdentityAttack
 from robust_llm.attacks.brute_force_tomita import BruteForceTomitaAttack
+from robust_llm.attacks.multiprompt_random_token import MultiPromptRandomTokenAttack
 from robust_llm.attacks.random_token import RandomTokenAttack
+from robust_llm.attacks.search_based.multiprompt_search_based import (
+    MultiPromptSearchBasedAttack,
+)
 from robust_llm.attacks.search_based.search_based import SearchBasedAttack
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.attacks.text_attack.text_attack import TextAttackAttack
@@ -55,6 +59,16 @@ def create_attack(
             victim_tokenizer=victim_tokenizer,
             ground_truth_label_fn=ground_truth_label_fn,
         )
+    elif attack_config.attack_type == "multiprompt_random_token":
+        return MultiPromptRandomTokenAttack(
+            attack_config=attack_config,
+            environment_config=environment_config,
+            modifiable_chunks_spec=modifiable_chunks_spec,
+            dataset_type=dataset_type,
+            victim_model=victim_model,
+            victim_tokenizer=victim_tokenizer,
+            ground_truth_label_fn=ground_truth_label_fn,
+        )
     elif attack_config.attack_type == "trl":
         return TRLAttack(
             attack_config=attack_config,
@@ -68,6 +82,16 @@ def create_attack(
         )
     elif attack_config.attack_type == "search_based":
         return SearchBasedAttack(
+            attack_config=attack_config,
+            environment_config=environment_config,
+            modifiable_chunks_spec=modifiable_chunks_spec,
+            model=victim_model,
+            tokenizer=victim_tokenizer,
+            accelerator=accelerator,
+            ground_truth_label_fn=ground_truth_label_fn,
+        )
+    elif attack_config.attack_type == "multiprompt_search_based":
+        return MultiPromptSearchBasedAttack(
             attack_config=attack_config,
             environment_config=environment_config,
             modifiable_chunks_spec=modifiable_chunks_spec,

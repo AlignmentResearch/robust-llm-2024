@@ -13,7 +13,7 @@ from robust_llm.attacks.search_based.models import SearchBasedAttackWrappedModel
 from robust_llm.attacks.search_based.utils import (
     AttackIndices,
     AttackTokenizationChangeException,
-    PromptTemplate,
+    PreppedExample,
     ReplacementCandidate,
     create_onehot_embedding,
 )
@@ -42,12 +42,10 @@ class SearchBasedRunner(abc.ABC):
         target: If using a CausalLM, it's the target string to optimize for.
             If using a SequenceClassification model, it's ignored in favor of
             the target specified by clf_target
-        prompt_template: The PromptTemplate defines the format of the prompt,
-            and its `build_prompt` method is used for producing full prompts
+        prepped_examples: List of PreppedExample which includes a
+            prompt_template and clf_target
         seq_clf: Whether we are using a SequenceClassification model
             (default alternative is a CausalLM)
-        clf_target: Only used for sequence classification, specifies the class
-            to optimize for
         random_seed: initial seed for a random.Random object used to sample
             replacement candidates
     """
@@ -56,11 +54,10 @@ class SearchBasedRunner(abc.ABC):
     n_candidates_per_it: int
     n_its: int
     n_attack_tokens: int
+    prepped_examples: Sequence[PreppedExample]
     forward_pass_batch_size: Optional[int] = None
     target: str = ""
-    prompt_template: PromptTemplate = PromptTemplate()
     seq_clf: bool = False
-    clf_target: Optional[int] = None
     random_seed: int = 0
 
     def __post_init__(self):
@@ -68,12 +65,13 @@ class SearchBasedRunner(abc.ABC):
             self.forward_pass_batch_size or self.n_candidates_per_it
         )
         self.candidate_sample_rng = random.Random(self.random_seed)
-
+        assert len(self.prepped_examples) == 1, "only one prompt/target pair supported"
+        self.example = self.prepped_examples[0]
         # TODO(GH#119): clean up if/elses for seq clf
         if self.seq_clf:
-            assert self.clf_target is not None, "need clf target for seq clf"
+            assert self.example.clf_target is not None, "need clf target for seq clf"
             assert (
-                self.clf_target < self.wrapped_model.model.num_labels
+                self.example.clf_target < self.wrapped_model.model.num_labels
             ), "clf target out of range"
             # no string target for sequence classification, just an int (clf_target)
             assert self.target == "", "string target provided for seq task"
@@ -161,7 +159,7 @@ class SearchBasedRunner(abc.ABC):
         assert len(attack_tokens[0]) == n_attack_tokens
 
         try:
-            attack_indices = self._get_attack_indices(attack_text)
+            attack_indices = self._get_attack_indices(attack_text, self.example)
             return attack_text, attack_indices
         # Note that we only catch the exception in case of retokenization issue caused
         # by the attack tokens. If there is an issue because of target tokens, it means
@@ -188,7 +186,7 @@ class SearchBasedRunner(abc.ABC):
                 )
                 attack_text = self.wrapped_model.decode_tokens(attack_tokens)
                 try:
-                    attack_indices = self._get_attack_indices(attack_text)
+                    attack_indices = self._get_attack_indices(attack_text, self.example)
                     return attack_text, attack_indices
                 except AttackTokenizationChangeException:
                     pass
@@ -224,7 +222,9 @@ class SearchBasedRunner(abc.ABC):
         )
         return string
 
-    def _get_attack_indices(self, attack_text: str) -> AttackIndices:
+    def _get_attack_indices(
+        self, attack_text: str, example: PreppedExample
+    ) -> AttackIndices:
         """Computes the start-end indices of the attack & target.
 
         Indices are relative to the tokenized string. Returns an object containing
@@ -243,12 +243,14 @@ class SearchBasedRunner(abc.ABC):
             TargetTokenizationChangeException: If the tokenization changes after
                 concatenating the strings because of the target tokens.
         """
-        before_attack_tokens = self._get_tokens(self.prompt_template.before_attack)
+        before_attack_tokens = self._get_tokens(example.prompt_template.before_attack)
         attack_start = before_attack_tokens.shape[1]
         attack_end = self.n_attack_tokens + attack_start
 
-        after_attack_tokens = self._get_tokens(self.prompt_template.after_attack)
+        after_attack_tokens = self._get_tokens(example.prompt_template.after_attack)
         target_start = attack_end + after_attack_tokens.shape[1]
+        # TODO (ian): include self.target in PreppedExample (or remove altogether)
+        # this will work fine for now because we are doing seq_clf
         target_tokens = self._get_tokens(self.target)
         target_end = target_start + target_tokens.shape[1]
 
@@ -260,7 +262,7 @@ class SearchBasedRunner(abc.ABC):
         )
 
         # check that the attack indices actually line up
-        full_prompt = self.prompt_template.build_prompt(
+        full_prompt = example.prompt_template.build_prompt(
             attack_text=attack_text,
             target=self.target,
         )
@@ -299,7 +301,7 @@ class SearchBasedRunner(abc.ABC):
         )
 
         full_prompts = [
-            self.prompt_template.build_prompt(
+            self.example.prompt_template.build_prompt(
                 attack_text=attack_text,
                 target=self.target,
             )
@@ -309,10 +311,10 @@ class SearchBasedRunner(abc.ABC):
             self.wrapped_model.device
         )
         if self.seq_clf:
-            assert self.clf_target is not None
+            assert self.example.clf_target is not None
             targets = torch.full(
                 size=(full_prompts_tokens.shape[0],),
-                fill_value=self.clf_target,
+                fill_value=self.example.clf_target,
                 device=self.wrapped_model.device,
             )
         else:
@@ -391,7 +393,7 @@ class SearchBasedRunner(abc.ABC):
         attack_tokens_list = self._get_tokens(attack_text_list, return_tensors=None)
 
         original_full_prompt_list = [
-            self.prompt_template.build_prompt(
+            self.example.prompt_template.build_prompt(
                 attack_text=attack_text,
                 target=self.target,
             )
@@ -442,7 +444,7 @@ class SearchBasedRunner(abc.ABC):
             torch.cat(candidate_attack_tokens_list)
         )
         candidate_full_prompt_list_alt = [
-            self.prompt_template.build_prompt(
+            self.example.prompt_template.build_prompt(
                 attack_text=attack_text, target=self.target
             )
             for attack_text in candidate_attack_texts
@@ -549,7 +551,7 @@ class SearchBasedRunner(abc.ABC):
         if self.seq_clf:
             # add batch dim
             targets = torch.tensor(
-                self.clf_target, device=self.wrapped_model.device
+                self.example.clf_target, device=self.wrapped_model.device
             ).unsqueeze(0)
         else:
             targets = full_prompt_tokens[:, self.attack_indices.target_slice]

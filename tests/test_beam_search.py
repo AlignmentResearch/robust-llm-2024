@@ -13,9 +13,9 @@ from robust_llm.attacks.search_based.models import (
 )
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.runners.beam_search_runner import BeamSearchRunner
-from robust_llm.attacks.search_based.utils import PromptTemplate
+from robust_llm.attacks.search_based.utils import PreppedExample, PromptTemplate
 from robust_llm.configs import BeamSearchAttackConfig, SearchBasedAttackConfig
-from robust_llm.utils import FakeModel
+from robust_llm.utils import FakeModelForSequenceClassification
 
 
 def _get_runner(
@@ -33,10 +33,15 @@ def _get_runner(
     prompt_template = PromptTemplate(
         before_attack=before_attack_text, after_attack=after_attack_text
     )
+    prepped_examples = [
+        PreppedExample(
+            prompt_template=prompt_template,
+            clf_target=0,
+        )
+    ]
     runner = make_runner(
         wrapped_model=wrapped_model,
-        prompt_template=prompt_template,
-        clf_target=0,
+        prepped_examples=prepped_examples,
         random_seed=0,
         config=config,
     )
@@ -48,17 +53,17 @@ ACCELERATOR = Accelerator(cpu=True)
 
 WRAPPED_MODELS = {
     "gpt2": WrappedGPT2Model(
-        FakeModel(1000),  # type: ignore
+        FakeModelForSequenceClassification(1000),  # type: ignore
         AutoTokenizer.from_pretrained("gpt2"),
         accelerator=ACCELERATOR,
     ),
     "bert": WrappedBERTModel(
-        FakeModel(1000),  # type: ignore
+        FakeModelForSequenceClassification(1000),  # type: ignore
         AutoTokenizer.from_pretrained("bert-base-uncased"),
         accelerator=ACCELERATOR,
     ),
     "pythia": WrappedGPTNeoXModel(
-        FakeModel(1000),  # type: ignore
+        FakeModelForSequenceClassification(1000),  # type: ignore
         AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped"),
         accelerator=ACCELERATOR,
     ),

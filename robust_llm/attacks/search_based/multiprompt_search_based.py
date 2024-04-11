@@ -25,8 +25,8 @@ from robust_llm.utils import LanguageModel, get_randint_with_exclusions
 logger = logging.getLogger(__name__)
 
 
-class SearchBasedAttack(Attack):
-    """Implementation of the search-based attacks.
+class MultiPromptSearchBasedAttack(Attack):
+    """Implementation of the search-based attacks for multiple prompts simultaneously.
 
     These are attacks that maintain a list of candidates and iteratively refine them by
     looking at the nearby candidates. Concrete approaches include GCG and beam search.
@@ -74,10 +74,9 @@ class SearchBasedAttack(Attack):
         dataset: Optional[Dataset],
         max_n_outputs: Optional[int] = None,
     ) -> Tuple[Dataset, Dict[str, Any]]:
-        """Run a GCG attack separately on each example in the dataset.
+        """Run a multi-prompt attack on the dataset.
 
         TODO(GH#113): consider multi-model attacks in the future.
-        TODO(GH#114): consider multi-prompt attacks in the future.
         """
         # preconditions
         assert dataset is not None, "GCGAttack requires dataset input"
@@ -90,6 +89,7 @@ class SearchBasedAttack(Attack):
         all_filtered_out_counts: List[int] = []
 
         attacked_input_texts = []
+        prepped_examples: list[PreppedExample] = []
         for example in dataset:
             assert isinstance(example, dict)
 
@@ -120,19 +120,20 @@ class SearchBasedAttack(Attack):
                 prompt_template=prompt_template,
                 clf_target=target_label,
             )
+            prepped_examples.append(prepped_example)
 
-            runner = make_runner(
-                wrapped_model=self.wrapped_model,
-                prepped_examples=[prepped_example],
-                random_seed=self.attack_config.seed,
-                config=config,
-            )
-            attack_text, example_debug_info = runner.run()
-            attacked_input_text = prompt_template.build_prompt(
-                attack_text=attack_text,
-            )
-            attacked_input_texts.append(attacked_input_text)
-            all_filtered_out_counts.append(example_debug_info["all_filtered_out_count"])
+        runner = make_runner(
+            wrapped_model=self.wrapped_model,
+            prepped_examples=prepped_examples,
+            random_seed=self.attack_config.seed,
+            config=config,
+        )
+        attack_text, example_debug_info = runner.run()
+        attacked_input_texts = [
+            example.prompt_template.build_prompt(attack_text=attack_text)
+            for example in prepped_examples
+        ]
+        all_filtered_out_counts.append(example_debug_info["all_filtered_out_count"])
 
         attacked_dataset = Dataset.from_dict(
             {

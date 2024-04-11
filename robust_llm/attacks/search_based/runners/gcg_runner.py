@@ -52,7 +52,7 @@ class GCGRunner(SearchBasedRunner):
         target: str,
         attack_text: str,
     ) -> torch.Tensor:
-        full_prompt = self.prompt_template.build_prompt(
+        full_prompt = self.example.prompt_template.build_prompt(
             attack_text=attack_text,
             target=target,
         )

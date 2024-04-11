@@ -2,7 +2,7 @@ experiment_type: "evaluation"
 
 environment:
   model_name_or_path: "AlignmentResearch/robust_llm_pythia-tt-14m-mz-v0"
-  is_pythia: true
+  model_family: "pythia"
   dataset_type: "tensor_trust"
   train_set_size: 10
   validation_set_size: 4

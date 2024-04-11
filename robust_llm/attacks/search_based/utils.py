@@ -190,3 +190,27 @@ def get_chunking_for_search_based(
     unmodifiable_suffix = "".join(text_chunked[modifiable_index + 1 :])
 
     return unmodifiable_prefix, modifiable_infix, unmodifiable_suffix
+
+
+@dataclass
+class PreppedExample:
+    """Example prepared for search-based attacks."""
+
+    prompt_template: PromptTemplate
+    clf_target: int
+
+    def add_attack_indices(
+        self, attack_indices: AttackIndices
+    ) -> "ExampleWithAttackIndices":
+        return ExampleWithAttackIndices(
+            prompt_template=self.prompt_template,
+            clf_target=self.clf_target,
+            attack_indices=attack_indices,
+        )
+
+
+@dataclass
+class ExampleWithAttackIndices(PreppedExample):
+    """Example prepared for search-based attacks with indices of attackable tokens."""
+
+    attack_indices: AttackIndices

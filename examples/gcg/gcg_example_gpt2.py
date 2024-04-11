@@ -2,7 +2,11 @@ from accelerate import Accelerator
 from transformers import AutoTokenizer, GPT2LMHeadModel
 
 from robust_llm.attacks.search_based.runners import GCGRunner
-from robust_llm.attacks.search_based.utils import PromptTemplate, get_wrapped_model
+from robust_llm.attacks.search_based.utils import (
+    PreppedExample,
+    PromptTemplate,
+    get_wrapped_model,
+)
 from robust_llm.utils import prepare_model_with_accelerate
 
 
@@ -15,6 +19,14 @@ def main():
     prompt_template = PromptTemplate(before_attack=user_prompt)
     # specify parameters for the attack
     wrapped_model = get_wrapped_model(model, tokenizer, accelerator)
+
+    prepped_examples = [
+        PreppedExample(
+            prompt_template=prompt_template,
+            clf_target=-1,  # causal models don't have a clf_target (old)
+        )
+    ]
+
     runner = GCGRunner(
         wrapped_model=wrapped_model,
         top_k=8,
@@ -22,14 +34,16 @@ def main():
         n_its=50,
         target="TARGET",
         n_attack_tokens=10,
-        prompt_template=prompt_template,
+        prepped_examples=prepped_examples,
     )
 
     # run the attack with the parameters specified above
     attack_text, _ = runner.run()
     print(f"{attack_text=}")
 
-    full_prompt = prompt_template.build_prompt(attack_text=attack_text, target="")
+    full_prompt = runner.example.prompt_template.build_prompt(
+        attack_text=attack_text, target=""
+    )
     print(f"{full_prompt=}")
     # confirm that the suffix works by using it to generate a continuation
     tokens = tokenizer(full_prompt, return_tensors="pt").input_ids.to(

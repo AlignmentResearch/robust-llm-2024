@@ -259,7 +259,7 @@ def prepare_model_with_accelerate(
     return model
 
 
-class FakeModel:
+class FakeModelForSequenceClassification:
     """Fake model class used in tests."""
 
     def __init__(self, vocab_size: int):
@@ -278,6 +278,8 @@ class FakeModel:
         return Namespace(pad_token_id=1, eos_token_id=2)
 
     def __call__(self, input: torch.Tensor) -> Namespace:
+        """Since we are mimicking a sequence classification model, we return logits in
+        the shape (batch_size, num_labels)."""
         return Namespace(
-            logits=torch.rand((input.shape[0], input.shape[1], self.vocab_size))
+            logits=torch.rand(input.shape[0], self.num_labels),
         )

@@ -1,0 +1,24 @@
+experiment_type: "evaluation"
+experiment_name: "ian_multi-prompt-development"
+run_name: "mpd-gcg"
+
+
+environment:
+  model_name_or_path: "AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3"
+  model_family: "pythia"
+  dataset_type: "tensor_trust"
+  train_set_size: 20
+  validation_set_size: 4
+  seed: 0
+
+evaluation:
+  batch_size: 3
+  evaluation_attack:
+    attack_type: "multiprompt_search_based"
+    search_based_attack_config:
+      search_type: "multiprompt_gcg"
+      forward_pass_batch_size: 3
+      n_candidates_per_it: 3
+      n_its: 3
+      gcg_attack_config:
+        top_k: 3

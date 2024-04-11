@@ -3,7 +3,15 @@ from typing import Optional
 
 import torch
 from accelerate import Accelerator, DistributedType
-from torch.distributed import fsdp
+from torch.distributed.fsdp import (
+    FullStateDictConfig,  # pyright: ignore[reportPrivateImportUsage]
+)
+from torch.distributed.fsdp import (
+    FullyShardedDataParallel,  # pyright: ignore[reportPrivateImportUsage]
+)
+from torch.distributed.fsdp import (
+    StateDictType,  # pyright: ignore[reportPrivateImportUsage]
+)
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from typing_extensions import override
 
@@ -34,11 +42,11 @@ def _get_embedding_weights(
     if accelerator.distributed_type == DistributedType.FSDP:
         # Implementation based on Accelerator.get_state_dict(); however, we want to load
         # parameters in all processes, not just in the rank 0 process.
-        full_state_dict_config = fsdp.FullStateDictConfig(
+        full_state_dict_config = FullStateDictConfig(
             offload_to_cpu=False, rank0_only=False
         )
-        with fsdp.FullyShardedDataParallel.state_dict_type(
-            embedding, fsdp.StateDictType.FULL_STATE_DICT, full_state_dict_config
+        with FullyShardedDataParallel.state_dict_type(
+            embedding, StateDictType.FULL_STATE_DICT, full_state_dict_config
         ):
             return embedding.state_dict()["weight"]
 
@@ -151,6 +159,16 @@ class SearchBasedAttackWrappedModel(ABC):
             dim=1,
         )
 
+    def _check_for_padding_tokens(self, token_ids: torch.Tensor) -> None:
+        """Checks if padding tokens are present in the token ids.
+
+        When using inputs_embeds, it's important that there are no padding tokens,
+        since they are not handled properly."""
+        if self.tokenizer.pad_token_id is not None:
+            assert (
+                self.tokenizer.pad_token_id not in token_ids
+            ), "Padding tokens are present in the token ids."
+
     @property
     def vocab_size(self) -> int:
         return self.tokenizer.vocab_size  # type: ignore
@@ -198,6 +216,7 @@ class WrappedBERTModel(SearchBasedAttackWrappedModel):
         return _call_model(self.model, inp, inputs_embeds)
 
     def get_embeddings(self, token_ids: torch.Tensor) -> torch.Tensor:
+        self._check_for_padding_tokens(token_ids)
         return self.model.bert.embeddings.word_embeddings(token_ids)
 
     def get_embedding_weights(self) -> torch.Tensor:
@@ -236,6 +255,7 @@ class WrappedGPT2Model(SearchBasedAttackWrappedModel):
         return _call_model(self.model, inp, inputs_embeds)
 
     def get_embeddings(self, token_ids: torch.Tensor) -> torch.Tensor:
+        self._check_for_padding_tokens(token_ids)
         return self.model.transformer.wte(token_ids)
 
     def get_embedding_weights(self) -> torch.Tensor:
@@ -273,6 +293,7 @@ class WrappedGPTNeoXModel(SearchBasedAttackWrappedModel):
         return _call_model(self.model, inp, inputs_embeds)
 
     def get_embeddings(self, token_ids: torch.Tensor) -> torch.Tensor:
+        self._check_for_padding_tokens(token_ids)
         return self.model.gpt_neox.embed_in(token_ids)
 
     def get_embedding_weights(self) -> torch.Tensor:

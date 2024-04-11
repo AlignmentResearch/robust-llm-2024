@@ -11,14 +11,16 @@ from robust_llm.attacks.search_based.models import (
     WrappedGPT2Model,
     WrappedGPTNeoXModel,
 )
-from robust_llm.attacks.search_based.runners import GCGRunner
+from robust_llm.attacks.search_based.runners import GCGRunner, make_runner
 from robust_llm.attacks.search_based.utils import (
     AttackIndices,
+    PreppedExample,
     PromptTemplate,
     ReplacementCandidate,
     TokenizationChangeException,
 )
-from robust_llm.utils import FakeModel
+from robust_llm.configs import GCGAttackConfig, SearchBasedAttackConfig
+from robust_llm.utils import FakeModelForSequenceClassification
 
 ACCELERATOR = Accelerator(cpu=True)
 
@@ -26,65 +28,119 @@ ACCELERATOR = Accelerator(cpu=True)
 def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     wrapped_model = WrappedGPT2Model(
-        FakeModel(vocab_size=tokenizer.vocab_size),  # type: ignore
+        FakeModelForSequenceClassification(
+            vocab_size=tokenizer.vocab_size
+        ),  # type: ignore
         tokenizer,
         accelerator=ACCELERATOR,
     )
-    gcg_runner = GCGRunner(
-        wrapped_model=wrapped_model,
-        top_k=1,
+    config = SearchBasedAttackConfig(
+        search_type="gcg",
         n_candidates_per_it=1,
         n_its=1,
-        target="^",
         n_attack_tokens=11,
-        prompt_template=PromptTemplate(
-            before_attack=before_attack_text, after_attack=after_attack_text
+        gcg_attack_config=GCGAttackConfig(
+            top_k=1,
         ),
     )
-    return gcg_runner
+    prompt_template = PromptTemplate(
+        before_attack=before_attack_text, after_attack=after_attack_text
+    )
+    prepped_examples = [
+        PreppedExample(
+            prompt_template=prompt_template,
+            clf_target=0,
+        )
+    ]
+    runner = make_runner(
+        wrapped_model=wrapped_model,
+        prepped_examples=prepped_examples,
+        random_seed=0,
+        config=config,
+    )
+    # hack to change some of the runner's attributes for testing
+    runner.target = "^"
+    assert isinstance(runner, GCGRunner)
+    return runner
 
 
 def bert_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     wrapped_model = WrappedBERTModel(
-        FakeModel(vocab_size=tokenizer.vocab_size),  # type: ignore
+        FakeModelForSequenceClassification(
+            vocab_size=tokenizer.vocab_size
+        ),  # type: ignore
         tokenizer,
         accelerator=ACCELERATOR,
     )
-    gcg_runner = GCGRunner(
-        wrapped_model=wrapped_model,
-        top_k=1,
+    config = SearchBasedAttackConfig(
+        search_type="gcg",
         n_candidates_per_it=1,
         n_its=1,
-        target="^",
         n_attack_tokens=11,
-        prompt_template=PromptTemplate(
-            before_attack=before_attack_text, after_attack=after_attack_text
+        gcg_attack_config=GCGAttackConfig(
+            top_k=1,
         ),
     )
-    return gcg_runner
+    prompt_template = PromptTemplate(
+        before_attack=before_attack_text, after_attack=after_attack_text
+    )
+    prepped_examples = [
+        PreppedExample(
+            prompt_template=prompt_template,
+            clf_target=0,
+        )
+    ]
+    runner = make_runner(
+        wrapped_model=wrapped_model,
+        prepped_examples=prepped_examples,
+        random_seed=0,
+        config=config,
+    )
+    # hack to change some of the runner's attributes for testing
+    runner.target = "^"
+    assert isinstance(runner, GCGRunner)
+    return runner
 
 
 def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     # we need a model for pythia because we access the config
     tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped")
     wrapped_model = WrappedGPTNeoXModel(
-        FakeModel(vocab_size=tokenizer.vocab_size),  # type: ignore
+        FakeModelForSequenceClassification(
+            vocab_size=tokenizer.vocab_size
+        ),  # type: ignore
         tokenizer,
         accelerator=ACCELERATOR,
     )
-    gcg_runner = GCGRunner(
-        wrapped_model=wrapped_model,
-        top_k=1,
+    config = SearchBasedAttackConfig(
+        search_type="gcg",
         n_candidates_per_it=1,
         n_its=1,
-        target="^",
         n_attack_tokens=11,
-        prompt_template=PromptTemplate(
-            before_attack=before_attack_text, after_attack=after_attack_text
+        gcg_attack_config=GCGAttackConfig(
+            top_k=1,
         ),
     )
-    return gcg_runner
+    prompt_template = PromptTemplate(
+        before_attack=before_attack_text, after_attack=after_attack_text
+    )
+    prepped_examples = [
+        PreppedExample(
+            prompt_template=prompt_template,
+            clf_target=0,
+        )
+    ]
+    runner = make_runner(
+        wrapped_model=wrapped_model,
+        prepped_examples=prepped_examples,
+        random_seed=0,
+        config=config,
+    )
+    # hack to change some of the runner's attributes for testing
+    runner.target = "^"
+    assert isinstance(runner, GCGRunner)
+    return runner
 
 
 RUNNERS = {
@@ -151,17 +207,17 @@ def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     initial_attack_text = gcg_runner.initial_attack_text
 
     # compute token lengths for checking that exceptions are raised when necessary
-    full_prompt = gcg_runner.prompt_template.build_prompt(
+    full_prompt = gcg_runner.example.prompt_template.build_prompt(
         attack_text=initial_attack_text, target=target
     )
     full_tokens = gcg_runner._get_tokens(full_prompt)
 
     before_attack_tokens = gcg_runner._get_tokens(
-        gcg_runner.prompt_template.before_attack
+        gcg_runner.example.prompt_template.before_attack
     )
     attack_tokens = gcg_runner._get_tokens(initial_attack_text)
     after_attack_tokens = gcg_runner._get_tokens(
-        gcg_runner.prompt_template.after_attack,
+        gcg_runner.example.prompt_template.after_attack,
     )
     target_tokens = gcg_runner._get_tokens(target)
 
@@ -174,10 +230,14 @@ def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     attack_indices = None
     if not torch.equal(concat_tokens, full_tokens):
         with pytest.raises(TokenizationChangeException):
-            attack_indices = gcg_runner._get_attack_indices(initial_attack_text)
+            attack_indices = gcg_runner._get_attack_indices(
+                initial_attack_text, gcg_runner.example
+            )
         return
 
-    attack_indices = gcg_runner._get_attack_indices(initial_attack_text)
+    attack_indices = gcg_runner._get_attack_indices(
+        initial_attack_text, gcg_runner.example
+    )
     assert attack_indices is not None
     assert attack_indices.attack_length == gcg_runner.n_attack_tokens
     assert attack_indices.target_length == gcg_runner._get_tokens(target).shape[1]
@@ -212,7 +272,8 @@ def test_filter_candidates(model_name: str, before_attack_text: str) -> None:
     merge_char = "@"
     # need to update the attack indices if we change the user prompt
     gcg_runner.attack_indices = gcg_runner._get_attack_indices(
-        gcg_runner.initial_attack_text
+        gcg_runner.initial_attack_text,
+        gcg_runner.example,
     )
     n_attack_tokens = gcg_runner.n_attack_tokens
 
@@ -316,9 +377,11 @@ def test_apply_replacements_and_eval_candidates(gcg_runner: GCGRunner) -> None:
         assert tokens.shape == (1, 1)
         return tokens.squeeze().item()  # type: ignore
 
+    initial_attack_text = "@!@!@!"
+    gcg_runner.n_attack_tokens = gcg_runner._get_tokens(initial_attack_text).shape[1]
     text_replacement_pairs = [
-        ("@!@!@!", ReplacementCandidate(0, get_token_id("b"))),  # b!@!@!
-        ("@!@!@!", ReplacementCandidate(1, get_token_id("c"))),  # @c@!@!
+        (initial_attack_text, ReplacementCandidate(0, get_token_id("b"))),  # b!@!@!
+        (initial_attack_text, ReplacementCandidate(1, get_token_id("c"))),  # @c@!@!
     ]
     expected_final_texts = ["b!@!@!", "@c@!@!"]
 
