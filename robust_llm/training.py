@@ -105,6 +105,7 @@ class Training:
             # wandb internal step on the horizontal axis less easily interpretable.
             # Thus, we set it to "none" here.
             report_to=["none"],
+            use_cpu=self.environment_config.device == "cpu",
         )
 
         self.trainer = TrainerWithBatchSizeStoring(
@@ -339,6 +340,7 @@ class AdversarialTraining(Training):
             save_steps=self.save_steps,
             seed=self.seed,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
+            use_cpu=self.environment_config.device == "cpu",
         )
         self.trainer = AdversarialTrainer(
             model=self.model,

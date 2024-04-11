@@ -67,7 +67,6 @@ def run_training_pipeline(
         "seed": experiment.training.seed,
         "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
         "ground_truth_label_fn": robust_llm_datasets.ground_truth_label_fn,
-        "use_cpu": experiment.environment.device == "cpu",
     }
 
     # Set up the training environment
