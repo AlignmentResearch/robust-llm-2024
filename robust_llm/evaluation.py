@@ -304,13 +304,39 @@ def _get_prediction_logits(
     return prediction_logits
 
 
-def _get_prediction_labels(
+def _get_prediction_labels_from_logits(
     prediction_logits: Sequence[Sequence[float | None]],
-) -> Sequence[int | None]:
+) -> list[int | None]:
     return [
         (None if None in logits else int(np.argmax(logits)))  # type: ignore
         for logits in prediction_logits
     ]
+
+
+def get_prediction_logits_and_labels(
+    dataset: Dataset,
+    model: LanguageModel,
+    tokenizer: PreTrainedTokenizerBase,
+    batch_size: int,
+) -> tuple[list[list[float | None]], list[int | None]]:
+    hf_pipeline = FilteredEvaluationPipeline(
+        model=model,
+        tokenizer=tokenizer,
+        device=model.device,
+        # Even though this option is deprecated, we use it instead of setting
+        # `top_k=None`. They differ by the order of returned classes. In the following
+        # option, we get classes in the order of the classes defined in the model.
+        return_all_scores=True,
+        framework="pt",
+    )
+    pred_logits = _get_prediction_logits(
+        hf_pipeline=hf_pipeline,
+        dataset=dataset,
+        batch_size=batch_size,
+    )
+    pred_labels = _get_prediction_labels_from_logits(pred_logits)
+
+    return pred_logits, pred_labels
 
 
 def _log_examples_to_wandb(
@@ -399,32 +425,19 @@ def compute_attack_results(
 
     model.eval()
 
-    hf_pipeline = FilteredEvaluationPipeline(
+    assert dataset is not None  # will be assumed after refactors anyway.
+    original_pred_logits, original_pred_labels = get_prediction_logits_and_labels(
+        dataset=dataset,
         model=model,
         tokenizer=tokenizer,
-        device=model.device,
-        # Even though this option is deprecated, we use it instead of setting
-        # `top_k=None`. They differ by the order of returned classes. In the following
-        # option, we get classes in the order of the classes defined in the model.
-        return_all_scores=True,
-        framework="pt",
-    )
-
-    original_pred_labels = None
-    if dataset is not None:
-        original_pred_logits = _get_prediction_logits(
-            hf_pipeline=hf_pipeline,
-            dataset=dataset,
-            batch_size=batch_size,
-        )
-        original_pred_labels = _get_prediction_labels(original_pred_logits)
-
-    attacked_pred_logits = _get_prediction_logits(
-        hf_pipeline=hf_pipeline,
-        dataset=attacked_dataset,
         batch_size=batch_size,
     )
-    attacked_pred_labels = _get_prediction_labels(attacked_pred_logits)
+    attacked_pred_logits, attacked_pred_labels = get_prediction_logits_and_labels(
+        dataset=attacked_dataset,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+    )
 
     # If the dataset allows for recomputation of the ground truth label, use it.
     if ground_truth_label_fn is not None:
@@ -512,7 +525,7 @@ def do_adversarial_evaluation(
 
     # TODO(GH#158): Refactor/unify logging.
     if accelerator.is_main_process:
-        wandb.log(metrics, commit=False)
+        wandb.log(metrics, commit=True)
         print("Adversarial evaluation metrics:")
         print(metrics)
 

@@ -363,21 +363,15 @@ class IterativeTrainingConfig:
 
     Attributes:
         iterative_training (bool): Whether to use iterative training.
+        num_examples_to_generate_each_round (int): The number of adversarial examples to
+            generate each round for training.
+        num_examples_to_log_to_wandb_each_round (int): The number of adversarial
+            examples to log to wandb each round.
         only_add_successful_adversarial_examples (bool):
-            Whether to add strictly adversarial examples or not.
-        min_num_new_examples_to_add (int):
-            The minimum number of adversarial examples to add to
-            the train set each attack round.
-        max_num_search_for_adversarial_examples (int):
-            The maximum number of examples to search for adversarial examples in
-            each attack round. Think 'compute budget'.
-        adversarial_example_search_minibatch_size (int):
-            The size of the minibatches to use when searching for adversarial examples.
+            Whether to add only successful adversarial examples to training set;
+            otherwise, add all trials, successful or not.
         num_iterative_training_rounds (int):
             The number of adversarial training rounds to do.
-        use_probabilistic_robustness_check (bool):
-            If true, only checks robustness on a random subset of the
-            brute force attack dataset.
         skip_first_training_round (bool):
             Whether to skip the first training round or not.
         training_attack (AttackConfig):
@@ -385,13 +379,12 @@ class IterativeTrainingConfig:
     """
 
     iterative_training: bool = False
-    only_add_successful_adversarial_examples: bool = True
-    min_num_new_examples_to_add: int = 50
-    max_num_search_for_adversarial_examples: int = 8192
-    adversarial_example_search_minibatch_size: int = 64
+    num_examples_to_generate_each_round: int = 500
+    num_examples_to_log_to_wandb_each_round: int = 10
+    only_add_successful_adversarial_examples: bool = False
     num_iterative_training_rounds: int = 3
-    use_probabilistic_robustness_check: bool = False
     skip_first_training_round: bool = False
+    use_balanced_sampling: bool = False
     training_attack: AttackConfig = AttackConfig()
 
 
@@ -484,8 +477,8 @@ class TrainingConfig:
             save_strategy="steps". Should be an integer or a float in range [0,1). If
             smaller than 1, will be interpreted as ratio of total training steps.
         revision (str): The huggingface revision to start from.
-        log_datasets_to_wandb (bool): Whether to log datasets to wandb. Off by default,
-            as it takes a lot of space.
+        log_full_datasets_to_wandb (bool): Whether to log full datasets to wandb. Off
+            by default, as it takes a lot of space.
         model_save_path_prefix_or_hf (Optional[str]): Where to save the final
             checkpoint. If None, the model is not saved. If "hf", the model is saved to
             HuggingFace. Otherwise, the model is saved to a location starting with the
@@ -509,10 +502,13 @@ class TrainingConfig:
     save_strategy: str = "steps"
     save_steps: int | float = 500
     revision: str = "main"
-    log_datasets_to_wandb: bool = False
+    log_full_datasets_to_wandb: bool = False
     model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
     force_name_to_save: Optional[str] = None
     seed: int = 0
+
+    def __post_init__(self):
+        assert self.num_train_epochs > 0, "Number of training epochs must be positive."
 
 
 @dataclass

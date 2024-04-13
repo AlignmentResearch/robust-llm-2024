@@ -26,5 +26,4 @@ training:
         ppo_epochs: 1
     num_iterative_training_rounds: 2
     skip_first_training_round: false
-    min_num_new_examples_to_add: 10
-    adversarial_example_search_minibatch_size: 4
+    num_examples_to_generate_each_round: 10

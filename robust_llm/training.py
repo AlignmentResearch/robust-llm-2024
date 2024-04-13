@@ -1,9 +1,11 @@
 import dataclasses
 import os
+import warnings
 from typing import Callable, Optional
 
 import evaluate
 import numpy as np
+import torch
 import transformers
 import wandb
 import wandb.util
@@ -25,7 +27,10 @@ from robust_llm.dataset_management.dataset_management import (
     get_num_classes,
 )
 from robust_llm.dataset_management.tomita.tomita import Tomita
-from robust_llm.evaluation import do_adversarial_evaluation
+from robust_llm.evaluation import (
+    do_adversarial_evaluation,
+    get_prediction_logits_and_labels,
+)
 from robust_llm.logging_utils import LoggingCounter, log_dataset_to_wandb
 from robust_llm.trainer import (
     AdversarialTrainer,
@@ -33,11 +38,7 @@ from robust_llm.trainer import (
     AdversarialTrainerLoggingCallback,
     TrainerWithBatchSizeStoring,
 )
-from robust_llm.utils import (
-    search_for_adversarial_examples,
-    tokenize_dataset,
-    yield_minibatch,
-)
+from robust_llm.utils import tokenize_dataset
 
 
 @dataclasses.dataclass
@@ -63,7 +64,7 @@ class Training:
     save_strategy: str = "steps"
     save_steps: int | float = 500
     trainer: Optional[TrainerWithBatchSizeStoring] = None
-    log_datasets_to_wandb: bool = False
+    log_full_datasets_to_wandb: bool = False
     ground_truth_label_fn: Optional[Callable[[str], int]] = None
     seed: int = 42
 
@@ -127,12 +128,8 @@ class Training:
         trainer = self.trainer
         assert trainer is not None
 
-        if self.log_datasets_to_wandb:
+        if trainer.is_world_process_zero() and self.log_full_datasets_to_wandb:
             self.log_datasets()
-
-        if self.train_epochs <= 0:
-            print(f"Not training, since train_epochs={self.train_epochs}.")
-            return
 
         trainer.train()
 
@@ -151,8 +148,6 @@ class Training:
 
     def log_datasets(self) -> None:
         """Save the training and eval datasets to wandb."""
-        to_log = {}
-
         if self.trainer is None:
             raise ValueError(
                 "self.trainer should have been assigned by now, exiting..."
@@ -170,35 +165,10 @@ class Training:
         in_eval = "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore  # noqa: E501
         assert in_train == in_eval
 
-        if "label" in self.trainer.train_dataset.column_names:  # type: ignore
-            train_table = wandb.Table(columns=["text", "label"])
-            for text, label in zip(
-                self.trainer.train_dataset["text"], self.trainer.train_dataset["label"]
-            ):
-                train_table.add_data(text, label)
-            to_log["train_dataset"] = train_table
-        else:
-            train_table = wandb.Table(columns=["text"])
-            for text in self.trainer.train_dataset["text"]:
-                train_table.add_data(text)
-            to_log["train_dataset"] = train_table
-
-        label_in_validation = "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore  # noqa: E501
-        if label_in_validation:
-            eval_table = wandb.Table(columns=["text", "label"])
-            for text, label in zip(
-                self.trainer.eval_dataset["validation"]["text"],
-                self.trainer.eval_dataset["validation"]["label"],
-            ):
-                eval_table.add_data(text, label)
-            to_log["validation_dataset"] = eval_table
-        else:
-            eval_table = wandb.Table(columns=["text"])
-            for text in self.trainer.eval_dataset["validation"]["text"]:
-                eval_table.add_data(text)
-            to_log["validation_dataset"] = eval_table
-
-        wandb.log(to_log, commit=False)
+        log_dataset_to_wandb(self.trainer.train_dataset, "train_dataset")  # type: ignore  # noqa: E501
+        log_dataset_to_wandb(
+            self.trainer.eval_dataset["validation"], "validation_dataset"  # type: ignore  # noqa: E501
+        )
 
     def maybe_save_model_to_path_or_hf(self, path_prefix_or_hf: Optional[str]) -> None:
         assert self.trainer is not None
@@ -263,35 +233,16 @@ class AdversarialTraining(Training):
             Config for the attack to use in validation.
         modifiable_chunks_spec:
             Specification for which chunks of the original text can be modified.
-        min_num_new_examples_to_add:
-            When searching for adversarial examples in the brute force attack,
-            we usually don't stop looking until we surpass this number.
-            If we search the entire brute force dataset and don't find enough
-            examples, we do stop looking.
-            If we surpass max_num_search_for_adversarial_examples during the
-            search, we also do stop looking.
-        max_num_search_for_adversarial_examples:
-            When searching for adversarial examples in the brute force dataset,
-            we stop looking if we search more or equal to this number of examples.
-            In practice we'll often search a few more than this
-            number since we do the search in minibatches.
-        adversarial_example_search_minibatch_size:
-            The number of datapoints to consider at once when searching for
-            adversarial examples.
+        num_examples_to_generate_each_round (int): The number of adversarial examples to
+            generate each round for training.
+        num_examples_to_log_to_wandb_each_round (int): The number of adversarial
+            examples to log to wandb each round.
         skip_first_training_round:
             Whether to skip the first round of training.
             Useful for doing "exclusively" adversarial training.
-        use_probabilistic_robustness_check:
-            Whether to determine model robustness by randomly selecting some
-            examples from the brute force dataset and testing only on those,
-            rather than the default of checking against the entire brute force
-            dataset.
         only_add_successful_adversarial_examples:
-            If true, then only add examples that the model got wrong. If false,
-            then add random examples irrespective of whether the model got them
-            right or wrong. Note that these random examples are still taken from the
-            attack dataset, so unless the attack is very weak, the model is still
-            likely to get a large proportion of these examples wrong.
+            Whether to add only successful adversarial examples to training set;
+            otherwise, add all trials, successful or not.
     """
 
     num_iterative_training_rounds: int
@@ -300,11 +251,10 @@ class AdversarialTraining(Training):
     training_attack_config: AttackConfig
     validation_attack_config: AttackConfig
     modifiable_chunks_spec: ModifiableChunksSpec
-    min_num_new_examples_to_add: int
-    max_num_search_for_adversarial_examples: int
-    adversarial_example_search_minibatch_size: int
+    num_examples_to_generate_each_round: int
+    num_examples_to_log_to_wandb_each_round: int
     skip_first_training_round: bool = False
-    use_probabilistic_robustness_check: bool = False
+    use_balanced_sampling: bool = False
     only_add_successful_adversarial_examples: bool = True
 
     def __post_init__(self):
@@ -343,6 +293,7 @@ class AdversarialTraining(Training):
             use_cpu=self.environment_config.device == "cpu",
         )
         self.trainer = AdversarialTrainer(
+            use_balanced_sampling=self.use_balanced_sampling,
             model=self.model,
             args=hf_training_args,
             train_dataset=self.train_dataset,
@@ -391,61 +342,67 @@ class AdversarialTraining(Training):
             ground_truth_label_fn=self.ground_truth_label_fn,
         )
 
-        training_attack_dataset = Dataset.from_dict({})
-
-        # At present, we always log training information to wandb
-        assert wandb.run is not None
+        if adversarial_trainer.is_world_process_zero():
+            # At present, we always log training information to wandb
+            assert wandb.run is not None
+            if self.log_full_datasets_to_wandb:
+                self.log_datasets()
 
         # Run the adversarial training loop
-        for i in range(self.num_iterative_training_rounds):
+        for round in range(self.num_iterative_training_rounds):
             print(
-                f"Iterative training round {i} started "
+                f"Iterative training round {round} started "
                 f"at logging counts: {self.victim_training_logging_counter._parent}"
             )
-            self.current_iterative_training_round = i
+            self.current_iterative_training_round = round
+            # Can be useful for x axis in plots
+            wandb.log({"iterative_training_round": round}, commit=False)
 
             # Train for "one round" (i.e., num_train_epochs)
             # on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
-            # NOTE: this is where wandb.init() is called by default
-            if i == 0 and self.skip_first_training_round:
+            if round == 0 and self.skip_first_training_round:
                 print("Skipping first round of training...")
             else:
-                if self.train_epochs == 0:
-                    raise ValueError(
-                        "Adversarial training should be done "
-                        "with >0 train epochs, exiting..."
-                    )
                 print(
-                    f"Victim started training in round {i} "
+                    f"Victim started training in round {round} "
                     f"at logging counts: {self.victim_training_logging_counter._parent}"
                 )
                 adversarial_trainer.train()
                 print(
-                    f"Victim finished training in round {i} "
+                    f"Victim finished training in round {round} "
                     f"at logging counts: {self.victim_training_logging_counter._parent}"
                 )
 
             # Train the train/validation attacks if they need training.
             print(
-                f"Adversary started training in round {i} "
+                f"Adversary (training_attack) started training in round {round} "
                 f"at logging counts: {self.victim_training_logging_counter._parent}"
             )
             _maybe_train_attack(
                 attack=training_attack,
                 dataset=self.train_dataset,
                 train_or_validation="train",
-                round=i,
+                round=round,
             )
             print(
-                f"Adversary finished training in round {i} "
+                f"Adversary (training_attack) finished training in round {round} "
+                f"at logging counts: {self.victim_training_logging_counter._parent}"
+            )
+
+            print(
+                f"Adversary (validation_attack) started training in round {round} "
                 f"at logging counts: {self.victim_training_logging_counter._parent}"
             )
             _maybe_train_attack(
                 attack=validation_attack,
                 dataset=self.eval_dataset["validation"],
                 train_or_validation="validation",
-                round=i,
+                round=round,
+            )
+            print(
+                f"Adversary (validation_attack) finished training in round {round} "
+                f"at logging counts: {self.victim_training_logging_counter._parent}"
             )
 
             # Perform adversarial evaluation every round
@@ -461,127 +418,87 @@ class AdversarialTraining(Training):
                 num_examples_to_log_detailed_info=self.evaluation_config.num_examples_to_log_detailed_info,  # noqa: E501
             )
 
-            training_attack_dataset = Dataset.from_dict(
-                tokenize_dataset(
-                    training_attack.get_attacked_dataset(self.train_dataset)[0],
-                    self.tokenizer,
-                    # TODO(michal): make it "do_not_pad" (some refactor needed for that)
-                    padding="max_length",
+            # Now generate adversarial examples using the training attack; possibly
+            # select only successful ones; and add them to the training set so that they
+            # are used in the next round of training.
+            if round < self.num_iterative_training_rounds - 1:
+                assert (
+                    len(self.train_dataset) >= self.num_examples_to_generate_each_round
                 )
-            )
-            print(
-                "Training attack dataset has size",
-                len(training_attack_dataset["text"]),
-            )
-            print(
-                "The first few training attack dataset examples are:",
-                training_attack_dataset["text"][:3],
-            )
-            # Save the training attack dataset so we can log it later
-            self.training_attack_dataset = training_attack_dataset
+                input_examples = self.train_dataset.shuffle().select(
+                    range(self.num_examples_to_generate_each_round)
+                )
+                generated_adv_examples, _ = training_attack.get_attacked_dataset(
+                    input_examples
+                )
 
-            if self.log_datasets_to_wandb:
-                self.log_datasets()
+                # Relabel if labeling function is provided. Critical e.g. for
+                # tensor_trust dataset.
+                if self.ground_truth_label_fn is not None:
+                    generated_adv_examples = generated_adv_examples.map(
+                        lambda x: {
+                            "label": self.ground_truth_label_fn(x["text"])  # type: ignore  # noqa: E501
+                        }
+                    )
 
-            incorrect_predictions: dict[str, list[str]]
-            number_examples_searched: int
-
-            print("Searching for mistakes...")
-            (
-                incorrect_predictions,
-                number_examples_searched,
-            ) = search_for_adversarial_examples(
-                adversarial_trainer,
-                training_attack_dataset,
-                min_num_new_examples_to_add=self.min_num_new_examples_to_add,
-                max_num_search_for_adversarial_examples=self.max_num_search_for_adversarial_examples,  # noqa: E501
-                adversarial_example_search_minibatch_size=self.adversarial_example_search_minibatch_size,  # noqa: E501
-            )
-
-            print(f"Model made {len(incorrect_predictions['text'])} mistakes.")
-            print("Some examples are:", incorrect_predictions["text"][:3])
-
-            examples_to_actually_add_to_train_set = incorrect_predictions
-
-            if not self.only_add_successful_adversarial_examples:
-                num_examples_to_add = (
-                    self.min_num_new_examples_to_add
-                    + self.adversarial_example_search_minibatch_size // 2
+                new_adv_examples = Dataset.from_dict(
+                    tokenize_dataset(generated_adv_examples, self.tokenizer)
                 )
                 print(
-                    f"Non-adversarial baseline: NOT adding those mistakes, instead adding the first {num_examples_to_add} random examples..."  # noqa: E501
+                    "Generated new adv examples for training, size (all):",
+                    len(new_adv_examples["text"]),
                 )
-                examples_to_actually_add_to_train_set = next(
-                    yield_minibatch(training_attack_dataset, num_examples_to_add)
-                )
-
-            wandb.log(
-                {
-                    "train/iterative_training_round": self.current_iterative_training_round,  # noqa: E501
-                    "misc/number_examples_searched": number_examples_searched,
-                    "misc/number_successful_attacks": len(
-                        incorrect_predictions["text"]
-                    ),
-                },
-                commit=False,
-            )
-
-            # Check if we have perfect accuracy now. If so, we're done.
-            if len(incorrect_predictions["text"]) == 0:
                 print(
-                    f"~~~In round {i} of adversarial training, model got perfect accuracy on the {number_examples_searched} examples tried, so stopping adversarial training.~~~"  # noqa: E501
+                    "The first few new adversarial examples are:",
+                    new_adv_examples["text"][:3],
                 )
-                break
 
-            # Log the successful attacks and the examples to add to the training set
-            to_log = {}
-            successful_attacks_table = wandb.Table(columns=["text", "correct label"])
-            for text_string, correct_label in zip(
-                incorrect_predictions["text"], incorrect_predictions["label"]
-            ):
-                successful_attacks_table.add_data(text_string, correct_label)
-            to_log[f"successful_attacks_after_round_{i}"] = successful_attacks_table
-            actual_examples_added_table = wandb.Table(columns=["text", "correct label"])
-            for text_string, correct_label in zip(
-                examples_to_actually_add_to_train_set["text"],
-                examples_to_actually_add_to_train_set["label"],
-            ):
-                actual_examples_added_table.add_data(text_string, correct_label)
-            to_log[f"examples_added_to_training_set_after_round_{i}"] = (
-                actual_examples_added_table
-            )
-            wandb.log(to_log, commit=False)
+                # Select the ones to actually add to the training set.
+                if self.only_add_successful_adversarial_examples:
+                    selected_new_adv_examples = (
+                        _get_only_data_with_incorrect_predictions(
+                            dataset=new_adv_examples,
+                            model=self.model,
+                            tokenizer=self.tokenizer,
+                            batch_size=self.eval_batch_size,
+                        )
+                    )
+                else:
+                    selected_new_adv_examples = new_adv_examples
 
-            # Save the new examples to the adversarial trainer
-            for text, true_label in zip(
-                examples_to_actually_add_to_train_set["text"],
-                examples_to_actually_add_to_train_set["label"],  # true label
-            ):
-                adversarial_trainer.new_examples["text"].append(text)
-                adversarial_trainer.new_examples["label"].append(true_label)
+                # Log stats and a subset of examples to wandb.
+                wandb.log(
+                    {
+                        "misc/num_selected_training_attack_data": len(
+                            selected_new_adv_examples
+                        ),
+                    },
+                    commit=False,
+                )
+                log_dataset_to_wandb(
+                    new_adv_examples,
+                    f"data/all_new_adv_examples_r_{round}",
+                    max_n_examples=self.num_examples_to_log_to_wandb_each_round,
+                )
+                log_dataset_to_wandb(
+                    selected_new_adv_examples,
+                    f"data/selected_new_adv_examples_r_{round}",
+                    max_n_examples=self.num_examples_to_log_to_wandb_each_round,
+                )
 
-            # Save the adversarial dataset as an eval set
-            tokenized_new_examples = Dataset.from_dict(
-                tokenize_dataset(adversarial_trainer.new_examples, self.tokenizer)
-            )
-            self.eval_dataset["all_examples_added_during_iterative_training"] = (
-                tokenized_new_examples
-            )
+                # Report new adversarial examples to the trainer so that they can be
+                # later used for training.
+                for text, true_label in zip(
+                    selected_new_adv_examples["text"],
+                    selected_new_adv_examples["label"],
+                ):
+                    adversarial_trainer.new_examples["text"].append(text)
+                    adversarial_trainer.new_examples["label"].append(true_label)
 
             print(
-                f"Iterative training round {i} finished "
+                f"Iterative training round {round} finished "
                 f"at logging counts: {self.victim_training_logging_counter._parent}"
             )
-
-    @override
-    def log_datasets(self) -> None:
-        # First log the train and evaluation sets
-        super().log_datasets()
-
-        if self.use_probabilistic_robustness_check:
-            return
-
-        log_dataset_to_wandb(self.training_attack_dataset, "training_attack_dataset")
 
 
 def _maybe_train_attack(
@@ -602,3 +519,29 @@ def _maybe_train_attack(
         if train_this_round:
             print(f"Training the {train_or_validation} attack on round {round}")
             attack.train(dataset=dataset)
+
+
+@torch.no_grad()
+def _get_only_data_with_incorrect_predictions(
+    dataset: Dataset,
+    model: PreTrainedModel,
+    tokenizer: PreTrainedTokenizerBase,
+    batch_size: int,
+) -> Dataset:
+    """Returns a dataset with only the examples that the model got wrong."""
+    model.eval()
+
+    pred_logits, pred_labels = get_prediction_logits_and_labels(
+        dataset=dataset,
+        model=model,
+        tokenizer=tokenizer,
+        batch_size=batch_size,
+    )
+
+    labels = np.array(dataset["label"])
+    indices_where_wrong = np.where(np.array(pred_labels) != labels)[0]
+
+    if len(indices_where_wrong) == 0:
+        warnings.warn("Got empty dataset after filering; all predictions were correct.")
+
+    return dataset.select(indices_where_wrong)

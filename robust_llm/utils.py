@@ -5,23 +5,15 @@ import os
 import random
 import uuid
 from argparse import Namespace
-from typing import TYPE_CHECKING, Any, Generator, Iterator, Optional, Protocol, Sequence
+from typing import Any, Dict, Iterator, Optional, Protocol, Sequence, Sized
 
-import numpy as np
 import torch
-from torch.nn.parameter import Parameter
-
-if TYPE_CHECKING:
-    from robust_llm.trainer import AdversarialTrainer
-
+import torch.utils.data
 from accelerate import Accelerator
 from datasets import Dataset
-from transformers import (
-    PretrainedConfig,
-    PreTrainedModel,
-    PreTrainedTokenizerBase,
-    Trainer,
-)
+from torch.nn.parameter import Parameter
+from transformers import PretrainedConfig, PreTrainedModel, PreTrainedTokenizerBase
+from transformers.modeling_outputs import SequenceClassifierOutput
 
 
 class LanguageModel(Protocol):
@@ -105,101 +97,6 @@ def write_lines_to_file(lines: list[str], file_path: str) -> None:
         afile.writelines([line + "\n" for line in lines])
 
 
-def get_incorrect_predictions(trainer: Trainer, dataset: Dataset) -> dict[str, list]:
-    incorrect_predictions = {"text": [], "label": []}  # type: ignore
-
-    assert dataset is not None
-    assert dataset.num_rows > 0
-
-    outputs = trainer.predict(test_dataset=dataset)  # type: ignore
-    logits = outputs.predictions
-    labels = outputs.label_ids
-
-    # Extract the incorrect predictions
-    predictions = np.argmax(logits, axis=-1)
-    incorrect_indices = np.where(predictions != labels)[0].astype(int)
-
-    # Return the incorrectly predicted examples, along with their true labels
-    for incorrect_index in incorrect_indices:
-        incorrect_predictions["text"].append(dataset["text"][incorrect_index])
-        incorrect_predictions["label"].append(dataset["label"][incorrect_index])
-
-    return incorrect_predictions
-
-
-def search_for_adversarial_examples(
-    adversarial_trainer: AdversarialTrainer,
-    attack_dataset: Dataset,
-    min_num_new_examples_to_add: int,
-    max_num_search_for_adversarial_examples: int,
-    adversarial_example_search_minibatch_size: int,
-) -> tuple[dict[str, list], int]:
-    """
-    Iterates through a shuffled `attack_dataset` for examples that the model
-    misclassifies, and returns them (and their correct labels) in a dict.
-
-    Args:
-        adversarial_trainer (AdversarialTrainer): trainer from which we use the
-            model to make predictions.
-        attack_dataset (Dataset): dataset in which to search for adversarial
-            examples.
-        min_num_new_examples_to_add (int): the minimum number of examples to
-            return. The function may return fewer than this examples if
-            `max_num_search_for_adversarial_examples` has been exceeded, or if the
-            entire dataset contains fewer than the desired count of adversarial
-            examples.
-        max_num_search_for_adversarial_examples (int): the maximum number of
-            examples to search over from `attack_dataset`. The function may return
-            up to one minibatch's worth of examples more than this number.
-
-    Returns:
-        dict[str, list]: A dict containing the adversarial examples and their
-            true labels.
-        int: the number of examples searched through
-    """
-
-    number_searched = 0
-    adversarial_examples = {"text": [], "label": []}  # type: ignore
-
-    for minibatch in yield_minibatch(
-        attack_dataset, adversarial_example_search_minibatch_size
-    ):
-        number_searched += adversarial_example_search_minibatch_size
-
-        # Search for adversarial examples
-        incorrect_predictions = get_incorrect_predictions(
-            trainer=adversarial_trainer, dataset=minibatch
-        )
-
-        # Add these (if any) to the already-found adversarial examples
-        adversarial_examples["text"] += incorrect_predictions["text"]
-        adversarial_examples["label"] += incorrect_predictions["label"]
-
-        # If we found enough adversarial examples, stop searching
-        if len(adversarial_examples["text"]) >= min_num_new_examples_to_add:
-            break
-
-        # If we passed the threshold of how many examples to search over, stop searching
-        if number_searched >= max_num_search_for_adversarial_examples:
-            print(
-                f"Stopping search after {number_searched} examples searched (limit was {max_num_search_for_adversarial_examples})"  # noqa: E501
-            )
-            break
-
-    return adversarial_examples, number_searched
-
-
-def yield_minibatch(
-    dataset: Dataset, minibatch_size: int
-) -> Generator[Dataset, None, None]:
-    shuffled_dataset = dataset.shuffle()
-
-    # Yield minibatches of the given size
-    for i in range(0, shuffled_dataset.num_rows, minibatch_size):
-        upper_limit = min(i + minibatch_size, shuffled_dataset.num_rows)
-        yield shuffled_dataset.select(range(i, upper_limit))
-
-
 def ask_for_confirmation(prompt: str) -> bool:
     while True:
         answer = input(prompt + " (y/n) ")
@@ -262,9 +159,6 @@ def prepare_model_with_accelerate(
 class FakeModelForSequenceClassification:
     """Fake model class used in tests."""
 
-    def __init__(self, vocab_size: int):
-        self.vocab_size = vocab_size
-
     @property
     def device(self) -> torch.device:
         return torch.device("cpu")
@@ -275,11 +169,96 @@ class FakeModelForSequenceClassification:
 
     @property
     def config(self):
-        return Namespace(pad_token_id=1, eos_token_id=2)
+        return Namespace(
+            pad_token_id=1,
+            eos_token_id=2,
+            task_specific_params={},
+            id2label={0: "LABEL_0", 1: "LABEL_1"},
+        )
 
-    def __call__(self, input: torch.Tensor) -> Namespace:
+    def can_generate(self) -> bool:
+        return False
+
+    def eval(self) -> FakeModelForSequenceClassification:
+        return self
+
+    def to(self, *args, **kwargs) -> FakeModelForSequenceClassification:
+        return self
+
+    def forward(
+        self, input_ids: torch.Tensor, *args, **kwargs
+    ) -> SequenceClassifierOutput:
         """Since we are mimicking a sequence classification model, we return logits in
         the shape (batch_size, num_labels)."""
-        return Namespace(
-            logits=torch.rand(input.shape[0], self.num_labels),
+        return SequenceClassifierOutput(
+            logits=torch.rand(input_ids.shape[0], self.num_labels),  # type: ignore
         )
+
+    def __call__(
+        self, input_ids: torch.Tensor, *args, **kwargs
+    ) -> Dict[str, torch.Tensor]:
+        return self.forward(input_ids, *args, **kwargs)
+
+
+def equal_ignore_padding(x: torch.Tensor, y: torch.Tensor, pad_token_id: int) -> bool:
+    """Checks if two 1D tensors are equal, ignoring padding at the end."""
+    while x[-1] == pad_token_id:
+        x = x[:-1]
+    while y[-1] == pad_token_id:
+        y = y[:-1]
+    return x.equal(y)
+
+
+class FakeClassifierWithPositiveList(FakeModelForSequenceClassification):
+    """Fake classification model with a pre-defined list of positive examples."""
+
+    def __init__(
+        self, tokenizer: PreTrainedTokenizerBase, positives: Sequence[torch.Tensor]
+    ):
+        self.tokenizer = tokenizer
+        self.positives = positives
+
+    def forward(
+        self, input_ids: torch.Tensor, *args, **kwargs
+    ) -> SequenceClassifierOutput:
+        logits = []
+        pad_token_id = self.tokenizer.pad_token_id
+        assert pad_token_id is not None
+        for x in input_ids:
+            logits.append(
+                [0.0, 1.0]
+                if any(
+                    [equal_ignore_padding(x, y, pad_token_id) for y in self.positives]
+                )
+                else [1.0, 0.0]
+            )
+        return SequenceClassifierOutput(logits=torch.tensor(logits))  # type: ignore
+
+
+class BalancedSampler(torch.utils.data.Sampler[int]):
+    """A sampler that alternates between regular and adversarial data.
+
+    Note that regardless of the relative sizes, regular and adversarial data will be
+    sampled in equal proportions. Adversarial data points might be sampled many times
+    during one loop (if there are more regular data than adversarial data).
+    """
+
+    def __init__(self, regular_data: Sized, adversarial_data: Sized) -> None:
+        self.regular_data = regular_data
+        self.adversarial_data = adversarial_data
+
+        self.regular_data_sampler = torch.utils.data.RandomSampler(regular_data)
+        self.adversarial_data_sampler = torch.utils.data.RandomSampler(
+            adversarial_data, num_samples=len(regular_data)
+        )
+
+    def __iter__(self) -> Iterator[int]:
+        n = len(self.regular_data)
+        iter_regular = iter(self.regular_data_sampler)
+        iter_adversarial = iter(self.adversarial_data_sampler)
+        for _ in range(n):
+            yield next(iter_regular)
+            yield n + next(iter_adversarial)
+
+    def __len__(self) -> int:
+        return 2 * len(self.regular_data)

@@ -1,0 +1,44 @@
+experiment_type: "training"
+
+environment:
+  model_name_or_path: "EleutherAI/pythia-14m"
+  model_family: "pythia"
+  dataset_type: "tensor_trust"
+  train_set_size: 20000
+  validation_set_size: 2000
+  seed: 0
+
+training:
+  model_save_path_prefix_or_hf: "hf"
+  num_train_epochs: 1
+  learning_rate: 1e-5
+  batch_size: 8
+  optimizer: "adafactor"
+  save_strategy: "no"
+  gradient_checkpointing: true
+  logging_steps: 100
+
+  iterative:
+    iterative_training: true
+    only_add_successful_adversarial_examples: false
+    training_attack:
+      attack_type: "search_based"
+      search_based_attack_config:
+        search_type: "gcg"
+        forward_pass_batch_size: 32
+        n_its: 10
+        n_candidates_per_it: 128
+    num_iterative_training_rounds: 3
+    skip_first_training_round: false
+    num_examples_to_generate_each_round: 500
+
+evaluation:
+  batch_size: 32
+  num_generated_examples: 200
+  evaluation_attack:
+    attack_type: "search_based"
+    search_based_attack_config:
+      search_type: "gcg"
+      forward_pass_batch_size: 32
+      n_its: 10
+      n_candidates_per_it: 128

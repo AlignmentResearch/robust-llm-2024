@@ -53,17 +53,17 @@ ACCELERATOR = Accelerator(cpu=True)
 
 WRAPPED_MODELS = {
     "gpt2": WrappedGPT2Model(
-        FakeModelForSequenceClassification(1000),  # type: ignore
+        FakeModelForSequenceClassification(),  # type: ignore
         AutoTokenizer.from_pretrained("gpt2"),
         accelerator=ACCELERATOR,
     ),
     "bert": WrappedBERTModel(
-        FakeModelForSequenceClassification(1000),  # type: ignore
+        FakeModelForSequenceClassification(),  # type: ignore
         AutoTokenizer.from_pretrained("bert-base-uncased"),
         accelerator=ACCELERATOR,
     ),
     "pythia": WrappedGPTNeoXModel(
-        FakeModelForSequenceClassification(1000),  # type: ignore
+        FakeModelForSequenceClassification(),  # type: ignore
         AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped"),
         accelerator=ACCELERATOR,
     ),

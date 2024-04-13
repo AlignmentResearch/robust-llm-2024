@@ -1,0 +1,25 @@
+experiment_type: "training"
+
+environment:
+  dataset_type: "tensor_trust"
+  train_set_size: 4
+  validation_set_size: 2
+
+training:
+  num_train_epochs: 2
+
+  iterative:
+    iterative_training: true
+    training_attack:
+      attack_type: "random_token"
+      random_token_attack_config:
+        max_iterations: 5
+    skip_first_training_round: false
+    num_examples_to_generate_each_round: 2
+    num_iterative_training_rounds: 3
+
+evaluation:
+  evaluation_attack:
+    attack_type: "random_token"
+    random_token_attack_config:
+      max_iterations: 5

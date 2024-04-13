@@ -16,8 +16,7 @@ training:
       attack_type: "identity"
     num_iterative_training_rounds: 1
     skip_first_training_round: false
-    min_num_new_examples_to_add: 50
-    adversarial_example_search_minibatch_size: 16
+    num_examples_to_generate_each_round: 50
 
 evaluation:
   evaluation_attack:

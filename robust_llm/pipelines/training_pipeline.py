@@ -65,7 +65,7 @@ def run_training_pipeline(
         "save_strategy": experiment.training.save_strategy,
         "save_steps": experiment.training.save_steps,
         "seed": experiment.training.seed,
-        "log_datasets_to_wandb": experiment.training.log_datasets_to_wandb,
+        "log_full_datasets_to_wandb": experiment.training.log_full_datasets_to_wandb,
         "ground_truth_label_fn": robust_llm_datasets.ground_truth_label_fn,
     }
 
@@ -81,11 +81,10 @@ def run_training_pipeline(
             training_attack_config=it.training_attack,
             validation_attack_config=experiment.evaluation.evaluation_attack,
             modifiable_chunks_spec=robust_llm_datasets.modifiable_chunks_spec,
-            min_num_new_examples_to_add=it.min_num_new_examples_to_add,
-            max_num_search_for_adversarial_examples=it.max_num_search_for_adversarial_examples,  # noqa: E501
-            adversarial_example_search_minibatch_size=it.adversarial_example_search_minibatch_size,  # noqa: E501
+            num_examples_to_generate_each_round=it.num_examples_to_generate_each_round,
+            num_examples_to_log_to_wandb_each_round=it.num_examples_to_log_to_wandb_each_round,  # noqa: E501
             skip_first_training_round=it.skip_first_training_round,
-            use_probabilistic_robustness_check=it.use_probabilistic_robustness_check,
+            use_balanced_sampling=it.use_balanced_sampling,
             only_add_successful_adversarial_examples=it.only_add_successful_adversarial_examples,  # noqa: E501
         )
     else:

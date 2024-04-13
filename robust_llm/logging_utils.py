@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 import wandb
 import yaml
@@ -114,7 +115,12 @@ def wandb_set_really_finished():
     wandb.run.log({"really_finished": 1}, commit=True)
 
 
-def log_dataset_to_wandb(dataset: Dataset, dataset_name: str) -> None:
+def log_dataset_to_wandb(
+    dataset: Dataset, dataset_name: str, max_n_examples: Optional[int] = None
+) -> None:
+    if max_n_examples is not None:
+        dataset = dataset.select(range(min(len(dataset), max_n_examples)))
+
     dataset_table = wandb.Table(columns=["text", "label"])
 
     for text, label in zip(

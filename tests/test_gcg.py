@@ -28,9 +28,7 @@ ACCELERATOR = Accelerator(cpu=True)
 def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     wrapped_model = WrappedGPT2Model(
-        FakeModelForSequenceClassification(
-            vocab_size=tokenizer.vocab_size
-        ),  # type: ignore
+        FakeModelForSequenceClassification(),  # type: ignore
         tokenizer,
         accelerator=ACCELERATOR,
     )
@@ -67,9 +65,7 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
 def bert_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     wrapped_model = WrappedBERTModel(
-        FakeModelForSequenceClassification(
-            vocab_size=tokenizer.vocab_size
-        ),  # type: ignore
+        FakeModelForSequenceClassification(),  # type: ignore
         tokenizer,
         accelerator=ACCELERATOR,
     )
@@ -107,9 +103,7 @@ def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRun
     # we need a model for pythia because we access the config
     tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped")
     wrapped_model = WrappedGPTNeoXModel(
-        FakeModelForSequenceClassification(
-            vocab_size=tokenizer.vocab_size
-        ),  # type: ignore
+        FakeModelForSequenceClassification(),  # type: ignore
         tokenizer,
         accelerator=ACCELERATOR,
     )
