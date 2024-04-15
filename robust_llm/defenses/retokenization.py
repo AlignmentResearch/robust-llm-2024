@@ -1,6 +1,6 @@
 """Retokenization defense."""
 
-from typing import Any, List, Sequence, Tuple, Union, cast
+from typing import Any, Sequence, Tuple, Union, cast
 
 import torch
 from transformers import PreTrainedTokenizerBase
@@ -9,11 +9,11 @@ from robust_llm.defenses.defense import DefendedModel
 
 
 def pad_list_of_lists(
-    list_of_lists: List[List[int]],
+    list_of_lists: list[list[int]],
     pad_token_id: int,
     max_length: int,
     padding_side: str = "right",
-) -> List[List[int]]:
+) -> list[list[int]]:
     """Pad lists to the longest member, up to length `max_length`."""
     # Pad lists to match the longest member
     pad_length = max((len(flat_sublist) for flat_sublist in list_of_lists))
@@ -39,7 +39,7 @@ def _broken_token_representations_flat_lists(
     broken_tokens: Sequence[Tuple[int, Sequence[int]]],
     max_length: int,
     padding_side: str = "right",
-) -> Tuple[List[int], List[int]]:
+) -> Tuple[list[int], list[int]]:
     # Convert broken_tokens to dictionary for O(1) lookups
     broken_tokens_dict = {k: v for k, v in broken_tokens}
 
@@ -75,7 +75,7 @@ def _broken_token_representations_nested_lists(
     max_length: int,
     padding_side: str = "right",
     pad_token_id: int = 0,
-) -> Tuple[List[List[int]], List[List[int]]]:
+) -> Tuple[list[list[int]], list[list[int]]]:
     new_list_of_lists = []
     new_attention_mask_list = []
     for input_ids_sublist, attention_mask_sublist in zip(input_ids, attention_mask):
@@ -109,7 +109,7 @@ def _broken_token_representations_from_lists(
     max_length: int,
     padding_side: str = "right",
     pad_token_id: int = 0,
-) -> Tuple[Union[List[int], List[List[int]]], ...]:
+) -> Tuple[Union[list[int], list[list[int]]], ...]:
     if isinstance(input_ids[0], int):
         input_ids = cast(Sequence[int], input_ids)
         attention_mask = cast(Sequence[int], attention_mask)

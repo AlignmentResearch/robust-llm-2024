@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 from robust_llm.logging_utils import log_dataset_to_wandb
 
@@ -39,7 +39,7 @@ class TrainerWithBatchSizeStoring(Trainer):
 
     @override
     def training_step(  # type: ignore[misc]
-        self, model: torch.nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
+        self, model: torch.nn.Module, inputs: dict[str, Union[torch.Tensor, Any]]
     ) -> torch.Tensor:
         loss = super().training_step(model=model, inputs=inputs)
         self._current_batch_size = inputs["input_ids"].shape[0]

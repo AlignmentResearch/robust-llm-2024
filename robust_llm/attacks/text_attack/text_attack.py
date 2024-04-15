@@ -1,5 +1,5 @@
 import copy
-from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import textattack
@@ -103,11 +103,11 @@ class RandomCharacterChanges(AttackRecipe):
 
 
 def _preprocess_example(
-    example: Dict[str, Any],
+    example: dict[str, Any],
     modifiable_chunks_spec: ModifiableChunksSpec,
     num_modifiable_words_per_chunk: Optional[int],
     ground_truth_label_fn: Optional[Callable[[str], int]],
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Preprocess text of a single example before the attack.
 
     In preprocessing, we do things like replacing the modifiable chunk with placeholder
@@ -252,7 +252,7 @@ class TextAttackAttack(Attack):
         self,
         dataset: Optional[Dataset],
         max_n_outputs: Optional[int] = None,
-    ) -> Tuple[Dataset, Dict[str, Any]]:
+    ) -> Tuple[Dataset, dict[str, Any]]:
         assert dataset is not None
 
         dataset = self._preprocess_dataset(dataset)
@@ -302,7 +302,7 @@ class TextAttackAttack(Attack):
     def _make_modified_attack(
         attack: textattack.Attack,
         new_constraints: Optional[
-            List[Union[Constraint, PreTransformationConstraint]]
+            list[Union[Constraint, PreTransformationConstraint]]
         ] = None,
         new_search_method: Optional[SearchMethod] = None,
     ):
@@ -335,7 +335,7 @@ class TextAttackAttack(Attack):
     def _get_info_dict(
         self,
         attack_results: Sequence[textattack.attack_results.AttackResult],
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Gather some info for debug purposes."""
 
         # For any attack trial, we define "modified ratio" as the ratio of words that

@@ -1,5 +1,5 @@
 import abc
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional, Tuple
 
 from datasets import Dataset
 from typing_extensions import override
@@ -50,7 +50,7 @@ class Attack(abc.ABC):
         self,
         dataset: Optional[Dataset],
         max_n_outputs: Optional[int] = None,
-    ) -> Tuple[Dataset, Dict[str, Any]]:
+    ) -> Tuple[Dataset, dict[str, Any]]:
         """Produces a dataset of adversarial examples.
 
         Args:
@@ -102,7 +102,7 @@ class IdentityAttack(Attack):
         self,
         dataset: Optional[Dataset],
         max_n_outputs: Optional[int] = None,
-    ) -> Tuple[Dataset, Dict[str, Any]]:
+    ) -> Tuple[Dataset, dict[str, Any]]:
         assert dataset is not None
 
         dataset = dataset.add_column(

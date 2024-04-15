@@ -1,6 +1,6 @@
 import copy
 from collections import deque
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import torch
 import wandb
@@ -90,7 +90,7 @@ class RandomTokenAttack(Attack):
     @override
     def get_attacked_dataset(
         self, dataset: Optional[Dataset] = None, max_n_outputs: Optional[int] = None
-    ) -> Tuple[Dataset, Dict[str, Any]]:
+    ) -> Tuple[Dataset, dict[str, Any]]:
 
         assert dataset is not None and "text_chunked" in dataset.column_names
 
@@ -137,7 +137,7 @@ class RandomTokenAttack(Attack):
 
     def _batch_get_adversarial_tokens(
         self, chunked_datapoints: Sequence[Sequence[str]], successes: Sequence[bool]
-    ) -> List[List[str]]:
+    ) -> list[list[str]]:
         """Gets new random tokens in the modifiable chunks.
 
         Operates on a list of chunked datapoints (strings which have been split into
@@ -220,7 +220,7 @@ class RandomTokenAttack(Attack):
         attacked_chunked_datapoints: Sequence[Sequence[str]],
         original_labels: Sequence[int],
         previous_attack_success: Sequence[bool],
-    ) -> List[bool]:
+    ) -> list[bool]:
         """Checks the success of the attack on a batch of datapoints.
 
         Args:

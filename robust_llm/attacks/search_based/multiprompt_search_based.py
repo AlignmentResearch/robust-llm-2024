@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
 import transformers
@@ -73,7 +73,7 @@ class MultiPromptSearchBasedAttack(Attack):
         self,
         dataset: Optional[Dataset],
         max_n_outputs: Optional[int] = None,
-    ) -> Tuple[Dataset, Dict[str, Any]]:
+    ) -> Tuple[Dataset, dict[str, Any]]:
         """Run a multi-prompt attack on the dataset.
 
         TODO(GH#113): consider multi-model attacks in the future.
@@ -86,7 +86,7 @@ class MultiPromptSearchBasedAttack(Attack):
 
         num_classes = get_num_classes(self.environment_config.dataset_type)
 
-        all_filtered_out_counts: List[int] = []
+        all_filtered_out_counts: list[int] = []
 
         attacked_input_texts = []
         prepped_examples: list[PreppedExample] = []
@@ -147,7 +147,7 @@ class MultiPromptSearchBasedAttack(Attack):
         return attacked_dataset, info_dict
 
 
-def _create_info_dict(all_filtered_out_counts: List[int]) -> Dict[str, Any]:
+def _create_info_dict(all_filtered_out_counts: list[int]) -> dict[str, Any]:
     return {
         # The number of examples for which there was some iteration where all
         # candidates were filtered out

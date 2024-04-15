@@ -1,6 +1,6 @@
 """Text paraphrasing defense."""
 
-from typing import Any, List, TypeAlias
+from typing import Any, TypeAlias
 
 import torch
 from transformers import (
@@ -19,7 +19,7 @@ from transformers.utils import PaddingStrategy, TensorType
 
 from robust_llm.defenses.defense import DefendedModel
 
-TextOrTokenSeqInput: TypeAlias = TextInput | PreTokenizedInput | List[PreTokenizedInput]
+TextOrTokenSeqInput: TypeAlias = TextInput | PreTokenizedInput | list[PreTokenizedInput]
 
 
 class ParaphraseTokenizer(PreTrainedTokenizerBase):

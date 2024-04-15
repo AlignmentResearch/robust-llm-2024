@@ -2,7 +2,7 @@ import abc
 import logging
 import random
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence, Tuple
 
 import torch
 import torch.utils.data
@@ -83,7 +83,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
             )
         )
 
-    def run(self) -> Tuple[str, Dict[str, Any]]:
+    def run(self) -> Tuple[str, dict[str, Any]]:
         raise NotImplementedError("Not implemented in general for multi-prompt search")
 
     def _get_candidate_texts_and_replacements(

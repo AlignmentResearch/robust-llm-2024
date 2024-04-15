@@ -8,7 +8,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Union
 
 import hydra
 from git.repo import Repo
@@ -146,7 +146,7 @@ def create_job_for_multiple_runs(
     return job
 
 
-def _prepare_override_args(override_args: Dict[str, Any]) -> list[str]:
+def _prepare_override_args(override_args: dict[str, Any]) -> list[str]:
     args = []
     for k, v in override_args.items():
         if v is None:

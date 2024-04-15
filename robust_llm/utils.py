@@ -5,7 +5,7 @@ import os
 import random
 import uuid
 from argparse import Namespace
-from typing import Any, Dict, Iterator, Optional, Protocol, Sequence, Sized
+from typing import Any, Iterator, Optional, Protocol, Sequence, Sized
 
 import torch
 import torch.utils.data
@@ -210,7 +210,7 @@ class FakeModelForSequenceClassification:
 
     def __call__(
         self, input_ids: torch.Tensor, *args, **kwargs
-    ) -> Dict[str, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         return self.forward(input_ids, *args, **kwargs)
 
 

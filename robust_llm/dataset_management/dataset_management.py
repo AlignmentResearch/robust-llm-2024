@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 from datasets import Dataset, DatasetDict, IterableDatasetDict, load_dataset
 from transformers import PreTrainedTokenizerBase
@@ -169,8 +169,8 @@ def _maybe_add_trivial_chunking(
 
 
 def _add_trivial_text_chunked_to_example(
-    example: Dict[str, Any],
-) -> Dict[str, Any]:
+    example: dict[str, Any],
+) -> dict[str, Any]:
     """Add a `text_chunked` field to the example that is a list containing `text`."""
     example["text_chunked"] = [example["text"]]
     return example

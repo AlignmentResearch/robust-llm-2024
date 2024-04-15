@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import torch
 import wandb
@@ -217,7 +217,7 @@ class TRLAttack(Attack):
         raise ValueError(f"Reward type {reward_type} not recognized")
 
     def _maybe_log_trl(
-        self, train_stats: Dict[str, Any], rewards: Sequence[torch.Tensor]
+        self, train_stats: dict[str, Any], rewards: Sequence[torch.Tensor]
     ):
         self.logging_counter.increment(
             step_count_to_add=1,
@@ -237,7 +237,7 @@ class TRLAttack(Attack):
     @override
     def get_attacked_dataset(
         self, dataset: Optional[Dataset], max_n_outputs: Optional[int] = None
-    ) -> Tuple[Dataset, Dict[str, Any]]:
+    ) -> Tuple[Dataset, dict[str, Any]]:
 
         if dataset is None:
             raise ValueError("For now, dataset cannot be None for TRLAttack")

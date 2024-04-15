@@ -2,7 +2,7 @@ import abc
 import logging
 import random
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence, Tuple
 
 import torch
 import torch.utils.data
@@ -82,7 +82,7 @@ class SearchBasedRunner(abc.ABC):
             self._get_initial_attack_text_and_indices(self.n_attack_tokens)
         )
 
-    def run(self) -> Tuple[str, Dict[str, Any]]:
+    def run(self) -> Tuple[str, dict[str, Any]]:
         """Runs the attack and returns the adversarial text and debug info dict."""
         attack_text = self.initial_attack_text
         candidate_texts = [attack_text]

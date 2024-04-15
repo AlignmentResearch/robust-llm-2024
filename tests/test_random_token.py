@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence, Tuple
 
 import torch
 
@@ -28,10 +28,10 @@ attack = RandomTokenAttack(
 
 def _get_new_chunks_and_spec(
     chunks: Sequence[str], attack: RandomTokenAttack
-) -> Tuple[List[str], List[bool | str]]:
+) -> Tuple[list[str], list[bool | str]]:
     assert attack.attack_config.append_to_modifiable_chunk is True
 
-    spec: List[bool | str] = []
+    spec: list[bool | str] = []
     updated_chunks = []
     for chunk, s in zip(chunks, attack.modifiable_chunks_spec):
         updated_chunks.append(chunk)
@@ -45,7 +45,7 @@ def _get_new_chunks_and_spec(
 
 def _sequential_get_adversarial_tokens(
     rt_attack: RandomTokenAttack, chunked_datapoint: Sequence[str]
-) -> List[str]:
+) -> list[str]:
     """Get new random tokens in the modifiable chunks.
 
     Operates on a single chunked datapoint (a string which has been split into
@@ -64,7 +64,7 @@ def _sequential_get_adversarial_tokens(
         with random tokens (or with new chunks appearing immediately
         after them).
     """
-    new_chunked_datapoint: List[str] = []
+    new_chunked_datapoint: list[str] = []
 
     for chunk, is_modifiable in zip(
         chunked_datapoint, rt_attack.modifiable_chunks_spec
@@ -132,8 +132,8 @@ def _sequential_check_success(
 
 # Override the pipeline with something simple
 def custom_pipeline(
-    input: str | List[str], batch_size: Optional[int] = None
-) -> List[Dict[str, Any]]:
+    input: str | list[str], batch_size: Optional[int] = None
+) -> list[dict[str, Any]]:
 
     def check(input: str) -> bool:
         return input in {"ABC", "DEF", "GHI", "JKL"}

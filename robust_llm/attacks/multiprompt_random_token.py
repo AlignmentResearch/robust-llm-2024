@@ -1,6 +1,6 @@
 import copy
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import torch
 import wandb
@@ -98,7 +98,7 @@ class MultiPromptRandomTokenAttack(Attack):
     @override
     def get_attacked_dataset(
         self, dataset: Optional[Dataset] = None, max_n_outputs: Optional[int] = None
-    ) -> Tuple[Dataset, Dict[str, Any]]:
+    ) -> Tuple[Dataset, dict[str, Any]]:
 
         assert dataset is not None and "text_chunked" in dataset.column_names
 
@@ -164,7 +164,7 @@ class MultiPromptRandomTokenAttack(Attack):
 
     def _get_best_iteration_result(
         self,
-        iteration_results: List[IterationResult],
+        iteration_results: list[IterationResult],
     ) -> IterationResult:
         best_iteration_result = max(
             iteration_results, key=lambda x: x.attack_success_rate
@@ -174,8 +174,8 @@ class MultiPromptRandomTokenAttack(Attack):
     def _construct_attacked_text_chunked(
         self,
         chunked_datapoints: Sequence[Sequence[str]],
-        attack_sequences: List[str],
-    ) -> List[List[str]]:
+        attack_sequences: list[str],
+    ) -> list[list[str]]:
         """Gets new random tokens in the modifiable chunks.
 
         Operates on a list of chunked datapoints (strings which have been split into
@@ -240,7 +240,7 @@ class MultiPromptRandomTokenAttack(Attack):
         self,
         attacked_chunked_datapoints: Sequence[Sequence[str]],
         original_labels: Sequence[int],
-    ) -> List[bool]:
+    ) -> list[bool]:
         """Checks the success of the attack on a batch of datapoints.
 
         Args:
@@ -283,7 +283,7 @@ class MultiPromptRandomTokenAttack(Attack):
     def _maybe_log_to_wandb(
         self,
         iteration: int,
-        attack_sequences: List[str],
+        attack_sequences: list[str],
         attack_success: Sequence[bool],
     ):
 

@@ -3,7 +3,7 @@
 import dataclasses
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import numpy as np
 import torch
@@ -31,12 +31,12 @@ class FilteredEvaluationPipeline(TextClassificationPipeline):
             # Revert the value back to the old value
             self.model = old_model
 
-    def check_model_type(self, supported_models: Union[List[str], dict]):
+    def check_model_type(self, supported_models: Union[list[str], dict]):
         """
         Check if the model class is supported by the pipeline.
 
         Args:
-            supported_models (`List[str]` or `dict`):
+            supported_models (`list[str]` or `dict`):
                 The list of models supported by the pipeline, or
                 a dictionary with model class values.
         """
@@ -98,8 +98,8 @@ class AttackResults:
     n_filtered_out_post_attack: int = 0
     n_failures: int = 0
     n_successes: int = 0
-    post_attack_losses: List[float] = dataclasses.field(default_factory=list)
-    post_attack_correct_class_probs: List[float] = dataclasses.field(
+    post_attack_losses: list[float] = dataclasses.field(default_factory=list)
+    post_attack_correct_class_probs: list[float] = dataclasses.field(
         default_factory=list
     )
 
@@ -225,7 +225,7 @@ class AttackResults:
         """Total number of examples for which the attack should have been attempted."""
         return self.n_successes + self.n_failures + self.n_filtered_out_post_attack
 
-    def compute_adversarial_evaluation_metrics(self) -> Dict[str, float]:
+    def compute_adversarial_evaluation_metrics(self) -> dict[str, float]:
         """Computes final metrics to report."""
 
         assert (
@@ -291,7 +291,7 @@ def _get_prediction_logits(
         # `pred` contains prediction information for a single example. It is a list of
         # dictionaries, each dictionary contains information about a single class.
         # Specifically, this dictionary includes a "score" for each class given
-        # by the model. Dicts appear in the order of the classes in the model.
+        # by the model. Dictionaries appear in the order of the classes in the model.
         assert type(pred) is list
         logits = []
         for i, cls_dict in enumerate(pred):
@@ -481,7 +481,7 @@ def do_adversarial_evaluation(
     attack: Attack,
     batch_size: int,
     num_examples_to_log_detailed_info: Optional[int],
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
     if dataset is None:
         assert num_generated_examples is not None

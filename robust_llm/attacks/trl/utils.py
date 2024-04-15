@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Sequence, Tuple
+from typing import Any, Mapping, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -159,7 +159,7 @@ def prepare_prompts(
     return contexts
 
 
-def check_for_not_finite(prepended_train_stats: Dict[str, Any]) -> None:
+def check_for_not_finite(prepended_train_stats: dict[str, Any]) -> None:
     """Check for not finite values in the training stats."""
     for key, value in prepended_train_stats.items():
         if not np.isfinite(value).all():
