@@ -31,7 +31,8 @@ def _call_model(
         return model(inp).logits
 
     if inputs_embeds is not None:
-        return model(inputs_embeds=inputs_embeds).logits
+        with SuppressPadTokenWarning(model):
+            return model(inputs_embeds=inputs_embeds).logits
 
     raise ValueError("exactly one of inp, inputs_embeds must be provided")
 
@@ -299,3 +300,37 @@ class WrappedGPTNeoXModel(SearchBasedAttackWrappedModel):
     def get_embedding_weights(self) -> torch.Tensor:
         # TODO: work out if we should be adding positional embeddings
         return _get_embedding_weights(self.accelerator, self.model.gpt_neox.embed_in)
+
+
+class SuppressPadTokenWarning:
+    """Context manager to suppress pad token warnings.
+
+    These warnings occur when you call a model with inputs_embeds rather than
+    tokens. We get the embeddings by running the input tokens through the
+    embedding layer. When we run the model on embeddings rather than tokens,
+    information about whether some of the input tokens were padding tokens is lost,
+    so padding tokens (if present) can't be masked out and huggingface
+    (reasonably) gives a warning: it's important to mask out padding tokens
+    since otherwise they are interpreted as normal input tokens and
+    they affect the output of the model.
+
+    The problem is the warning is repeated for every single call to the model,
+    which can be annoying and make the logs unreadable. Additionally, since the
+    warning is not from the 'warnings' module, it is not easy to suppress.
+
+    This context manager suppresses the warning by disabling the padding token
+    for the duration of the model call. Since we shouldn't have any padding
+    tokens in the input sequence due to the issues mentioned above, and since
+    the padding token is not used when calling the model with inputs_embeds,
+    this should be safe.
+    """
+
+    def __init__(self, model: PreTrainedModel):
+        self.model = model
+        self.saved_pad_token = model.config.pad_token_id
+
+    def __enter__(self):
+        self.model.config.pad_token_id = None
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.model.config.pad_token_id = self.saved_pad_token
