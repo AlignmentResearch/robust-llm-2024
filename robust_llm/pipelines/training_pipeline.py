@@ -14,7 +14,7 @@ from robust_llm.pipelines.utils import (
     prepare_victim_models,
 )
 from robust_llm.training import AdversarialTraining, Training
-from robust_llm.utils import get_overlap, make_unique_name_to_save
+from robust_llm.utils import get_unique_overlap, make_unique_name_to_save
 
 
 def run_training_pipeline(
@@ -106,7 +106,7 @@ def run_training_pipeline(
             experiment.environment.train_set_size is not None
             and experiment.environment.validation_set_size is not None
         ):
-            train_val_overlap = get_overlap(
+            train_val_overlap = get_unique_overlap(
                 smaller_dataset=robust_llm_datasets.validation_dataset,
                 larger_dataset=robust_llm_datasets.train_dataset,
             )
