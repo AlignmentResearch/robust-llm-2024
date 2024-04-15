@@ -20,7 +20,7 @@ from transformers import (
 )
 from typing_extensions import override
 
-from robust_llm.utils import BalancedSampler, get_overlap, tokenize_dataset
+from robust_llm.utils import BalancedSampler, get_unique_overlap, tokenize_dataset
 
 
 class TrainerWithBatchSizeStoring(Trainer):
@@ -204,7 +204,7 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
         augmented_train_set = self.training.trainer.get_augmented_training_set()
 
         # Record how much of the validation set is in the train set
-        overlap = get_overlap(
+        overlap = get_unique_overlap(
             self.training.eval_dataset["validation"],
             augmented_train_set,
         )

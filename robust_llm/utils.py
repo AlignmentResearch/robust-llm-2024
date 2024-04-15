@@ -84,7 +84,21 @@ def tokenize_dataset(
     return {**dataset, **tokenized_data}
 
 
-def get_overlap(smaller_dataset: Dataset, larger_dataset: Dataset) -> list[str]:
+def get_unique_overlap(smaller_dataset: Dataset, larger_dataset: Dataset) -> list[str]:
+    """Calculate the overlap between the "text" columns of two datasets.
+
+    Assumes that there are no duplicate entries in either of the datasets.
+    If there are duplicate entries, they will be removed before the overlap
+    is calculated, and you will get a smaller calculated overlap than
+    you would expect.
+
+    Args:
+        smaller_dataset: A dataset with a "text" column.
+        larger_dataset: A dataset with a "text" column.
+
+    Returns:
+        A list of unique texts that appear in both datasets.
+    """
     return list(set(smaller_dataset["text"]).intersection(set(larger_dataset["text"])))
 
 
