@@ -3,7 +3,7 @@
 import dataclasses
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 import numpy as np
 import torch
@@ -66,138 +66,189 @@ class FilteredEvaluationPipeline(TextClassificationPipeline):
         labels_and_scores = super().postprocess(
             model_outputs, function_to_apply, top_k, _legacy
         )
-        filter_value: Optional[bool] = None
+        flag_value: Optional[bool] = None
         if "filters" in model_outputs:
-            filter_value = model_outputs["filters"][0].item()
+            flag_value = model_outputs["filters"][0].item()
 
-        return labels_and_scores, filter_value  # type: ignore
+        return labels_and_scores, flag_value  # type: ignore
 
 
 @dataclass
 class AttackResults:
     """Results of an attack on a dataset.
 
-    Note that we have a simplified division into classes for now. In general, there
-    are three different possible outcomes (correct prediction, incorrect prediction,
-    filtered out) for both pre-attack and post-attack predictions, which gives us 9
-    different combinations. However, for simplification and to eliminate some degenerate
-    cases, we make the following assumptions:
-    - if an example was filtered out pre-attack, we do not care what happens next and
-    always treat it as a "filtered_out_before_attack" class;
-    - if an example was misclassified pre-attack, we do not care what happens next and
-    always treat it as a "mistake_before_attack" class;
-    - otherwise (correct prediction pre-attack), we subdivide into 3 different classes
-    based on the post-attack prediction (correct, incorrect, filtered out).
+    When we run an attack on a dataset, we do the following things, in order:
+    - run the victim model on the original dataset, and record which examples
+        it gets correct or incorrect;
+    - run the defense on the original dataset, and record how many examples it
+        incorrectly flags as attacked;
+    - run the attack on the examples from the original dataset that the model
+        got correct. This gives us the "post-attack" dataset.
+    - run the defense on the post-attack dataset, and record which examples
+        it correctly flags as attacked.
+    - run the victim model on the post-attack dataset, and record which examples
+        it gets correct or incorrect, and whether or not that example was flagged
+        by the defense.
 
-    Note 1: If no filtering defense is used, there are only 3 classes left and so there
-    is no controversy about the division.
+    For an illustration of how the attack proceeds and what is being stored when,
+    see the diagram at the following link:
+    https://docs.google.com/presentation/d/1mxVyxYoZ3YXhK4MCvy3pdhVw-BOQTY-p-URmHeKP5DI
+    In the list of attributes below, we put the letter corresponding to that section
+    of the diagram in parentheses next to the attribute name,
+    for those that are applicable.
 
-    Note 2: If we want to refine our class division in the future, we might consider
-    not using defense pre-attack -> having only correct / incorrect options pre-attack.
+    Please note that the attributes listed below are not disjoint. For example,
+    a datapoint can be both flagged post-attack and correctly classified post-attack.
 
     Attributes:
-        n_filtered_out_pre_attack: Number of examples that were filtered out by the
-            defense pre-attack. This is a false positive from the perspective of the
-            defender.
-        n_mistakes_pre_attack: Number of examples for which the model makes a mistake
-            even before the attack, so for the sake of the metrics we do not care about
-            them; attack might have been skipped for these cases.
-        n_filtered_out_post_attack: Number of examples that were filtered out by the
-            defense post-attack. This is a true positive from the perspective of the
-            defender.
-        n_failures: Number of examples that were not successfully attacked.
-        n_successes: Number of examples that were successfully attacked.
-        n_post_attack_false_positives: Number of examples that were filtered out by the
-            defense post-attack, but which the model would have got correct.
-        post_attack_losses: Losses of the model on the attacked examples
-            (only considers examples that were failures or successes, not ones that were
-            mistakes pre attack or filtered out pre or post-attack).
+        n_examples (a): Total number of datapoints in the original dataset.
+        n_incorrect_pre_attack (b): Number of examples for which the model makes
+            a mistake even before the attack.
+        n_flagged_pre_attack (d): Number of examples from the original dataset
+            that were flagged by the defense. This is a "false positive"
+            for the defense: none of the original dataset has been attacked.
+        n_flagged_post_attack (f): Number of examples from the attacked dataset
+            that were flagged by the defense. This is a "true positive"
+            for the defense: all of the attacked dataset has been attacked.
+        n_flagged_post_attack_then_correct (i): Number of examples that were
+            flagged by the defense post-attack, but which the model got correct.
+        n_not_flagged_post_attack_then_correct (k): Number of examples that were
+            not flagged by the defense post-attack, and which the model got correct.
+        post_attack_losses: Losses of the victim model on the attacked examples.
         post_attack_correct_class_probs: Probabilities of the correct class for the
-            attacked examples (only considers examples that were failures or successes,
-            not ones that were mistakes pre attack or filtered out pre or post-attack).
+            attacked examples, according to the victim model.
     """
 
-    n_filtered_out_pre_attack: int = 0
-    n_mistakes_pre_attack: int = 0
-    n_filtered_out_post_attack: int = 0
-    n_failures: int = 0
-    n_successes: int = 0
-    n_post_attack_false_positives: int = 0
+    # NOTE(niki): we assume that the length of the dataset
+    # is the same pre and post attack.
+
+    n_examples: int = 0
+    n_incorrect_pre_attack: int = 0
+    n_flagged_pre_attack: int = 0
+    n_flagged_post_attack: int = 0
+    n_flagged_post_attack_then_correct: int = 0
+    n_not_flagged_post_attack_then_correct: int = 0
+
     post_attack_losses: list[float] = dataclasses.field(default_factory=list)
     post_attack_correct_class_probs: list[float] = dataclasses.field(
         default_factory=list
     )
 
     @property
-    def p_filtered_out_post_attack(self) -> float:
-        return div_maybe_nan(self.n_filtered_out_post_attack, self.n_attempted)
+    def n_correct_pre_attack(self) -> int:
+        return self.n_examples - self.n_incorrect_pre_attack
+
+    @property
+    def n_not_flagged_pre_attack(self) -> int:
+        return self.n_examples - self.n_flagged_pre_attack
+
+    @property
+    def n_not_flagged_post_attack(self) -> int:
+        return self.n_correct_pre_attack - self.n_flagged_post_attack
+
+    @property
+    def n_flagged_post_attack_then_incorrect(self) -> int:
+        return self.n_flagged_post_attack - self.n_flagged_post_attack_then_correct
+
+    @property
+    def n_not_flagged_post_attack_then_incorrect(self) -> int:
+        return (
+            self.n_not_flagged_post_attack - self.n_not_flagged_post_attack_then_correct
+        )
+
+    @property
+    def n_post_attack_correct(self) -> int:
+        return (
+            self.n_flagged_post_attack_then_correct
+            + self.n_not_flagged_post_attack_then_correct
+        )
+
+    @property
+    def n_post_attack_incorrect(self) -> int:
+        return (
+            self.n_flagged_post_attack_then_incorrect
+            + self.n_not_flagged_post_attack_then_incorrect
+        )
 
     @classmethod
     def from_labels_and_predictions(
         cls,
         original_labels: Sequence[int],
+        original_pred_labels: Optional[Sequence[int]],
+        original_flag_values: Optional[Sequence[bool | None]],
         attacked_labels: Sequence[int],
-        original_pred_labels: Optional[Sequence[int | None]],
         attacked_pred_labels: Sequence[int],
-        attacked_filter_values: Sequence[bool | None],
+        attacked_flag_values: Sequence[bool | None],
         attacked_pred_logits: Sequence[Sequence[float | None]],
     ) -> "AttackResults":
         """Generates `AttackResults` from labels and model predictions.
 
         Args:
-            original_labels: true labels of the original examples (pre-attack)
-            attacked_labels: true labels of the attacked examples (post-attack)
-            original_pred_labels: optional predictions of the model pre-attack. Should
-                be provided iff the attack uses input dataset
-            attacked_pred_labels: predictions of the model post-attack
-            attacked_filter_values: values of the filter applied post-attack
-            attacked_pred_logits: logits of the model post-attack
+            original_labels: True labels of the original examples (pre-attack)
+            original_pred_labels: Predictions of the model pre-attack. Should
+                be provided iff the attack uses input dataset.
+            original_flag_values: Values of the filter applied pre-attack. Should be
+                provided iff the attack uses input dataset.
+            attacked_labels: True labels of the attacked examples (post-attack)
+            attacked_pred_labels: Predictions of the model post-attack
+            attacked_flag_values: Values of the filter applied post-attack
+            attacked_pred_logits: Logits of the model post-attack
 
         Returns:
             `AttackResults` object
         """
         results = cls()
+        # TODO(niki): don't record the length here - instead, compute it as
+        # we add examples in an _add_example... method below. For now, this
+        # is not possible because we have two different methods, but after
+        # an upcoming refactor in which we will have only one method, this
+        # will be possible.
+        results.n_examples = len(original_labels)
 
         if original_pred_labels is None:
             for (
                 attacked_label,
                 attacked_pred_label,
-                attacked_filter_value,
+                attacked_flag_value,
                 logits,
             ) in zip(
                 attacked_labels,
                 attacked_pred_labels,
-                attacked_filter_values,
+                attacked_flag_values,
                 attacked_pred_logits,
             ):
                 results._add_example_with_post_attack_only(
                     attacked_label=attacked_label,
                     attacked_pred_label=attacked_pred_label,
-                    attacked_filter_value=attacked_filter_value,
+                    attacked_flag_value=attacked_flag_value,
                     logits=logits,
                 )
         else:
+            assert original_flag_values is not None
             for (
                 original_label,
-                attacked_label,
                 original_pred_label,
+                original_flag_value,
+                attacked_label,
                 attacked_pred_label,
-                attacked_filter_value,
+                attacked_flag_value,
                 logits,
             ) in zip(
                 original_labels,
-                attacked_labels,
                 original_pred_labels,
+                original_flag_values,
+                attacked_labels,
                 attacked_pred_labels,
-                attacked_filter_values,
+                attacked_flag_values,
                 attacked_pred_logits,
             ):
                 results._add_example(
                     original_label=original_label,
-                    attacked_label=attacked_label,
                     original_pred_label=original_pred_label,
+                    original_flag_value=original_flag_value,
+                    attacked_label=attacked_label,
                     attacked_pred_label=attacked_pred_label,
-                    attacked_filter_value=attacked_filter_value,
+                    attacked_flag_value=attacked_flag_value,
                     logits=logits,
                 )
 
@@ -207,71 +258,55 @@ class AttackResults:
         self,
         attacked_label: int,
         attacked_pred_label: int,
-        attacked_filter_value: bool | None,
+        attacked_flag_value: bool | None,
         logits: Sequence[float | None],
     ) -> None:
-        # Filtered out after attack -> true positive.
-        if attacked_filter_value:
-            self.n_filtered_out_post_attack += 1
+        if attacked_flag_value is True:
+            self.n_flagged_post_attack += 1
             if attacked_label == attacked_pred_label:
-                self.n_post_attack_false_positives += 1
+                self.n_flagged_post_attack_then_correct += 1
+        # This branch catches both the case where the defense did not flag the
+        # example (False), and the case in which the defense was not run (None)
         else:
-            # Correct prediction after attack -> failure.
             if attacked_label == attacked_pred_label:
-                self.n_failures += 1
-            # Incorrect prediction after attack -> success.
-            else:
-                self.n_successes += 1
+                self.n_not_flagged_post_attack_then_correct += 1
 
-            # In case of failure or success, compute the loss and the probability of
-            # the correct class.
-            assert all(logit is not None for logit in logits)
-            logprobs = torch.nn.functional.log_softmax(torch.tensor(logits), dim=0)
-            loss = float(-logprobs[attacked_label])
-            correct_class_prob = float(torch.exp(logprobs[attacked_label]))
-            self.post_attack_losses.append(loss)
-            self.post_attack_correct_class_probs.append(correct_class_prob)
+        # Compute the loss and the probability of the correct class.
+        assert all(logit is not None for logit in logits)
+        logprobs = torch.nn.functional.log_softmax(torch.tensor(logits), dim=0)
+        loss = float(-logprobs[attacked_label])
+        correct_class_prob = float(torch.exp(logprobs[attacked_label]))
+        self.post_attack_losses.append(loss)
+        self.post_attack_correct_class_probs.append(correct_class_prob)
 
     def _add_example(
         self,
         original_label: int,
+        original_pred_label: int,
+        original_flag_value: bool | None,
         attacked_label: int,
-        original_pred_label: int | None,
         attacked_pred_label: int,
-        attacked_filter_value: bool | None,
+        attacked_flag_value: bool | None,
         logits: Sequence[float | None],
     ) -> None:
-        # Example was filtered out pre-attack -> false positive.
-        if original_pred_label is None:
-            self.n_filtered_out_pre_attack += 1
-        # Prediction was already incorrect, so we expect this example should have
-        # been skipped and we do not consider it either a success or a failure.
-        elif original_pred_label != original_label:
-            self.n_mistakes_pre_attack += 1
-        # Prediction was correct pre-attack. Now we need to check the post-attack.
-        else:
-            self._add_example_with_post_attack_only(
-                attacked_label=attacked_label,
-                attacked_pred_label=attacked_pred_label,
-                attacked_filter_value=attacked_filter_value,
-                logits=logits,
-            )
+        if original_flag_value:
+            self.n_flagged_pre_attack += 1
 
-    @property
-    def n_total(self) -> int:
-        """Total number of examples used."""
-        return (
-            self.n_filtered_out_pre_attack
-            + self.n_mistakes_pre_attack
-            + self.n_filtered_out_post_attack
-            + self.n_failures
-            + self.n_successes
+        if original_pred_label != original_label:
+            self.n_incorrect_pre_attack += 1
+            # Since the model got this example wrong pre-attack,
+            # there was no need to run the attack, and thus we
+            # ignore the attack's output even if it is present.
+            return
+
+        # If we got here, the model gave the correct answer
+        # pre-attack and the attack was run.
+        self._add_example_with_post_attack_only(
+            attacked_label=attacked_label,
+            attacked_pred_label=attacked_pred_label,
+            attacked_flag_value=attacked_flag_value,
+            logits=logits,
         )
-
-    @property
-    def n_attempted(self) -> int:
-        """Total number of examples for which the attack should have been attempted."""
-        return self.n_successes + self.n_failures + self.n_filtered_out_post_attack
 
     def compute_adversarial_evaluation_metrics(self) -> dict[str, float]:
         """Computes final metrics to report."""
@@ -279,41 +314,88 @@ class AttackResults:
         assert (
             len(self.post_attack_losses)
             == len(self.post_attack_correct_class_probs)
-            == self.n_failures + self.n_successes
+            == self.n_correct_pre_attack
         )
 
         return {
+            # "Base" metrics
+            "adversarial_eval/n_examples": self.n_examples,
+            "adversarial_eval/n_correct_pre_attack": self.n_correct_pre_attack,
+            "adversarial_eval/n_incorrect_pre_attack": self.n_incorrect_pre_attack,
+            "adversarial_eval/n_flagged_pre_attack": self.n_flagged_pre_attack,
+            "adversarial_eval/n_not_flagged_pre_attack": self.n_not_flagged_pre_attack,
+            "adversarial_eval/n_flagged_post_attack": self.n_flagged_post_attack,
+            "adversarial_eval/n_not_flagged_post_attack": (
+                self.n_not_flagged_post_attack
+            ),
+            "adversarial_eval/n_flagged_post_attack_then_correct": (
+                self.n_flagged_post_attack_then_correct
+            ),
+            "adversarial_eval/n_flagged_post_attack_then_incorrect": (
+                self.n_flagged_post_attack_then_incorrect
+            ),
+            "adversarial_eval/n_not_flagged_post_attack_then_correct": (
+                self.n_not_flagged_post_attack_then_correct
+            ),
+            "adversarial_eval/n_not_flagged_post_attack_then_incorrect": (
+                self.n_not_flagged_post_attack_then_incorrect
+            ),
+            "adversarial_eval/n_post_attack_correct": self.n_post_attack_correct,
+            "adversarial_eval/n_post_attack_incorrect": self.n_post_attack_incorrect,
+            # Computed metrics
+            "adversarial_eval/pre_attack_flagging_rate": div_maybe_nan(
+                self.n_flagged_pre_attack, self.n_examples
+            ),
             "adversarial_eval/pre_attack_accuracy": div_maybe_nan(
-                self.n_attempted, self.n_total
+                self.n_correct_pre_attack, self.n_examples
             ),
-            "adversarial_eval/post_attack_accuracy": div_maybe_nan(
-                self.n_failures,
-                self.n_total
-                - self.n_filtered_out_post_attack
-                - self.n_filtered_out_pre_attack,
+            "adversarial_eval/post_attack_flagging_rate": div_maybe_nan(
+                self.n_flagged_post_attack,
+                self.n_correct_pre_attack,
             ),
-            "adversarial_eval/post_attack_accuracy_without_previous_mistakes": div_maybe_nan(  # noqa: E501
-                self.n_failures,
-                self.n_total
-                - self.n_filtered_out_post_attack
-                - self.n_filtered_out_pre_attack
-                - self.n_mistakes_pre_attack,
-            ),
-            "adversarial_eval/p_filtered_out_post_attack": self.p_filtered_out_post_attack,  # noqa: E501
-            "adversarial_eval/post_attack_false_positive_rate": div_maybe_nan(
-                self.n_post_attack_false_positives, self.n_filtered_out_post_attack
+            "adversarial_eval/post_attack_accuracy_including_original_mistakes": (
+                div_maybe_nan(self.n_post_attack_correct, self.n_examples)
             ),
             "adversarial_eval/attack_success_rate": div_maybe_nan(
-                self.n_successes, self.n_attempted
+                self.n_post_attack_incorrect, self.n_correct_pre_attack
             ),
-            "adversarial_eval/n_total_examples_used": self.n_total,
-            "adversarial_eval/filtering_false_positive_rate": div_maybe_nan(
-                self.n_filtered_out_pre_attack,
-                self.n_total,
+            "adversarial_eval/post_attack_accuracy_on_pre_attack_correct_examples": (
+                div_maybe_nan(self.n_post_attack_correct, self.n_correct_pre_attack)
             ),
-            "adversarial_eval/filtering_true_positive_rate": div_maybe_nan(
-                self.n_filtered_out_post_attack,
-                self.n_attempted,
+            "adversarial_eval/post_attack_accuracy_on_not_flagged_examples": (
+                div_maybe_nan(
+                    self.n_not_flagged_post_attack_then_correct,
+                    self.n_not_flagged_post_attack,
+                )
+            ),
+            "adversarial_eval/attack_post_defense_success_rate": div_maybe_nan(
+                self.n_not_flagged_post_attack_then_incorrect, self.n_correct_pre_attack
+            ),
+            "adversarial_eval/post_attack_robustness_rate": div_maybe_nan(
+                self.n_flagged_post_attack
+                + self.n_not_flagged_post_attack_then_correct,
+                self.n_correct_pre_attack,
+            ),
+            "adversarial_eval/defense_post_attack_true_positive_rate": div_maybe_nan(
+                self.n_flagged_post_attack, self.n_correct_pre_attack
+            ),
+            "adversarial_eval/defense_post_attack_true_negative_rate": div_maybe_nan(
+                self.n_not_flagged_pre_attack, self.n_examples
+            ),
+            "adversarial_eval/defense_post_attack_false_positive_rate": div_maybe_nan(
+                self.n_flagged_pre_attack, self.n_examples
+            ),
+            "adversarial_eval/defense_post_attack_false_negative_rate": div_maybe_nan(
+                self.n_not_flagged_post_attack, self.n_correct_pre_attack
+            ),
+            "adversarial_eval/post_attack_flagged_but_correct_rate": div_maybe_nan(
+                self.n_flagged_post_attack_then_correct, self.n_flagged_post_attack
+            ),
+            "adversarial_eval/post_attack_not_flagged_but_incorrect_rate": (
+                div_maybe_nan(
+                    self.n_not_flagged_post_attack_then_incorrect,
+                    self.n_not_flagged_post_attack,
+                )
             ),
             "adversarial_eval/avg_post_attack_loss": float(
                 np.mean(self.post_attack_losses)
@@ -357,12 +439,12 @@ def _get_prediction_logits_and_maybe_filter(
     hf_pipeline: FilteredEvaluationPipeline,
     dataset: Dataset,
     batch_size: int,
-) -> Tuple[list[list[float]], list[bool | None]]:
+) -> tuple[list[list[float]], list[bool | None]]:
     """Returns prediction logits, of shape (n_examples, n_classes)."""
 
     # TODO(michal): consider dropping HF pipelines and instead use data loaders + direct
     # model calls. Pipelines complicate the code without a clear benefit.
-    preds_with_filter_values = hf_pipeline(
+    preds_with_flag_values = hf_pipeline(
         dataset["text"],
         batch_size=batch_size,
         truncation=True,
@@ -372,11 +454,11 @@ def _get_prediction_logits_and_maybe_filter(
     # We use explicit loops below instead of list comprehension to be able to have type
     # asserts so that typechecker does not complain.
     prediction_logits = []
-    filter_values: list[bool | None] = []
-    assert isinstance(preds_with_filter_values, list)
-    for pred, filter_value in preds_with_filter_values:  # type: ignore
-        assert isinstance(filter_value, bool) or filter_value is None
-        filter_values.append(filter_value)
+    flag_values: list[bool | None] = []
+    assert isinstance(preds_with_flag_values, list)
+    for pred, flag_value in preds_with_flag_values:  # type: ignore
+        assert isinstance(flag_value, bool) or flag_value is None
+        flag_values.append(flag_value)
 
         # `pred` contains prediction information for a single example. It is a list of
         # dictionaries, each dictionary contains information about a single class.
@@ -391,7 +473,7 @@ def _get_prediction_logits_and_maybe_filter(
             logits.append(cls_dict["score"])
         prediction_logits.append(logits)
 
-    return prediction_logits, filter_values
+    return prediction_logits, flag_values
 
 
 def _get_prediction_labels(
@@ -428,12 +510,12 @@ def get_prediction_logits_and_labels(
 
 def _log_examples_to_wandb(
     original_texts: Optional[Sequence[str]],
-    attacked_texts: Sequence[str],
     original_labels: Optional[Sequence[int]],
-    attacked_labels: Sequence[int],
     original_pred_labels: Optional[Sequence[int | None]],
+    attacked_texts: Sequence[str],
+    attacked_labels: Sequence[int],
     attacked_pred_labels: Sequence[int | None],
-    attacked_filter_values: Sequence[bool | None],
+    attacked_flag_values: Sequence[bool | None],
     attacked_pred_logits: Sequence[Sequence[float | None]],
     num_examples_to_log_detailed_info: int,
 ) -> None:
@@ -468,7 +550,7 @@ def _log_examples_to_wandb(
                 attacked_labels[i],
                 original_pred_labels[i],
                 attacked_pred_labels[i],
-                attacked_filter_values[i],
+                attacked_flag_values[i],
                 attacked_pred_logits[i],
             )
 
@@ -487,7 +569,7 @@ def _log_examples_to_wandb(
                 attacked_texts[i],
                 attacked_labels[i],
                 attacked_pred_labels[i],
-                attacked_filter_values[i],
+                attacked_flag_values[i],
                 attacked_pred_logits[i],
             )
 
@@ -512,14 +594,14 @@ def _get_prediction_logits_and_labels_and_maybe_filter(
         framework="pt",
     )
 
-    pred_logits, pred_filter = _get_prediction_logits_and_maybe_filter(
+    pred_logits, pred_flag_values = _get_prediction_logits_and_maybe_filter(
         hf_pipeline=hf_pipeline,
         dataset=dataset,
         batch_size=batch_size,
     )
     pred_labels = _get_prediction_labels(pred_logits)
 
-    return pred_logits, pred_labels, pred_filter
+    return pred_logits, pred_labels, pred_flag_values
 
 
 def compute_attack_results(
@@ -541,7 +623,7 @@ def compute_attack_results(
     model.eval()
 
     assert dataset is not None  # will be assumed after refactors anyway.
-    original_pred_logits, original_pred_labels, original_filter_values = (
+    original_pred_logits, original_pred_labels, original_flag_values = (
         _get_prediction_logits_and_labels_and_maybe_filter(
             dataset=dataset,
             model=model,
@@ -550,7 +632,7 @@ def compute_attack_results(
         )
     )
 
-    attacked_pred_logits, attacked_pred_labels, attacked_filter_values = (
+    attacked_pred_logits, attacked_pred_labels, attacked_flag_values = (
         _get_prediction_logits_and_labels_and_maybe_filter(
             dataset=attacked_dataset,
             model=model,
@@ -570,22 +652,23 @@ def compute_attack_results(
 
     results = AttackResults.from_labels_and_predictions(
         original_labels=attacked_dataset["label"],
-        attacked_labels=attacked_labels,
         original_pred_labels=original_pred_labels,
+        original_flag_values=original_flag_values,
+        attacked_labels=attacked_labels,
         attacked_pred_labels=attacked_pred_labels,
-        attacked_filter_values=attacked_filter_values,
+        attacked_flag_values=attacked_flag_values,
         attacked_pred_logits=attacked_pred_logits,
     )
 
     if num_examples_to_log_detailed_info is not None and accelerator.is_main_process:
         _log_examples_to_wandb(
             original_texts=dataset["text"] if dataset else None,
-            attacked_texts=attacked_dataset["text"],
             original_labels=dataset["label"] if dataset else None,
-            attacked_labels=attacked_labels,
             original_pred_labels=original_pred_labels,
+            attacked_texts=attacked_dataset["text"],
+            attacked_labels=attacked_labels,
             attacked_pred_labels=attacked_pred_labels,
-            attacked_filter_values=attacked_filter_values,
+            attacked_flag_values=attacked_flag_values,
             attacked_pred_logits=attacked_pred_logits,
             num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
         )

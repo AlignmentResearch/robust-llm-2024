@@ -1,5 +1,6 @@
 import torch
 import torch.utils.data
+import wandb
 from datasets import Dataset
 from tdigest import TDigest
 from transformers import PreTrainedTokenizerBase
@@ -316,6 +317,20 @@ class PerplexityDefendedModel(DefendedModel):
             f"Setting perplexity threshold to {round(proportion * 100, 4)}% "
             f"(perplexity={round(self.threshold, 4)})"
         )
+
+        # Don't log to wandb if we're running tests
+        if wandb.run is not None:
+            wandb.log(
+                {
+                    "defense/perplexity_threshold_proportion_pre_attack": (
+                        perplexity_config.perplexity_threshold_proportion
+                    ),
+                    "defense/perplexity_threshold_value": self.threshold,
+                    "defense/max_perplexity_pre_attack": self.max_perplexity,
+                    "defense/min_perplexity_pre_attack": self.min_perplexity,
+                },
+                commit=False,
+            )
 
     def forward(self, **inputs):
         assert self.decoder is not None
