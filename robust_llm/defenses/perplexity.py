@@ -3,6 +3,7 @@ from typing import Optional
 import torch
 import torch.utils.data
 from datasets import Dataset
+from tdigest import TDigest
 from transformers import PreTrainedTokenizerBase
 
 from robust_llm.defenses.defense import DefendedModel
@@ -86,14 +87,15 @@ def compute_perplexity(
     return perplexity
 
 
-def compute_max_perplexity(
+def compute_max_min_percentile_perplexity(
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     dataset: Dataset,
     batch_size: int,
-) -> float:
+) -> tuple[float, float, TDigest]:
     """
-    Computes the maximum perplexity of the model on the given dataset.
+    Computes the maximum, minimum, and approximate percentile perplexities
+    of the model on the given dataset.
     This is useful for setting the perplexity threshold.
 
     Args:
@@ -101,13 +103,16 @@ def compute_max_perplexity(
         dataset: the dataset to evaluate on
         batch_size: the batch size to use for evaluation
     Returns:
-        The maximum perplexity (float).
+        A tuple of the maximum perplexity, minimum perplexity, and a TDigest
+        object from which approximate percentiles can be extracted.
     """
     dataset = dataset.with_format("torch")
     dataloader = torch.utils.data.DataLoader(
         dataset, batch_size=batch_size, shuffle=False  # type: ignore
     )
+    min_perplexity_so_far = float("inf")
     max_perplexity_so_far = 0.0
+    tdigest = TDigest()
     for batch in dataloader:
         encoded_input = tokenizer(
             batch["text"],
@@ -121,28 +126,48 @@ def compute_max_perplexity(
             window_size=None,
             **encoded_input,
         )
+        min_perplexity_so_far = min(min_perplexity_so_far, perplexity.min().item())
         max_perplexity_so_far = max(max_perplexity_so_far, perplexity.max().item())
-    return max_perplexity_so_far
+        tdigest.batch_update(perplexity)
+    return max_perplexity_so_far, min_perplexity_so_far, tdigest
 
 
 class PerplexityDefendedModel(DefendedModel):
     def __post_init__(self) -> None:
         super().__post_init__()
+
+        self.max_perplexity: Optional[float] = None
+        self.min_perplexity: Optional[float] = None
+        self.tdigest: Optional[TDigest] = None
+
         assert self.decoder is not None
         assert isinstance(self.device, torch.device)
         self.decoder.to(device=self.device)  # type: ignore
-        threshold = self.defense_config.perplexity_defense_config.perplexity_threshold
-        if threshold is None:
-            assert self.dataset is not None
-            threshold = compute_max_perplexity(
+        # We subtract from 1 because perplexities are sorted low -> high,
+        # and we want to get the x% _highest_ (not lowest) perplexity value.
+        perplexity_config = self.defense_config.perplexity_defense_config
+        proportion = perplexity_config.perplexity_threshold_proportion
+
+        assert self.dataset is not None
+        self.max_perplexity, self.min_perplexity, self.tdigest = (
+            compute_max_min_percentile_perplexity(
                 self.decoder,
                 self.tokenizer,
                 self.dataset,
                 self.defense_config.perplexity_defense_config.batch_size,
             )
-        if self.verbose:
-            print(f"Setting perplexity threshold to {threshold}")
-        self.threshold = threshold
+        )
+        print("the max perplexity was", self.max_perplexity)
+        print("the min perplexity was", self.min_perplexity)
+
+        # TDigest takes percentages as input
+        # Since we want to filter out `proportion` of the perplexities,
+        # we take the (1 - proportion)th percentile.
+        self.threshold = self.tdigest.percentile((1 - proportion) * 100)
+        print(
+            f"Setting perplexity threshold to {round(proportion * 100, 4)}% "
+            f"(perplexity={round(self.threshold, 4)})"
+        )
 
     @property
     def verbose(self) -> bool:
@@ -172,3 +197,25 @@ class PerplexityDefendedModel(DefendedModel):
                 f"Filter: {output['filters']}\n"
             )
         return output
+
+    def get_all_perplexity_thresholds(self, dataset: Dataset) -> list[float]:
+        """This method is used to get the perplexity thresholds for all percentiles.
+
+        This is useful for exploring the perplexities of different models on
+        both attacked and not-attacked datasets. Note that it doesn't touch the
+        stored max_perplexity, min_perplexity, or tdigest.
+
+        Args:
+            dataset: the dataset to evaluate on
+
+        Returns:
+            A list of perplexity thresholds for percentiles [0%, 1%, ..., 100%]
+        """
+        _, _, tdigest = compute_max_min_percentile_perplexity(
+            self.decoder,  # type: ignore
+            self.tokenizer,
+            dataset,
+            self.defense_config.perplexity_defense_config.batch_size,
+        )
+
+        return [tdigest.percentile(p) for p in range(101)]

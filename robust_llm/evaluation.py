@@ -13,6 +13,7 @@ from datasets import Dataset
 from transformers import PreTrainedTokenizerBase, TextClassificationPipeline
 
 from robust_llm.attacks.attack import Attack
+from robust_llm.defenses.perplexity import PerplexityDefendedModel
 from robust_llm.utils import LanguageModel, div_maybe_nan
 
 
@@ -323,6 +324,37 @@ class AttackResults:
         }
 
 
+def _maybe_record_defense_specific_metrics(
+    model: LanguageModel, dataset: Optional[Dataset], attacked_dataset: Dataset
+) -> dict:
+
+    metrics = {}
+
+    if (
+        isinstance(model, PerplexityDefendedModel)
+        and model.defense_config.perplexity_defense_config.save_perplexity_curves
+    ):
+        # Get the approximate perplexities of the decoder on
+        # on both datasets.
+
+        assert dataset is not None
+        # We don't pass in input_ids or attention_mask here because
+        # get_all_perplexity_thresholds gets confused
+        original_text_dataset = Dataset.from_dict({"text": dataset["text"]})
+        metrics["perplexity/decoder_perplexities_original"] = (  # type: ignore
+            model.get_all_perplexity_thresholds(dataset=original_text_dataset)  # type: ignore  # noqa: E501
+        )
+
+        assert attacked_dataset is not None
+        # The attacked dataset only has `text`, `original_text`, and `label`,
+        # so we're fine to pass it in as is.
+        metrics["perplexity/decoder_perplexities_attacked"] = (  # type: ignore
+            model.get_all_perplexity_thresholds(dataset=attacked_dataset)  # type: ignore  # noqa: E501
+        )
+
+    return metrics
+
+
 def _get_prediction_logits_and_maybe_filter(
     hf_pipeline: FilteredEvaluationPipeline,
     dataset: Dataset,
@@ -612,6 +644,10 @@ def do_adversarial_evaluation(
     metrics = attack_results.compute_adversarial_evaluation_metrics()
     assert len(set(metrics.keys()) & set(info_dict.keys())) == 0
     metrics |= info_dict
+
+    metrics |= _maybe_record_defense_specific_metrics(
+        model=model, dataset=dataset, attacked_dataset=attacked_dataset  # type: ignore
+    )
 
     # TODO(GH#158): Refactor/unify logging.
     if accelerator.is_main_process:

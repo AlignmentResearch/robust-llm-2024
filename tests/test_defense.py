@@ -12,7 +12,7 @@ from transformers import PreTrainedModel
 from robust_llm.configs import DefenseConfig, PerplexityDefenseConfig
 from robust_llm.defenses.perplexity import (
     PerplexityDefendedModel,
-    compute_max_perplexity,
+    compute_max_min_percentile_perplexity,
     compute_perplexity,
 )
 from robust_llm.defenses.retokenization import (
@@ -216,7 +216,7 @@ def test_compute_max_perplexity():
     mock_dataset = TrivialTestDataset()
 
     # Step 2: Call function
-    max_perplexity = compute_max_perplexity(
+    max_perplexity, _, _ = compute_max_min_percentile_perplexity(
         mock_model, mock_tokenizer, mock_dataset, batch_size=1  # type: ignore
     )
 
@@ -304,6 +304,7 @@ def test_perplexity_defended_model_forward():
     # Create a dummy dataset
     dataset = Dataset.from_dict(
         {
+            "text": ["hello test test"],
             "input_ids": [[0, 1, 2]],
             "attention_mask": [[1, 1, 1]],
         }
@@ -311,13 +312,18 @@ def test_perplexity_defended_model_forward():
 
     # Create a dummy defense config
     perplexity_config = PerplexityDefenseConfig()
-    perplexity_config.perplexity_threshold = 0.0
+    perplexity_config.perplexity_threshold_proportion = 0.01
     defense_config = DefenseConfig(
         perplexity_defense_config=perplexity_config,
     )
 
     init_model = MagicMock()
+
     tokenizer = MagicMock()
+    tokenizer.return_value = TokenizedInput(
+        input_ids=torch.tensor([[0, 1, 2]]),
+        attention_mask=torch.tensor([[1, 1, 1]]),
+    )
     decoder = MagicMock()
     decoder.__class__ = PreTrainedModel
 

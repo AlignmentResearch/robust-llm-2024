@@ -284,22 +284,30 @@ class PerplexityDefenseConfig:
     Configs used in perplexity-based defenses.
 
     Attributes:
-        perplexity_threshold (Optional[float]):
-            The perplexity threshold to use.
-            If None, use the max perplexity in the train set.
+        perplexity_threshold_proportion (float):
+            What proportion of the train set should be filtered out by
+            the perplexity filter?
         window_size (Optional[int]): Window size (if applicable).
         batch_size (int): Batch size to use for perplexity calculations.
         verbose (bool): Whether to print out the perplexity of each example.
+        save_perplexity_curves (bool):
+            Whether or not to save the full perplexity curves (what proportion
+            of the dataset is filtered out at each perplexity value) for the
+            original dataset and the attacked dataset.
     """
 
-    perplexity_threshold: Optional[float] = None
+    perplexity_threshold_proportion: float = 0.01
     window_size: Optional[int] = None
     batch_size: int = 4
     verbose: bool = False
+    save_perplexity_curves: bool = False
 
     @property
     def windowed(self) -> bool:
         return self.window_size is not None
+
+    def __post_init__(self):
+        assert 0 <= self.perplexity_threshold_proportion <= 1
 
 
 @dataclass
