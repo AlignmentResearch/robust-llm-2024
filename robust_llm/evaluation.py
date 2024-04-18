@@ -325,7 +325,7 @@ class AttackResults:
 
 
 def _maybe_record_defense_specific_metrics(
-    model: LanguageModel, dataset: Optional[Dataset], attacked_dataset: Dataset
+    model: LanguageModel, dataset: Dataset, attacked_dataset: Dataset
 ) -> dict:
 
     metrics = {}
@@ -337,7 +337,6 @@ def _maybe_record_defense_specific_metrics(
         # Get the approximate perplexities of the decoder on
         # on both datasets.
 
-        assert dataset is not None
         # We don't pass in input_ids or attention_mask here because
         # get_all_perplexity_thresholds gets confused
         original_text_dataset = Dataset.from_dict({"text": dataset["text"]})
@@ -345,7 +344,6 @@ def _maybe_record_defense_specific_metrics(
             model.get_all_perplexity_thresholds(dataset=original_text_dataset)  # type: ignore  # noqa: E501
         )
 
-        assert attacked_dataset is not None
         # The attacked dataset only has `text`, `original_text`, and `label`,
         # so we're fine to pass it in as is.
         metrics["perplexity/decoder_perplexities_attacked"] = (  # type: ignore

@@ -10,13 +10,6 @@ from robust_llm.defenses.defense import DefendedModel
 from robust_llm.utils import LanguageModel
 
 
-def debug_print(logits):
-    print("the shape is:", logits.shape)
-    print("the min and max were:", logits.min().item(), logits.max().item())
-    print("were there any nans:", torch.isnan(logits).any().item())
-    print("were there any infs:", torch.isinf(logits).any().item())
-
-
 def compute_perplexity(
     model: LanguageModel,
     window_size: Optional[int] = None,
@@ -33,35 +26,61 @@ def compute_perplexity(
     """
     outputs = model(**inputs)
 
-    # print("~~~~RAW LOGITS~~~~")
-    # debug_print(outputs.logits)
+    # Softmax the logits so now the last dimension
+    # is a probability distribution over the vocabulary
 
-    logits = torch.log_softmax(outputs.logits, -1)  # [batch pos vocab]
+    # We think of the softmaxed logits as a probability distribution over all tokens,
+    # which says how likely each token is to be the _next_ token.
 
-    # print("~~~~SOFTMAX~~~~")
-    # debug_print(logits)
+    # start_token,    token_1,    token_2,    token_3,    token_4(=end_token)
+    #        \           \           \           \           \
+    #         \           \           \           \           \
+    #          \           \           \           \           \
+    #           \           \           \           \           \
+    #            \           \           \           \           \
+    #             \           \           \           \           \
+    #              \      softmaxed logits predict     \           \
+    #               \           \           \           \           \
+    #                \           \           \           \           \
+    #                 \           \           \           \           \
+    #                  \           \           \           \           \
+    #                   \           \           \           \           \
+    #                    v           v           v           v           v
+    #           dist_token_1, dist_token_2, dist_token_3, dist_token_4, ignore_this
 
+    # Shape is [batch_size, num_tokens_per_datapoint, vocab_size]
+    logits = torch.log_softmax(outputs.logits, -1)
+
+    # We want to know how well the model predicted the next tokens,
+    # for the "next tokens" that we actually saw. We do this by
+    # getting the log probability mass of token_i in dist_token_i,
+    # for each index i = 1, ..., num_tokens_per_datapoint - 1.
+
+    # Note that `input_ids` has dimensions [batch_size, num_tokens_per_datapoint],
+    # so we need to add a dimension to it to use it in `gather`.
+
+    # Shape is [batch_size, num_tokens_per_datapoint - 1]
+    # (no vocab_size dimension because we extracted the probability
+    # corresponding to the token in question along that dimension)
+    logits_without_final_prediction = logits[:, :-1, :]
+    input_ids_without_initial_token = inputs["input_ids"][:, 1:].unsqueeze(-1)
     next_token_logits = torch.gather(
-        logits, 2, inputs["input_ids"][:, 1:].unsqueeze(-1)
-    ).squeeze(
-        -1
-    )  # [batch pos-1]
+        input=logits_without_final_prediction,
+        dim=2,
+        index=input_ids_without_initial_token,
+    ).squeeze(-1)
 
-    # print("~~~~NEXT TOKEN LOGITS~~~~")
-    # debug_print(next_token_logits)
-
-    mask = inputs["attention_mask"][:, 1:] == 1  # [batch pos-1]
-
-    # print("~~~~MASK~~~~")
-    # debug_print(mask)
-
+    # We ignore the probabilities of the padding tokens.
+    # Shape is [batch_size, num_tokens_per_datapoint - 1]
+    mask = inputs["attention_mask"][:, 1:] == 1
     masked_next_token_logits = torch.where(
-        mask, next_token_logits, torch.zeros_like(next_token_logits)
-    )  # masked tokens have log prob 0 # [batch, pos-1]
+        condition=mask,
+        input=next_token_logits,
+        other=torch.zeros_like(next_token_logits),
+    )
 
-    # print("~~~~MASKED NEXT TOKEN LOGITS~~~~")
-    # debug_print(masked_next_token_logits)
-
+    # TODO(niki): delete or document the window code
+    # (this is addressed in PR #305)
     if window_size is not None:
         # chunk tokens into windows of size window_size
         num_windows = next_token_logits.shape[1] // window_size
@@ -79,11 +98,14 @@ def compute_perplexity(
         )  # [batch num_windows]
         perplexity = -masked_next_token_logits.min(dim=1).values  # batch
     else:
-        # NOTE(niki): if the sequence is too short, we get division by 0 here
-        # TODO(niki): fix this!!
-        perplexity = (
-            -masked_next_token_logits.sum(dim=1) / mask.sum(dim=1).float()
-        )  # [batch]
+        # Finally, sum the log probabilities of the next tokens
+        # along the datapoint dimension, and divide by the number
+        # of tokens in that datapoint.
+        # Shape is [batch_size]
+        denominator = mask.sum(dim=1).float()
+        if torch.any(denominator < 1):
+            raise ValueError("Can't take perplexity of empty sequences.")
+        perplexity = -masked_next_token_logits.sum(dim=1) / mask.sum(dim=1).float()
     return perplexity
 
 
