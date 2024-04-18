@@ -1,5 +1,3 @@
-from typing import Optional
-
 import torch
 import torch.utils.data
 from datasets import Dataset
@@ -10,10 +8,135 @@ from robust_llm.defenses.defense import DefendedModel
 from robust_llm.utils import LanguageModel
 
 
+def _get_logits_in_windows(
+    num_windows: int, window_size: int, masked_next_token_logits, side: str
+) -> torch.Tensor:
+    # Truncate the next token logits and mask to be divisible by window_size
+    if side == "left":
+        masked_next_token_logits = masked_next_token_logits[: num_windows * window_size]
+    elif side == "right":
+        masked_next_token_logits = masked_next_token_logits[
+            -num_windows * window_size :
+        ]
+    else:
+        raise ValueError("`side` must be 'left' or 'right'")
+
+    return torch.reshape(masked_next_token_logits, (num_windows, window_size))
+
+
+def _is_ones_then_zeros(mask):
+    """Check that the mask is of the form [True, True, ..., False, False, ...]."""
+    return (
+        set(mask.unique().tolist()) <= {False, True}
+        and torch.all(mask[: mask.sum().item()])
+        and torch.all(~mask[mask.sum().item() :])
+    )
+
+
+def _get_perplexity_from_start_side(
+    masked_next_token_logits: torch.Tensor,
+    mask: torch.Tensor,
+    window_size: int,
+    report_max_perplexity: bool,
+    start_side: str,
+) -> torch.Tensor:
+    # Extract the subset of the next token logits and mask
+    # such that we have a number of tokens that is divisible
+    # by window_size
+    # Shape is [num_windows window_size]
+    num_windows = len(masked_next_token_logits) // window_size
+    logits_in_windows = _get_logits_in_windows(
+        num_windows=num_windows,
+        window_size=window_size,
+        masked_next_token_logits=masked_next_token_logits,
+        side=start_side,
+    )
+
+    # Get the average perplexity of each window
+    # Shape is [num_windows]
+    window_average_logits = logits_in_windows.sum(dim=1) / window_size
+
+    # Extract the maximum or average perplexity across windows.
+    # Shape is []
+    if report_max_perplexity:
+        perplexity = torch.max(-window_average_logits, dim=0).values
+    else:
+        perplexity = torch.mean(-window_average_logits, dim=0)
+
+    return perplexity
+
+
+def _get_single_datapoint_perplexity(
+    masked_next_token_logits: torch.Tensor,
+    mask: torch.Tensor,
+    window_size: int,
+    report_max_perplexity: bool,
+) -> torch.Tensor:
+    # Now that we are only dealing with one datapoint, we
+    # can cut off the masked tokens at the end
+    assert _is_ones_then_zeros(mask)
+    masked_next_token_logits = masked_next_token_logits[: int(mask.sum().item())]
+
+    assert torch.all(masked_next_token_logits < 0)
+
+    # Cut down the window size if it exceeds the number
+    # of tokens we have in this example
+    window_size = min(window_size, len(masked_next_token_logits))
+
+    # For this single datapoint, we calculate
+    # the perplexity across two sets of windows:
+    # one that is flush with the left side, and one that is
+    # flush with the right side. This way, we don't miss out
+    # on high perplexity regions at the beginning or end of the
+    # sequences. Below is an example.
+
+    # Starting sequence:
+    # [logit_token_1, logit_token_2, logit_token_3, logit_token_4,
+    #  logit_token_5, logit_token_6, logit_token_7, logit_token_8]
+
+    # If we have a window size of 3, starting from left side we would take
+    # [logit_token_1, logit_token_2, logit_token_3] and
+    # [logit_token_4, logit_token_5, logit_token_6];
+    # while starting from the right side we would take
+    # [logit_token_3, logit_token_4, logit_token_5] and
+    # [logit_token_6, logit_token_7, logit_token_8].
+    # We would do analogously for the mask.
+
+    # We consider the perplexities across both of these sets of windows,
+    # and take their maximum or average, depending on the value of
+    # `report_max_perplexity`.
+    start_left_perplexity = _get_perplexity_from_start_side(
+        masked_next_token_logits=masked_next_token_logits,
+        mask=mask,
+        window_size=window_size,
+        report_max_perplexity=report_max_perplexity,
+        start_side="left",
+    )
+    start_right_perplexity = _get_perplexity_from_start_side(
+        masked_next_token_logits=masked_next_token_logits,
+        mask=mask,
+        window_size=window_size,
+        report_max_perplexity=report_max_perplexity,
+        start_side="right",
+    )
+    stacked_perplexities = torch.stack([start_left_perplexity, start_right_perplexity])
+
+    # Finally, take the average or maximum across the two sets of windows
+    # starting from the left and right sides.
+    # Shape is []
+    if report_max_perplexity:
+        perplexity = torch.max(stacked_perplexities, dim=0).values
+    else:
+        perplexity = torch.mean(stacked_perplexities, dim=0)
+
+    return perplexity
+
+
 def compute_perplexity(
     model: LanguageModel,
-    window_size: Optional[int] = None,
-    **inputs,
+    model_inputs,  # TODO(niki): type
+    window_size: int,
+    report_max_perplexity: bool,
 ) -> torch.Tensor:
     """Compute the perplexity of the model on the given inputs.
 
@@ -21,18 +144,30 @@ def compute_perplexity(
     of size `window_size`, dropping any tokens at the end of the string
     if `window_size` does not divide the number of tokens.
 
+    Args:
+        model: the model to evaluate
+        window_size: the size of the sliding window, if any
+        window_stride: the stride of the window. Required if `window_size`
+            is not None. Note that we always consider the rightmost
+            window as well, even if the stride doesn't match up with it.
+        report_max_perplexity: whether to report the maximum perplexity
+            across windows, rather than the average perplexity.
+        inputs: the inputs to the model
+
     Returns:
         A batch-shaped tensor of perplexities (negative log probs).
     """
-    outputs = model(**inputs)
+    outputs = model(**model_inputs)
 
     # Softmax the logits so now the last dimension
     # is a probability distribution over the vocabulary
 
     # We think of the softmaxed logits as a probability distribution over all tokens,
-    # which says how likely each token is to be the _next_ token.
+    # which says how likely each token is to be the _next_ token. For example,
+    # dist_token_2 is a probability distribution over all tokens, saying how
+    # likely each token is to be the next token after token_1.
 
-    # start_token,    token_1,    token_2,    token_3,    token_4(=end_token)
+    # token_0,    token_1,    token_2,    token_3,    token_4
     #        \           \           \           \           \
     #         \           \           \           \           \
     #          \           \           \           \           \
@@ -49,7 +184,7 @@ def compute_perplexity(
     #           dist_token_1, dist_token_2, dist_token_3, dist_token_4, ignore_this
 
     # Shape is [batch_size, num_tokens_per_datapoint, vocab_size]
-    logits = torch.log_softmax(outputs.logits, -1)
+    logits = torch.log_softmax(outputs.logits, -1).detach()
 
     # We want to know how well the model predicted the next tokens,
     # for the "next tokens" that we actually saw. We do this by
@@ -63,7 +198,7 @@ def compute_perplexity(
     # (no vocab_size dimension because we extracted the probability
     # corresponding to the token in question along that dimension)
     logits_without_final_prediction = logits[:, :-1, :]
-    input_ids_without_initial_token = inputs["input_ids"][:, 1:].unsqueeze(-1)
+    input_ids_without_initial_token = model_inputs["input_ids"][:, 1:].unsqueeze(-1)
     next_token_logits = torch.gather(
         input=logits_without_final_prediction,
         dim=2,
@@ -72,41 +207,28 @@ def compute_perplexity(
 
     # We ignore the probabilities of the padding tokens.
     # Shape is [batch_size, num_tokens_per_datapoint - 1]
-    mask = inputs["attention_mask"][:, 1:] == 1
+    mask = model_inputs["attention_mask"][:, 1:] == 1
     masked_next_token_logits = torch.where(
         condition=mask,
         input=next_token_logits,
         other=torch.zeros_like(next_token_logits),
     )
 
-    # TODO(niki): delete or document the window code
-    # (this is addressed in PR #305)
-    if window_size is not None:
-        # chunk tokens into windows of size window_size
-        num_windows = next_token_logits.shape[1] // window_size
-        # TODO: handle case where window_size doesn't divide num_tokens
-        masked_next_token_logits = masked_next_token_logits[
-            :, : num_windows * window_size
-        ]
-        mask = mask[:, : num_windows * window_size]
-        masked_next_token_logits = masked_next_token_logits.reshape(
-            next_token_logits.shape[0], num_windows, window_size
-        )  # [batch num_windows window_size]
-        mask = mask.reshape(next_token_logits.shape[0], num_windows, window_size)
-        masked_next_token_logits = (
-            masked_next_token_logits.sum(dim=2) / mask.sum(dim=2).float()
-        )  # [batch num_windows]
-        perplexity = -masked_next_token_logits.min(dim=1).values  # batch
-    else:
-        # Finally, sum the log probabilities of the next tokens
-        # along the datapoint dimension, and divide by the number
-        # of tokens in that datapoint.
-        # Shape is [batch_size]
-        denominator = mask.sum(dim=1).float()
-        if torch.any(denominator < 1):
-            raise ValueError("Can't take perplexity of empty sequences.")
-        perplexity = -masked_next_token_logits.sum(dim=1) / mask.sum(dim=1).float()
-    return perplexity
+    # Unfortunately, we need to calculate the perplexities for each
+    # datapoint separately. We cannot do it in batch mode because
+    # of the challenges arising from variable-length sequences.
+    batch_perplexities = []
+    for single_example_logits, mask in zip(masked_next_token_logits, mask):
+        # Calculate the perplexity of each window
+        perplexities = _get_single_datapoint_perplexity(
+            masked_next_token_logits=single_example_logits,
+            mask=mask,
+            window_size=window_size,
+            report_max_perplexity=report_max_perplexity,
+        )
+        batch_perplexities.append(perplexities)
+
+    return torch.tensor(batch_perplexities)
 
 
 def compute_max_min_percentile_perplexity(
@@ -114,16 +236,14 @@ def compute_max_min_percentile_perplexity(
     tokenizer: PreTrainedTokenizerBase,
     dataset: Dataset,
     batch_size: int,
+    window_size: int,
+    report_max_perplexity: bool,
 ) -> tuple[float, float, TDigest]:
     """
     Computes the maximum, minimum, and approximate percentile perplexities
     of the model on the given dataset.
     This is useful for setting the perplexity threshold.
 
-    Args:
-        model: the model to evaluate
-        dataset: the dataset to evaluate on
-        batch_size: the batch size to use for evaluation
     Returns:
         A tuple of the maximum perplexity, minimum perplexity, and a TDigest
         object from which approximate percentiles can be extracted.
@@ -145,8 +265,9 @@ def compute_max_min_percentile_perplexity(
         encoded_input.to(model.device)
         perplexity = compute_perplexity(
             model=model,
-            window_size=None,
-            **encoded_input,
+            model_inputs=encoded_input,
+            window_size=window_size,
+            report_max_perplexity=report_max_perplexity,
         )
         min_perplexity_so_far = min(min_perplexity_so_far, perplexity.min().item())
         max_perplexity_so_far = max(max_perplexity_so_far, perplexity.max().item())
@@ -158,13 +279,16 @@ class PerplexityDefendedModel(DefendedModel):
     def __post_init__(self) -> None:
         super().__post_init__()
 
-        self.max_perplexity: Optional[float] = None
-        self.min_perplexity: Optional[float] = None
-        self.tdigest: Optional[TDigest] = None
-
         assert self.decoder is not None
         assert isinstance(self.device, torch.device)
         self.decoder.to(device=self.device)  # type: ignore
+        self.window_size = self.defense_config.perplexity_defense_config.window_size
+        self.report_max_perplexity = (
+            self.defense_config.perplexity_defense_config.report_max_perplexity
+        )
+        self.batch_size = self.defense_config.perplexity_defense_config.batch_size
+        self.verbose = self.defense_config.perplexity_defense_config.verbose
+
         # We subtract from 1 because perplexities are sorted low -> high,
         # and we want to get the x% _highest_ (not lowest) perplexity value.
         perplexity_config = self.defense_config.perplexity_defense_config
@@ -173,10 +297,12 @@ class PerplexityDefendedModel(DefendedModel):
         assert self.dataset is not None
         self.max_perplexity, self.min_perplexity, self.tdigest = (
             compute_max_min_percentile_perplexity(
-                self.decoder,
-                self.tokenizer,
-                self.dataset,
-                self.defense_config.perplexity_defense_config.batch_size,
+                model=self.decoder,
+                tokenizer=self.tokenizer,
+                dataset=self.dataset,
+                batch_size=self.batch_size,
+                window_size=self.window_size,
+                report_max_perplexity=self.report_max_perplexity,
             )
         )
         print("the max perplexity was", self.max_perplexity)
@@ -191,24 +317,13 @@ class PerplexityDefendedModel(DefendedModel):
             f"(perplexity={round(self.threshold, 4)})"
         )
 
-    @property
-    def verbose(self) -> bool:
-        return self.defense_config.perplexity_defense_config.verbose
-
-    @property
-    def window_size(self) -> Optional[int]:
-        return self.defense_config.perplexity_defense_config.window_size
-
-    @property
-    def windowed(self) -> bool:
-        return self.defense_config.perplexity_defense_config.windowed
-
     def forward(self, **inputs):
         assert self.decoder is not None
         perplexity = compute_perplexity(
             model=self.decoder,
+            model_inputs=inputs,
             window_size=self.window_size,
-            **inputs,
+            report_max_perplexity=self.report_max_perplexity,
         )
         output = self.model(**inputs)
         output["filters"] = perplexity > self.threshold

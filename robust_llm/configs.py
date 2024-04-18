@@ -286,8 +286,15 @@ class PerplexityDefenseConfig:
     Attributes:
         perplexity_threshold_proportion (float):
             What proportion of the train set should be filtered out by
-            the perplexity filter?
-        window_size (Optional[int]): Window size (if applicable).
+            the perplexity filter? Must be between 0 and 1 inclusive.
+        window_size (int): Window size. If the window is larger
+            than a given example, it will be cut down to the
+            length of that example for the perplexity calculation
+            on that specific example. Thus, if you want to calculate
+            perplexity over the entire example for every example,
+            choose a window size that is larger than any example.
+        report_max_perplexity (bool): Whether to report the maximum
+            perplexity across windows, instead of the average.
         batch_size (int): Batch size to use for perplexity calculations.
         verbose (bool): Whether to print out the perplexity of each example.
         save_perplexity_curves (bool):
@@ -297,14 +304,11 @@ class PerplexityDefenseConfig:
     """
 
     perplexity_threshold_proportion: float = 0.01
-    window_size: Optional[int] = None
+    window_size: int = 8
+    report_max_perplexity: bool = True
     batch_size: int = 4
     verbose: bool = False
     save_perplexity_curves: bool = False
-
-    @property
-    def windowed(self) -> bool:
-        return self.window_size is not None
 
     def __post_init__(self):
         assert 0 <= self.perplexity_threshold_proportion <= 1

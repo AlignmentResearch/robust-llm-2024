@@ -143,22 +143,20 @@ def test_compute_perplexity():
     mock_model = MagicMock()
 
     # Define what mock_model should return when called
+    BIG = 9
+    SMALL = 1
+    MED = 2
+    BIG_SMALL = [-np.log(BIG), -np.log(SMALL)]
+    SMALL_BIG = [-np.log(SMALL), -np.log(BIG)]
+    MED_MED = [-np.log(MED), -np.log(MED)]
     output = torch.tensor(
         [
-            [[-np.inf, 0.0], [-np.inf, 0.0], [-np.inf, 0.0]],
-            [[0.0, -np.inf], [0.0, -np.inf], [0.0, -np.inf]],
-            [[-np.inf, 0.0], [-np.inf, 0], [0.0, -np.inf]],
-            [
-                [-np.log(2), -np.log(2)],
-                [-np.log(2), -np.log(2)],
-                [-np.log(2), -np.log(2)],
-            ],
-            [
-                [-np.log(2), -np.log(2)],
-                [-np.log(2), -np.log(2)],
-                [-np.log(2), -np.log(2)],
-            ],
-            [[-np.inf, 0.0], [-np.inf, 0.0], [-np.inf, 0.0]],
+            [BIG_SMALL, BIG_SMALL, BIG_SMALL],
+            [SMALL_BIG, SMALL_BIG, SMALL_BIG],
+            [BIG_SMALL, BIG_SMALL, SMALL_BIG],
+            [MED_MED, MED_MED, MED_MED],
+            [MED_MED, MED_MED, MED_MED],
+            [BIG_SMALL, BIG_SMALL, BIG_SMALL],
         ],
         dtype=torch.float,
     )
@@ -178,11 +176,21 @@ def test_compute_perplexity():
     }
 
     # Step 2: Call function
-    output = compute_perplexity(mock_model, window_size=None, **inputs)
+    output = compute_perplexity(
+        model=mock_model, model_inputs=inputs, window_size=1, report_max_perplexity=True
+    )
 
     # Step 3: Assert the output is as expected
     expected_output = torch.tensor(
-        [np.inf, np.inf, 0.0, np.log(2), np.log(2), 0.0], dtype=torch.float
+        [
+            -np.log(SMALL / (BIG + SMALL)),
+            -np.log(SMALL / (BIG + SMALL)),
+            -np.log(BIG / (BIG + SMALL)),
+            -np.log(MED / (MED + MED)),
+            -np.log(MED / (MED + MED)),
+            -np.log(BIG / (BIG + SMALL)),
+        ],
+        dtype=torch.float,
     )
     assert torch.allclose(
         output, expected_output
@@ -217,7 +225,12 @@ def test_compute_max_perplexity():
 
     # Step 2: Call function
     max_perplexity, _, _ = compute_max_min_percentile_perplexity(
-        mock_model, mock_tokenizer, mock_dataset, batch_size=1  # type: ignore
+        model=mock_model,
+        tokenizer=mock_tokenizer,
+        dataset=mock_dataset,  # type: ignore
+        batch_size=1,  # type: ignore
+        window_size=1,
+        report_max_perplexity=True,
     )
 
     # Step 3: Assert the output is as expected
@@ -332,20 +345,20 @@ def test_perplexity_defended_model_forward():
 
     output_logits = torch.tensor(
         [
-            [-np.inf, 0],
-            [0, -np.inf],
-            [-np.inf, 0],
+            [-9.0, -1.0],
+            [-1.0, -9.0],
+            [-9.0, -1.0],
         ]
     )
     init_model.return_value = Output(
-        logits=torch.tensor(output_logits),
+        logits=output_logits.clone().detach(),
     )
     decoder.return_value = Output(
         logits=torch.tensor(
             [
-                [[-np.inf, 0, -np.inf], [-np.inf, -np.inf, 0], [0, 0, 0]],
-                [[-np.inf, 0, -np.inf], [-np.inf, -np.inf, 0], [0, 0, 0]],
-                [[-np.inf, 0, -np.inf], [-np.inf, -np.inf, 0], [0, 0, 0]],
+                [[-9.0, -1.0, -9.0], [-9.0, -9.0, -1.0], [-1.0, -1.0, -1.0]],
+                [[-9.0, -1.0, -9.0], [-9.0, -9.0, -1.0], [-1.0, -1.0, -1.0]],
+                [[-9.0, -1.0, -9.0], [-9.0, -9.0, -1.0], [-1.0, -1.0, -1.0]],
             ]
         )
     )
