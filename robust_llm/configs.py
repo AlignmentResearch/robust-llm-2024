@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Optional
 
 import torch
@@ -188,8 +188,10 @@ class SearchBasedAttackConfig:
     forward_pass_batch_size: Optional[int] = None
     seq_clf: bool = True
     search_type: str = "gcg"  # We currently support "gcg" and "beam_search"
-    gcg_attack_config: GCGAttackConfig = GCGAttackConfig()
-    beam_search_attack_config: BeamSearchAttackConfig = BeamSearchAttackConfig()
+    gcg_attack_config: GCGAttackConfig = field(default_factory=GCGAttackConfig)
+    beam_search_attack_config: BeamSearchAttackConfig = field(
+        default_factory=BeamSearchAttackConfig
+    )
 
     def __post_init__(self):
         if (
@@ -251,13 +253,19 @@ class AttackConfig:
     append_to_modifiable_chunk: bool = False
 
     # Configs for specific types of attacks.
-    brute_force_tomita_attack_config: BruteForceTomitaAttackConfig = (
-        BruteForceTomitaAttackConfig()
+    brute_force_tomita_attack_config: BruteForceTomitaAttackConfig = field(
+        default_factory=BruteForceTomitaAttackConfig
     )
-    text_attack_attack_config: TextAttackAttackConfig = TextAttackAttackConfig()
-    random_token_attack_config: RandomTokenAttackConfig = RandomTokenAttackConfig()
-    trl_attack_config: TRLAttackConfig = TRLAttackConfig()
-    search_based_attack_config: SearchBasedAttackConfig = SearchBasedAttackConfig()
+    text_attack_attack_config: TextAttackAttackConfig = field(
+        default_factory=TextAttackAttackConfig
+    )
+    random_token_attack_config: RandomTokenAttackConfig = field(
+        default_factory=RandomTokenAttackConfig
+    )
+    trl_attack_config: TRLAttackConfig = field(default_factory=TRLAttackConfig)
+    search_based_attack_config: SearchBasedAttackConfig = field(
+        default_factory=SearchBasedAttackConfig
+    )
 
     def __post_init__(self):
         if self.attack_type in TEXT_ATTACK_ATTACK_TYPES:
@@ -349,11 +357,15 @@ class DefenseConfig:
 
     defense_type: str = "identity"
     seed: int = 0
-    perplexity_defense_config: PerplexityDefenseConfig = PerplexityDefenseConfig()
-    retokenization_defense_config: RetokenizationDefenseConfig = (
-        RetokenizationDefenseConfig()
+    perplexity_defense_config: PerplexityDefenseConfig = field(
+        default_factory=PerplexityDefenseConfig
     )
-    paraphrase_defense_config: ParaphraseDefenseConfig = ParaphraseDefenseConfig()
+    retokenization_defense_config: RetokenizationDefenseConfig = field(
+        default_factory=RetokenizationDefenseConfig
+    )
+    paraphrase_defense_config: ParaphraseDefenseConfig = field(
+        default_factory=ParaphraseDefenseConfig
+    )
 
 
 @dataclass
@@ -385,7 +397,7 @@ class IterativeTrainingConfig:
     num_iterative_training_rounds: int = 3
     skip_first_training_round: bool = False
     use_balanced_sampling: bool = False
-    training_attack: AttackConfig = AttackConfig()
+    training_attack: AttackConfig = field(default_factory=AttackConfig)
 
 
 @dataclass
@@ -490,8 +502,8 @@ class TrainingConfig:
     For now, works only for the training pipeline.
     """
 
-    iterative: IterativeTrainingConfig = IterativeTrainingConfig()
-    baseline: BaselineTrainingConfig = BaselineTrainingConfig()
+    iterative: IterativeTrainingConfig = field(default_factory=IterativeTrainingConfig)
+    baseline: BaselineTrainingConfig = field(default_factory=BaselineTrainingConfig)
     num_train_epochs: int = 3
     learning_rate: float = 5e-5
     batch_size: int = 8
@@ -529,7 +541,7 @@ class EvaluationConfig:
     """
 
     batch_size: int = 8
-    evaluation_attack: AttackConfig = AttackConfig()
+    evaluation_attack: AttackConfig = field(default_factory=AttackConfig)
     num_generated_examples: Optional[int] = None
     num_examples_to_log_detailed_info: Optional[int] = 10
 
@@ -555,10 +567,10 @@ class ExperimentConfig:
     experiment_name: str = "default-experiment"
     job_type: str = "default-job"
     run_name: str = "default-run"
-    environment: EnvironmentConfig = EnvironmentConfig()
-    training: TrainingConfig = TrainingConfig()
-    evaluation: EvaluationConfig = EvaluationConfig()
-    defense: DefenseConfig = DefenseConfig()
+    environment: EnvironmentConfig = field(default_factory=EnvironmentConfig)
+    training: TrainingConfig = field(default_factory=TrainingConfig)
+    evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
+    defense: DefenseConfig = field(default_factory=DefenseConfig)
 
     def __post_init__(self):
         # Ensure that the config is valid.
@@ -578,4 +590,4 @@ class ExperimentConfig:
 
 @dataclass
 class OverallConfig:
-    experiment: ExperimentConfig = ExperimentConfig()
+    experiment: ExperimentConfig = field(default_factory=ExperimentConfig)
