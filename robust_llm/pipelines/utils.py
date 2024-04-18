@@ -27,10 +27,12 @@ def prepare_victim_models(
     print("Preparing model and tokenizer (and maybe decoder)...")
 
     model_name_or_path = args.experiment.environment.model_name_or_path
-    decoder_name = args.experiment.environment.decoder_name
-
     model_family = args.experiment.environment.model_family
     revision = args.experiment.training.revision
+
+    decoder_name = args.experiment.environment.decoder_name
+    decoder_family = args.experiment.environment.decoder_family
+    decoder_revision = args.experiment.environment.decoder_revision
 
     model = _prepare_model(
         model_name_or_path=model_name_or_path,
@@ -46,15 +48,17 @@ def prepare_victim_models(
 
     decoder = None
     if decoder_name is not None:
+        assert decoder_family is not None
+        assert decoder_revision is not None
         decoder = _prepare_decoder(
             decoder_name=decoder_name,
-            model_family=model_family,
-            revision=revision,
+            model_family=decoder_family,
+            revision=decoder_revision,
         )
         decoder_tokenizer = _prepare_tokenizer(
             model_name_or_path=decoder_name,
-            model_family=model_family,
-            revision=revision,
+            model_family=decoder_family,
+            revision=decoder_revision,
         )
 
         # Assert that tokenizers are the same. This check is of course not ideal.

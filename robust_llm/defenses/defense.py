@@ -24,10 +24,9 @@ class Defenses(Enum):
 
 @dataclass
 class DefendedModel(LanguageModel):
-    """
-    Wrapper class for model modified to be robust to attacks.
+    """Wrapper class for model modified to be robust to attacks.
 
-    The model can be any model that implements the `RobustModel` protocol, but most
+    The model can be any model that implements the `LanguageModel` protocol, but most
     likely it will be a `transformers.PreTrainedModel`.
 
     The wrapper is designed to be subclassed by specific defenses, which can then
@@ -39,7 +38,7 @@ class DefendedModel(LanguageModel):
         init_model: the model to be defended
         tokenizer: tokenizer used by the model
         dataset: dataset used to train or tune the defense, e.g. setting max perplexity
-        decoder: this can be used for instance to compute perplexity
+        decoder: additional model used in some defenses, such as to compute perplexity
     """
 
     defense_config: DefenseConfig
@@ -49,11 +48,14 @@ class DefendedModel(LanguageModel):
     decoder: Optional[PreTrainedModel] = None
 
     def __post_init__(self) -> None:
-        """
-        Perform any necessary post-initialization steps,
+        """Perform any necessary post-initialization steps,
         in particular updating the model.
         """
         self._model = self.init_model
+
+        # It was necessary to add this since being a pipeline
+        # means you have a "can_generate" method
+        self.can_generate = lambda: False
 
     def __call__(self, **inputs):
         return self.forward(**inputs)
@@ -63,6 +65,7 @@ class DefendedModel(LanguageModel):
         return self.model.config
 
     def to(self, *args, **kwargs):
+        # For torch modules (but not tensors), "to" modifies in-place.
         self._model.to(*args, **kwargs)
         return self
 

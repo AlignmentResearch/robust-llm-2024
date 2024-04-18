@@ -347,6 +347,9 @@ class DefenseConfig:
     Attributes:
         defense_type (str): The type of defense.
         seed (int): Random seed for the defense.
+        num_preparation_examples (Optional[int]):
+            Number of examples to give the defense for preparation.
+            If None, use the full train set.
         perplexity_defense_config (PerplexityDefenseConfig):
             Configs for perplexity-based defenses.
         retokenization_defense_config (RetokenizationDefenseConfig):
@@ -357,6 +360,7 @@ class DefenseConfig:
 
     defense_type: str = "identity"
     seed: int = 0
+    num_preparation_examples: Optional[int] = None
     perplexity_defense_config: PerplexityDefenseConfig = field(
         default_factory=PerplexityDefenseConfig
     )
@@ -410,6 +414,7 @@ class EnvironmentConfig:
         model_family (str) : Which model family to load (e.g. "gpt2").
         decoder_name (Optional[str]): Decoder model name (used for defenses).
         decoder_family (Optional[str]): Which model family the decoder belongs to.
+        decoder_revision (Optional[str]): The revision of the decoder model.
         dataset_type (str): Dataset type (tomita, tensor_trust).
         num_classes (Optional[int]): Number of classes in the dataset, if specified.
             Otherwise, number of classes is inferred from the dataset.
@@ -444,6 +449,7 @@ class EnvironmentConfig:
     model_family: str = "gpt2"
     decoder_name: Optional[str] = None
     decoder_family: Optional[str] = None
+    decoder_revision: Optional[str] = None
     dataset_type: str = "tomita"
     num_classes: Optional[int] = None
     dataset_generation_style: str = (
@@ -461,6 +467,12 @@ class EnvironmentConfig:
     filter_out_longer_than_n_tokens_train: Optional[int] = 2000
     filter_out_longer_than_n_tokens_validation: Optional[int] = 2000
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def __post_init__(self):
+    if self.decoder_name is not None:
+        assert self.decoder_family is not None
+        assert self.decoder_revision is not None
 
 
 @dataclass

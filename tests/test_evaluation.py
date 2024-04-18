@@ -19,44 +19,40 @@ def test_attack_results_from_labels_and_predictions():
     PROB_CORR_SUCCESS = PROBS_PRED1[0]
 
     data = [
-        (0, 0, 0, 1, LOGITS_PRED1),  # success
-        (1, 1, 0, 0, LOGITS_PRED0),  # mistake before attack
-        (0, 0, 0, 0, LOGITS_PRED0),  # failure
-        (1, 1, 1, 1, LOGITS_PRED1),  # failure
-        (1, 1, 1, 0, LOGITS_PRED0),  # success
-        (0, 0, 1, 1, LOGITS_PRED1),  # mistake before attack
-        (1, 1, 1, 1, LOGITS_PRED1),  # failure
-        (0, 0, 0, 0, LOGITS_PRED0),  # failure
-        (1, 1, 0, 1, LOGITS_PRED1),  # mistake before attack
-        (0, 0, None, 0, LOGITS_PRED0),  # false positive
-        (0, 0, 0, None, [None, None]),  # true positive
-        (1, 1, 1, None, [None, None]),  # true positive
-        (0, 1, 0, 0, LOGITS_PRED0),  # success, with ground truth changed
-        (0, 1, 0, 1, LOGITS_PRED1),  # failure, with ground truth changed
+        (0, 0, 0, 1, None, LOGITS_PRED1),  # success
+        (1, 1, 0, 0, None, LOGITS_PRED0),  # mistake before attack
+        (0, 0, 0, 0, None, LOGITS_PRED0),  # failure
+        (1, 1, 1, 1, None, LOGITS_PRED1),  # failure
+        (1, 1, 1, 0, None, LOGITS_PRED0),  # success
+        (0, 0, 1, 1, None, LOGITS_PRED1),  # mistake before attack
+        (1, 1, 1, 1, None, LOGITS_PRED1),  # failure
+        (0, 0, 0, 0, None, LOGITS_PRED0),  # failure
+        (1, 1, 0, 1, None, LOGITS_PRED1),  # mistake before attack
+        (0, 0, 0, 0, True, LOGITS_PRED0),  # false positive
+        (0, 0, 0, 1, True, LOGITS_PRED1),  # true positive
+        (1, 1, 1, 0, True, LOGITS_PRED0),  # true positive
+        (0, 1, 0, 0, None, LOGITS_PRED0),  # success, with ground truth changed
+        (0, 1, 0, 1, None, LOGITS_PRED1),  # failure, with ground truth changed
     ]
-    original_labels = []
-    attacked_labels = []
-    original_preds = []
-    attacked_preds = []
-    attacked_logits = []
-    for original_label, attacked_label, original_pred, attacked_pred, logits in data:
-        original_labels.append(original_label)
-        attacked_labels.append(attacked_label)
-        original_preds.append(original_pred)
-        attacked_preds.append(attacked_pred)
-        attacked_logits.append(logits)
+    original_labels = [d[0] for d in data]
+    attacked_labels = [d[1] for d in data]
+    original_preds = [d[2] for d in data]
+    attacked_preds = [d[3] for d in data]
+    attacked_filter_values = [d[4] for d in data]
+    attacked_logits = [d[5] for d in data]
 
     attack_results = AttackResults.from_labels_and_predictions(
         original_labels,
         attacked_labels,
         original_preds,
         attacked_preds,
+        attacked_filter_values,
         attacked_logits,
     )
 
-    assert attack_results.n_filtered_out_pre_attack == 1
+    assert attack_results.n_filtered_out_pre_attack == 0
     assert attack_results.n_mistakes_pre_attack == 3
-    assert attack_results.n_filtered_out_post_attack == 2
+    assert attack_results.n_filtered_out_post_attack == 3
     assert attack_results.n_failures == 5
     assert attack_results.n_successes == 3
     assert np.allclose(

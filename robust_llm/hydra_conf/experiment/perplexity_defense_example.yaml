@@ -1,21 +1,27 @@
 experiment_name: "perplexity_defense_example"
-job_type: "defense"
-experiment_type: "defense"
-
-training:
-  num_train_epochs: 1
-
-evaluation:
-  evaluation_attack:
-    attack_type: "textfooler"
-    text_attack_attack_config:
-      query_budget: 400
+experiment_type: "evaluation"
 
 environment:
-  dataset_type: "hf/imdb"
-  model_name: "textattack/bert-base-uncased-imdb"
-  train_set_size: 10
-  validation_set_size: 10
+  model_name_or_path: "AlignmentResearch/robust_llm_pythia-word-length-14m-niki-ada-v1"
+  model_family: "pythia"
+  dataset_type: "word_length"
+  train_set_size: 1000
+  validation_set_size: 1000
+  shuffle_validation_set: true
+  decoder_name: "EleutherAI/pythia-14m"
+  decoder_family: "pythia"
+  decoder_revision: "main"
+
+evaluation:
+  batch_size: 128
+  num_generated_examples: 1000
+  evaluation_attack:
+    attack_type: "random_token"
+    random_token_attack_config:
+      max_iterations: 40
 
 defense:
   defense_type: "perplexity"
+  num_preparation_examples: 50
+  perplexity_defense_config:
+    batch_size: 4
