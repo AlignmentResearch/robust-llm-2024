@@ -541,69 +541,43 @@ def get_prediction_logits_and_labels_and_maybe_flag_values(
 
 
 def _log_examples_to_wandb(
-    original_texts: Optional[Sequence[str]],
-    original_labels: Optional[Sequence[int]],
-    original_pred_labels: Optional[Sequence[int | None]],
+    original_texts: Sequence[str],
+    original_labels: Sequence[int],
+    original_pred_labels: Sequence[int],
+    original_flag_values: Sequence[bool] | Sequence[None],
     attacked_texts: Sequence[str],
     attacked_labels: Sequence[int],
-    attacked_pred_labels: Sequence[int | None],
-    attacked_flag_values: Sequence[bool | None],
-    attacked_pred_logits: Sequence[Sequence[float | None]],
+    attacked_pred_labels: Sequence[int],
+    attacked_flag_values: Sequence[bool] | Sequence[None],
+    attacked_pred_logits: Sequence[Sequence[float]],
     num_examples_to_log_detailed_info: int,
 ) -> None:
-    assert (
-        (original_texts is None)
-        == (original_labels is None)
-        == (original_pred_labels is None)
+
+    table = wandb.Table(
+        columns=[
+            "original_text",
+            "attacked_text",
+            "original_label",
+            "attacked_label",
+            "original_pred",
+            "attacked_pred",
+            "original_filter",
+            "attacked_filter",
+            "attacked_logits",
+        ]
     )
-
-    if original_texts is not None:
-        # Have those asserts here so that type checker does not complain.
-        assert original_labels is not None
-        assert original_pred_labels is not None
-
-        table = wandb.Table(
-            columns=[
-                "original_text",
-                "attacked_text",
-                "original_label",
-                "attacked_label",
-                "original_pred",
-                "attacked_pred",
-                "attacked_filter",
-                "attacked_logits",
-            ]
+    for i in range(min(num_examples_to_log_detailed_info, len(attacked_texts))):
+        table.add_data(
+            original_texts[i],
+            attacked_texts[i],
+            original_labels[i],
+            attacked_labels[i],
+            original_pred_labels[i],
+            attacked_pred_labels[i],
+            original_flag_values[i],
+            attacked_flag_values[i],
+            attacked_pred_logits[i],
         )
-        for i in range(min(num_examples_to_log_detailed_info, len(attacked_texts))):
-            table.add_data(
-                original_texts[i],
-                attacked_texts[i],
-                original_labels[i],
-                attacked_labels[i],
-                original_pred_labels[i],
-                attacked_pred_labels[i],
-                attacked_flag_values[i],
-                attacked_pred_logits[i],
-            )
-
-    else:
-        table = wandb.Table(
-            columns=[
-                "attacked_text",
-                "attacked_label",
-                "attacked_pred",
-                "attacked_filter",
-                "attacked_logits",
-            ]
-        )
-        for i in range(min(num_examples_to_log_detailed_info, len(attacked_texts))):
-            table.add_data(
-                attacked_texts[i],
-                attacked_labels[i],
-                attacked_pred_labels[i],
-                attacked_flag_values[i],
-                attacked_pred_logits[i],
-            )
 
     wandb.log({"adversarial_eval/examples": table}, commit=False)
 
@@ -666,9 +640,10 @@ def compute_attack_results(
 
     if num_examples_to_log_detailed_info is not None and accelerator.is_main_process:
         _log_examples_to_wandb(
-            original_texts=dataset["text"] if dataset else None,
-            original_labels=dataset["label"] if dataset else None,
+            original_texts=dataset["text"],
+            original_labels=dataset["label"],
             original_pred_labels=original_pred_labels,
+            original_flag_values=original_flag_values,
             attacked_texts=attacked_dataset["text"],
             attacked_labels=attacked_labels,
             attacked_pred_labels=attacked_pred_labels,
