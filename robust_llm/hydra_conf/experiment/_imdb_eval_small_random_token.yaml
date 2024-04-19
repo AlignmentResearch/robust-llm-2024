@@ -1,0 +1,12 @@
+defaults:
+  - /datasets/imdb_eval_small@dataset
+  - /evaluations/random_token@evaluation
+  - /environments/pythia_14m@environment
+  - _self_
+experiment_type: "evaluation"
+experiment_name: "dataset-testing"
+run_name: imdb-random-token
+
+evaluation:
+  evaluation_attack:
+    append_to_modifiable_chunk: true

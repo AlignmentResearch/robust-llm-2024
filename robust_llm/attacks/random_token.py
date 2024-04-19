@@ -1,17 +1,16 @@
 import copy
 from collections import deque
-from typing import Any, Callable, Optional, Sequence, Tuple
+from typing import Any, Sequence
 
 import torch
 import wandb
-from datasets import Dataset
 from transformers import PreTrainedTokenizerBase, pipeline
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
-from robust_llm.configs import AttackConfig, EnvironmentConfig
-from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.configs import AttackConfig
 from robust_llm.logging_utils import LoggingCounter
+from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel
 
 
@@ -27,44 +26,25 @@ class RandomTokenAttack(Attack):
     is True.
     """
 
-    REQUIRES_INPUT_DATASET = True
     REQUIRES_TRAINING = False
 
     def __init__(
         self,
         attack_config: AttackConfig,
-        environment_config: EnvironmentConfig,
-        modifiable_chunks_spec: ModifiableChunksSpec,
-        dataset_type: str,
         victim_model: LanguageModel,
         victim_tokenizer: PreTrainedTokenizerBase,
-        ground_truth_label_fn: Optional[Callable[[str], int]],
     ) -> None:
         """Constructor for RandomTokenAttack.
 
         Args:
             attack_config: config of the attack
-            environment_config: config of the environment
-            modifiable_chunks_spec: Specification for which chunks of the
-                original text can be modified
-            dataset_type: used dataset type
             victim_model: the model to be attacked
             victim_tokenizer: tokenizer used by the victim model
-            ground_truth_label_fn: function to get the ground truth label
         """
-        super().__init__(attack_config, environment_config, modifiable_chunks_spec)
-
-        assert True in modifiable_chunks_spec
-
-        if dataset_type == "tomita":
-            raise ValueError(
-                "Random token attack is not supported for dataset type "
-                f"{dataset_type}, exiting..."
-            )
+        super().__init__(attack_config)
 
         self.victim_model = victim_model
         self.victim_tokenizer = victim_tokenizer
-        self.ground_truth_label_fn = ground_truth_label_fn
 
         self.torch_rng = torch.random.manual_seed(self.attack_config.seed)
 
@@ -89,16 +69,10 @@ class RandomTokenAttack(Attack):
 
     @override
     def get_attacked_dataset(
-        self, dataset: Optional[Dataset] = None, max_n_outputs: Optional[int] = None
-    ) -> Tuple[Dataset, dict[str, Any]]:
-
-        assert dataset is not None and "text_chunked" in dataset.column_names
-
-        if max_n_outputs is not None:
-            dataset = dataset.select(range(max_n_outputs))
-
-        attacked_text_chunked = copy.deepcopy(dataset["text_chunked"])
-        original_labels = dataset["label"]
+        self, dataset: RLLMDataset
+    ) -> tuple[RLLMDataset, dict[str, Any]]:
+        attacked_text_chunked = copy.deepcopy(dataset.ds["chunked_text"])
+        original_labels = dataset.ds["clf_label"]
         attack_success = [False] * len(original_labels)
 
         # Replace all the modifiable text with random tokens from
@@ -110,9 +84,12 @@ class RandomTokenAttack(Attack):
             num_skips = sum(attack_success)
 
             attacked_text_chunked = self._batch_get_adversarial_tokens(
-                chunked_datapoints=attacked_text_chunked, successes=attack_success
+                dataset,
+                chunked_datapoints=attacked_text_chunked,
+                successes=attack_success,
             )
             attack_success = self._batch_check_success(
+                dataset=dataset,
                 attacked_chunked_datapoints=attacked_text_chunked,
                 original_labels=original_labels,
                 previous_attack_success=attack_success,
@@ -125,18 +102,15 @@ class RandomTokenAttack(Attack):
         # Also replace dataset text, and delete tokenized text
         attacked_text = ["".join(line) for line in attacked_text_chunked]
 
-        new_dataset = Dataset.from_dict(
-            {
-                "text": attacked_text,
-                "original_text": dataset["text"],
-                "label": dataset["label"],
-            }
-        )
-
-        return new_dataset, {}
+        # add new column to copy of original dataset
+        attacked_ds = dataset.with_attacked_text(attacked_text)
+        return attacked_ds, {}
 
     def _batch_get_adversarial_tokens(
-        self, chunked_datapoints: Sequence[Sequence[str]], successes: Sequence[bool]
+        self,
+        dataset: RLLMDataset,
+        chunked_datapoints: Sequence[Sequence[str]],
+        successes: Sequence[bool],
     ) -> list[list[str]]:
         """Gets new random tokens in the modifiable chunks.
 
@@ -149,6 +123,7 @@ class RandomTokenAttack(Attack):
         will make it not match up with the modifiable_chunks_spec.
 
         Args:
+            dataset: The original dataset
             chunked_datapoints: The datapoints to operate on
             successes: A list of booleans indicating whether the attack has already
                 been successful on this datapoint or not
@@ -161,7 +136,7 @@ class RandomTokenAttack(Attack):
 
         assert len(chunked_datapoints) == len(successes)
 
-        num_modifiable_chunks = sum(self.modifiable_chunks_spec)
+        num_modifiable_chunks = sum(dataset.modifiable_chunks_spec)
         assert num_modifiable_chunks > 0
 
         num_not_success = len(chunked_datapoints) - sum(successes)
@@ -194,7 +169,7 @@ class RandomTokenAttack(Attack):
                 new_chunked_datapoint = []
                 modifiable_chunk_idx = 0
                 for text, is_modifiable in zip(
-                    chunked_datapoint, self.modifiable_chunks_spec
+                    chunked_datapoint, dataset.modifiable_chunks_spec
                 ):
                     if not is_modifiable:
                         new_chunked_datapoint.append(text)
@@ -217,6 +192,7 @@ class RandomTokenAttack(Attack):
 
     def _batch_check_success(
         self,
+        dataset: RLLMDataset,
         attacked_chunked_datapoints: Sequence[Sequence[str]],
         original_labels: Sequence[int],
         previous_attack_success: Sequence[bool],
@@ -256,15 +232,14 @@ class RandomTokenAttack(Attack):
         ]
         assert all(isinstance(label, int) for label in result_int_labels)
 
-        true_labels: Sequence[int]
-        if self.ground_truth_label_fn is not None:
-            true_labels = [self.ground_truth_label_fn(convo) for convo in datapoints]
-        else:
-            true_labels = [
-                label
-                for label, suc in zip(original_labels, previous_attack_success)
-                if not suc
-            ]
+        original_labels = [
+            label
+            for label, suc in zip(original_labels, previous_attack_success)
+            if not suc
+        ]
+        true_labels = dataset.maybe_recompute_labels(
+            texts=datapoints, labels=original_labels
+        )
 
         new_successes = deque(
             [result != true for result, true in zip(result_int_labels, true_labels)]

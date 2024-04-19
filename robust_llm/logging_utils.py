@@ -5,10 +5,10 @@ from typing import Optional
 
 import wandb
 import yaml
-from datasets import Dataset
 from omegaconf import OmegaConf
 
 from robust_llm.configs import ExperimentConfig
+from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 
 @dataclass
@@ -116,16 +116,16 @@ def wandb_set_really_finished():
 
 
 def log_dataset_to_wandb(
-    dataset: Dataset, dataset_name: str, max_n_examples: Optional[int] = None
+    dataset: RLLMDataset, dataset_name: str, max_n_examples: Optional[int] = None
 ) -> None:
     if max_n_examples is not None:
-        dataset = dataset.select(range(min(len(dataset), max_n_examples)))
+        dataset = dataset.get_subset(range(min(len(dataset), max_n_examples)))
 
     dataset_table = wandb.Table(columns=["text", "label"])
 
     for text, label in zip(
-        dataset["text"],
-        dataset["label"],
+        dataset.ds["text"],
+        dataset.ds["clf_label"],
     ):
         dataset_table.add_data(text, label)
 
@@ -137,7 +137,7 @@ def log_config_to_wandb(config: ExperimentConfig) -> None:
     if not wandb.run:
         raise ValueError("wandb should have been initialized by now, exiting...")
     config_yaml = yaml.load(OmegaConf.to_yaml(config), Loader=yaml.FullLoader)
-    wandb.run.summary["experiment_yaml"] = config_yaml
+    wandb.run.summary["experiment_yaml"] = config_yaml  # type: ignore[has-type]
 
 
 def wandb_initialize(

@@ -65,25 +65,6 @@ class LanguageModel(Protocol):
         pass
 
 
-def tokenize_dataset(
-    dataset: Dataset | dict[str, Any],
-    tokenizer: PreTrainedTokenizerBase,
-    padding: str = "do_not_pad",
-    truncation: bool = True,
-    return_tensors: Optional[str] = None,
-) -> dict[str, Any]:
-    if isinstance(dataset, Dataset):
-        dataset = {key: dataset[key] for key in dataset.features.keys()}
-    # Padding seems necessary in order to avoid an error
-    tokenized_data = tokenizer(
-        dataset["text"],
-        padding=padding,
-        truncation=truncation,
-        return_tensors=return_tensors,
-    )
-    return {**dataset, **tokenized_data}
-
-
 def get_unique_overlap(smaller_dataset: Dataset, larger_dataset: Dataset) -> list[str]:
     """Calculate the overlap between the "text" columns of two datasets.
 

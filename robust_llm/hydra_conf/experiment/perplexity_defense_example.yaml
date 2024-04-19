@@ -4,17 +4,17 @@ experiment_type: "evaluation"
 environment:
   model_name_or_path: "AlignmentResearch/robust_llm_pythia-word-length-14m-niki-ada-v1"
   model_family: "pythia"
-  dataset_type: "word_length"
-  train_set_size: 1000
-  validation_set_size: 1000
-  shuffle_validation_set: true
   decoder_name: "EleutherAI/pythia-14m"
   decoder_family: "pythia"
   decoder_revision: "main"
 
+dataset:
+  dataset_type: "AlignmentResearch/WordLength"
+  n_train: 1000
+  n_val: 1000
+
 evaluation:
   batch_size: 128
-  num_generated_examples: 1000
   evaluation_attack:
     attack_type: "random_token"
     random_token_attack_config:

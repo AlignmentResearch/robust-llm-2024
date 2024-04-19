@@ -20,7 +20,7 @@ from transformers import (
 )
 from typing_extensions import override
 
-from robust_llm.utils import BalancedSampler, get_unique_overlap, tokenize_dataset
+from robust_llm.utils import BalancedSampler, get_unique_overlap
 
 
 class TrainerWithBatchSizeStoring(Trainer):
@@ -65,7 +65,9 @@ class AdversarialTrainer(TrainerWithBatchSizeStoring):
             self.train_dataset = self.train_dataset.remove_columns("text_chunked")
 
         self.regular_dataset = self.train_dataset
-        self.new_examples: dict = {"text": [], "label": []}
+
+        # Will be set in add_new_adversarial_examples.
+        # TODO (ian): avoid statefulness if possible
         self.adversarial_dataset = Dataset.from_dict({})
 
     @override
@@ -104,38 +106,25 @@ class AdversarialTrainer(TrainerWithBatchSizeStoring):
             return super()._get_train_sampler()
 
     def get_augmented_training_set(self) -> Dataset:
-        # Augment the train set with the new adversarial examples
-        if len(self.new_examples["text"]) > 0:
-            # Tokenize the new examples
-            self.adversarial_dataset = self.get_tokenized_adversarial_dataset()
-
+        if len(self.adversarial_dataset) > 0:
             train_dataset_plus_adv_examples = concatenate_datasets(
                 [
-                    self.regular_dataset,  # type: ignore
+                    self.regular_dataset,
                     self.adversarial_dataset,
                 ]
             )
-
         else:
             train_dataset_plus_adv_examples = self.regular_dataset
 
         return train_dataset_plus_adv_examples  # type: ignore
 
-    def get_tokenized_adversarial_dataset(self) -> Dataset:
-        assert len(self.new_examples["text"]) > 0
-
-        # Tokenize the new examples
-        assert self.tokenizer is not None
-        tokenized_new_examples = Dataset.from_dict(
-            tokenize_dataset(self.new_examples, self.tokenizer)
-        )
-
-        assert (
-            self.regular_dataset.features.type  # type: ignore
-            == tokenized_new_examples.features.type
-        )
-
-        return tokenized_new_examples
+    def add_new_adversarial_examples(self, new_examples: Dataset) -> None:
+        if len(self.adversarial_dataset) == 0:
+            self.adversarial_dataset = new_examples
+        else:
+            self.adversarial_dataset = concatenate_datasets(
+                [self.adversarial_dataset, new_examples]
+            )
 
 
 class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
@@ -156,7 +145,7 @@ class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
         # and be evaluating on something new after the start of each adversarial
         # training round
         augmented_train_set = self.training.trainer.get_augmented_training_set()  # type: ignore  # noqa: E501
-        self.training.eval_dataset["augmented_train_set"] = augmented_train_set
+        self.training.eval_rllm_dataset["augmented_train_set"] = augmented_train_set
 
 
 class AdversarialTrainerLoggingCallback(TrainerCallback):
@@ -205,11 +194,11 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
 
         # Record how much of the validation set is in the train set
         overlap = get_unique_overlap(
-            self.training.eval_dataset["validation"],
+            self.training.eval_rllm_dataset["validation"].ds,
             augmented_train_set,
         )
         proportion_of_validation_in_train = (
-            len(overlap) / self.training.eval_dataset["validation"].num_rows
+            len(overlap) / self.training.eval_rllm_dataset["validation"].ds.num_rows
         )
         to_log["misc/proportion_of_validation_in_train"] = (
             proportion_of_validation_in_train

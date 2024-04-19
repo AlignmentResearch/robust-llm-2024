@@ -1,50 +1,77 @@
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence
 
 import torch
 
 from robust_llm.attacks.random_token import RandomTokenAttack
-from robust_llm.configs import OverallConfig
+from robust_llm.configs import (
+    AttackConfig,
+    DatasetConfig,
+    EvaluationConfig,
+    ExperimentConfig,
+    OverallConfig,
+    RandomTokenAttackConfig,
+)
 from robust_llm.pipelines.utils import prepare_victim_models
+from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
+from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 # Get an overall config and change the random token attack
 # max and min to be the same to avoid randomness in tests
-overall_config = OverallConfig()
+overall_config = OverallConfig(
+    experiment=ExperimentConfig(
+        dataset=DatasetConfig(
+            dataset_type="AlignmentResearch/PasswordMatch",
+            n_val=10,
+        ),
+        evaluation=EvaluationConfig(
+            evaluation_attack=AttackConfig(
+                random_token_attack_config=RandomTokenAttackConfig(
+                    min_tokens=3,
+                    max_tokens=3,
+                )
+            )
+        ),
+    )
+)
 attack_config = overall_config.experiment.evaluation.evaluation_attack
+dataset_config = overall_config.experiment.dataset
+dataset = load_rllm_dataset(dataset_config, split="validation")
+# hack to get around the fact that the dataset DOES have a ground_truth_label_fn
+# but it's not used in the test
+dataset.ground_truth_label_fn = lambda text, label: label  # type: ignore[method-assign]
 
 # Get victim model and tokenizer
-victim_model, victim_tokenizer, _ = prepare_victim_models(overall_config)
+victim_model, victim_tokenizer, _ = prepare_victim_models(overall_config, num_classes=2)
 
 # Set up the attack
 attack = RandomTokenAttack(
     attack_config=attack_config,
-    environment_config=overall_config.experiment.environment,
-    modifiable_chunks_spec=[True, False, True],  # type: ignore
-    dataset_type="tensor_trust",
     victim_model=victim_model,
     victim_tokenizer=victim_tokenizer,
-    ground_truth_label_fn=None,
 )
 
 
 def _get_new_chunks_and_spec(
-    chunks: Sequence[str], attack: RandomTokenAttack
-) -> Tuple[list[str], list[bool | str]]:
+    chunks: Sequence[str], attack: RandomTokenAttack, dataset: RLLMDataset
+) -> tuple[list[str], list[bool | str]]:
     assert attack.attack_config.append_to_modifiable_chunk is True
 
     spec: list[bool | str] = []
     updated_chunks = []
-    for chunk, s in zip(chunks, attack.modifiable_chunks_spec):
+    for chunk, s in zip(chunks, dataset.modifiable_chunks_spec):
         updated_chunks.append(chunk)
         spec.append(s)
         if s is True:
             updated_chunks.append("new_chunk")
+            # TODO (ian): Remove this? This isn't how modifiable_chunks_spec works now,
+            # it's a tuple of bools
             spec.append("new")
 
     return updated_chunks, spec
 
 
 def _sequential_get_adversarial_tokens(
-    rt_attack: RandomTokenAttack, chunked_datapoint: Sequence[str]
+    rt_attack: RandomTokenAttack, chunked_datapoint: Sequence[str], dataset: RLLMDataset
 ) -> list[str]:
     """Get new random tokens in the modifiable chunks.
 
@@ -66,9 +93,7 @@ def _sequential_get_adversarial_tokens(
     """
     new_chunked_datapoint: list[str] = []
 
-    for chunk, is_modifiable in zip(
-        chunked_datapoint, rt_attack.modifiable_chunks_spec
-    ):
+    for chunk, is_modifiable in zip(chunked_datapoint, dataset.modifiable_chunks_spec):
         if not is_modifiable:
             new_chunked_datapoint.append(chunk)
         else:
@@ -99,6 +124,7 @@ def _sequential_check_success(
     rt_attack: RandomTokenAttack,
     attacked_chunked_datapoint: Sequence[str],
     original_label: int,
+    dataset: RLLMDataset,
 ) -> bool:
     """Check whether the attack was successful on a single datapoint.
 
@@ -122,10 +148,7 @@ def _sequential_check_success(
     result_label = result[0]["label"]  # type: ignore
     result_int_label = rt_attack.victim_model.config.label2id[result_label]  # type: ignore # noqa: E501
 
-    if rt_attack.ground_truth_label_fn is not None:
-        true_label = rt_attack.ground_truth_label_fn(convo)
-    else:
-        true_label = original_label
+    true_label = dataset.ground_truth_label_fn(convo, original_label)
 
     return result_int_label != true_label
 
@@ -148,7 +171,7 @@ def custom_pipeline(
 attack.victim_pipeline = custom_pipeline  # type: ignore
 
 
-def _test_get_adversarial_tokens(rt_attack: RandomTokenAttack):
+def _test_get_adversarial_tokens(rt_attack: RandomTokenAttack, dataset: RLLMDataset):
     """This test checks batched and sequential implementations of check_success.
 
     Specifically, it compares them against each other, and against handwritten values.
@@ -164,12 +187,12 @@ def _test_get_adversarial_tokens(rt_attack: RandomTokenAttack):
             sequential_adversarial_tokens.append(chunks)
         else:
             adversarial_tokens = _sequential_get_adversarial_tokens(
-                rt_attack=attack, chunked_datapoint=chunks
+                rt_attack=attack, chunked_datapoint=chunks, dataset=dataset
             )
             sequential_adversarial_tokens.append(adversarial_tokens)
 
     batched_adversarial_tokens = attack._batch_get_adversarial_tokens(
-        chunked_datapoints=text_chunked, successes=successes
+        chunked_datapoints=text_chunked, successes=successes, dataset=dataset
     )
 
     assert len(sequential_adversarial_tokens) == len(batched_adversarial_tokens)
@@ -189,10 +212,10 @@ def _test_get_adversarial_tokens(rt_attack: RandomTokenAttack):
                 assert (
                     len(seq)
                     == len(bat)
-                    == len(orig) + sum(attack.modifiable_chunks_spec)
+                    == len(orig) + sum(dataset.modifiable_chunks_spec)
                 )
 
-                new_chunks, new_spec = _get_new_chunks_and_spec(orig, attack)
+                new_chunks, new_spec = _get_new_chunks_and_spec(orig, attack, dataset)
 
                 for s, b, o, mod in zip(seq, bat, new_chunks, new_spec):
                     if mod == "new":
@@ -201,7 +224,7 @@ def _test_get_adversarial_tokens(rt_attack: RandomTokenAttack):
                         assert s == b == o
 
             else:
-                for s, b, o, mod in zip(seq, bat, orig, attack.modifiable_chunks_spec):
+                for s, b, o, mod in zip(seq, bat, orig, dataset.modifiable_chunks_spec):
                     if mod:
                         # Probability of collision is low enough
                         # we don't need to care
@@ -213,14 +236,14 @@ def _test_get_adversarial_tokens(rt_attack: RandomTokenAttack):
 def test_get_adversarial_tokens_replace():
     previous_value = attack.attack_config.append_to_modifiable_chunk
     attack.attack_config.append_to_modifiable_chunk = False
-    _test_get_adversarial_tokens(attack)
+    _test_get_adversarial_tokens(attack, dataset)
     attack.attack_config.append_to_modifiable_chunk = previous_value
 
 
 def test_get_adversarial_tokens_append():
     previous_value = attack.attack_config.append_to_modifiable_chunk
     attack.attack_config.append_to_modifiable_chunk = True
-    _test_get_adversarial_tokens(attack)
+    _test_get_adversarial_tokens(attack, dataset)
     attack.attack_config.append_to_modifiable_chunk = previous_value
 
 
@@ -244,7 +267,10 @@ def test_check_success():
     sequential_successes = []
     for chunk, label in zip(attacked_text_chunked, original_labels):
         success = _sequential_check_success(
-            rt_attack=attack, attacked_chunked_datapoint=chunk, original_label=label
+            rt_attack=attack,
+            attacked_chunked_datapoint=chunk,
+            original_label=label,
+            dataset=dataset,
         )
         sequential_successes.append(success)
 
@@ -252,6 +278,7 @@ def test_check_success():
         attacked_chunked_datapoints=attacked_text_chunked,
         original_labels=original_labels,
         previous_attack_success=previous_successes,
+        dataset=dataset,
     )
 
     assert (

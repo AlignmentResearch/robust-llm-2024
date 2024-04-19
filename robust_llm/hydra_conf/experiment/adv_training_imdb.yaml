@@ -3,9 +3,12 @@ experiment_type: "training"
 environment:
   model_name_or_path: "EleutherAI/pythia-14m"
   model_family: "pythia"
-  dataset_type: "hf/imdb"
-  shuffle_validation_set: true
-  seed: 0
+
+dataset:
+  dataset_type: "AlignmentResearch/IMDB"
+  n_train: 20000
+  n_val: 200
+
 
 training:
   model_save_path_prefix_or_hf: "hf"
@@ -22,6 +25,7 @@ training:
     only_add_successful_adversarial_examples: false
     training_attack:
       attack_type: "search_based"
+      append_to_modifiable_chunk: true
       search_based_attack_config:
         search_type: "gcg"
         forward_pass_batch_size: 32
@@ -33,9 +37,9 @@ training:
 
 evaluation:
   batch_size: 32
-  num_generated_examples: 200
   evaluation_attack:
     attack_type: "search_based"
+    append_to_modifiable_chunk: true
     search_based_attack_config:
       search_type: "gcg"
       forward_pass_batch_size: 32

@@ -1,10 +1,9 @@
 import copy
-from typing import Callable, Optional, Sequence, Tuple, Union
+from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 import textattack
 import transformers
-from datasets import Dataset
 from pyparsing import Any
 from textattack.attack_recipes import AttackRecipe
 from textattack.attack_results import (
@@ -30,9 +29,10 @@ from transformers import PreTrainedTokenizerBase
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
-from robust_llm.configs import AttackConfig, EnvironmentConfig
-from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.configs import AttackConfig
 from robust_llm.defenses.defense import DefendedModel
+from robust_llm.rllm_datasets.dataset_utils import ModifiableChunksSpec
+from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel
 
 SPECIAL_MODIFIABLE_WORD = "special_modifiable_word"
@@ -106,7 +106,7 @@ def _preprocess_example(
     example: dict[str, Any],
     modifiable_chunks_spec: ModifiableChunksSpec,
     num_modifiable_words_per_chunk: Optional[int],
-    ground_truth_label_fn: Optional[Callable[[str], int]],
+    ground_truth_label_fn: Optional[Callable[[str, int], int]],
 ) -> dict[str, Any]:
     """Preprocess text of a single example before the attack.
 
@@ -126,7 +126,7 @@ def _preprocess_example(
     """
 
     example["original_text"] = example["text"]
-    example["original_label"] = example["label"]
+    example["original_label"] = example["clf_label"]
 
     # Replace the modifiable chunk with special words if needed.
     if num_modifiable_words_per_chunk is not None:
@@ -144,7 +144,9 @@ def _preprocess_example(
 
         example["text"] = "".join(result)
         if ground_truth_label_fn is not None:
-            example["label"] = ground_truth_label_fn(example["text"])
+            example["clf_label"] = ground_truth_label_fn(
+                example["text"], example["clf_label"]
+            )
 
     return example
 
@@ -152,33 +154,22 @@ def _preprocess_example(
 class TextAttackAttack(Attack):
     """Attack using the TextAttack library."""
 
-    REQUIRES_INPUT_DATASET = True
     REQUIRES_TRAINING = False
 
     def __init__(
         self,
         attack_config: AttackConfig,
-        environment_config: EnvironmentConfig,
-        modifiable_chunks_spec: ModifiableChunksSpec,
         model: LanguageModel,
         tokenizer: transformers.PreTrainedTokenizerBase,
-        ground_truth_label_fn: Optional[Callable[[str], int]],
     ) -> None:
         """Constructor for TextAttackAttack.
 
         Args:
             attack_config: config of the attack
-            environment_config: config of the environment
-            modifiable_chunks_spec: Specification for which chunks of the
-                original text can be modified
             model: attacked model
             tokenizer: tokenizer used with the model
-            ground_truth_label_fn: function to get the ground truth label from
-                input text
         """
-        super().__init__(attack_config, environment_config, modifiable_chunks_spec)
-
-        assert sum(modifiable_chunks_spec) == 1
+        super().__init__(attack_config)
 
         assert isinstance(model, (transformers.PreTrainedModel, DefendedModel)), (
             "`model` must be of type `transformers.PreTrainedModel` "
@@ -186,16 +177,9 @@ class TextAttackAttack(Attack):
         )
         wrapped_model = LanguageModelWrapper(model, tokenizer)
 
-        self.ground_truth_label_fn = ground_truth_label_fn
-
         self.num_modifiable_words_per_chunk = (
             self.attack_config.text_attack_attack_config.num_modifiable_words_per_chunk
         )
-
-        if len(modifiable_chunks_spec) > 1:
-            assert (
-                self.num_modifiable_words_per_chunk is not None
-            ), "Special words must be used if only part of the text is modifiable."
 
         if attack_config.attack_type == "textfooler":
             assert self.num_modifiable_words_per_chunk is None, "Not supported."
@@ -250,18 +234,15 @@ class TextAttackAttack(Attack):
     @override
     def get_attacked_dataset(
         self,
-        dataset: Optional[Dataset],
-        max_n_outputs: Optional[int] = None,
-    ) -> Tuple[Dataset, dict[str, Any]]:
-        assert dataset is not None
+        dataset: RLLMDataset,
+    ) -> tuple[RLLMDataset, dict[str, Any]]:
+        assert sum(dataset.modifiable_chunks_spec) == 1
 
         dataset = self._preprocess_dataset(dataset)
 
         text_attack_dataset = textattack.datasets.HuggingFaceDataset(dataset)
 
         attack_args = copy.deepcopy(self.attack_args)
-        if max_n_outputs is not None:
-            attack_args.num_examples = max_n_outputs
 
         attacker = textattack.Attacker(self._attack, text_attack_dataset, attack_args)
         attack_results = attacker.attack_dataset()
@@ -276,10 +257,11 @@ class TextAttackAttack(Attack):
     @staticmethod
     def _get_dataset_from_attack_results(
         attack_results: Sequence[textattack.attack_results.AttackResult],
-        original_dataset: Dataset,
-    ) -> Dataset:
+        original_dataset: RLLMDataset,
+    ) -> RLLMDataset:
+        assert original_dataset.ds is not None
         texts, labels = [], []
-        for attack_result, original_example in zip(attack_results, original_dataset):
+        for attack_result, original_example in zip(attack_results, original_dataset.ds):
             assert isinstance(original_example, dict)
 
             texts.append(attack_result.perturbed_result.attacked_text.text)
@@ -290,13 +272,8 @@ class TextAttackAttack(Attack):
                 == original_example["text"]
             )
 
-        return Dataset.from_dict(
-            {
-                "text": texts,
-                "original_text": original_dataset["original_text"],
-                "label": labels,
-            }
-        )
+        attacked_dataset = original_dataset.with_attacked_text(attacked_text=texts)
+        return attacked_dataset
 
     @staticmethod
     def _make_modified_attack(
@@ -314,23 +291,22 @@ class TextAttackAttack(Attack):
             search_method=new_search_method or attack.search_method,
         )
 
-    def _preprocess_dataset(self, dataset: Dataset) -> Dataset:
+    def _preprocess_dataset(self, dataset: RLLMDataset) -> RLLMDataset:
         """Preprocess dataset before the attack."""
-
         # Assignments below are somehow needed so that .map() doesn't complain about
         # caching the context.
-        modifiable_chunks_spec = self.modifiable_chunks_spec
         num_modifiable_words_per_chunk = self.num_modifiable_words_per_chunk
-        ground_truth_label_fn = self.ground_truth_label_fn
-        dataset = dataset.map(
+        ground_truth_label_fn = dataset.ground_truth_label_fn
+        new_ds = dataset.ds.map(
             lambda x: _preprocess_example(
                 x,
-                modifiable_chunks_spec=modifiable_chunks_spec,
+                modifiable_chunks_spec=dataset.modifiable_chunks_spec,
                 num_modifiable_words_per_chunk=num_modifiable_words_per_chunk,
                 ground_truth_label_fn=ground_truth_label_fn,
             )
         )
-        return dataset
+        new_dataset = dataset.with_new_ds(new_ds)
+        return new_dataset
 
     def _get_info_dict(
         self,

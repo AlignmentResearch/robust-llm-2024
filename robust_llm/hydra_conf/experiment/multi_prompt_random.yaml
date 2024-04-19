@@ -6,10 +6,11 @@ run_name: "mpd-gcg-1"
 environment:
   model_name_or_path: "AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3"
   model_family: "pythia"
-  dataset_type: "tensor_trust"
-  train_set_size: 20
-  validation_set_size: 10
-  seed: 0
+
+dataset:
+  dataset_type: "AlignmentResearch/PasswordMatch"
+  n_train: 20
+  n_val: 10
 
 evaluation:
   batch_size: 8

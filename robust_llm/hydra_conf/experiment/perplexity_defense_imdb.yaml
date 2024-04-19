@@ -4,15 +4,16 @@ experiment_type: "evaluation"
 environment:
   model_name_or_path: "AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3"
   is_pythia: true
-  dataset_type: "hf/imdb"
-  shuffle_validation_set: true
   decoder_name: "EleutherAI/pythia-14m"
   decoder_checkpoint: 143000
+
+dataset:
+  dataset_type: "AlignmentResearch/IMDB"
+  n_val: 1000
 
 
 evaluation:
   batch_size: 16
-  num_generated_examples: 1000
   evaluation_attack:
     attack_type: "random_token"
     append_to_modifiable_chunk: true

@@ -1,48 +1,37 @@
-from datasets import Dataset
 from transformers import AutoTokenizer
 
+from robust_llm.configs import DatasetConfig
+from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import _get_only_data_with_incorrect_predictions
 from robust_llm.utils import FakeClassifierWithPositiveList
 
 
 def test_get_only_data_with_incorrect_predictions():
-    DATA = [
-        # text, label, prediction
-        ("text1", 1, 0),
-        ("longer_text_2", 0, 0),
-        ("ssfsdGGGG", 1, 1),
-        ("text4", 0, 1),
-        ("text5", 1, 1),
-        ("text6", 0, 0),
-        ("text7", 1, 1),
-        ("blahblah", 1, 0),
-    ]
-
-    dataset = Dataset.from_dict(
-        {
-            "text": [d[0] for d in DATA],
-            "label": [d[1] for d in DATA],
-        }
+    cfg = DatasetConfig(
+        dataset_type="AlignmentResearch/PasswordMatch",
+        n_train=10,
+        n_val=10,
     )
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+    train = load_rllm_dataset(cfg, split="train").tokenize(tokenizer)
+
+    # assume all are marked positive
     positives = tokenizer.batch_encode_plus(
-        [d[0] for d in DATA if d[2]], padding=True, return_tensors="pt"
+        train.ds["text"], padding=True, return_tensors="pt"
     ).input_ids
     model = FakeClassifierWithPositiveList(tokenizer=tokenizer, positives=positives)
 
-    expected_filtered_dataset = Dataset.from_dict(
-        {
-            "text": [d[0] for d in DATA if d[1] != d[2]],
-            "label": [d[1] for d in DATA if d[1] != d[2]],
-        }
-    )
+    subset_indices = [
+        i for i, d in enumerate(train.ds) if d["clf_label"] == 0  # type: ignore
+    ]
+    expected_filtered_dataset = train.get_subset(subset_indices)
 
     filtered_dataset = _get_only_data_with_incorrect_predictions(
-        dataset=dataset,
+        dataset=train,
         model=model,  # type: ignore
         tokenizer=tokenizer,
         batch_size=2,
     )
 
-    assert filtered_dataset["text"] == expected_filtered_dataset["text"]
-    assert filtered_dataset["label"] == expected_filtered_dataset["label"]
+    assert filtered_dataset.ds["text"] == expected_filtered_dataset.ds["text"]
+    assert filtered_dataset.ds["clf_label"] == expected_filtered_dataset.ds["clf_label"]

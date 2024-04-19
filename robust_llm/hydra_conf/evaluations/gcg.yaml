@@ -1,0 +1,4 @@
+evaluation_attack:
+  attack_type: "search_based"
+  search_based_attack_config:
+    search_type: "gcg"

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Literal, Optional
 
+import omegaconf
 import torch
 from omegaconf import MISSING
 
@@ -418,9 +419,31 @@ class IterativeTrainingConfig:
 
 
 @dataclass
+class DatasetConfig:
+    """Config used for dataset setup.
+
+    Attributes:
+        dataset_type (str): Type of dataset to use.
+        n_train (int): Number of training examples.
+        n_val (int): Number of validation examples.
+        config_name (Optional[str]): config_name from hf datasets (if applicable).
+        revision (str): The huggingface revision to start from.
+        inference_type (str): The type of inference performed ("classification"
+            or "generation")
+    """
+
+    dataset_type: str = omegaconf.MISSING
+    n_train: int = 0
+    n_val: int = 0
+    config_name: Optional[str] = None
+    revision: str = "main"
+    inference_type: str = "classification"
+
+
+@dataclass
 class EnvironmentConfig:
     """
-    Configs used in environment setup (including dataset).
+    Configs used in environment setup.
 
     Attributes:
         model_name_or_path (str): Either HF name or path to model checkpoint.
@@ -429,32 +452,6 @@ class EnvironmentConfig:
         decoder_family (Optional[str]): Which model family the decoder belongs to.
         decoder_revision (Optional[str]): The revision of the decoder model.
         dataset_type (str): Dataset type (tomita, tensor_trust).
-        num_classes (Optional[int]): Number of classes in the dataset, if specified.
-            Otherwise, number of classes is inferred from the dataset.
-        dataset_generation_style (str):
-            How to generate the negative examples in the dataset.
-            Only works with tensor trust for now.
-        language_generator (str):
-            Choose the regular language to use (tomita1, tomita2, tomita4, tomita7).
-        max_length (int): The maximum length of the strings to generate.
-        seed (int):
-            The seed to use for the random number generator used to make the dataset.
-        train_set_size (Optional[int]):
-            The size of the train set.
-            For generated datasets, must be set to positive integer.
-            For HF datasets, can be set to None to use the full dataset.
-        validation_set_size (Optional[int]):
-            The size of the validation set.
-            For generated datasets, must be set to positive integer.
-            For HF datasets, can be set to None to use the full dataset.
-        shuffle_train_set (bool):
-            Whether to shuffle the train set. Can matter if we subsample.
-        shuffle_validation_set (bool):
-            Whether to shuffle the validation set. Can matter if we subsample.
-        filter_out_longer_than_n_tokens_train (Optional[int]): if set, filter out
-            examples longer than this number of tokens from the train set.
-        filter_out_longer_than_n_tokens_validation (Optional[int]): if set, filter out
-            examples longer than this number of tokens from the validation set.
         device (str): Device to use for models.
     """
 
@@ -463,22 +460,6 @@ class EnvironmentConfig:
     decoder_name: Optional[str] = None
     decoder_family: Optional[str] = None
     decoder_revision: Optional[str] = None
-    dataset_type: str = "tomita"
-    num_classes: Optional[int] = None
-    dataset_generation_style: str = (
-        "random_words"  # random_word / random_character_edit
-    )
-    language_generator: str = "tomita4"
-    max_length: int = 50
-    seed: int = 0
-    train_set_size: Optional[int] = None
-    validation_set_size: Optional[int] = None
-    shuffle_train_set: bool = False
-    shuffle_validation_set: bool = False
-    # Default to 2000 as 2048 is context length for Pythia models;
-    # we are leaving some slack for the attack to add tokens.
-    filter_out_longer_than_n_tokens_train: Optional[int] = 2000
-    filter_out_longer_than_n_tokens_validation: Optional[int] = 2000
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -556,10 +537,6 @@ class EvaluationConfig:
         batch_size (int): The mini-batch size used to iterate over the dataset when
             evaluating (PER DEVICE!).
         evaluation_attack (AttackConfig): Config for the attack to use in evaluation.
-        num_generated_examples (Optional[int]): Number of adversarial examples to
-            generate with the attack. Needs to be set if the attack does not take
-            dataset as an input. If there is dataset, this option will limit the number
-            of examples to attack.
         num_examples_to_log_detailed_info (Optional[int]): Number of adversarial
             examples for which we want to log detailed info, such as the original and
             attacked text, attack results and debug info. If None, do not log anything.
@@ -567,7 +544,6 @@ class EvaluationConfig:
 
     batch_size: int = 8
     evaluation_attack: AttackConfig = field(default_factory=AttackConfig)
-    num_generated_examples: Optional[int] = None
     num_examples_to_log_detailed_info: Optional[int] = 10
 
 
@@ -593,24 +569,10 @@ class ExperimentConfig:
     job_type: str = "default-job"
     run_name: str = "default-run"
     environment: EnvironmentConfig = field(default_factory=EnvironmentConfig)
+    dataset: DatasetConfig = omegaconf.MISSING
     training: TrainingConfig = field(default_factory=TrainingConfig)
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
-    defense: DefenseConfig = field(default_factory=DefenseConfig)
-
-    def __post_init__(self):
-        # Ensure that the config is valid.
-        evaluation_attack = self.evaluation.evaluation_attack
-
-        if (
-            self.environment.dataset_type == "tensor_trust"
-            and evaluation_attack.attack_type == "search_based"
-        ):
-            # This is especially important for examples with True label; after wiping
-            # out contents of modifiable chunk (the user's guess), the label changes
-            # to False (which is desirable).
-            assert (
-                not evaluation_attack.append_to_modifiable_chunk
-            ), "For tensor_trust, we want to forget about the original password guess."
+    defense: Optional[DefenseConfig] = None
 
 
 @dataclass

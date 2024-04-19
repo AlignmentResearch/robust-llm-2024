@@ -3,11 +3,12 @@ experiment_name: "trl_attack_training_example"
 
 environment:
   model_name_or_path: "bert-base-uncased"
-  dataset_type: "tensor_trust"
-  train_set_size: 20
-  validation_set_size: 20
-  shuffle_train_set: true
-  shuffle_validation_set: true
+  model_family: "bert"
+
+dataset:
+  dataset_type: "AlignmentResearch/PasswordMatch"
+  n_train: 20
+  n_val: 20
 
 training:
   num_train_epochs: 5

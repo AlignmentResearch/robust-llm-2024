@@ -3,8 +3,9 @@ experiment_type: "evaluation"
 environment:
   model_name_or_path: "EleutherAI/pythia-14m"
   model_family: "pythia"
-  dataset_type: "hf/imdb"
-  shuffle_validation_set: true
+
+dataset:
+  dataset_type: "AlignmentResearch/IMDB"
 
 evaluation:
   batch_size: 512

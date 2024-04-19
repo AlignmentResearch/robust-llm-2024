@@ -1,0 +1,7 @@
+defaults:
+  - /datasets/passwordmatch_eval_small@dataset
+  - /evaluations/beam_search@evaluation
+  - /environments/pythia_14m@environment
+  - _self_
+experiment_type: "evaluation"
+experiment_name: "dataset-testing"

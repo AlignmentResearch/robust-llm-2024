@@ -1,11 +1,9 @@
 experiment_type: "training"
 
-environment:
-  dataset_type: "tensor_trust"
-  train_set_size: 10
-  validation_set_size: 10
-  shuffle_train_set: true
-  shuffle_validation_set: true
+dataset:
+  dataset_type: "AlignmentResearch/PasswordMatch"
+  n_train: 10
+  n_val: 10
 
 training:
   num_train_epochs: 1

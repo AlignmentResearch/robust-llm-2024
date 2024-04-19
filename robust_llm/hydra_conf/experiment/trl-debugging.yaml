@@ -4,10 +4,12 @@ experiment_name: "niki/trl-debugging"
 environment:
   model_name_or_path: "AlignmentResearch/robust_llm_pythia-imdb-14m-mz-v1"
   model_family: "pythia"
-  dataset_type: "hf/imdb"
+
+dataset:
+  dataset_type: "AlignmentResearch/IMDB"
+  n_val: 500
 
 evaluation:
-  num_generated_examples: 500
   num_examples_to_log_detailed_info: 20
   evaluation_attack:
     attack_type: "trl"

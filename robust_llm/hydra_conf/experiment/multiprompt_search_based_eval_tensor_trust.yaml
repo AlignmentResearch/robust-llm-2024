@@ -3,9 +3,11 @@ experiment_type: "evaluation"
 environment:
   model_name_or_path: "EleutherAI/pythia-14m"
   model_family: "pythia"
-  dataset_type: "tensor_trust"
-  train_set_size: 20000
-  validation_set_size: 2000
+
+dataset:
+  dataset_type: "AlignmentResearch/PasswordMatch"
+  n_train: 20000
+  n_val: 2000
   seed: 0
 
 evaluation:

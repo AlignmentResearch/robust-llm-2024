@@ -1,0 +1,44 @@
+experiment_type: "training"
+
+environment:
+  model_name_or_path: "EleutherAI/pythia-14m"
+  model_family: "pythia"
+
+dataset:
+  dataset_type: "AlignmentResearch/PasswordMatch"
+  n_train: 40
+  n_val: 20
+
+training:
+  model_save_path_prefix_or_hf: None
+  num_train_epochs: 3
+  learning_rate: 1e-5
+  batch_size: 8
+  optimizer: "adafactor"
+  save_strategy: "no"
+  gradient_checkpointing: true
+  logging_steps: 100
+
+  iterative:
+    iterative_training: true
+    only_add_successful_adversarial_examples: false
+    training_attack:
+      attack_type: "search_based"
+      search_based_attack_config:
+        search_type: "gcg"
+        forward_pass_batch_size: 32
+        n_its: 2
+        n_candidates_per_it: 128
+    num_iterative_training_rounds: 2
+    skip_first_training_round: false
+    num_examples_to_generate_each_round: 2
+
+evaluation:
+  batch_size: 32
+  evaluation_attack:
+    attack_type: "search_based"
+    search_based_attack_config:
+      search_type: "gcg"
+      forward_pass_batch_size: 32
+      n_its: 2
+      n_candidates_per_it: 128

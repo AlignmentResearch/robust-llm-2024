@@ -1,0 +1,19 @@
+experiment_type: "evaluation"
+
+environment:
+  model_name_or_path: "AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3"
+  model_family: "pythia"
+
+dataset:
+  dataset_type: "AlignmentResearch/IMDB"
+  n_train: 0
+  n_val: 200
+
+evaluation:
+  batch_size: 32
+  evaluation_attack:
+    attack_type: "random_token"
+    append_to_modifiable_chunk: true
+    random_token_attack_config:
+      logging_frequency: 10
+      batch_size: 32

@@ -3,10 +3,12 @@ experiment_type: "training"
 environment:
   model_name_or_path: "EleutherAI/pythia-14m"
   model_family: "pythia"
-  dataset_type: "tensor_trust"
-  train_set_size: 20000
-  validation_set_size: 2000
-  seed: 0
+
+dataset:
+  dataset_type: "AlignmentResearch/PasswordMatch"
+  n_train: 20000
+  n_val: 200  # Note: this basically takes the place of num_generated_examples
+
 
 training:
   model_save_path_prefix_or_hf: "hf"
@@ -34,7 +36,6 @@ training:
 
 evaluation:
   batch_size: 32
-  num_generated_examples: 200
   evaluation_attack:
     attack_type: "search_based"
     search_based_attack_config:

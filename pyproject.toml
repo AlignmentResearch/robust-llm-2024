@@ -19,6 +19,7 @@ dependencies = [
     "textattack",
     "trl",
     "wandb",
+    "semver",
 ]
 
 [project.optional-dependencies]

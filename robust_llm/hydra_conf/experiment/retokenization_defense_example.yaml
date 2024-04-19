@@ -6,10 +6,13 @@ training:
   num_train_epochs: 1
 
 environment:
-  dataset_type: "hf/imdb"
   model_name: "textattack/bert-base-uncased-imdb"
-  train_set_size: 10
-  validation_set_size: 10
+  model_family: "bert"
+
+dataset:
+  dataset_type: "AlignmentResearch/IMDB"
+  n_train: 10
+  n_val: 10
 
 defense:
   defense_type: "retokenization"

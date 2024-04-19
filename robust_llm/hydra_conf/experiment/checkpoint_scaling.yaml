@@ -1,9 +1,0 @@
-experiment_type: "scaling_experiments"
-
-environment:
-  dataset_type: tensor_trust
-  train_set_size: 1000
-  validation_set_size: 1000
-
-training:
-  num_train_epochs: 1

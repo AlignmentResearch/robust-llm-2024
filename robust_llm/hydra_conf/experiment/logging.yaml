@@ -3,11 +3,12 @@ experiment_name: "logging_training_example"
 
 environment:
   model_name_or_path: "bert-base-uncased"
-  dataset_type: "tensor_trust"
-  train_set_size: 26
-  validation_set_size: 26
-  shuffle_train_set: true
-  shuffle_validation_set: true
+  model_family: "bert"
+
+dataset:
+  dataset_type: "AlignmentResearch/PasswordMatch"
+  n_train: 26
+  n_val: 26
 
 training:
   num_train_epochs: 3

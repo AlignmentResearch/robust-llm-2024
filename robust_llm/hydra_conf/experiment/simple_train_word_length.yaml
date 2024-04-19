@@ -3,10 +3,11 @@ experiment_type: "training"
 environment:
   model_name_or_path: "EleutherAI/pythia-14m"
   model_family: "pythia"
-  dataset_type: "word_length"
-  train_set_size: 20000
-  validation_set_size: 500
-  seed: 0
+
+dataset:
+  dataset_type: "AlignmentResearch/WordLength"
+  n_train: 20_000
+  n_val: 500
 
 training:
   revision: "main"

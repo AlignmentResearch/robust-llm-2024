@@ -8,19 +8,13 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.configs import OverallConfig
-from robust_llm.dataset_management.dataset_management import (
-    RobustLLMDatasets,
-    generate_robust_llm_datasets,
-    get_num_classes,
-)
-from robust_llm.dataset_management.tomita import make_language_generator
-from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.model_utils import _prepare_decoder, _prepare_model, _prepare_tokenizer
 from robust_llm.utils import LanguageModel
 
 
 def prepare_victim_models(
     args: OverallConfig,
+    num_classes: int,
 ) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase, Optional[PreTrainedModel]]:
     """Returns the victim model, tokenizer, and optionally decoder used in defenses."""
 
@@ -38,7 +32,7 @@ def prepare_victim_models(
         model_name_or_path=model_name_or_path,
         model_family=model_family,
         revision=revision,
-        num_labels=get_num_classes(args.experiment.environment.dataset_type),
+        num_labels=num_classes,
     )
     tokenizer = _prepare_tokenizer(
         model_name_or_path=model_name_or_path,
@@ -67,42 +61,11 @@ def prepare_victim_models(
     return model, tokenizer, decoder
 
 
-def prepare_language_generator(args: OverallConfig) -> Optional[Tomita]:
-    print("Preparing language generator...")
-
-    if args.experiment.environment.dataset_type == "tomita":
-        return make_language_generator(
-            args.experiment.environment.language_generator,
-            args.experiment.environment.max_length,
-        )
-
-    return None
-
-
-def prepare_datasets(
-    args: OverallConfig,
-    tokenizer: PreTrainedTokenizerBase,
-    language_generator: Optional[Tomita],
-) -> RobustLLMDatasets:
-    print("Preparing datasets...")
-
-    return generate_robust_llm_datasets(
-        dataset_type=args.experiment.environment.dataset_type,
-        language_generator=language_generator,
-        tokenizer=tokenizer,
-        environment_config=args.experiment.environment,
-        training_config=args.experiment.training,
-        dataset_generation_style=args.experiment.environment.dataset_generation_style,
-        seed=args.experiment.environment.seed,
-    )
-
-
 def prepare_attack(
     args: OverallConfig,
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     accelerator: Accelerator,
-    robust_llm_datasets: RobustLLMDatasets,
     training: bool,
 ) -> Attack:
     print("Preparing attack...")
@@ -116,13 +79,8 @@ def prepare_attack(
 
     return create_attack(
         attack_config=attack_config,
-        environment_config=args.experiment.environment,
-        modifiable_chunks_spec=robust_llm_datasets.modifiable_chunks_spec,
         logging_name=logging_name,
-        dataset_type=args.experiment.environment.dataset_type,
         victim_model=model,
         victim_tokenizer=tokenizer,
         accelerator=accelerator,
-        language_generator_name=args.experiment.environment.language_generator,
-        ground_truth_label_fn=robust_llm_datasets.ground_truth_label_fn,
     )

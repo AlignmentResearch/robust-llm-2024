@@ -11,7 +11,7 @@ from robust_llm.attacks.search_based.models import (
     WrappedGPT2Model,
     WrappedGPTNeoXModel,
 )
-from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.rllm_datasets.dataset_utils import ModifiableChunksSpec
 
 
 class TokenizationChangeException(Exception):

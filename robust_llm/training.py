@@ -1,7 +1,7 @@
 import dataclasses
 import os
 import warnings
-from typing import Callable, Optional
+from typing import Optional
 
 import evaluate
 import numpy as np
@@ -9,7 +9,6 @@ import torch
 import transformers
 import wandb
 import wandb.util
-from datasets import Dataset
 from transformers import (
     EvalPrediction,
     PreTrainedModel,
@@ -22,23 +21,18 @@ from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import CustomLoggingWandbCallback
 from robust_llm.configs import AttackConfig, EnvironmentConfig, EvaluationConfig
-from robust_llm.dataset_management.dataset_management import (
-    ModifiableChunksSpec,
-    get_num_classes,
-)
-from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.evaluation import (
     do_adversarial_evaluation,
     get_prediction_logits_and_labels_and_maybe_flag_values,
 )
 from robust_llm.logging_utils import LoggingCounter, log_dataset_to_wandb
+from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.trainer import (
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,
     AdversarialTrainerLoggingCallback,
     TrainerWithBatchSizeStoring,
 )
-from robust_llm.utils import tokenize_dataset
 
 
 @dataclasses.dataclass
@@ -46,8 +40,8 @@ class Training:
     experiment_name: str
     run_name: str
     job_type: str
-    train_dataset: Dataset
-    eval_dataset: dict[str, Dataset]
+    train_rllm_dataset: RLLMDataset
+    eval_rllm_dataset: dict[str, RLLMDataset]
     model: PreTrainedModel
     tokenizer: PreTrainedTokenizerBase
     model_name_to_save: str  # Used for saving the model to disk/hf
@@ -65,13 +59,12 @@ class Training:
     save_steps: int | float = 500
     trainer: Optional[TrainerWithBatchSizeStoring] = None
     log_full_datasets_to_wandb: bool = False
-    ground_truth_label_fn: Optional[Callable[[str], int]] = None
     seed: int = 42
 
     def __post_init__(self):
         metrics = [evaluate.load("accuracy")]
 
-        num_classes = get_num_classes(self.environment_config.dataset_type)
+        num_classes = self.train_rllm_dataset.num_classes
         if num_classes == 2:
             metrics.extend(
                 [
@@ -82,6 +75,12 @@ class Training:
             )
 
         self.metrics = evaluate.combine(metrics)
+
+        # expose underlying hf datasets, prepared for training
+        self.hf_train = self.train_rllm_dataset.for_hf_trainer()
+        self.hf_eval = {
+            key: ds.for_hf_trainer() for key, ds in self.eval_rllm_dataset.items()
+        }
 
     def setup_trainer(self) -> TrainerWithBatchSizeStoring:
         hf_training_args = TrainingArguments(
@@ -116,8 +115,8 @@ class Training:
         self.trainer = TrainerWithBatchSizeStoring(
             model=self.model,
             args=hf_training_args,
-            train_dataset=self.train_dataset,  # type: ignore
-            eval_dataset=self.eval_dataset,  # type: ignore
+            train_dataset=self.hf_train,
+            eval_dataset=self.hf_eval,
             data_collator=transformers.DataCollatorWithPadding(self.tokenizer),
             compute_metrics=self.compute_metrics,
         )
@@ -193,7 +192,7 @@ class Training:
                 # here to default local directory.
                 self.trainer._save(state_dict=state_dict)
                 hf_name = self.trainer.args.hub_model_id
-                wandb.run.summary["saved_hf_name"] = hf_name  # type: ignore
+                wandb.run.summary["saved_hf_name"] = hf_name  # type: ignore[has-type]
                 print(f"Saving the model/tokenizer to HuggingFace as {hf_name}")
                 self.trainer.push_to_hub()
                 # Even though above line should push both model and tokenizer, in
@@ -206,7 +205,7 @@ class Training:
                 output_dir = os.path.join(
                     path_prefix_or_hf, "models", self.model_name_to_save
                 )
-                wandb.run.summary["saved_dir"] = output_dir  # type: ignore
+                wandb.run.summary["saved_dir"] = output_dir  # type: ignore[has-type]
                 print(f"Saving the model/tokenizer to {output_dir}")
                 self.trainer._save(output_dir=output_dir, state_dict=state_dict)
                 self.tokenizer.save_pretrained(output_dir)
@@ -225,12 +224,6 @@ class AdversarialTraining(Training):
             One round of adversarial training involves first finding some number
             of adversarial examples, adding them to an "augmented train set",
             and training on that for some number of epochs.
-        dataset_type:
-            The type of dataset to use. Either "tomita" or "tensor_trust".
-        language_generator:
-            The language generator which should be created to generate
-            datapoints for training and evaluation.
-            Only relevant in the Tomita setting.
         training_attack_config:
             Config for the attack to use in adversarial training.
         validation_attack_config:
@@ -250,11 +243,8 @@ class AdversarialTraining(Training):
     """
 
     num_iterative_training_rounds: int
-    dataset_type: str
-    language_generator: Optional[Tomita]
     training_attack_config: AttackConfig
     validation_attack_config: AttackConfig
-    modifiable_chunks_spec: ModifiableChunksSpec
     num_examples_to_generate_each_round: int
     num_examples_to_log_to_wandb_each_round: int
     skip_first_training_round: bool = False
@@ -264,16 +254,8 @@ class AdversarialTraining(Training):
     def __post_init__(self):
         super().__post_init__()
 
-        assert type(self.eval_dataset) is dict
-        assert "validation" in self.eval_dataset
-
-        # Standardize the language generator name
-        if self.language_generator is None:
-            self.language_generator_name: str = (
-                "(no language generator, tensor trust setting)"
-            )
-        else:
-            self.language_generator_name = self.language_generator.name
+        assert type(self.eval_rllm_dataset) is dict
+        assert "validation" in self.eval_rllm_dataset
 
         self.current_iterative_training_round: int = 0
 
@@ -304,8 +286,8 @@ class AdversarialTraining(Training):
             use_balanced_sampling=self.use_balanced_sampling,
             model=self.model,
             args=hf_training_args,
-            train_dataset=self.train_dataset,
-            eval_dataset=self.eval_dataset,
+            train_dataset=self.hf_train,
+            eval_dataset=self.hf_eval,
             data_collator=transformers.DataCollatorWithPadding(self.tokenizer),
             compute_metrics=self.compute_metrics,
             tokenizer=self.tokenizer,
@@ -327,27 +309,17 @@ class AdversarialTraining(Training):
         # Prepare attacks
         training_attack = create_attack(
             attack_config=self.training_attack_config,
-            environment_config=self.environment_config,
-            modifiable_chunks_spec=self.modifiable_chunks_spec,
             logging_name="training_attack",
-            dataset_type=self.dataset_type,
             victim_model=self.model,
             victim_tokenizer=self.tokenizer,
             accelerator=adversarial_trainer.accelerator,
-            language_generator_name=self.language_generator_name,
-            ground_truth_label_fn=self.ground_truth_label_fn,
         )
         validation_attack = create_attack(
             attack_config=self.validation_attack_config,
-            environment_config=self.environment_config,
-            modifiable_chunks_spec=self.modifiable_chunks_spec,
             logging_name="validation_attack",
-            dataset_type=self.dataset_type,
             victim_model=self.model,
             victim_tokenizer=self.tokenizer,
             accelerator=adversarial_trainer.accelerator,
-            language_generator_name=self.language_generator_name,
-            ground_truth_label_fn=self.ground_truth_label_fn,
         )
 
         if adversarial_trainer.is_world_process_zero():
@@ -389,7 +361,7 @@ class AdversarialTraining(Training):
             )
             _maybe_train_attack(
                 attack=training_attack,
-                dataset=self.train_dataset,
+                dataset=self.train_rllm_dataset,
                 train_or_validation="train",
                 round=round,
             )
@@ -404,7 +376,7 @@ class AdversarialTraining(Training):
             )
             _maybe_train_attack(
                 attack=validation_attack,
-                dataset=self.eval_dataset["validation"],
+                dataset=self.eval_rllm_dataset["validation"],
                 train_or_validation="validation",
                 round=round,
             )
@@ -418,9 +390,7 @@ class AdversarialTraining(Training):
                 model=self.model,
                 tokenizer=self.tokenizer,
                 accelerator=adversarial_trainer.accelerator,
-                dataset=self.eval_dataset["validation"],
-                ground_truth_label_fn=self.ground_truth_label_fn,
-                num_generated_examples=self.evaluation_config.num_generated_examples,
+                dataset=self.eval_rllm_dataset["validation"],
                 attack=validation_attack,
                 batch_size=self.evaluation_config.batch_size,
                 num_examples_to_log_detailed_info=self.evaluation_config.num_examples_to_log_detailed_info,  # noqa: E501
@@ -431,34 +401,25 @@ class AdversarialTraining(Training):
             # are used in the next round of training.
             if round < self.num_iterative_training_rounds - 1:
                 assert (
-                    len(self.train_dataset) >= self.num_examples_to_generate_each_round
+                    len(self.train_rllm_dataset.ds)
+                    >= self.num_examples_to_generate_each_round
                 )
-                input_examples = self.train_dataset.shuffle().select(
-                    range(self.num_examples_to_generate_each_round)
+                input_rllm_dataset = self.train_rllm_dataset.get_random_subset(
+                    self.num_examples_to_generate_each_round
                 )
-                generated_adv_examples, _ = training_attack.get_attacked_dataset(
-                    input_examples
+                # NOTE: .get_attacked_dataset should relabel the examples
+                attacked_dataset, _ = training_attack.get_attacked_dataset(
+                    input_rllm_dataset
                 )
 
-                # Relabel if labeling function is provided. Critical e.g. for
-                # tensor_trust dataset.
-                if self.ground_truth_label_fn is not None:
-                    generated_adv_examples = generated_adv_examples.map(
-                        lambda x: {
-                            "label": self.ground_truth_label_fn(x["text"])  # type: ignore  # noqa: E501
-                        }
-                    )
-
-                new_adv_examples = Dataset.from_dict(
-                    tokenize_dataset(generated_adv_examples, self.tokenizer)
-                )
+                new_adv_examples = attacked_dataset.as_adversarial_examples()
                 print(
                     "Generated new adv examples for training, size (all):",
-                    len(new_adv_examples["text"]),
+                    len(new_adv_examples),
                 )
                 print(
                     "The first few new adversarial examples are:",
-                    new_adv_examples["text"][:3],
+                    new_adv_examples.ds["text"][:3],
                 )
 
                 # Select the ones to actually add to the training set.
@@ -496,12 +457,9 @@ class AdversarialTraining(Training):
 
                 # Report new adversarial examples to the trainer so that they can be
                 # later used for training.
-                for text, true_label in zip(
-                    selected_new_adv_examples["text"],
-                    selected_new_adv_examples["label"],
-                ):
-                    adversarial_trainer.new_examples["text"].append(text)
-                    adversarial_trainer.new_examples["label"].append(true_label)
+                adversarial_trainer.add_new_adversarial_examples(
+                    selected_new_adv_examples.for_hf_trainer()
+                )
 
             print(
                 f"Iterative training round {round} finished "
@@ -511,7 +469,7 @@ class AdversarialTraining(Training):
 
 def _maybe_train_attack(
     attack: Attack,
-    dataset: Dataset,
+    dataset: RLLMDataset,
     train_or_validation: str,
     round: int,
 ) -> None:
@@ -531,27 +489,27 @@ def _maybe_train_attack(
 
 @torch.no_grad()
 def _get_only_data_with_incorrect_predictions(
-    dataset: Dataset,
+    dataset: RLLMDataset,
     model: PreTrainedModel,
     tokenizer: PreTrainedTokenizerBase,
     batch_size: int,
-) -> Dataset:
+) -> RLLMDataset:
     """Returns a dataset with only the examples that the model got wrong."""
     model.eval()
 
     pred_logits, pred_labels, _ = (
         get_prediction_logits_and_labels_and_maybe_flag_values(
-            dataset=dataset,
+            dataset=dataset.ds,
             model=model,
             tokenizer=tokenizer,
             batch_size=batch_size,
         )
     )
 
-    labels = np.array(dataset["label"])
+    labels = np.array(dataset.ds["clf_label"])
     indices_where_wrong = np.where(np.array(pred_labels) != labels)[0]
 
     if len(indices_where_wrong) == 0:
         warnings.warn("Got empty dataset after filering; all predictions were correct.")
 
-    return dataset.select(indices_where_wrong)
+    return dataset.get_subset(indices_where_wrong)

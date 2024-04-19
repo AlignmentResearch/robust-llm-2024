@@ -4,13 +4,13 @@ experiment_name: "trl_eval_imdb_example"
 environment:
   model_name_or_path: "AlignmentResearch/robust_llm_pythia-imdb-14m-mz-v1"
   model_family: "pythia"
-  dataset_type: "hf/imdb"
-  shuffle_validation_set: true
-  train_set_size: 10
-  validation_set_size: 10
+
+dataset:
+  dataset_type: "AlignmentResearch/IMDB"
+  n_train: 10
+  n_val: 5  # 500
 
 evaluation:
-  num_generated_examples: 5  # 500
   evaluation_attack:
     attack_type: "trl"
     append_to_modifiable_chunk: true

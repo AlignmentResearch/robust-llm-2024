@@ -1,0 +1,11 @@
+defaults:
+  - /datasets/imdb_eval_small@dataset
+  - /evaluations/gcg@evaluation
+  - /environments/pythia_14m@environment
+  - _self_
+experiment_type: "evaluation"
+experiment_name: "dataset-testing"
+
+experiment:
+  attack_config:
+    append_to_modifiable_chunk: true

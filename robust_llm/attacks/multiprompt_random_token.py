@@ -1,18 +1,17 @@
 import copy
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Sequence, Tuple
+from typing import Any, Sequence
 
 import torch
 import wandb
-from datasets import Dataset
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase, pipeline
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
-from robust_llm.configs import AttackConfig, EnvironmentConfig
-from robust_llm.dataset_management.dataset_management import ModifiableChunksSpec
+from robust_llm.configs import AttackConfig
 from robust_llm.logging_utils import LoggingCounter
+from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel
 
 
@@ -41,38 +40,20 @@ class MultiPromptRandomTokenAttack(Attack):
     def __init__(
         self,
         attack_config: AttackConfig,
-        environment_config: EnvironmentConfig,
-        modifiable_chunks_spec: ModifiableChunksSpec,
-        dataset_type: str,
         victim_model: LanguageModel,
         victim_tokenizer: PreTrainedTokenizerBase,
-        ground_truth_label_fn: Optional[Callable[[str], int]],
     ) -> None:
         """Constructor for MultiPromptRandomTokenAttack.
 
         Args:
             attack_config: config of the attack
-            environment_config: config of the environment
-            modifiable_chunks_spec: Specification for which chunks of the
-                original text can be modified
-            dataset_type: used dataset type
             victim_model: the model to be attacked
             victim_tokenizer: tokenizer used by the victim model
-            ground_truth_label_fn: function to get the ground truth label
         """
-        super().__init__(attack_config, environment_config, modifiable_chunks_spec)
-
-        assert True in modifiable_chunks_spec
-
-        if dataset_type == "tomita":
-            raise ValueError(
-                "Random token attack is not supported for dataset type "
-                f"{dataset_type}, exiting..."
-            )
+        super().__init__(attack_config)
 
         self.victim_model = victim_model
         self.victim_tokenizer = victim_tokenizer
-        self.ground_truth_label_fn = ground_truth_label_fn
 
         self.torch_rng = torch.random.manual_seed(self.attack_config.seed)
 
@@ -97,16 +78,12 @@ class MultiPromptRandomTokenAttack(Attack):
 
     @override
     def get_attacked_dataset(
-        self, dataset: Optional[Dataset] = None, max_n_outputs: Optional[int] = None
-    ) -> Tuple[Dataset, dict[str, Any]]:
+        self,
+        dataset: RLLMDataset,
+    ) -> tuple[RLLMDataset, dict[str, Any]]:
 
-        assert dataset is not None and "text_chunked" in dataset.column_names
-
-        if max_n_outputs is not None:
-            dataset = dataset.select(range(max_n_outputs))
-
-        attacked_text_chunked = copy.deepcopy(dataset["text_chunked"])
-        original_labels = dataset["label"]
+        attacked_text_chunked = copy.deepcopy(dataset.ds["chunked_text"])
+        original_labels = dataset.ds["clf_label"]
 
         # Replace all the modifiable text with random tokens from
         # the tokenizer's vocabulary.
@@ -114,13 +91,15 @@ class MultiPromptRandomTokenAttack(Attack):
         iteration_results = []
         for iteration in (pbar := tqdm(range(self.max_iterations))):
 
-            # no arguments because it's random each time
-            attack_sequences = self._get_new_attack_sequences()
+            num_modifiable_chunks = sum(dataset.modifiable_chunks_spec)
+            attack_sequences = self._get_new_attack_sequences(num_modifiable_chunks)
             attacked_text_chunked = self._construct_attacked_text_chunked(
+                dataset=dataset,
                 chunked_datapoints=attacked_text_chunked,
                 attack_sequences=attack_sequences,
             )
             attack_success = self._batch_check_success(
+                dataset=dataset,
                 attacked_chunked_datapoints=attacked_text_chunked,
                 original_labels=original_labels,
             )
@@ -145,6 +124,7 @@ class MultiPromptRandomTokenAttack(Attack):
         print(f"Best iteration: {best_it} with {best_rate} success rate.")
 
         attacked_text_chunked = self._construct_attacked_text_chunked(
+            dataset=dataset,
             chunked_datapoints=attacked_text_chunked,
             attack_sequences=best_iteration_result.attack_sequences,
         )
@@ -152,15 +132,9 @@ class MultiPromptRandomTokenAttack(Attack):
         # Also replace dataset text, and delete tokenized text
         attacked_text = ["".join(line) for line in attacked_text_chunked]
 
-        new_dataset = Dataset.from_dict(
-            {
-                "text": attacked_text,
-                "original_text": dataset["text"],
-                "label": dataset["label"],
-            }
-        )
+        attacked_ds = dataset.with_attacked_text(attacked_text)
 
-        return new_dataset, {}
+        return attacked_ds, {}
 
     def _get_best_iteration_result(
         self,
@@ -173,6 +147,7 @@ class MultiPromptRandomTokenAttack(Attack):
 
     def _construct_attacked_text_chunked(
         self,
+        dataset: RLLMDataset,
         chunked_datapoints: Sequence[Sequence[str]],
         attack_sequences: list[str],
     ) -> list[list[str]]:
@@ -194,7 +169,7 @@ class MultiPromptRandomTokenAttack(Attack):
             A list of chunked datapoints with the new attack sequences.
         """
 
-        num_modifiable_chunks = sum(self.modifiable_chunks_spec)
+        num_modifiable_chunks = sum(dataset.modifiable_chunks_spec)
         assert num_modifiable_chunks > 0
 
         new_chunked_datapoints = []
@@ -202,7 +177,7 @@ class MultiPromptRandomTokenAttack(Attack):
             new_chunked_datapoint = []
             modifiable_chunk_idx = 0
             for text, is_modifiable in zip(
-                chunked_datapoint, self.modifiable_chunks_spec
+                chunked_datapoint, dataset.modifiable_chunks_spec
             ):
                 if not is_modifiable:
                     new_chunked_datapoint.append(text)
@@ -215,8 +190,8 @@ class MultiPromptRandomTokenAttack(Attack):
 
         return new_chunked_datapoints
 
-    def _get_new_attack_sequences(self) -> list[str]:
-        num_modifiable_chunks = sum(self.modifiable_chunks_spec)
+    def _get_new_attack_sequences(self, num_modifiable_chunks: int) -> list[str]:
+        """Get new attack sequences (random tokens) for each modifiable chunk."""
         new_attack_sequences = []
         for _ in range(num_modifiable_chunks):
             num_tokens = torch.randint(
@@ -238,6 +213,7 @@ class MultiPromptRandomTokenAttack(Attack):
 
     def _batch_check_success(
         self,
+        dataset: RLLMDataset,
         attacked_chunked_datapoints: Sequence[Sequence[str]],
         original_labels: Sequence[int],
     ) -> list[bool]:
@@ -268,11 +244,9 @@ class MultiPromptRandomTokenAttack(Attack):
         ]
         assert all(isinstance(label, int) for label in result_int_labels)
 
-        true_labels: Sequence[int]
-        if self.ground_truth_label_fn is not None:
-            true_labels = [self.ground_truth_label_fn(convo) for convo in datapoints]
-        else:
-            true_labels = original_labels
+        true_labels = dataset.maybe_recompute_labels(
+            texts=datapoints, labels=original_labels
+        )
 
         successes = [
             result != true for result, true in zip(result_int_labels, true_labels)

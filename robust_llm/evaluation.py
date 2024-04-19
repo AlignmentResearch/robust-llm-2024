@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Optional, Sequence, Union
 
 import numpy as np
 import torch
@@ -15,6 +15,7 @@ from transformers import PreTrainedTokenizerBase, TextClassificationPipeline
 
 from robust_llm.attacks.attack import Attack
 from robust_llm.defenses.perplexity import PerplexityDefendedModel
+from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel, div_maybe_nan
 
 
@@ -486,6 +487,7 @@ def _get_prediction_logits_and_maybe_flag_values(
     hf_pipeline: FilteredEvaluationPipeline,
     dataset: Dataset,
     batch_size: int,
+    input_column: str = "text",
 ) -> tuple[list[list[float]], list[bool] | list[None]]:
     """Returns prediction logits, of shape (n_examples, n_classes),
     and flag values, of shape (n_examples,)."""
@@ -493,7 +495,7 @@ def _get_prediction_logits_and_maybe_flag_values(
     # TODO(michal): consider dropping HF pipelines and instead use data loaders + direct
     # model calls. Pipelines complicate the code without a clear benefit.
     preds_with_flag_values = hf_pipeline(
-        dataset["text"],
+        dataset[input_column],
         batch_size=batch_size,
         truncation=True,
         function_to_apply="none",
@@ -519,6 +521,7 @@ def get_prediction_logits_and_labels_and_maybe_flag_values(
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     batch_size: int,
+    input_column: str = "text",
 ) -> tuple[list[list[float]], list[int], list[bool] | list[None]]:
     hf_pipeline = FilteredEvaluationPipeline(
         model=model,
@@ -534,6 +537,7 @@ def get_prediction_logits_and_labels_and_maybe_flag_values(
         hf_pipeline=hf_pipeline,
         dataset=dataset,
         batch_size=batch_size,
+        input_column=input_column,
     )
     pred_labels = _get_prediction_labels(pred_logits)
 
@@ -583,9 +587,7 @@ def _log_examples_to_wandb(
 
 
 def compute_attack_results(
-    dataset: Dataset,
-    attacked_dataset: Dataset,
-    ground_truth_label_fn: Optional[Callable[[str], int]],
+    attacked_dataset: RLLMDataset,
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     accelerator: Accelerator,
@@ -594,45 +596,33 @@ def compute_attack_results(
 ) -> AttackResults:
     """Performs an attack and reports its results."""
 
-    assert len(dataset) == len(attacked_dataset)
-    assert dataset["text"] == attacked_dataset["original_text"]
-    assert dataset["label"] == attacked_dataset["label"]
-
+    assert attacked_dataset.ds is not None
     model.eval()
 
-    assert dataset is not None  # will be assumed after refactors anyway.
-    original_pred_logits, original_pred_labels, original_flag_values = (
+    _, original_pred_labels, original_flag_values = (
         get_prediction_logits_and_labels_and_maybe_flag_values(
-            dataset=dataset,
+            dataset=attacked_dataset.ds,
             model=model,
             tokenizer=tokenizer,
             batch_size=batch_size,
+            input_column="text",
         )
     )
-
     attacked_pred_logits, attacked_pred_labels, attacked_flag_values = (
         get_prediction_logits_and_labels_and_maybe_flag_values(
-            dataset=attacked_dataset,
+            dataset=attacked_dataset.ds,
             model=model,
             tokenizer=tokenizer,
             batch_size=batch_size,
+            input_column="attacked_text",
         )
     )
 
-    # If the dataset allows for recomputation of the ground truth label, use it.
-    if ground_truth_label_fn is not None:
-        attacked_labels = [
-            ground_truth_label_fn(text) for text in attacked_dataset["text"]
-        ]
-    # Otherwise, assume that the labels have not changed (may or may not be accurate).
-    else:
-        attacked_labels = attacked_dataset["label"]
-
     results = AttackResults.from_labels_and_predictions(
-        original_labels=attacked_dataset["label"],
+        original_labels=attacked_dataset.ds["clf_label"],
         original_pred_labels=original_pred_labels,
         original_flag_values=original_flag_values,
-        attacked_labels=attacked_labels,
+        attacked_labels=attacked_dataset.ds["attacked_clf_label"],
         attacked_pred_labels=attacked_pred_labels,
         attacked_flag_values=attacked_flag_values,
         attacked_pred_logits=attacked_pred_logits,
@@ -640,18 +630,17 @@ def compute_attack_results(
 
     if num_examples_to_log_detailed_info is not None and accelerator.is_main_process:
         _log_examples_to_wandb(
-            original_texts=dataset["text"],
-            original_labels=dataset["label"],
+            original_texts=attacked_dataset.ds["text"],
+            original_labels=attacked_dataset.ds["clf_label"],
             original_pred_labels=original_pred_labels,
             original_flag_values=original_flag_values,
-            attacked_texts=attacked_dataset["text"],
-            attacked_labels=attacked_labels,
+            attacked_texts=attacked_dataset.ds["attacked_text"],
+            attacked_labels=attacked_dataset.ds["attacked_clf_label"],
             attacked_pred_labels=attacked_pred_labels,
             attacked_flag_values=attacked_flag_values,
             attacked_pred_logits=attacked_pred_logits,
             num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
         )
-
     return results
 
 
@@ -659,38 +648,26 @@ def do_adversarial_evaluation(
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     accelerator: Accelerator,
-    dataset: Dataset,
-    ground_truth_label_fn: Optional[Callable[[str], int]],
-    num_generated_examples: Optional[int],
+    dataset: RLLMDataset,
     attack: Attack,
     batch_size: int,
     num_examples_to_log_detailed_info: Optional[int],
 ) -> dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
-    if num_generated_examples is not None:
-        dataset = dataset.select(range(min(num_generated_examples, len(dataset))))
-        # We have already limited the dataset, so do not pass this value into
-        # the `get_attacked_dataset` call below (note also that some some
-        # attacks do not support passing it into `get_attacked_dataset`).
-        num_generated_examples = None
 
     # Sanity check in case of a distributed run (with accelerate): check if every
     # process has the same dataset.
     # TODO(michal): Look into datasets code and make sure the dataset creation is
     # deterministic given seeds; this is especially important when using accelerate.
-    _assert_same_data_between_processes(accelerator, dataset["text"])
-    _assert_same_data_between_processes(accelerator, dataset["label"])
+    _assert_same_data_between_processes(accelerator, dataset.ds["text"])
+    _assert_same_data_between_processes(accelerator, dataset.ds["clf_label"])
 
     print("Doing adversarial evaluation...")
 
-    attacked_dataset, info_dict = attack.get_attacked_dataset(
-        dataset=dataset, max_n_outputs=num_generated_examples
-    )
+    attacked_dataset, info_dict = attack.get_attacked_dataset(dataset=dataset)
 
     attack_results = compute_attack_results(
-        dataset=dataset,
         attacked_dataset=attacked_dataset,
-        ground_truth_label_fn=ground_truth_label_fn,
         model=model,
         tokenizer=tokenizer,
         accelerator=accelerator,

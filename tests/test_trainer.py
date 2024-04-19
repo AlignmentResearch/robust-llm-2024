@@ -1,44 +1,30 @@
-from datasets import Dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from robust_llm.configs import EnvironmentConfig, EvaluationConfig
-from robust_llm.dataset_management.tomita import make_language_generator
+from robust_llm.configs import DatasetConfig, EnvironmentConfig, EvaluationConfig
+from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import Training
-from robust_llm.utils import tokenize_dataset
-
-# 10 is long enough for all Tomita languages to have several
-# true and false examples, but is otherwise arbitrary.
-MAX_LANGUAGE_LENGTH = 10
 
 
 def test_basic_constructor():
-    language_generator = make_language_generator(
-        language_name="tomita1", max_length=MAX_LANGUAGE_LENGTH
-    )
-    (
-        train_dataset,
-        validation_dataset,
-        _test_dataset,
-    ) = language_generator.generate_dataset(
-        train_size=10, validation_size=10, test_size=10
+    dataset_cfg = DatasetConfig(
+        dataset_type="AlignmentResearch/PasswordMatch",
+        n_train=10,
+        n_val=10,
     )
 
-    model_name = "bert-base-cased"
+    model_name = "EleutherAI/pythia-14m"
     model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-    tokenized_train_dataset = Dataset.from_dict(
-        tokenize_dataset(train_dataset, tokenizer)
-    )
-    tokenized_validation_dataset = Dataset.from_dict(
-        tokenize_dataset(validation_dataset, tokenizer)
-    )
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    train = load_rllm_dataset(dataset_cfg, split="train").tokenize(tokenizer)
+    validation = load_rllm_dataset(dataset_cfg, split="validation").tokenize(tokenizer)
 
     Training(
         experiment_name="test-experiment",
         job_type="test-job_type",
         run_name="test-run",
-        train_dataset=tokenized_train_dataset,
-        eval_dataset={"validation": tokenized_validation_dataset},
+        train_rllm_dataset=train,
+        eval_rllm_dataset={"validation": validation},
         model=model,
         tokenizer=tokenizer,
         model_name_to_save="test_model",
