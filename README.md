@@ -38,6 +38,12 @@ pre-commit install
 pip install -e '.[dev]'
 ```
 
+If you would like to run TextAttack attacks that depend on TensorFlow embeddings [such as TextFooler](https://textattack.readthedocs.io/en/latest/0_get_started/installation.html#optional-dependencies), then run:
+
+```
+pip install -e '.[dev,tensorflow]'
+```
+
 ## Running experiments
 
 We have various kinds of pipelines that you can run. Currently we have training pipeline (used for supervised fine-tuning of models or adversarial training), and an evaluation pipeline (used to evaluate adversarial attack on a fixed model). To choose appropriate pipeline, you need to define the `experiment.experiment_type` in a Hydra config (see below). Note that there is also a defense pipeline which is currently non-operational.

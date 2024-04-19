@@ -4,16 +4,49 @@ orbs:
   python: circleci/python@1.5.0
   codecov: codecov/codecov@3.3.0
 
+executors:
+  python-executor:
+    docker:
+      - image: cimg/python:3.10.13
 
 commands:
-  install-dependencies:
-    description: "Check out and update Python dependencies."
+  prepare-virtualenv:
+    description: "Create Python virtual environment with caching support"
     steps:
-      - checkout
+      - restore_cache:
+          # To force cache validation, increase the version number N in "venv-vN" below
+          key: &venv-cache venv-v3-{{ checksum "pyproject.toml" }}
       - run:
-          name: Install robust-llm
+          name: Setup Virtual Environment
           command: |
-            pip install -e '.[dev]'
+            # Store venv activate script in special CircleCI BASH_ENV
+            # variable which will be automatically sourced before
+            # new commands
+            echo ". $(pwd)/venv/bin/activate" >> "$BASH_ENV"
+            if [ ! -d "venv" ]; then
+              # venv does not exist: create it
+              python -m venv venv
+              # Activate venv now it's been created
+              source "$BASH_ENV"
+              # Install CPU version of PyTorch as CI does not have GPU.
+              # (CUDA version runs on CPU OK, but file size is larger,
+              # slowing down CI.)
+              pip install torch --index-url https://download.pytorch.org/whl/cpu
+              # Install remaining dependencies.
+              # Note if we ever remove `-e` it'll become necessary to reinstall
+              # robust_llm even if a virtual environment already exists, with:
+              # pip install --upgrade --force-reinstall --no-deps '.[dev]'
+              pip install -e '.[dev]'
+            fi
+
+      - save_cache:
+          paths:
+            - "venv"
+          key: *venv-cache
+
+      - run:
+          name: print installed packages
+          command: pip freeze --all
 
   store-test-output:
     description: "Store the output of tests."
@@ -31,28 +64,29 @@ commands:
 
 jobs:
   pytest:
-    docker:
-      - image: cimg/python:3.10.13
+    executor: python-executor
     steps:
-      - install-dependencies
+      - checkout
+      - prepare-virtualenv
       - run:
           name: Run tests
           command: |
             pytest --cov=robust_llm \
-              --cov=tests --junitxml=/tmp/test-reports/junit.xml \
-              --durations=500 -vv tests/
-            mv .coverage .coverage.robust_llm
-            coverage combine  # rewrite paths from virtualenv to src/
+                   --cov=tests --junitxml=test-reports/junit.xml \
+                   --durations=500 -vv tests/
           environment:
             WANDB_MODE: offline
+      - store_artifacts:
+          path: test-reports
+          destination: test-reports
       - codecov/upload
       - store-test-output
 
   lint:
-    docker:
-      - image: cimg/python:3.10.13
+    executor: python-executor
     steps:
-      - install-dependencies
+      - checkout
+      - prepare-virtualenv
       - run:
           name: black
           command: |
@@ -67,7 +101,7 @@ jobs:
           name: pyright
           command: |
             pyright --version
-            pyright .
+            pyright
       - run:
           name: mypy
           command: |
@@ -78,10 +112,9 @@ jobs:
           command: |
             flake8 --version
             flake8 . -v --exclude venv
-        # TODO maybe add codespell
-
 
 workflows:
+  version: 2
   tests:
     jobs:
       - pytest

@@ -9,7 +9,7 @@ RUN apt update && \
 
 FROM base as prod
 ADD . .
-RUN python3 -m pip install .
+RUN python3 -m pip install '.[tensorflow]'
 
 # Install requirements for repo
 # note this only monitors the pyproject.toml file for changes
