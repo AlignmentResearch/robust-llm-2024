@@ -312,6 +312,7 @@ class PerplexityDefenseConfig:
 
     def __post_init__(self):
         assert 0 <= self.perplexity_threshold_proportion <= 1
+        assert self.window_size > 0
 
 
 @dataclass
