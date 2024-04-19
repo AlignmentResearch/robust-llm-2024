@@ -92,6 +92,10 @@ class Training:
             per_device_eval_batch_size=self.eval_batch_size,
             optim=self.optimizer,
             gradient_checkpointing=self.gradient_checkpointing,
+            # Using non-reentrant checkpointing avoids a warning and
+            # is recommended in the PyTorch docs:
+            # https://pytorch.org/docs/stable/checkpoint.html
+            gradient_checkpointing_kwargs={"use_reentrant": False},
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
@@ -189,7 +193,7 @@ class Training:
                 # here to default local directory.
                 self.trainer._save(state_dict=state_dict)
                 hf_name = self.trainer.args.hub_model_id
-                wandb.run.summary["saved_hf_name"] = hf_name
+                wandb.run.summary["saved_hf_name"] = hf_name  # type: ignore
                 print(f"Saving the model/tokenizer to HuggingFace as {hf_name}")
                 self.trainer.push_to_hub()
                 # Even though above line should push both model and tokenizer, in
@@ -202,7 +206,7 @@ class Training:
                 output_dir = os.path.join(
                     path_prefix_or_hf, "models", self.model_name_to_save
                 )
-                wandb.run.summary["saved_dir"] = output_dir
+                wandb.run.summary["saved_dir"] = output_dir  # type: ignore
                 print(f"Saving the model/tokenizer to {output_dir}")
                 self.trainer._save(output_dir=output_dir, state_dict=state_dict)
                 self.tokenizer.save_pretrained(output_dir)
@@ -283,6 +287,10 @@ class AdversarialTraining(Training):
             per_device_eval_batch_size=self.eval_batch_size,
             optim=self.optimizer,
             gradient_checkpointing=self.gradient_checkpointing,
+            # Using non-reentrant checkpointing avoids a warning and
+            # is recommended in the PyTorch docs:
+            # https://pytorch.org/docs/stable/checkpoint.html
+            gradient_checkpointing_kwargs={"use_reentrant": False},
             eval_steps=self.eval_steps,
             evaluation_strategy="steps",
             logging_steps=self.logging_steps,
