@@ -29,7 +29,7 @@ from robust_llm.dataset_management.dataset_management import (
 from robust_llm.dataset_management.tomita.tomita import Tomita
 from robust_llm.evaluation import (
     do_adversarial_evaluation,
-    get_prediction_logits_and_labels,
+    get_prediction_logits_and_labels_and_maybe_flag_values,
 )
 from robust_llm.logging_utils import LoggingCounter, log_dataset_to_wandb
 from robust_llm.trainer import (
@@ -531,11 +531,13 @@ def _get_only_data_with_incorrect_predictions(
     """Returns a dataset with only the examples that the model got wrong."""
     model.eval()
 
-    pred_logits, pred_labels = get_prediction_logits_and_labels(
-        dataset=dataset,
-        model=model,
-        tokenizer=tokenizer,
-        batch_size=batch_size,
+    pred_logits, pred_labels, _ = (
+        get_prediction_logits_and_labels_and_maybe_flag_values(
+            dataset=dataset,
+            model=model,
+            tokenizer=tokenizer,
+            batch_size=batch_size,
+        )
     )
 
     labels = np.array(dataset["label"])

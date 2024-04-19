@@ -1,6 +1,7 @@
 """Code for evaluating an attack on a single model. Used by multiple pipelines."""
 
-import dataclasses
+from __future__ import annotations
+
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Sequence, Union
@@ -33,8 +34,7 @@ class FilteredEvaluationPipeline(TextClassificationPipeline):
             self.model = old_model
 
     def check_model_type(self, supported_models: Union[list[str], dict]):
-        """
-        Check if the model class is supported by the pipeline.
+        """Check if the model class is supported by the pipeline.
 
         Args:
             supported_models (`list[str]` or `dict`):
@@ -74,6 +74,68 @@ class FilteredEvaluationPipeline(TextClassificationPipeline):
 
 
 @dataclass
+class EvaluationOutput:
+    """Represents the output of evaluating an attack on a single example.
+
+    Attributes:
+        original_label: True label of the original example.
+        original_pred_label: Prediction of the model on the original example.
+        original_flag_value: Value of the filter applied pre-attack. Will be
+            `None` iff the defense was not run pre-attack.
+        attacked_label: True label of the attacked example.
+        attacked_pred_label: Prediction of the model on the attacked example.
+        attacked_flag_value: Value of the filter applied post-attack. Will be
+            `None` iff the defense was not applied post-attack.
+        attacked_pred_logits: Logits of the model on the attacked example.
+    """
+
+    original_label: int
+    original_pred_label: int
+    original_flag_value: Optional[bool]
+    attacked_label: int
+    attacked_pred_label: int
+    attacked_flag_value: Optional[bool]
+    attacked_pred_logits: list[float]
+
+    @classmethod
+    def get_list_from_labels_and_predictions(
+        cls,
+        original_labels: Sequence[int],
+        original_pred_labels: Sequence[int],
+        original_flag_values: Sequence[bool] | Sequence[None],
+        attacked_labels: Sequence[int],
+        attacked_pred_labels: Sequence[int],
+        attacked_flag_values: Sequence[bool] | Sequence[None],
+        attacked_pred_logits: Sequence[Sequence[float]],
+    ) -> list[EvaluationOutput]:
+
+        assert (
+            len(original_labels)
+            == len(original_pred_labels)
+            == len(original_flag_values)
+            == len(attacked_labels)
+            == len(attacked_pred_labels)
+            == len(attacked_flag_values)
+            == len(attacked_pred_logits)
+        )
+
+        evaluation_outputs = []
+        for i in range(len(original_labels)):
+            evaluation_outputs.append(
+                cls(
+                    original_label=original_labels[i],
+                    original_pred_label=original_pred_labels[i],
+                    original_flag_value=original_flag_values[i],
+                    attacked_label=attacked_labels[i],
+                    attacked_pred_label=attacked_pred_labels[i],
+                    attacked_pred_logits=list(attacked_pred_logits[i]),
+                    attacked_flag_value=attacked_flag_values[i],
+                )
+            )
+
+        return evaluation_outputs
+
+
 class AttackResults:
     """Results of an attack on a dataset.
 
@@ -119,20 +181,21 @@ class AttackResults:
             attacked examples, according to the victim model.
     """
 
-    # NOTE(niki): we assume that the length of the dataset
-    # is the same pre and post attack.
+    def __init__(self, evaluation_outputs: Sequence[EvaluationOutput]):
+        # NOTE(niki): we assume that the length of the dataset
+        # is the same pre and post attack.
+        self.n_examples: int = 0
+        self.n_incorrect_pre_attack: int = 0
+        self.n_flagged_pre_attack: int = 0
+        self.n_flagged_post_attack: int = 0
+        self.n_flagged_post_attack_then_correct: int = 0
+        self.n_not_flagged_post_attack_then_correct: int = 0
 
-    n_examples: int = 0
-    n_incorrect_pre_attack: int = 0
-    n_flagged_pre_attack: int = 0
-    n_flagged_post_attack: int = 0
-    n_flagged_post_attack_then_correct: int = 0
-    n_not_flagged_post_attack_then_correct: int = 0
+        self.post_attack_losses: list[float] = []
+        self.post_attack_correct_class_probs: list[float] = []
 
-    post_attack_losses: list[float] = dataclasses.field(default_factory=list)
-    post_attack_correct_class_probs: list[float] = dataclasses.field(
-        default_factory=list
-    )
+        for evaluation_output in evaluation_outputs:
+            self._add_example(evaluation_output)
 
     @property
     def n_correct_pre_attack(self) -> int:
@@ -174,125 +237,80 @@ class AttackResults:
     def from_labels_and_predictions(
         cls,
         original_labels: Sequence[int],
-        original_pred_labels: Optional[Sequence[int]],
-        original_flag_values: Optional[Sequence[bool | None]],
+        original_pred_labels: Sequence[int],
+        original_flag_values: Sequence[bool] | Sequence[None],
         attacked_labels: Sequence[int],
         attacked_pred_labels: Sequence[int],
-        attacked_flag_values: Sequence[bool | None],
-        attacked_pred_logits: Sequence[Sequence[float | None]],
-    ) -> "AttackResults":
+        attacked_flag_values: Sequence[bool] | Sequence[None],
+        attacked_pred_logits: Sequence[Sequence[float]],
+    ) -> AttackResults:
         """Generates `AttackResults` from labels and model predictions.
 
         Args:
             original_labels: True labels of the original examples (pre-attack)
-            original_pred_labels: Predictions of the model pre-attack. Should
-                be provided iff the attack uses input dataset.
-            original_flag_values: Values of the filter applied pre-attack. Should be
-                provided iff the attack uses input dataset.
+            original_pred_labels: Predictions of the model pre-attack.
+            original_flag_values: Values of the filter applied pre-attack.
             attacked_labels: True labels of the attacked examples (post-attack)
             attacked_pred_labels: Predictions of the model post-attack
             attacked_flag_values: Values of the filter applied post-attack
             attacked_pred_logits: Logits of the model post-attack
 
         Returns:
-            `AttackResults` object
+            An `AttackResults` object
         """
-        results = cls()
-        # TODO(niki): don't record the length here - instead, compute it as
-        # we add examples in an _add_example... method below. For now, this
-        # is not possible because we have two different methods, but after
-        # an upcoming refactor in which we will have only one method, this
-        # will be possible.
-        results.n_examples = len(original_labels)
 
-        if original_pred_labels is None:
-            for (
-                attacked_label,
-                attacked_pred_label,
-                attacked_flag_value,
-                logits,
-            ) in zip(
-                attacked_labels,
-                attacked_pred_labels,
-                attacked_flag_values,
-                attacked_pred_logits,
-            ):
-                results._add_example_with_post_attack_only(
-                    attacked_label=attacked_label,
-                    attacked_pred_label=attacked_pred_label,
-                    attacked_flag_value=attacked_flag_value,
-                    logits=logits,
-                )
-        else:
-            assert original_flag_values is not None
-            for (
-                original_label,
-                original_pred_label,
-                original_flag_value,
-                attacked_label,
-                attacked_pred_label,
-                attacked_flag_value,
-                logits,
-            ) in zip(
-                original_labels,
-                original_pred_labels,
-                original_flag_values,
-                attacked_labels,
-                attacked_pred_labels,
-                attacked_flag_values,
-                attacked_pred_logits,
-            ):
-                results._add_example(
-                    original_label=original_label,
-                    original_pred_label=original_pred_label,
-                    original_flag_value=original_flag_value,
-                    attacked_label=attacked_label,
-                    attacked_pred_label=attacked_pred_label,
-                    attacked_flag_value=attacked_flag_value,
-                    logits=logits,
-                )
+        evaluation_outputs: list[EvaluationOutput] = (
+            EvaluationOutput.get_list_from_labels_and_predictions(
+                original_labels=original_labels,
+                original_pred_labels=original_pred_labels,
+                original_flag_values=original_flag_values,
+                attacked_labels=attacked_labels,
+                attacked_pred_labels=attacked_pred_labels,
+                attacked_flag_values=attacked_flag_values,
+                attacked_pred_logits=attacked_pred_logits,
+            )
+        )
 
-        return results
+        return cls(evaluation_outputs=evaluation_outputs)
 
     def _add_example_with_post_attack_only(
-        self,
-        attacked_label: int,
-        attacked_pred_label: int,
-        attacked_flag_value: bool | None,
-        logits: Sequence[float | None],
+        self, evaluation_output: EvaluationOutput
     ) -> None:
-        if attacked_flag_value is True:
+        if evaluation_output.attacked_flag_value is True:
             self.n_flagged_post_attack += 1
-            if attacked_label == attacked_pred_label:
+            if (
+                evaluation_output.attacked_label
+                == evaluation_output.attacked_pred_label
+            ):
                 self.n_flagged_post_attack_then_correct += 1
         # This branch catches both the case where the defense did not flag the
         # example (False), and the case in which the defense was not run (None)
         else:
-            if attacked_label == attacked_pred_label:
+            if (
+                evaluation_output.attacked_label
+                == evaluation_output.attacked_pred_label
+            ):
                 self.n_not_flagged_post_attack_then_correct += 1
 
         # Compute the loss and the probability of the correct class.
-        assert all(logit is not None for logit in logits)
-        logprobs = torch.nn.functional.log_softmax(torch.tensor(logits), dim=0)
-        loss = float(-logprobs[attacked_label])
-        correct_class_prob = float(torch.exp(logprobs[attacked_label]))
+        assert all(
+            logit is not None for logit in evaluation_output.attacked_pred_logits
+        )
+        logprobs = torch.nn.functional.log_softmax(
+            torch.tensor(evaluation_output.attacked_pred_logits), dim=0
+        )
+        loss = float(-logprobs[evaluation_output.attacked_label])
+        correct_class_prob = float(
+            torch.exp(logprobs[evaluation_output.attacked_label])
+        )
         self.post_attack_losses.append(loss)
         self.post_attack_correct_class_probs.append(correct_class_prob)
 
-    def _add_example(
-        self,
-        original_label: int,
-        original_pred_label: int,
-        original_flag_value: bool | None,
-        attacked_label: int,
-        attacked_pred_label: int,
-        attacked_flag_value: bool | None,
-        logits: Sequence[float | None],
-    ) -> None:
-        if original_flag_value:
+    def _add_example(self, evaluation_output: EvaluationOutput) -> None:
+        self.n_examples += 1
+        if evaluation_output.original_flag_value is True:
             self.n_flagged_pre_attack += 1
-
-        if original_pred_label != original_label:
+        if evaluation_output.original_pred_label != evaluation_output.original_label:
             self.n_incorrect_pre_attack += 1
             # Since the model got this example wrong pre-attack,
             # there was no need to run the attack, and thus we
@@ -301,12 +319,7 @@ class AttackResults:
 
         # If we got here, the model gave the correct answer
         # pre-attack and the attack was run.
-        self._add_example_with_post_attack_only(
-            attacked_label=attacked_label,
-            attacked_pred_label=attacked_pred_label,
-            attacked_flag_value=attacked_flag_value,
-            logits=logits,
-        )
+        self._add_example_with_post_attack_only(evaluation_output)
 
     def compute_adversarial_evaluation_metrics(self) -> dict[str, float]:
         """Computes final metrics to report."""
@@ -435,31 +448,25 @@ def _maybe_record_defense_specific_metrics(
     return metrics
 
 
-def _get_prediction_logits_and_maybe_filter(
-    hf_pipeline: FilteredEvaluationPipeline,
-    dataset: Dataset,
-    batch_size: int,
-) -> tuple[list[list[float]], list[bool | None]]:
-    """Returns prediction logits, of shape (n_examples, n_classes)."""
+def _make_flag_values_from_pipeline_output(
+    preds_with_flag_values,
+) -> list[None] | list[bool]:
+    if all(flag is None for _, flag in preds_with_flag_values):
+        return [None for _ in preds_with_flag_values]
+    elif all(isinstance(flag, bool) for _, flag in preds_with_flag_values):
+        return [flag for _, flag in preds_with_flag_values]
+    else:
+        raise ValueError("Flag values should be either all None or all bools")
 
-    # TODO(michal): consider dropping HF pipelines and instead use data loaders + direct
-    # model calls. Pipelines complicate the code without a clear benefit.
-    preds_with_flag_values = hf_pipeline(
-        dataset["text"],
-        batch_size=batch_size,
-        truncation=True,
-        function_to_apply="none",
-    )
 
+def _make_prediction_logits_from_pipeline_output(
+    preds_with_flag_values,
+) -> list[list[float]]:
     # We use explicit loops below instead of list comprehension to be able to have type
     # asserts so that typechecker does not complain.
     prediction_logits = []
-    flag_values: list[bool | None] = []
     assert isinstance(preds_with_flag_values, list)
-    for pred, flag_value in preds_with_flag_values:  # type: ignore
-        assert isinstance(flag_value, bool) or flag_value is None
-        flag_values.append(flag_value)
-
+    for pred, _ in preds_with_flag_values:  # type: ignore
         # `pred` contains prediction information for a single example. It is a list of
         # dictionaries, each dictionary contains information about a single class.
         # Specifically, this dictionary includes a "score" for each class given
@@ -472,6 +479,31 @@ def _get_prediction_logits_and_maybe_filter(
             assert cls_dict["label"] == f"LABEL_{i}"
             logits.append(cls_dict["score"])
         prediction_logits.append(logits)
+    return prediction_logits
+
+
+def _get_prediction_logits_and_maybe_flag_values(
+    hf_pipeline: FilteredEvaluationPipeline,
+    dataset: Dataset,
+    batch_size: int,
+) -> tuple[list[list[float]], list[bool] | list[None]]:
+    """Returns prediction logits, of shape (n_examples, n_classes),
+    and flag values, of shape (n_examples,)."""
+
+    # TODO(michal): consider dropping HF pipelines and instead use data loaders + direct
+    # model calls. Pipelines complicate the code without a clear benefit.
+    preds_with_flag_values = hf_pipeline(
+        dataset["text"],
+        batch_size=batch_size,
+        truncation=True,
+        function_to_apply="none",
+    )
+
+    # TODO(niki): type check the following two functions
+    prediction_logits = _make_prediction_logits_from_pipeline_output(
+        preds_with_flag_values
+    )
+    flag_values = _make_flag_values_from_pipeline_output(preds_with_flag_values)
 
     return prediction_logits, flag_values
 
@@ -482,12 +514,12 @@ def _get_prediction_labels(
     return [int(np.argmax(logits)) for logits in prediction_logits]
 
 
-def get_prediction_logits_and_labels(
+def get_prediction_logits_and_labels_and_maybe_flag_values(
     dataset: Dataset,
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     batch_size: int,
-) -> tuple[list[list[float]], list[int]]:
+) -> tuple[list[list[float]], list[int], list[bool] | list[None]]:
     hf_pipeline = FilteredEvaluationPipeline(
         model=model,
         tokenizer=tokenizer,
@@ -498,14 +530,14 @@ def get_prediction_logits_and_labels(
         return_all_scores=True,
         framework="pt",
     )
-    pred_logits, _ = _get_prediction_logits_and_maybe_filter(
+    pred_logits, pred_flag_values = _get_prediction_logits_and_maybe_flag_values(
         hf_pipeline=hf_pipeline,
         dataset=dataset,
         batch_size=batch_size,
     )
     pred_labels = _get_prediction_labels(pred_logits)
 
-    return pred_logits, pred_labels
+    return pred_logits, pred_labels, pred_flag_values
 
 
 def _log_examples_to_wandb(
@@ -576,34 +608,6 @@ def _log_examples_to_wandb(
     wandb.log({"adversarial_eval/examples": table}, commit=False)
 
 
-def _get_prediction_logits_and_labels_and_maybe_filter(
-    dataset: Dataset,
-    model: LanguageModel,
-    tokenizer: PreTrainedTokenizerBase,
-    batch_size: int,
-) -> tuple[list[list[float]], list[int], list[bool | None]]:
-
-    hf_pipeline = FilteredEvaluationPipeline(
-        model=model,
-        tokenizer=tokenizer,
-        device=model.device,
-        # Even though this option is deprecated, we use it instead of setting
-        # `top_k=None`. They differ by the order of returned classes. In the following
-        # option, we get classes in the order of the classes defined in the model.
-        return_all_scores=True,
-        framework="pt",
-    )
-
-    pred_logits, pred_flag_values = _get_prediction_logits_and_maybe_filter(
-        hf_pipeline=hf_pipeline,
-        dataset=dataset,
-        batch_size=batch_size,
-    )
-    pred_labels = _get_prediction_labels(pred_logits)
-
-    return pred_logits, pred_labels, pred_flag_values
-
-
 def compute_attack_results(
     dataset: Dataset,
     attacked_dataset: Dataset,
@@ -624,7 +628,7 @@ def compute_attack_results(
 
     assert dataset is not None  # will be assumed after refactors anyway.
     original_pred_logits, original_pred_labels, original_flag_values = (
-        _get_prediction_logits_and_labels_and_maybe_filter(
+        get_prediction_logits_and_labels_and_maybe_flag_values(
             dataset=dataset,
             model=model,
             tokenizer=tokenizer,
@@ -633,7 +637,7 @@ def compute_attack_results(
     )
 
     attacked_pred_logits, attacked_pred_labels, attacked_flag_values = (
-        _get_prediction_logits_and_labels_and_maybe_filter(
+        get_prediction_logits_and_labels_and_maybe_flag_values(
             dataset=attacked_dataset,
             model=model,
             tokenizer=tokenizer,
@@ -707,8 +711,6 @@ def do_adversarial_evaluation(
     attacked_dataset, info_dict = attack.get_attacked_dataset(
         dataset=dataset, max_n_outputs=num_generated_examples
     )
-
-    print("got the attacked dataset")
 
     attack_results = compute_attack_results(
         dataset=dataset,

@@ -39,13 +39,17 @@ def test_attack_results_from_labels_and_predictions():
     attacked_flag_values = [d[5] for d in data]
     attacked_logits = [d[6] for d in data]
 
+    # TODO(niki): the code this is testing assumes that either all
+    # the examples are flagged or none are. So ideally this test
+    # would be broken up into two tests: one in which flag values
+    # are all True/False, and one in which they are all None.
     attack_results = AttackResults.from_labels_and_predictions(
         original_labels=original_labels,
         original_pred_labels=original_pred_labels,
-        original_flag_values=original_flag_values,
+        original_flag_values=original_flag_values,  # type: ignore
         attacked_labels=attacked_labels,
         attacked_pred_labels=attacked_pred_labels,
-        attacked_flag_values=attacked_flag_values,
+        attacked_flag_values=attacked_flag_values,  # type: ignore
         attacked_pred_logits=attacked_logits,
     )
 
@@ -86,32 +90,34 @@ def test_attack_results_from_labels_and_predictions():
 def test_compute_adversarial_evaluation_metrics():
     """Test the AttackResults.compute_adversarial_evaluation_metrics method."""
 
-    attack_results = AttackResults(
-        n_examples=7,
-        n_incorrect_pre_attack=2,
-        n_flagged_pre_attack=1,
-        # n attacked = 5
-        # n not attacked = 2
-        n_flagged_post_attack=4,
-        # n not flagged post attack = 1
-        n_flagged_post_attack_then_correct=2,
-        n_not_flagged_post_attack_then_correct=1,
-        # n correct post attack = 3
-        post_attack_losses=[
-            0.1,
-            0.2,
-            0.3,
-            0.4,
-            0.5,
-        ],
-        post_attack_correct_class_probs=[
-            0.8,
-            0.7,
-            0.6,
-            0.5,
-            0.4,
-        ],
-    )
+    attack_results = AttackResults(evaluation_outputs=[])
+
+    # Manually set the attributes of the AttackResults object
+    attack_results.n_examples = 7
+    attack_results.n_incorrect_pre_attack = 2
+    attack_results.n_flagged_pre_attack = 1
+    # n attacked = 5
+    # n not attacked = 2
+    attack_results.n_flagged_post_attack = 4
+    # n not flagged post attack = 1
+    attack_results.n_flagged_post_attack_then_correct = 2
+    attack_results.n_not_flagged_post_attack_then_correct = 1
+    # n correct post attack = 3
+    attack_results.post_attack_losses = [
+        0.1,
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+    ]
+    attack_results.post_attack_correct_class_probs = [
+        0.8,
+        0.7,
+        0.6,
+        0.5,
+        0.4,
+    ]
+
     metrics = attack_results.compute_adversarial_evaluation_metrics()
 
     assert metrics["adversarial_eval/n_examples"] == 7
