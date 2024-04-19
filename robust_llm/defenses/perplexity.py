@@ -78,6 +78,15 @@ def _get_single_datapoint_perplexity(
     assert _is_ones_then_zeros(mask)
     masked_next_token_logits = masked_next_token_logits[: int(mask.sum().item())]
 
+    # If masked_next_token_logits is empty then there was at most one non-masked
+    # token, so perplexity is not well-defined. We make the choice to throw an
+    # error here, because a one-token sequence was almost certainly not intended.
+    if len(masked_next_token_logits) == 0:
+        raise ValueError(
+            "Tried to calculate perplexity on a single token, which is undefined."
+            " Is 'append_to_modifiable_chunk' False with a single modifiable chunk?"
+        )
+
     assert torch.all(masked_next_token_logits < 0)
 
     # Cut down the window size if it exceeds the number
