@@ -69,11 +69,20 @@ jobs:
       - checkout
       - prepare-virtualenv
       - run:
+          name: Show num processes
+          command: |
+            # See https://discuss.circleci.com/t/environment-variable-set-to-the-number-of-available-cpus/32670/3
+            # for explanation of the weird expression below. -- Aaron
+            NUM_CPUS=$(($(cat /sys/fs/cgroup/cpu/cpu.shares) / 1024))
+            echo ${NUM_CPUS} processes
+            # Save environment variable for next step
+            echo "export NUM_CPUS=${NUM_CPUS}" >> $BASH_ENV
+      - run:
           name: Run tests
           command: |
             pytest --cov=robust_llm \
                    --cov=tests --junitxml=test-reports/junit.xml \
-                   --durations=500 -vv tests/
+                   --durations=500 -vv -n ${NUM_CPUS} tests/
           environment:
             WANDB_MODE: offline
       - store_artifacts:

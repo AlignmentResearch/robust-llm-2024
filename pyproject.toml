@@ -34,6 +34,7 @@ dev = [
     "pytest",
     "hypothesis",
     "pytest-cov",
+    "pytest-xdist",
     "flake8",
     "names-generator",
     # For checking GPU memory usage
