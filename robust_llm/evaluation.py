@@ -198,6 +198,25 @@ class AttackResults:
         for evaluation_output in evaluation_outputs:
             self._add_example(evaluation_output)
 
+    def __repr__(self):
+        return f"""
+    AttackResults(
+        n_examples={self.n_examples},
+        n_correct_pre_attack={self.n_correct_pre_attack},
+        n_incorrect_pre_attack={self.n_incorrect_pre_attack},
+        n_flagged_pre_attack={self.n_flagged_pre_attack},
+        n_not_flagged_pre_attack={self.n_not_flagged_pre_attack},
+        n_flagged_post_attack={self.n_flagged_post_attack},
+        n_not_flagged_post_attack={self.n_not_flagged_post_attack},
+        n_flagged_post_attack_then_correct={self.n_flagged_post_attack_then_correct},
+        n_flagged_post_attack_then_incorrect={self.n_flagged_post_attack_then_incorrect},
+        n_not_flagged_post_attack_then_correct={self.n_not_flagged_post_attack_then_correct},
+        n_not_flagged_post_attack_then_incorrect={self.n_not_flagged_post_attack_then_incorrect},
+        n_post_attack_correct={self.n_post_attack_correct},
+        n_post_attack_incorrect={self.n_post_attack_incorrect},
+    )
+    """
+
     @property
     def n_correct_pre_attack(self) -> int:
         return self.n_examples - self.n_incorrect_pre_attack
@@ -674,7 +693,6 @@ def do_adversarial_evaluation(
         batch_size=batch_size,
         num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
     )
-    print(attack_results)
 
     metrics = attack_results.compute_adversarial_evaluation_metrics()
     assert len(set(metrics.keys()) & set(info_dict.keys())) == 0
