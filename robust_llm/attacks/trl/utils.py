@@ -44,7 +44,7 @@ def make_ppo_trainer(
         model=adversary_model,  # type: ignore
         tokenizer=adversary_tokenizer,
         dataset=dataset,
-        # Needed to properly process "text_chunked"
+        # Needed to properly process "chunked_text"
         data_collator=trl_data_collator,
     )
     assert isinstance(ppo_trainer, PPOTrainer)
@@ -58,21 +58,21 @@ class LogitTextClassificationPipeline(TextClassificationPipeline):
 
 
 def trl_data_collator(datapoints: Sequence[Any]) -> Mapping[str, Any]:
-    """A simple data collator to use when the dataset contains "text_chunked".
+    """A simple data collator to use when the dataset contains "chunked_text".
 
     The default PPOTrainer data collator does not support
     collating lists of lists cleanly, so it is necessary to either
     use our own or modify the output of the default data collator
     after the fact.
     """
-    assert all("label" in datapoint for datapoint in datapoints)
+    assert all("clf_label" in datapoint for datapoint in datapoints)
     assert all("text" in datapoint for datapoint in datapoints)
-    assert all("text_chunked" in datapoint for datapoint in datapoints)
+    assert all("chunked_text" in datapoint for datapoint in datapoints)
 
     batch = {}
-    batch["label"] = [datapoint["label"] for datapoint in datapoints]
+    batch["clf_label"] = [datapoint["clf_label"] for datapoint in datapoints]
     batch["text"] = [datapoint["text"] for datapoint in datapoints]
-    batch["text_chunked"] = [datapoint["text_chunked"] for datapoint in datapoints]
+    batch["chunked_text"] = [datapoint["chunked_text"] for datapoint in datapoints]
     return batch
 
 

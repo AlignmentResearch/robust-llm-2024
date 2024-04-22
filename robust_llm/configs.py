@@ -451,7 +451,6 @@ class EnvironmentConfig:
         decoder_name (Optional[str]): Decoder model name (used for defenses).
         decoder_family (Optional[str]): Which model family the decoder belongs to.
         decoder_revision (Optional[str]): The revision of the decoder model.
-        dataset_type (str): Dataset type (tomita, tensor_trust).
         device (str): Device to use for models.
     """
 
