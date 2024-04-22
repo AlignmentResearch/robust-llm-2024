@@ -136,18 +136,10 @@ def test_compute_adversarial_evaluation_metrics():
     assert np.isclose(
         metrics["adversarial_eval/post_attack_accuracy_on_not_flagged_examples"], 1 / 1
     )
-    assert np.isclose(
-        metrics["adversarial_eval/defense_post_attack_true_positive_rate"], 4 / 5
-    )
-    assert np.isclose(
-        metrics["adversarial_eval/defense_post_attack_true_negative_rate"], 6 / 7
-    )
-    assert np.isclose(
-        metrics["adversarial_eval/defense_post_attack_false_positive_rate"], 1 / 7
-    )
-    assert np.isclose(
-        metrics["adversarial_eval/defense_post_attack_false_negative_rate"], 1 / 5
-    )
+    assert np.isclose(metrics["adversarial_eval/defense_true_positive_rate"], 4 / 5)
+    assert np.isclose(metrics["adversarial_eval/defense_true_negative_rate"], 6 / 7)
+    assert np.isclose(metrics["adversarial_eval/defense_false_positive_rate"], 1 / 7)
+    assert np.isclose(metrics["adversarial_eval/defense_false_negative_rate"], 1 / 5)
 
     assert np.isclose(
         metrics["adversarial_eval/post_attack_flagged_but_correct_rate"], 2 / 4

@@ -390,16 +390,16 @@ class AttackResults:
                 + self.n_not_flagged_post_attack_then_correct,
                 self.n_correct_pre_attack,
             ),
-            "adversarial_eval/defense_post_attack_true_positive_rate": div_maybe_nan(
+            "adversarial_eval/defense_true_positive_rate": div_maybe_nan(
                 self.n_flagged_post_attack, self.n_correct_pre_attack
             ),
-            "adversarial_eval/defense_post_attack_true_negative_rate": div_maybe_nan(
+            "adversarial_eval/defense_true_negative_rate": div_maybe_nan(
                 self.n_not_flagged_pre_attack, self.n_examples
             ),
-            "adversarial_eval/defense_post_attack_false_positive_rate": div_maybe_nan(
+            "adversarial_eval/defense_false_positive_rate": div_maybe_nan(
                 self.n_flagged_pre_attack, self.n_examples
             ),
-            "adversarial_eval/defense_post_attack_false_negative_rate": div_maybe_nan(
+            "adversarial_eval/defense_false_negative_rate": div_maybe_nan(
                 self.n_not_flagged_post_attack, self.n_correct_pre_attack
             ),
             "adversarial_eval/post_attack_flagged_but_correct_rate": div_maybe_nan(
