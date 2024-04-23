@@ -130,7 +130,7 @@ def _preprocess_example(
 
     # Replace the modifiable chunk with special words if needed.
     if num_modifiable_words_per_chunk is not None:
-        text_chunked: Sequence[str] = example["text_chunked"]
+        text_chunked: Sequence[str] = example["chunked_text"]
 
         result = []
         for chunk, modifiable in zip(text_chunked, modifiable_chunks_spec):
@@ -240,7 +240,13 @@ class TextAttackAttack(Attack):
 
         dataset = self._preprocess_dataset(dataset)
 
-        text_attack_dataset = textattack.datasets.HuggingFaceDataset(dataset)
+        # We need to set the columns schema explicitly because TextAttack
+        # doesn't recognise 'clf_label' automatically.
+        columns_schema = (["text"], "clf_label")
+        text_attack_dataset = textattack.datasets.HuggingFaceDataset(
+            name_or_dataset=dataset.ds,
+            dataset_columns=columns_schema,
+        )
 
         attack_args = copy.deepcopy(self.attack_args)
 
