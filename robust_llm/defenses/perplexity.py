@@ -36,7 +36,6 @@ def _is_ones_then_zeros(mask):
 
 def _get_perplexity_from_start_side(
     masked_next_token_logits: torch.Tensor,
-    mask: torch.Tensor,
     window_size: int,
     report_max_perplexity: bool,
     start_side: str,
@@ -117,14 +116,12 @@ def _get_single_datapoint_perplexity(
     # `report_max_perplexity`.
     start_left_perplexity = _get_perplexity_from_start_side(
         masked_next_token_logits=masked_next_token_logits,
-        mask=mask,
         window_size=window_size,
         report_max_perplexity=report_max_perplexity,
         start_side="left",
     )
     start_right_perplexity = _get_perplexity_from_start_side(
         masked_next_token_logits=masked_next_token_logits,
-        mask=mask,
         window_size=window_size,
         report_max_perplexity=report_max_perplexity,
         start_side="right",
