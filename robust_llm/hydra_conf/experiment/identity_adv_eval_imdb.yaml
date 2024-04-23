@@ -1,0 +1,16 @@
+experiment_name: 'identity_adv_eval_imdb'
+run_name: 'identity_adv_eval_imdb-1'
+experiment_type: "evaluation"
+
+environment:
+  model_name_or_path: "AlignmentResearch/robust_llm_pythia-14m_ian-022_IMDB_n-its-10"
+  model_family: "pythia"
+
+dataset:
+  dataset_type: "AlignmentResearch/IMDB"
+  n_val: 200
+
+evaluation:
+  batch_size: 64
+  evaluation_attack:
+    attack_type: "identity"

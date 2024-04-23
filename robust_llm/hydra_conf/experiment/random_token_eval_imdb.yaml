@@ -1,7 +1,7 @@
 experiment_type: "evaluation"
 
 environment:
-  model_name_or_path: "AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3"
+  model_name_or_path: "CHANGE THIS"  # Default value that causes an error
   model_family: "pythia"
 
 dataset:
@@ -15,5 +15,9 @@ evaluation:
     attack_type: "random_token"
     append_to_modifiable_chunk: true
     random_token_attack_config:
+      min_tokens: 10
+      max_tokens: 10
       logging_frequency: 10
       batch_size: 32
+      # Corresponds to 10 iterations of 128 candidates per iteration in GCG.
+      max_iterations: 1280

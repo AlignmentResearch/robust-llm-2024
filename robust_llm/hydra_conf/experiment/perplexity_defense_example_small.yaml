@@ -17,6 +17,7 @@ evaluation:
   batch_size: 128
   evaluation_attack:
     attack_type: "random_token"
+    append_to_modifiable_chunk: true
     random_token_attack_config:
       max_iterations: 4
 
