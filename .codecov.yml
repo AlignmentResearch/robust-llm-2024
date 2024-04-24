@@ -1,0 +1,24 @@
+# Do not consider the following directories and files
+# when calculating test coverage.
+ignore:
+  - "build"
+  - "examples"
+  - "experiments"
+  - "tests"
+
+coverage:
+  status:
+    project:
+      default:
+        # Set the target coverage to match the current coverage.
+        target: auto
+        # Allow overall test coverage to drop by up to 1% for a new commit.
+        threshold: 1%
+    patch:
+      default:
+        # Require that at least 50% of new code is covered by tests.
+        target: 50%
+
+github_checks:
+  # Remove codecov warning on GitHub PR web interface
+  annotations: false
