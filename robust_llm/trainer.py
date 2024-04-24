@@ -20,7 +20,7 @@ from transformers import (
 )
 from typing_extensions import override
 
-from robust_llm.utils import BalancedSampler, get_unique_overlap
+from robust_llm.utils import BalancedSampler
 
 
 class TrainerWithBatchSizeStoring(Trainer):
@@ -177,31 +177,3 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
                 },
                 commit=False,
             )
-
-    @override
-    def on_train_end(  # type: ignore[misc]
-        self,
-        args: TrainingArguments,
-        state: TrainerState,
-        control: TrainerControl,
-        **kwargs,
-    ) -> None:
-        # TODO(michal): consider removing this as it was mostly relevant for Tomita?
-        to_log: dict[str, Any] = {}
-
-        assert isinstance(self.training.trainer, AdversarialTrainer)
-        augmented_train_set = self.training.trainer.get_augmented_training_set()
-
-        # Record how much of the validation set is in the train set
-        overlap = get_unique_overlap(
-            self.training.eval_rllm_dataset["validation"].ds,
-            augmented_train_set,
-        )
-        proportion_of_validation_in_train = (
-            len(overlap) / self.training.eval_rllm_dataset["validation"].ds.num_rows
-        )
-        to_log["misc/proportion_of_validation_in_train"] = (
-            proportion_of_validation_in_train
-        )
-
-        wandb.log(to_log, commit=False)

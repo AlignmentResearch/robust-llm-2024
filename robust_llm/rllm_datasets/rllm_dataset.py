@@ -296,7 +296,6 @@ class RLLMDataset(ABC):
         """
         assert self.is_tokenized
         ds_for_trainer = self.ds.rename_column("clf_label", "label")
-        # TODO (ian): Once we stop tracking overlap, we won't need to keep 'text'.
         trainer_cols = ["text", "input_ids", "attention_mask", "label"]
         unused_cols = [c for c in ds_for_trainer.column_names if c not in trainer_cols]
         ds_for_trainer = ds_for_trainer.remove_columns(unused_cols)

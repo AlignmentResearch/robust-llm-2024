@@ -2,7 +2,6 @@
 
 from typing import Tuple
 
-import wandb
 from omegaconf import OmegaConf
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
@@ -11,7 +10,7 @@ from robust_llm.logging_utils import wandb_cleanup, wandb_initialize
 from robust_llm.pipelines.utils import prepare_victim_models
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import AdversarialTraining, Training
-from robust_llm.utils import get_unique_overlap, make_unique_name_to_save
+from robust_llm.utils import make_unique_name_to_save
 
 
 def run_training_pipeline(
@@ -94,28 +93,6 @@ def run_training_pipeline(
         # the Trainer, and we wait until that is done to overwrite them with our own.
         # We do this in the `CustomLoggingWandbCallback`'s `setup` method.
         wandb_initialize(experiment, set_up_step_metrics=False)
-
-        # Log the train-val overlap to wandb
-        assert wandb.run is not None
-        if (
-            experiment.dataset.n_train is not None
-            and experiment.dataset.n_val is not None
-        ):
-            train_val_overlap = get_unique_overlap(
-                smaller_dataset=val_set.ds,
-                larger_dataset=train_set.ds,
-            )
-            wandb.run.summary["train_val_overlap_size"] = len(train_val_overlap)  # type: ignore  # noqa: E501
-            wandb.run.summary["train_val_overlap_over_train_set_size"] = len(  # type: ignore  # noqa: E501
-                train_val_overlap
-            ) / len(
-                train_set.ds["text"]
-            )
-            wandb.run.summary["train_val_overlap_over_val_set_size"] = len(  # type: ignore  # noqa: E501
-                train_val_overlap
-            ) / len(
-                val_set.ds["text"]
-            )
 
     # Perform the training
     training.run_trainer()
