@@ -23,6 +23,9 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
 
     model, tokenizer, decoder = prepare_victim_models(args, num_classes)
     model = prepare_model_with_accelerate(accelerator, model)
+    model.eval()
+    if decoder is not None:
+        decoder.eval()
 
     attack = prepare_attack(
         args=args,

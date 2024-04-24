@@ -681,6 +681,8 @@ def do_adversarial_evaluation(
     _assert_same_data_between_processes(accelerator, dataset.ds["text"])
     _assert_same_data_between_processes(accelerator, dataset.ds["clf_label"])
 
+    model.eval()
+
     print("Doing adversarial evaluation...")
 
     attacked_dataset, info_dict = attack.get_attacked_dataset(dataset=dataset)

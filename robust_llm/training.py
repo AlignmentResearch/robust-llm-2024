@@ -354,6 +354,10 @@ class AdversarialTraining(Training):
                     f"at logging counts: {self.victim_training_logging_counter._parent}"
                 )
 
+            # Set the model to eval mode for the attacks. Model is set to train mode by
+            # HF Trainer during training, otherwise we want it in eval mode.
+            self.model.eval()
+
             # Train the train/validation attacks if they need training.
             print(
                 f"Adversary (training_attack) started training in round {round} "
