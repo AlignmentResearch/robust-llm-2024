@@ -5,6 +5,7 @@ import os
 import random
 import uuid
 from argparse import Namespace
+from datetime import datetime
 from typing import Any, Iterator, Optional, Protocol, Sequence, Sized
 
 import torch
@@ -115,6 +116,10 @@ def make_unique_name_to_save(base_name_or_path: str) -> str:
     # Create a long random id.
     id = uuid.uuid1().hex
     return f"{id}_from_{base_processed}"
+
+
+def get_readable_timestamp() -> str:
+    return datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
 
 
 def get_randint_with_exclusions(

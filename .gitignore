@@ -181,3 +181,4 @@ pythia*/
 # Trainer files
 adversarial_trainer/
 test_trainer/
+trainer/

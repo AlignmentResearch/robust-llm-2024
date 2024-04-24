@@ -33,6 +33,7 @@ from robust_llm.trainer import (
     AdversarialTrainerLoggingCallback,
     TrainerWithBatchSizeStoring,
 )
+from robust_llm.utils import get_readable_timestamp
 
 
 @dataclasses.dataclass
@@ -84,7 +85,7 @@ class Training:
 
     def setup_trainer(self) -> TrainerWithBatchSizeStoring:
         hf_training_args = TrainingArguments(
-            output_dir="test_trainer",
+            output_dir=self.output_dir,
             num_train_epochs=self.train_epochs,
             learning_rate=self.learning_rate,
             per_device_train_batch_size=self.train_batch_size,
@@ -210,6 +211,10 @@ class Training:
                 self.trainer._save(output_dir=output_dir, state_dict=state_dict)
                 self.tokenizer.save_pretrained(output_dir)
 
+    @property
+    def output_dir(self) -> str:
+        return f"trainer/{get_readable_timestamp()}_{self.model_name_to_save}"
+
 
 @dataclasses.dataclass(kw_only=True)
 # TODO: make sure kw_only is not breaking anything.
@@ -262,7 +267,7 @@ class AdversarialTraining(Training):
     @override
     def setup_trainer(self) -> AdversarialTrainer:
         hf_training_args = TrainingArguments(
-            output_dir="adversarial_trainer",
+            output_dir=self.output_dir,
             num_train_epochs=self.train_epochs,
             learning_rate=self.learning_rate,
             per_device_train_batch_size=self.train_batch_size,
