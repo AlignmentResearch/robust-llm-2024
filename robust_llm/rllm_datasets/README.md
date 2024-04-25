@@ -24,12 +24,13 @@
     - Default is `"default"`, which should point to the standard, full version of the dataset
 
 ## Generating datasets
-- Dataset generation scripts can be found in `robust_llm/rllm_datasets/generation_scripts`.
+- Dataset generation and uploading scripts can be found in `robust_llm/rllm_datasets/generation_scripts`.
 - To add a new dataset, suggested workflows is:
     - If the dataset comes from huggingface and has two classes:
-        - Copy `generate_imdb.py` and modify it with the relevant information.
+        - Copy `upload_imdb.py` and modify it with the relevant information.
     - If the dataset is generated from scratch:
-        - Copy `generate_word_length.py` and modify it with the new dataset generation logic.
+        - Implement generation for the dataset, e.g. in `<new-dataset>_generation.py`.
+        - Copy `upload_word_length.py` and modify it to point to the new dataset generation logic.
 - To make a new version of an existing dataset, suggested workflow is:
     - Modify dataset generation inside `main` in the relevant script.
     - Increase the `MINOR_VERSION` and/or `PATCH_VERSION`.

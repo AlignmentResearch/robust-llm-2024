@@ -1,6 +1,6 @@
 from typing_extensions import override
 
-from robust_llm.rllm_datasets.generation_scripts.generate_password_match import (
+from robust_llm.rllm_datasets.generation_scripts.password_match_generation import (
     RESPONSE_SEPARATOR,
 )
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
