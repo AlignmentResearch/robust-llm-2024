@@ -300,12 +300,13 @@ class TRLAttack(Attack):
         )
 
     def _maybe_save_model_to_path_or_hf(self) -> None:
-
         model_save_path_prefix = (
             self.attack_config.trl_attack_config.model_save_path_prefix
         )
 
-        assert model_save_path_prefix is not None
+        if model_save_path_prefix is None:
+            print("No model_save_path_prefix provided; not saving the model")
+            return
         assert wandb.run is not None
         output_dir = os.path.join(
             model_save_path_prefix, "models", self.model_name_to_save

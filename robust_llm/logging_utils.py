@@ -155,6 +155,8 @@ def wandb_initialize(
         group=config.experiment_name,
         job_type=config.job_type,
         name=config.run_name,
+        # default if not in test_mode
+        mode="disabled" if config.environment.test_mode else None,
     )
     if set_up_step_metrics:
         setup_wandb_metrics()

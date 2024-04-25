@@ -242,8 +242,8 @@ class AttackConfig:
             Config for RandomTokenAttack.
         trl_attack_config (TRLAttackConfig):
             Config for TRLAttack.
-        gcg_attack_config (GCGAttackConfig):
-            Config for GCGAttack.
+        search_based_attack_config (SearchBasedAttackConfig):
+            Config for SearchBasedAttack.
     """
 
     attack_type: str = "identity"
@@ -452,6 +452,7 @@ class EnvironmentConfig:
         decoder_family (Optional[str]): Which model family the decoder belongs to.
         decoder_revision (Optional[str]): The revision of the decoder model.
         device (str): Device to use for models.
+        test_mode (bool): Whether or not we're currently testing
     """
 
     model_name_or_path: str = "bert-base-uncased"
@@ -460,6 +461,7 @@ class EnvironmentConfig:
     decoder_family: Optional[str] = None
     decoder_revision: Optional[str] = None
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    test_mode: bool = False
 
 
 def __post_init__(self):

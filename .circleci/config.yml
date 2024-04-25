@@ -48,6 +48,21 @@ commands:
           name: print installed packages
           command: pip freeze --all
 
+  memory-monitor:
+    description: "Monitor memory usage of processes in background"
+    steps:
+      - run:
+          name: Memory Monitor
+          command: |
+            mkdir /tmp/resource-usage
+            export FILE=/tmp/resource-usage/memory.txt
+            while true; do
+              ps eo pid,%cpu,%mem,args,uname --sort=-%mem >> $FILE
+              echo "----------" >> $FILE
+              sleep 1
+            done
+          background: true
+
   store-test-output:
     description: "Store the output of tests."
     steps:
@@ -58,6 +73,9 @@ commands:
       - store_test_results:
           path: /tmp/test-reports
 
+  store-memory-monitor:
+    description: "Store resource usage of tests"
+    steps:
       - store_artifacts:
           path: /tmp/resource-usage
           destination: resource-usage
@@ -65,31 +83,32 @@ commands:
 jobs:
   pytest:
     executor: python-executor
+    resource_class: xlarge
     steps:
       - checkout
       - prepare-virtualenv
       - run:
-          name: Show num processes
+          name: Show num vCPUs & processes
           command: |
             # See https://discuss.circleci.com/t/environment-variable-set-to-the-number-of-available-cpus/32670/3
             # for explanation of the weird expression below. -- Aaron
             NUM_CPUS=$(($(cat /sys/fs/cgroup/cpu/cpu.shares) / 1024))
-            echo ${NUM_CPUS} processes
+            NUM_PROCS=$((NUM_CPUS / 2))
+            echo ${NUM_CPUS} vCPUs, ${NUM_PROCS} processes
             # Save environment variable for next step
-            echo "export NUM_CPUS=${NUM_CPUS}" >> $BASH_ENV
+            echo "export NUM_PROCS=${NUM_PROCS}" >> $BASH_ENV
+      - memory-monitor
       - run:
           name: Run tests
           command: |
             pytest --cov=robust_llm \
-                   --cov=tests --junitxml=test-reports/junit.xml \
-                   --durations=500 -vv -n ${NUM_CPUS} tests/
+                   --cov=tests --junitxml=/tmp/test-reports/junit.xml \
+                   --durations=500 -vv -n ${NUM_PROCS} tests/
           environment:
             WANDB_MODE: offline
-      - store_artifacts:
-          path: test-reports
-          destination: test-reports
       - codecov/upload
       - store-test-output
+      - store-memory-monitor
 
   lint:
     executor: python-executor
