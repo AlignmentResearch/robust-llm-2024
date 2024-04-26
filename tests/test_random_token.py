@@ -13,6 +13,7 @@ from robust_llm.configs import (
 )
 from robust_llm.pipelines.utils import prepare_victim_models
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
+from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 # Get an overall config and change the random token attack
@@ -51,25 +52,6 @@ attack = RandomTokenAttack(
 )
 
 
-def _get_new_chunks_and_spec(
-    chunks: Sequence[str], attack: RandomTokenAttack, dataset: RLLMDataset
-) -> tuple[list[str], list[bool | str]]:
-    assert attack.attack_config.append_to_modifiable_chunk is True
-
-    spec: list[bool | str] = []
-    updated_chunks = []
-    for chunk, s in zip(chunks, dataset.modifiable_chunks_spec):
-        updated_chunks.append(chunk)
-        spec.append(s)
-        if s is True:
-            updated_chunks.append("new_chunk")
-            # TODO (ian): Remove this? This isn't how modifiable_chunks_spec works now,
-            # it's a tuple of bools
-            spec.append("new")
-
-    return updated_chunks, spec
-
-
 def _sequential_get_adversarial_tokens(
     rt_attack: RandomTokenAttack, chunked_datapoint: Sequence[str], dataset: RLLMDataset
 ) -> list[str]:
@@ -77,10 +59,10 @@ def _sequential_get_adversarial_tokens(
 
     Operates on a single chunked datapoint (a string which has been split into
     "chunks", some of which are modifiable, some of which are not, as determined
-    by the self.modifiable_chunks_spec). This method replaces those chunks which
+    by dataset.modifiable_chunk_spec). This method replaces those chunks which
     are modifiable with random tokens from the victim tokenizer's vocabulary.
-    If attack_config.append_to_modifiable_chunk is True, instead of replacing
-    the modifiable chunks, new chunks are made and appended to them.
+    If the ChunkType is PERTURBABLE, instead of replacing
+    the modifiable chunk, a new chunk is made and appended to it.
 
     Args:
         rt_attack: The random token attack object
@@ -93,8 +75,8 @@ def _sequential_get_adversarial_tokens(
     """
     new_chunked_datapoint: list[str] = []
 
-    for chunk, is_modifiable in zip(chunked_datapoint, dataset.modifiable_chunks_spec):
-        if not is_modifiable:
+    for chunk, chunk_type in zip(chunked_datapoint, dataset.modifiable_chunk_spec):
+        if chunk_type == ChunkType.IMMUTABLE:
             new_chunked_datapoint.append(chunk)
         else:
             num_tokens = int(
@@ -113,7 +95,7 @@ def _sequential_get_adversarial_tokens(
             )
             random_token_text = rt_attack.victim_tokenizer.decode(random_tokens)
 
-            if rt_attack.attack_config.append_to_modifiable_chunk:
+            if chunk_type == ChunkType.PERTURBABLE:
                 new_chunked_datapoint.append(chunk)
             new_chunked_datapoint.append(random_token_text)
 
@@ -207,44 +189,10 @@ def _test_get_adversarial_tokens(rt_attack: RandomTokenAttack, dataset: RLLMData
     ):
         if suc:
             assert seq == bat == orig
-        else:
-            if rt_attack.attack_config.append_to_modifiable_chunk:
-                assert (
-                    len(seq)
-                    == len(bat)
-                    == len(orig) + sum(dataset.modifiable_chunks_spec)
-                )
-
-                new_chunks, new_spec = _get_new_chunks_and_spec(orig, attack, dataset)
-
-                for s, b, o, mod in zip(seq, bat, new_chunks, new_spec):
-                    if mod == "new":
-                        assert s != b != o
-                    else:
-                        assert s == b == o
-
-            else:
-                for s, b, o, mod in zip(seq, bat, orig, dataset.modifiable_chunks_spec):
-                    if mod:
-                        # Probability of collision is low enough
-                        # we don't need to care
-                        assert s != b != o
-                    else:
-                        assert s == b == o
 
 
-def test_get_adversarial_tokens_replace():
-    previous_value = attack.attack_config.append_to_modifiable_chunk
-    attack.attack_config.append_to_modifiable_chunk = False
+def test_get_adversarial_tokens():
     _test_get_adversarial_tokens(attack, dataset)
-    attack.attack_config.append_to_modifiable_chunk = previous_value
-
-
-def test_get_adversarial_tokens_append():
-    previous_value = attack.attack_config.append_to_modifiable_chunk
-    attack.attack_config.append_to_modifiable_chunk = True
-    _test_get_adversarial_tokens(attack, dataset)
-    attack.attack_config.append_to_modifiable_chunk = previous_value
 
 
 def test_check_success():

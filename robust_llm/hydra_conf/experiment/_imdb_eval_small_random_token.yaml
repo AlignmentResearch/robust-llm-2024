@@ -6,7 +6,3 @@ defaults:
 experiment_type: "evaluation"
 experiment_name: "dataset-testing"
 run_name: imdb-random-token
-
-evaluation:
-  evaluation_attack:
-    append_to_modifiable_chunk: true

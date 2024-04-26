@@ -14,6 +14,7 @@ from robust_llm.rllm_datasets.dataset_utils import (
     tokenize_dataset,
     valid_tag,
 )
+from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 
 
 class RLLMDataset(ABC):
@@ -26,14 +27,15 @@ class RLLMDataset(ABC):
             Currently, we assume that a dataset has at least the following columns:
             - text: The input text.
             - chunked_text: The input text, chunked into modifiable and
-            unmodifiable parts, matching 'modifiable_chunks_spec'.
+            unmodifiable parts, matching 'modifiable_chunk_spec'.
             - clf_label: The classification label.
         num_classes: The number of classes in the dataset.
-        modifiable_chunks_spec: Datasets consist of sections that can and cannot
-            be modified. For example, we might want to leave the instructions intact
-            while allowing the example-specific data to be modified. The
-            modifiable_chunk_spec is a tuple of booleans, where True indicates that
-            the corresponding chunk can be modified.
+        modifiable_chunk_spec: Datasets consist of sections that can and cannot
+            be modified in various ways. For example, we might want to leave the
+            instructions intact while allowing part of the example content to be
+            perturbed and the rest overwritten. modifiable_chunk_spec is a
+            tuple of ChunkType, an enum that specifies whether each chunk is
+            IMMUTABLE, PERTURBABLE, or OVERWRITABLE.
         ground_truth_label_fn: A function that maps an input to its ground truth
             label. This is ideal to have because sometimes adversarial attacks can
             change the true label. Not all datasets can easily define such a
@@ -80,8 +82,8 @@ class RLLMDataset(ABC):
 
     @property
     @abstractmethod
-    def modifiable_chunks_spec(self) -> tuple[bool, ...]:
-        """Specifies which parts of the dataset can be modified."""
+    def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
+        """Specifies which parts of the dataset can be modified, and how."""
         pass
 
     @property

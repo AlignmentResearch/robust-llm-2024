@@ -15,6 +15,7 @@ from robust_llm.attacks.search_based.utils import (
     get_wrapped_model,
 )
 from robust_llm.configs import AttackConfig
+from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel, get_randint_with_exclusions
 
@@ -30,10 +31,10 @@ class SearchBasedAttack(Attack):
     the `runners` submodule, with the `SearchBasedRunner` abstract class as the base.
 
     For now, we allow only one modifiable chunk, so the inputs are of the form
-    <unmodifiable_prefix><modifiable_infix><unmodifiable_suffix>. The attack will either
-    completely replace modifiable infix with optimized tokens (if
-    `attack_config.append_to_modifiable_chunk` is False) or, otherwise, will add the
-    tokens after the modifiable infix.
+    <unmodifiable_prefix><modifiable_infix><unmodifiable_suffix>. The attack
+    will either completely replace modifiable infix with optimized tokens (if
+    the chunk is OVERWRITABLE) or, otherwise if the chunk is PERTURBABLE, will
+    add the tokens after the modifiable infix.
     """
 
     REQUIRES_TRAINING = False
@@ -69,7 +70,9 @@ class SearchBasedAttack(Attack):
         """
 
         # preconditions
-        assert sum(dataset.modifiable_chunks_spec) == 1, "Exactly one modifiable chunk"
+        assert (
+            dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
+        ), "Exactly one modifiable chunk"
 
         config = self.attack_config.search_based_attack_config
 
@@ -83,10 +86,11 @@ class SearchBasedAttack(Attack):
 
             unmodifiable_prefix, modifiable_infix, unmodifiable_suffix = (
                 get_chunking_for_search_based(
-                    example["chunked_text"], dataset.modifiable_chunks_spec
+                    example["chunked_text"], dataset.modifiable_chunk_spec
                 )
             )
-            if not self.attack_config.append_to_modifiable_chunk:
+            infix_chunk_type = dataset.modifiable_chunk_spec.get_modifiable_chunk()
+            if infix_chunk_type == ChunkType.OVERWRITABLE:
                 modifiable_infix = ""
 
             prompt_template = PromptTemplate(

@@ -18,7 +18,7 @@ from robust_llm.attacks.trl.utils import (
     prepare_prompts,
 )
 from robust_llm.configs import AttackConfig
-from robust_llm.rllm_datasets.dataset_utils import ModifiableChunksSpec
+from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel
 
@@ -134,7 +134,7 @@ class TRLAttack(Attack):
                     responses,
                 ) = self._get_attacked_texts(
                     batch,
-                    modifiable_chunks_spec=dataset.modifiable_chunks_spec,
+                    modifiable_chunk_spec=dataset.modifiable_chunk_spec,
                 )
 
                 # Get victim responses
@@ -217,11 +217,11 @@ class TRLAttack(Attack):
 
         # At present, the trl attack is set up to only work
         # with one modifiable chunk
-        assert sum(dataset.modifiable_chunks_spec) == 1  # exactly one True
+        assert dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
 
         attacked_texts, _, _ = self._get_attacked_texts(
             dataset=dataset.ds,
-            modifiable_chunks_spec=dataset.modifiable_chunks_spec,
+            modifiable_chunk_spec=dataset.modifiable_chunk_spec,
         )
 
         attacked_dataset = dataset.with_attacked_text(attacked_texts)
@@ -230,14 +230,14 @@ class TRLAttack(Attack):
     def _get_attacked_texts(
         self,
         dataset: Dataset,
-        modifiable_chunks_spec: ModifiableChunksSpec,
+        modifiable_chunk_spec: ModifiableChunkSpec,
     ) -> Tuple[Sequence[str], Sequence[torch.Tensor], Sequence[torch.Tensor]]:
         """The trl attack method itself.
 
         Args:
             dataset: The dataset to attack. Must have a "chunked_text" column.
-            modifiable_chunks_spec: Specification which chunks of the original text can
-            be modified.
+            modifiable_chunk_spec: Specification which chunks of the original text can
+            be modified, and how.
 
         Returns:
             attacked_texts: A sequence of the full attacked texts, ready to be
@@ -258,8 +258,7 @@ class TRLAttack(Attack):
         contexts = prepare_prompts(
             text_chunked=chunked_text,
             response_text=TRL_RESPONSE_STR,
-            modifiable_chunks_spec=modifiable_chunks_spec,
-            append_to_modifiable_chunk=self.attack_config.append_to_modifiable_chunk,  # noqa: E501
+            modifiable_chunk_spec=modifiable_chunk_spec,
         )
         context_tensors = self.adversary_tokenizer(
             contexts, padding="max_length", truncation=True, return_tensors="pt"  # type: ignore # noqa: E501
@@ -289,8 +288,7 @@ class TRLAttack(Attack):
         attacked_texts = prepare_prompts(
             text_chunked=chunked_text,
             response_text=adversary_generated_responses_txt,
-            modifiable_chunks_spec=modifiable_chunks_spec,
-            append_to_modifiable_chunk=self.attack_config.append_to_modifiable_chunk,  # noqa: E501
+            modifiable_chunk_spec=modifiable_chunk_spec,
         )
 
         return (

@@ -5,7 +5,6 @@ import omegaconf
 import torch
 from omegaconf import MISSING
 
-from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.attacks.trl.constants import TRL_REWARD_TYPES
 
 SHARED_DATA_DIR = "/robust_llm_data"
@@ -39,8 +38,12 @@ class TextAttackAttackConfig:
         num_modifiable_words_per_chunk (Optional[int]): If set to an integer value, the
             attack will replace all content of each modifiable chunk with
             `num_modifiable_words_per_chunk` placeholder words which can be then
-            modified by the attack. Otherwise, content is not modified at the start and
-            the attack performs modifications on the original text.
+            modified by the attack. Otherwise, content is not modified at the
+            start and the attack performs modifications on the original text.
+            If None, all modifiable chunks should be PERTURBABLE.
+            If int, all modifiable chunks should be OVERWRITABLE.
+            TODO (GH#353): Refactor to remove the option for None.
+
         silent (bool): If silent, TextAttack will only print errors.
     """
 
@@ -230,10 +233,6 @@ class AttackConfig:
             If None, no training progress is logged. Must be positive or None.
         victim_inference_batch_size (int):
             Batch size to use for victim model inference.
-        append_to_modifiable_chunk: if False, the modifiable chunk is replaced by dummy
-            attack tokens. Otherwise, dummy attack tokens are added after the original
-            content of the modifiable chunk. Our attack then operates on these attack
-            tokens.
         brute_force_tomita_attack_config (BruteForceTomitaAttackConfig):
             Config for BruteForceTomitaAttack.
         text_attack_attack_config (TextAttackAttackConfig):
@@ -251,7 +250,6 @@ class AttackConfig:
     train_frequency: Optional[int] = None
     log_frequency: Optional[int] = 1
     victim_inference_batch_size: int = 8
-    append_to_modifiable_chunk: bool = False
 
     # Configs for specific types of attacks.
     brute_force_tomita_attack_config: BruteForceTomitaAttackConfig = field(
@@ -269,9 +267,6 @@ class AttackConfig:
     )
 
     def __post_init__(self):
-        if self.attack_type in TEXT_ATTACK_ATTACK_TYPES:
-            assert not self.append_to_modifiable_chunk, "Not supported!"
-
         if self.train_frequency is not None and self.train_frequency <= 0:
             raise ValueError("train_frequency must be positive or None.")
 

@@ -1,4 +1,8 @@
 from robust_llm.attacks.trl.utils import prepare_prompts
+from robust_llm.rllm_datasets.modifiable_chunk_spec import (
+    ChunkType,
+    ModifiableChunkSpec,
+)
 
 
 def test_prepare_prompts():
@@ -8,7 +12,9 @@ def test_prepare_prompts():
     response_text = "X"
     prompts = prepare_prompts(
         text_chunked=text_chunked,
-        modifiable_chunks_spec=(False, True, False),
+        modifiable_chunk_spec=ModifiableChunkSpec(
+            ChunkType.IMMUTABLE, ChunkType.OVERWRITABLE, ChunkType.IMMUTABLE
+        ),
         response_text=response_text,
     )
     assert prompts == ["AXC", "DXF"]
@@ -17,7 +23,9 @@ def test_prepare_prompts():
     response_text_list = ["X", "Y"]
     prompts = prepare_prompts(
         text_chunked=text_chunked,
-        modifiable_chunks_spec=(False, False, True),
+        modifiable_chunk_spec=ModifiableChunkSpec(
+            ChunkType.IMMUTABLE, ChunkType.IMMUTABLE, ChunkType.OVERWRITABLE
+        ),
         response_text=response_text_list,
     )
     assert prompts == ["ABX", "DEY"]

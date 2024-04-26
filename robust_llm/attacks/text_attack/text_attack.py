@@ -31,7 +31,10 @@ from typing_extensions import override
 from robust_llm.attacks.attack import Attack
 from robust_llm.configs import AttackConfig
 from robust_llm.defenses.defense import DefendedModel
-from robust_llm.rllm_datasets.dataset_utils import ModifiableChunksSpec
+from robust_llm.rllm_datasets.modifiable_chunk_spec import (
+    ChunkType,
+    ModifiableChunkSpec,
+)
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel
 
@@ -104,7 +107,7 @@ class RandomCharacterChanges(AttackRecipe):
 
 def _preprocess_example(
     example: dict[str, Any],
-    modifiable_chunks_spec: ModifiableChunksSpec,
+    modifiable_chunk_spec: ModifiableChunkSpec,
     num_modifiable_words_per_chunk: Optional[int],
     ground_truth_label_fn: Optional[Callable[[str, int], int]],
 ) -> dict[str, Any]:
@@ -115,8 +118,8 @@ def _preprocess_example(
 
     Args:
         example: example to preprocess
-        modifiable_chunks_spec: Specification for which chunks of the original text can
-            be modified
+        modifiable_chunk_spec: Specification for which chunks of the original text can
+            be modified, and how
         num_modifiable_words_per_chunk: Number of words to replace each modifiable
             chunk with
         ground_truth_label_fn: function to get the ground truth label from input text
@@ -130,11 +133,18 @@ def _preprocess_example(
 
     # Replace the modifiable chunk with special words if needed.
     if num_modifiable_words_per_chunk is not None:
+        if modifiable_chunk_spec.n_perturbable_chunks != 0:
+            raise ValueError(
+                "if `num_modifiable_words_per_chunk` is set, then there should be"
+                " no PERTURBABLE chunks in the `modifiable_chunk_spec`"
+                " (see GH#353)."
+            )
+
         text_chunked: Sequence[str] = example["chunked_text"]
 
         result = []
-        for chunk, modifiable in zip(text_chunked, modifiable_chunks_spec):
-            if modifiable:
+        for chunk, chunk_type in zip(text_chunked, modifiable_chunk_spec):
+            if chunk_type == ChunkType.OVERWRITABLE:
                 result.append(
                     f" {SPECIAL_MODIFIABLE_WORD}" * num_modifiable_words_per_chunk
                     + " "  # We want spaces before and after the modifiable chunk
@@ -236,7 +246,7 @@ class TextAttackAttack(Attack):
         self,
         dataset: RLLMDataset,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
-        assert sum(dataset.modifiable_chunks_spec) == 1
+        assert dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
 
         dataset = self._preprocess_dataset(dataset)
 
@@ -306,7 +316,7 @@ class TextAttackAttack(Attack):
         new_ds = dataset.ds.map(
             lambda x: _preprocess_example(
                 x,
-                modifiable_chunks_spec=dataset.modifiable_chunks_spec,
+                modifiable_chunk_spec=dataset.modifiable_chunk_spec,
                 num_modifiable_words_per_chunk=num_modifiable_words_per_chunk,
                 ground_truth_label_fn=ground_truth_label_fn,
             )

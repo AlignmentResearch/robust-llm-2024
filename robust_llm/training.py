@@ -233,8 +233,6 @@ class AdversarialTraining(Training):
             Config for the attack to use in adversarial training.
         validation_attack_config:
             Config for the attack to use in validation.
-        modifiable_chunks_spec:
-            Specification for which chunks of the original text can be modified.
         num_examples_to_generate_each_round (int): The number of adversarial examples to
             generate each round for training.
         num_examples_to_log_to_wandb_each_round (int): The number of adversarial

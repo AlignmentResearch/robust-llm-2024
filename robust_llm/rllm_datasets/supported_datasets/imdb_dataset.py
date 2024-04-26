@@ -1,5 +1,9 @@
 from typing_extensions import override
 
+from robust_llm.rllm_datasets.modifiable_chunk_spec import (
+    ChunkType,
+    ModifiableChunkSpec,
+)
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 
@@ -14,6 +18,6 @@ class IMDBDataset(RLLMDataset):
 
     @property
     @override
-    def modifiable_chunks_spec(self):
-        """IMDB consists of a single modifiable chunk."""
-        return (True,)
+    def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
+        """IMDB consists of a single PERTURBABLE chunk."""
+        return ModifiableChunkSpec(ChunkType.PERTURBABLE)

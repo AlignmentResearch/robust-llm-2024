@@ -83,7 +83,7 @@ def _get_single_datapoint_perplexity(
     if len(masked_next_token_logits) == 0:
         raise ValueError(
             "Tried to calculate perplexity on a single token, which is undefined."
-            " Is 'append_to_modifiable_chunk' False with a single modifiable chunk?"
+            " Does the dataset consist of a single ChunkType.OVERWRITABLE chunk?"
         )
 
     assert torch.all(masked_next_token_logits < 0)

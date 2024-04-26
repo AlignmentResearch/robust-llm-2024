@@ -3,6 +3,10 @@ from typing_extensions import override
 from robust_llm.rllm_datasets.generation_scripts.password_match_generation import (
     RESPONSE_SEPARATOR,
 )
+from robust_llm.rllm_datasets.modifiable_chunk_spec import (
+    ChunkType,
+    ModifiableChunkSpec,
+)
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 
@@ -14,14 +18,18 @@ class PasswordMatchDataset(RLLMDataset):
 
     @property
     @override
-    def modifiable_chunks_spec(self) -> tuple[bool, ...]:
+    def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
         """
         PasswordMatch has three chunks:
-        1. The context including instructions and the password.
-        2. The user's password.
-        3. The closing response separator (default '\n---\n').
+        1. The context including instructions and the password (IMMUTABLE).
+        2. The user's password (OVERWRITABLE).
+        3. The closing response separator (default '\n---\n') (IMMUTABLE).
         """
-        return (False, True, False)
+        return ModifiableChunkSpec(
+            ChunkType.IMMUTABLE,
+            ChunkType.OVERWRITABLE,
+            ChunkType.IMMUTABLE,
+        )
 
     @override
     def ground_truth_label_fn(self, text: str, label: int) -> int:

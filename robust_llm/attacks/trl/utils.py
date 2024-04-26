@@ -15,6 +15,10 @@ from typing_extensions import override
 
 from robust_llm.configs import AttackConfig
 from robust_llm.model_utils import _prepare_tokenizer
+from robust_llm.rllm_datasets.modifiable_chunk_spec import (
+    ChunkType,
+    ModifiableChunkSpec,
+)
 
 
 def make_ppo_trainer(
@@ -110,9 +114,8 @@ def prepare_adversary_model_and_tokenizer(
 
 def prepare_prompts(
     text_chunked: Sequence[Sequence[str]],
-    modifiable_chunks_spec: Sequence[bool],
+    modifiable_chunk_spec: ModifiableChunkSpec,
     response_text: str | Sequence[str],
-    append_to_modifiable_chunk: bool = False,
 ) -> Sequence[str]:
     """Prepare prompts either for the adversary model or for the victim model.
 
@@ -124,18 +127,15 @@ def prepare_prompts(
     Args:
         text_chunked: Sequence of chunked texts. Each chunked text is
             a sequence of strings, one of which is modifiable, the others
-            of which are not, as determined by modifiable_chunks_spec.
-        modifiable_chunks_spec: Specification for which chunks of the original text can
-            be modified.
+            of which are not, as determined by modifiable_chunk_spec.
+        modifiable_chunk_spec: Specification for which chunks of the original text can
+            be modified, and how.
         response_text:
             The text or sequence of texts to replace the modifiable chunks with.
-        append_to_modifiable_chunk: if False, the modifiable chunk is replaced by the
-            response text. Otherwise, response text is added after the original
-            content of the modifiable chunk.
 
     Returns:
-        A sequence of prompts with the modifiable chunks replaced by the
-        response text.
+        A sequence of prompts with the modifiable chunks replaced by (or
+        appended with) the response text.
     """
     one_response = True
     if not isinstance(response_text, str):
@@ -145,15 +145,15 @@ def prepare_prompts(
     contexts = []
     for i, line in enumerate(text_chunked):
         context_list = []
-        for text, is_modifiable in zip(line, modifiable_chunks_spec):
-            if is_modifiable:
+        for text, chunk_type in zip(line, modifiable_chunk_spec):
+            if chunk_type == ChunkType.IMMUTABLE:
+                context_list.append(text)
+            else:
                 replacement_text = response_text if one_response else response_text[i]
                 assert isinstance(replacement_text, str)
-                if append_to_modifiable_chunk:
+                if chunk_type == ChunkType.PERTURBABLE:
                     context_list.append(text)
                 context_list.append(replacement_text)
-            else:
-                context_list.append(text)
         contexts.append("".join(context_list))
 
     return contexts

@@ -12,9 +12,6 @@ from transformers import AutoConfig, AutoTokenizer, PreTrainedTokenizerBase
 
 from robust_llm.utils import ask_for_confirmation
 
-# TODO (Ian): Find a home for ModifiableChunksSpec
-ModifiableChunksSpec = tuple[bool, ...]
-
 DS_SHUFFLE_SEED = 0
 
 

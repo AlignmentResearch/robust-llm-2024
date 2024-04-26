@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Sequence, Tuple
 
 import torch
 from accelerate import Accelerator
@@ -11,7 +11,7 @@ from robust_llm.attacks.search_based.models import (
     WrappedGPT2Model,
     WrappedGPTNeoXModel,
 )
-from robust_llm.rllm_datasets.dataset_utils import ModifiableChunksSpec
+from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 
 
 class TokenizationChangeException(Exception):
@@ -174,17 +174,17 @@ def create_onehot_embedding(
 
 
 def get_chunking_for_search_based(
-    text_chunked: str, modifiable_chunks_spec: ModifiableChunksSpec
+    text_chunked: Sequence[str], modifiable_chunk_spec: ModifiableChunkSpec
 ) -> Tuple[str, str, str]:
     """Returns the unmodifiable prefix, the modifiable infix, & the unmodifiable suffix.
 
     GCG needs exactly three chunks, so we guarantee this here as long as
-        modifiable_chunks_spec contains exactly one modifiable chunk.
+        modifiable_chunk_spec contains exactly one modifiable chunk.
     """
 
-    assert sum(modifiable_chunks_spec) == 1
+    assert modifiable_chunk_spec.n_modifiable_chunks == 1
 
-    modifiable_index = modifiable_chunks_spec.index(True)
+    modifiable_index = modifiable_chunk_spec.get_modifiable_chunk_index()
     unmodifiable_prefix = "".join(text_chunked[:modifiable_index])
     modifiable_infix = text_chunked[modifiable_index]
     unmodifiable_suffix = "".join(text_chunked[modifiable_index + 1 :])

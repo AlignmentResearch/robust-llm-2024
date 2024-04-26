@@ -10,6 +10,7 @@ from typing_extensions import override
 from robust_llm.attacks.attack import Attack
 from robust_llm.configs import AttackConfig
 from robust_llm.logging_utils import LoggingCounter
+from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel
 
@@ -17,13 +18,12 @@ from robust_llm.utils import LanguageModel
 class RandomTokenAttack(Attack):
     """Random token attack for non-Tomita datasets.
 
-    Replaces all the modifiable text with random tokens
+    Replaces all the OVERWRITABLE text with random tokens
     from the victim tokenizer's vocabulary. The attack
     is repeated for each datapoint until it is successful,
     or until `attack_config.max_iterations` is reached.
     Appends the attack to the modifiable text instead
-    of replacing it if `attack_config.append_to_modifiable_chunk`
-    is True.
+    of replacing it if the chunk is PERTURBABLE.
     """
 
     REQUIRES_TRAINING = False
@@ -116,11 +116,11 @@ class RandomTokenAttack(Attack):
 
         Operates on a list of chunked datapoints (strings which have been split into
         "chunks", some of which are modifiable, some of which are not, as determined
-        by the self.modifiable_chunks_spec). This method replaces those chunks which
-        are modifiable with random tokens from the victim tokenizer's vocabulary.
-        If attack_config.append_to_modifiable_chunk is True, the attack will add new
-        chunks after the modifiable chunks instead of replacing them. Note that this
-        will make it not match up with the modifiable_chunks_spec.
+        by dataset.modifiable_chunk_spec). This method replaces those chunks which
+        are OVERWRITABLE with random tokens from the victim tokenizer's vocabulary.
+        If a chunk is PERTURBABLE but not OVERWRITABLE, the attack will add new
+        tokens after the chunk instead of replacing it. Note that this will
+        make it not match up with the modifiable_chunk_spec (GH#345).
 
         Args:
             dataset: The original dataset
@@ -130,13 +130,13 @@ class RandomTokenAttack(Attack):
 
         Returns:
             A list of chunked datapoints where previously successfully attacked
-            datapoints remain unchanched, and previously not successfully attacked
+            datapoints remain unchanged, and previously not successfully attacked
             ones have their modifiable chunks replaced with random tokens.
         """
 
         assert len(chunked_datapoints) == len(successes)
 
-        num_modifiable_chunks = sum(dataset.modifiable_chunks_spec)
+        num_modifiable_chunks = dataset.modifiable_chunk_spec.n_modifiable_chunks
         assert num_modifiable_chunks > 0
 
         num_not_success = len(chunked_datapoints) - sum(successes)
@@ -168,13 +168,13 @@ class RandomTokenAttack(Attack):
             else:
                 new_chunked_datapoint = []
                 modifiable_chunk_idx = 0
-                for text, is_modifiable in zip(
-                    chunked_datapoint, dataset.modifiable_chunks_spec
+                for text, chunk_type in zip(
+                    chunked_datapoint, dataset.modifiable_chunk_spec
                 ):
-                    if not is_modifiable:
+                    if chunk_type == ChunkType.IMMUTABLE:
                         new_chunked_datapoint.append(text)
-                    else:
-                        if self.attack_config.append_to_modifiable_chunk:
+                    else:  # Since the chunk is not IMMUTABLE, we attack it
+                        if chunk_type == ChunkType.PERTURBABLE:
                             new_chunked_datapoint.append(text)
                         tokens_to_add = []
                         for _ in range(
