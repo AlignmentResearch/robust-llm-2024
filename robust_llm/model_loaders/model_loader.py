@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from transformers import PreTrainedModel
+
 
 class ModelLoader(ABC):
     """Abstract class for loading a model."""
@@ -11,7 +13,7 @@ class ModelLoader(ABC):
         model_name_or_path: str,
         revision: str = "main",
         num_labels: int = 2,
-    ):
+    ) -> PreTrainedModel:
         """Load the model."""
         raise NotImplementedError
 

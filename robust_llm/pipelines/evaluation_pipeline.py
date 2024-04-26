@@ -1,5 +1,6 @@
 """Pipeline to evaluate a fixed model under attack."""
 
+import wandb
 from accelerate import Accelerator
 
 from robust_llm.configs import OverallConfig
@@ -22,6 +23,14 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
     num_classes = validation.num_classes
 
     model, tokenizer, decoder = prepare_victim_models(args, num_classes)
+
+    assert wandb.run is not None
+    # Log the model size to wandb for use in plots, so we don't
+    # have to try to get it out of the model name.
+    # We use `commit=False` to avoid incrementing the step counter.
+    # TODO (GH#348): Move this to a more appropriate place.
+    wandb.log({"model_size": model.num_parameters()}, commit=False)
+
     model = prepare_model_with_accelerate(accelerator, model)
     model.eval()
     if decoder is not None:

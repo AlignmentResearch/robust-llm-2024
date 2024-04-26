@@ -2,6 +2,7 @@
 
 from typing import Tuple
 
+import wandb
 from omegaconf import OmegaConf
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
@@ -93,6 +94,13 @@ def run_training_pipeline(
         # the Trainer, and we wait until that is done to overwrite them with our own.
         # We do this in the `CustomLoggingWandbCallback`'s `setup` method.
         wandb_initialize(experiment, set_up_step_metrics=False)
+
+        assert wandb.run is not None
+        # Log the model size to wandb for use in plots, so we don't
+        # have to try to get it out of the model name.
+        # We use `commit=False` to avoid incrementing the step counter.
+        # TODO (GH#348): Move this to a more appropriate place.
+        wandb.log({"model_size": model.num_parameters()}, commit=False)
 
     # Perform the training
     training.run_trainer()
