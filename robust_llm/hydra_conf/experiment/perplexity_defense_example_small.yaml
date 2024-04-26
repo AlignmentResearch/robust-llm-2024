@@ -19,10 +19,11 @@ evaluation:
     attack_type: "random_token"
     append_to_modifiable_chunk: true
     random_token_attack_config:
-      max_iterations: 4
+      max_iterations: 10
 
 defense:
   defense_type: "perplexity"
   num_preparation_examples: 10
   perplexity_defense_config:
     batch_size: 4
+    save_perplexity_curves: true

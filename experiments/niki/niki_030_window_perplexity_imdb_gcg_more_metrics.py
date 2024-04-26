@@ -16,23 +16,25 @@ DECODERS_AND_BATCH_SIZES = [
     ("EleutherAI/pythia-2.8b", 1),
 ]
 
+WINDOW_SIZES = [8, 16]
+
 OVERRIDE_ARGS_LIST = [
     {
         "experiment.environment.decoder_name": decoder,
-        "experiment.environment.decoder_checkpoint": 143_000,
         # Setting evalaution batch size and perplexity batch size equal, for simplicity
         "experiment.evaluation.batch_size": batch_size,
-        "experiment.evaluation.num_generated_examples": 1000,
         "experiment.evaluation.evaluation_attack.attack_type": "search_based",
         "experiment.evaluation.evaluation_attack.append_to_modifiable_chunk": True,
         "experiment.evaluation.evaluation_attack.search_based_attack_config.search_type": "gcg",  # noqa: E501
-        "experiment.evaluation.evaluation_attack.search_based_attack_config.n_its": 3,  # noqa: E501
+        "experiment.evaluation.evaluation_attack.search_based_attack_config.n_its": 1,  # noqa: E501
         "experiment.evaluation.evaluation_attack.search_based_attack_config.forward_pass_batch_size": 64,  # noqa: E501
-        "experiment.defense.num_preparation_examples": 1000,
+        "experiment.defense.perplexity_defense_config.window_size": window_size,
         "experiment.defense.perplexity_defense_config.batch_size": batch_size,
+        "experiment.defense.perplexity_defense_config.verbose": True,
         "experiment.defense.perplexity_defense_config.save_perplexity_curves": True,
     }
     for decoder, batch_size in DECODERS_AND_BATCH_SIZES
+    for window_size in WINDOW_SIZES
 ]
 
 if __name__ == "__main__":

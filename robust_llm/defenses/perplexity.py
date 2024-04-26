@@ -6,6 +6,7 @@ from tdigest import TDigest
 from transformers import PreTrainedTokenizerBase
 
 from robust_llm.defenses.defense import DefendedModel
+from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel
 
 
@@ -86,7 +87,10 @@ def _get_single_datapoint_perplexity(
             " Does the dataset consist of a single ChunkType.OVERWRITABLE chunk?"
         )
 
-    assert torch.all(masked_next_token_logits < 0)
+    assert torch.all(masked_next_token_logits <= 0), (
+        "The masked_next_token_logits should be nonpositive log probabilities, "
+        f"but got a positive value:\n{masked_next_token_logits=}"
+    )
 
     # Cut down the window size if it exceeds the number
     # of tokens we have in this example
@@ -356,7 +360,9 @@ class PerplexityDefendedModel(DefendedModel):
             )
         return output
 
-    def get_all_perplexity_thresholds(self, dataset: Dataset) -> list[float]:
+    def get_all_perplexity_thresholds(
+        self, dataset: RLLMDataset, text_column_to_use: str
+    ) -> list[float]:
         """This method is used to get the perplexity thresholds for all percentiles.
 
         This is useful for exploring the perplexities of different models on
@@ -365,15 +371,25 @@ class PerplexityDefendedModel(DefendedModel):
 
         Args:
             dataset: the dataset to evaluate on
-
+            text_column_to_use: the column of the dataset that should
+                be used for the perplexity calculation
         Returns:
             A list of perplexity thresholds for percentiles [0%, 1%, ..., 100%]
         """
+        # We don't pass in input_ids or attention_mask here because
+        # compute_max_min_percentile_perplexity gets confused by them.
+        hf_dataset_only_text = Dataset.from_dict(
+            {"text": dataset.ds[text_column_to_use]}
+        )
+
+        assert self.decoder is not None
         _, _, tdigest = compute_max_min_percentile_perplexity(
-            self.decoder,  # type: ignore
-            self.tokenizer,
-            dataset,
-            self.defense_config.perplexity_defense_config.batch_size,
+            model=self.decoder,
+            tokenizer=self.tokenizer,
+            dataset=hf_dataset_only_text,
+            batch_size=self.batch_size,
+            window_size=self.window_size,
+            report_max_perplexity=self.report_max_perplexity,
         )
 
         return [tdigest.percentile(p) for p in range(101)]

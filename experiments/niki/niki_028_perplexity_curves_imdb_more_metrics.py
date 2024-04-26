@@ -20,7 +20,7 @@ OVERRIDE_ARGS_LIST = [
     {
         "experiment.environment.decoder_name": decoder,
         "experiment.environment.decoder_checkpoint": 143_000,
-        # Setting batch size to match for ease of search
+        # Setting evalaution batch size and perplexity batch size equal, for simplicity
         "experiment.evaluation.batch_size": batch_size,
         "experiment.evaluation.num_generated_examples": 1000,
         "experiment.evaluation.evaluation_attack.random_token_attack_config.max_iterations": 10,  # noqa: E501

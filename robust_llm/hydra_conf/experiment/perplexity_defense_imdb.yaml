@@ -3,14 +3,15 @@ experiment_type: "evaluation"
 
 environment:
   model_name_or_path: "AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3"
-  is_pythia: true
+  model_family: "pythia"
   decoder_name: "EleutherAI/pythia-14m"
-  decoder_checkpoint: 143000
+  decoder_family: "pythia"
+  decoder_revision: "main"
 
 dataset:
   dataset_type: "AlignmentResearch/IMDB"
+  n_train: 1000
   n_val: 1000
-
 
 evaluation:
   batch_size: 16
@@ -22,6 +23,6 @@ evaluation:
 
 defense:
   defense_type: "perplexity"
-  num_preparation_examples: 500
+  num_preparation_examples: 1000
   perplexity_defense_config:
     batch_size: 16

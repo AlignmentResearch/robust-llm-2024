@@ -440,7 +440,7 @@ class AttackResults:
 
 
 def _maybe_record_defense_specific_metrics(
-    model: LanguageModel, dataset: Dataset, attacked_dataset: Dataset
+    model: LanguageModel, dataset: RLLMDataset, attacked_dataset: RLLMDataset
 ) -> dict:
 
     metrics = {}
@@ -449,20 +449,17 @@ def _maybe_record_defense_specific_metrics(
         isinstance(model, PerplexityDefendedModel)
         and model.defense_config.perplexity_defense_config.save_perplexity_curves
     ):
-        # Get the approximate perplexities of the decoder on
-        # on both datasets.
-
-        # We don't pass in input_ids or attention_mask here because
-        # get_all_perplexity_thresholds gets confused
-        original_text_dataset = Dataset.from_dict({"text": dataset["text"]})
+        # Get the approximate perplexities of the decoder on both
+        # the original and attacked datasets.
         metrics["perplexity/decoder_perplexities_original"] = (  # type: ignore
-            model.get_all_perplexity_thresholds(dataset=original_text_dataset)  # type: ignore  # noqa: E501
+            model.get_all_perplexity_thresholds(
+                dataset=dataset, text_column_to_use="text"
+            )
         )
-
-        # The attacked dataset only has `text`, `original_text`, and `label`,
-        # so we're fine to pass it in as is.
         metrics["perplexity/decoder_perplexities_attacked"] = (  # type: ignore
-            model.get_all_perplexity_thresholds(dataset=attacked_dataset)  # type: ignore  # noqa: E501
+            model.get_all_perplexity_thresholds(
+                dataset=attacked_dataset, text_column_to_use="attacked_text"
+            )
         )
 
     return metrics
@@ -701,7 +698,7 @@ def do_adversarial_evaluation(
     metrics |= info_dict
 
     metrics |= _maybe_record_defense_specific_metrics(
-        model=model, dataset=dataset, attacked_dataset=attacked_dataset  # type: ignore
+        model=model, dataset=dataset, attacked_dataset=attacked_dataset
     )
 
     # TODO(GH#158): Refactor/unify logging.

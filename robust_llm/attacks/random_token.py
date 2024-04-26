@@ -104,6 +104,7 @@ class RandomTokenAttack(Attack):
 
         # add new column to copy of original dataset
         attacked_ds = dataset.with_attacked_text(attacked_text)
+
         return attacked_ds, {}
 
     def _batch_get_adversarial_tokens(
