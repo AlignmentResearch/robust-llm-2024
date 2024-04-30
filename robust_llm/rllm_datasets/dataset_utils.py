@@ -160,6 +160,40 @@ def get_largest_version(repo_id: str) -> semver.Version | None:
     return largest_version
 
 
+def get_largest_version_below(repo_id: str, version: str) -> semver.Version | None:
+    """Get the largest version of a dataset strictly less than a given version.
+
+    Args:
+        repo_id: The id of the dataset repo on the hf hub.
+        version: A valid semver version number as a string.
+
+    Returns:
+        The largest version of the dataset that is strictly less than the given
+        version. If no such version exists, returns None.
+
+    """
+    try:
+        existing_tags = _get_versions(repo_id)
+    except ValueError:
+        return None
+
+    if len(existing_tags) == 0:
+        return None
+
+    parsed_version_upper_bound = semver.Version.parse(version)
+
+    largest_version = None
+    for existing_tag in existing_tags:
+        parsed_tag = semver.Version.parse(existing_tag)
+
+        if parsed_tag >= parsed_version_upper_bound:
+            continue
+        if largest_version is None or parsed_tag > largest_version:
+            largest_version = parsed_tag
+
+    return largest_version
+
+
 def _get_versions(repo_id: str) -> list[str]:
     """Get the versions of a dataset on the hub.
 

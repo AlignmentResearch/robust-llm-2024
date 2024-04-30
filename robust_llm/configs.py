@@ -422,7 +422,8 @@ class DatasetConfig:
         n_train (int): Number of training examples.
         n_val (int): Number of validation examples.
         config_name (Optional[str]): config_name from hf datasets (if applicable).
-        revision (str): The huggingface revision to start from.
+        revision (str): The huggingface revision to start from. Defaults
+            to <1.0.0 to avoid unexpected breaking changes.
         inference_type (str): The type of inference performed ("classification"
             or "generation")
     """
@@ -431,7 +432,7 @@ class DatasetConfig:
     n_train: int = 0
     n_val: int = 0
     config_name: Optional[str] = None
-    revision: str = "main"
+    revision: str = "<1.0.0"
     inference_type: str = "classification"
 
 

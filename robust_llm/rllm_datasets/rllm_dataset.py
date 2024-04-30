@@ -5,12 +5,14 @@ from abc import ABC, abstractmethod
 from typing import Any, Iterable, Sequence
 
 import datasets
+import semver
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 
 from robust_llm.configs import DatasetConfig
 from robust_llm.rllm_datasets.dataset_utils import (
     get_largest_version,
+    get_largest_version_below,
     tokenize_dataset,
     valid_tag,
 )
@@ -103,25 +105,36 @@ class RLLMDataset(ABC):
         return label
 
     def _maybe_get_version(self, dataset_type: str, revision: str) -> str:
-        """If a semver version was specified, use that. Otherwise if 'main' was
-        specified, use the latest version.
+        """Maybe process the version given into an actual version to use.
+
+        If a valid semver version was specified, use that. Otherwise if
+        'main' was specified, use the latest version. If the string starts with
+        '<', use the latest version that is strictly less than the specified
+        version.
 
         NOTE: We don't simply use 'main' because we want to record the version
         used and avoid race conditions that could arise from separately loading
         'main' and looking up the most recent version.
+
+        Args:
+            dataset_type: The name of the dataset on huggingface hub.
+            revision: The revision to use. (e.g. 'main', '1.0.0', '<1.0.0')
         """
-        if revision == "main":
+        version: str | semver.Version | None
+        if revision.startswith("<"):
+            version = get_largest_version_below(dataset_type, revision[1:])
+        elif revision == "main":
             version = get_largest_version(dataset_type)
-            if version is None:
-                raise ValueError("No versions found for dataset")
-            return str(version)
         elif valid_tag(revision):
-            return revision
+            version = revision
         else:
             raise ValueError(
                 f"Invalid revision: {revision}."
                 " Should be 'main' or a valid semver version."
             )
+        if version is None:
+            raise ValueError(f"No versions found for revision {revision}")
+        return str(version)
 
     def _load_dataset(
         self,
@@ -149,18 +162,22 @@ class RLLMDataset(ABC):
                 raise ValueError(
                     "Cannot load train split when DatasetConfig.n_train is 0"
                 )
-            return self._load_split(cfg, split, n_examples=cfg.n_train)
+            return self._load_split(
+                cfg, split, n_examples=cfg.n_train, revision=revision
+            )
 
         elif split == "validation":
             if cfg.n_val == 0:
                 raise ValueError(
                     "Cannot load validation split when DatasetConfig.n_val is 0"
                 )
-            return self._load_split(cfg, split, n_examples=cfg.n_val)
+            return self._load_split(cfg, split, n_examples=cfg.n_val, revision=revision)
         else:
             raise ValueError(f"Unknown split {split}")
 
-    def _load_split(self, cfg: DatasetConfig, split: str, n_examples: int) -> Dataset:
+    def _load_split(
+        self, cfg: DatasetConfig, split: str, n_examples: int, revision: str
+    ) -> Dataset:
         """Load a split of the dataset with a given number of examples.
 
         We clear the ClassLabel feature from the `clf_label` column because
@@ -177,7 +194,7 @@ class RLLMDataset(ABC):
         ds = datasets.load_dataset(
             path=cfg.dataset_type,
             name=cfg.config_name,
-            revision=cfg.revision,
+            revision=revision,
             # We use slice splits to load a subset of the dataset.
             # https://huggingface.co/docs/datasets/en/loading#slice-splits
             split=f"{split}[:{n_examples}]",
