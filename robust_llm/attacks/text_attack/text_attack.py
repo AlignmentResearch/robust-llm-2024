@@ -29,7 +29,7 @@ from transformers import PreTrainedTokenizerBase
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
-from robust_llm.configs import AttackConfig
+from robust_llm.config.attack_configs import TextAttackAttackConfig
 from robust_llm.defenses.defense import DefendedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
@@ -168,7 +168,7 @@ class TextAttackAttack(Attack):
 
     def __init__(
         self,
-        attack_config: AttackConfig,
+        attack_config: TextAttackAttackConfig,
         model: LanguageModel,
         tokenizer: transformers.PreTrainedTokenizerBase,
     ) -> None:
@@ -188,15 +188,15 @@ class TextAttackAttack(Attack):
         wrapped_model = LanguageModelWrapper(model, tokenizer)
 
         self.num_modifiable_words_per_chunk = (
-            self.attack_config.text_attack_attack_config.num_modifiable_words_per_chunk
+            attack_config.num_modifiable_words_per_chunk
         )
 
-        if attack_config.attack_type == "textfooler":
+        if attack_config.text_attack_recipe == "textfooler":
             assert self.num_modifiable_words_per_chunk is None, "Not supported."
             self._attack = textattack.attack_recipes.TextFoolerJin2019.build(
                 model_wrapper=wrapped_model
             )
-        elif attack_config.attack_type == "bae":
+        elif attack_config.text_attack_recipe == "bae":
             self._attack = textattack.attack_recipes.BAEGarg2019.build(
                 model_wrapper=wrapped_model
             )
@@ -207,22 +207,24 @@ class TextAttackAttack(Attack):
                     self._attack,
                     new_search_method=GreedySearch(),
                 )
-        elif attack_config.attack_type == "checklist":
+        elif attack_config.text_attack_recipe == "checklist":
             assert self.num_modifiable_words_per_chunk is None, "Not supported."
             self._attack = textattack.attack_recipes.CheckList2020.build(
                 model_wrapper=wrapped_model
             )
-        elif attack_config.attack_type == "pso":
+        elif attack_config.text_attack_recipe == "pso":
             assert self.num_modifiable_words_per_chunk is None, "Not supported."
             self._attack = textattack.attack_recipes.PSOZang2020.build(
                 model_wrapper=wrapped_model
             )
-        elif attack_config.attack_type == "random_character_changes":
+        elif attack_config.text_attack_recipe == "random_character_changes":
             assert self.num_modifiable_words_per_chunk is not None, "Not supported."
 
             self._attack = RandomCharacterChanges.build(model_wrapper=wrapped_model)
         else:
-            raise ValueError(f"Attack type {attack_config.attack_type} not recognized.")
+            raise ValueError(
+                f"TextAttack Recipe {attack_config.text_attack_recipe} not recognized."
+            )
 
         if self.num_modifiable_words_per_chunk is not None:
             # In this case, we drop any regular constraints (e.g. on semantics or
@@ -232,13 +234,13 @@ class TextAttackAttack(Attack):
             )
 
         self.attack_args = textattack.AttackArgs(
-            num_examples=self.attack_config.text_attack_attack_config.num_examples,
-            query_budget=self.attack_config.text_attack_attack_config.query_budget,
-            random_seed=self.attack_config.seed,
+            num_examples=attack_config.num_examples,
+            query_budget=attack_config.query_budget,
+            random_seed=attack_config.seed,
             # Despite TextAttack's documentation, we need to set both of these
             # to actually make the attack silent.
-            silent=self.attack_config.text_attack_attack_config.silent,
-            disable_stdout=self.attack_config.text_attack_attack_config.silent,
+            silent=attack_config.silent,
+            disable_stdout=attack_config.silent,
         )
 
     @override

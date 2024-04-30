@@ -1,4 +1,9 @@
-from robust_llm.configs import DatasetConfig, ExperimentConfig, OverallConfig
+from robust_llm.config.configs import (
+    DatasetConfig,
+    EvaluationConfig,
+    ExperimentConfig,
+    ModelConfig,
+)
 from robust_llm.pipelines.utils import prepare_victim_models
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 
@@ -11,13 +16,17 @@ def test_prepare_victim_models_num_classes():
     ]
 
     for dataset_type, expected_num_classes in TEST_CASES:
-        config = OverallConfig(
-            experiment=ExperimentConfig(
-                dataset=DatasetConfig(dataset_type=dataset_type, n_train=10),
-            )
+        config = ExperimentConfig(
+            experiment_type="evaluation",
+            dataset=DatasetConfig(dataset_type=dataset_type, n_train=10),
+            model=ModelConfig(
+                name_or_path="EleutherAI/pythia-14m",
+                family="pythia",
+            ),
+            evaluation=EvaluationConfig(),
         )
 
-        train_dataset = load_rllm_dataset(config.experiment.dataset, split="train")
+        train_dataset = load_rllm_dataset(config.dataset, split="train")
         num_classes = train_dataset.num_classes
         victim_model, _, _ = prepare_victim_models(config, num_classes=num_classes)
 

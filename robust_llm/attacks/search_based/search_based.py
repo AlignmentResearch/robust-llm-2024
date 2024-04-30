@@ -14,7 +14,8 @@ from robust_llm.attacks.search_based.utils import (
     get_chunking_for_search_based,
     get_wrapped_model,
 )
-from robust_llm.configs import AttackConfig
+from robust_llm.config.attack_configs import SearchBasedAttackConfig
+from robust_llm.config.configs import AttackConfig
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel, get_randint_with_exclusions
@@ -74,8 +75,6 @@ class SearchBasedAttack(Attack):
             dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
         ), "Exactly one modifiable chunk"
 
-        config = self.attack_config.search_based_attack_config
-
         num_classes = dataset.num_classes
 
         all_filtered_out_counts: list[int] = []
@@ -112,11 +111,12 @@ class SearchBasedAttack(Attack):
                 clf_target=target_label,
             )
 
+            assert isinstance(self.attack_config, SearchBasedAttackConfig)
             runner = make_runner(
                 wrapped_model=self.wrapped_model,
                 prepped_examples=[prepped_example],
                 random_seed=self.attack_config.seed,
-                config=config,
+                config=self.attack_config,
             )
 
             attack_text, example_debug_info = runner.run()

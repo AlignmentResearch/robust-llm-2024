@@ -1,6 +1,6 @@
 from transformers import AutoTokenizer
 
-from robust_llm.configs import DatasetConfig
+from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import _get_only_data_with_incorrect_predictions
 from robust_llm.utils import FakeClassifierWithPositiveList

@@ -14,7 +14,8 @@ from robust_llm.attacks.search_based.utils import (
     get_chunking_for_search_based,
     get_wrapped_model,
 )
-from robust_llm.configs import AttackConfig
+from robust_llm.config.attack_configs import SearchBasedAttackConfig
+from robust_llm.config.configs import AttackConfig
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel, get_randint_with_exclusions
@@ -69,8 +70,6 @@ class MultiPromptSearchBasedAttack(Attack):
         TODO(GH#113): consider multi-model attacks in the future.
         """
 
-        config = self.attack_config.search_based_attack_config
-
         num_classes = dataset.num_classes
 
         all_filtered_out_counts: list[int] = []
@@ -107,11 +106,12 @@ class MultiPromptSearchBasedAttack(Attack):
             )
             prepped_examples.append(prepped_example)
 
+        assert isinstance(self.attack_config, SearchBasedAttackConfig)
         runner = make_runner(
             wrapped_model=self.wrapped_model,
             prepped_examples=prepped_examples,
             random_seed=self.attack_config.seed,
-            config=config,
+            config=self.attack_config,
         )
         attack_text, example_debug_info = runner.run()
         attacked_input_texts = [

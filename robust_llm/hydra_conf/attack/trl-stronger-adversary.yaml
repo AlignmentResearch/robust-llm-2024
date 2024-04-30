@@ -1,0 +1,3 @@
+defaults:
+- TRL
+- /model@adversary: pythia-31m

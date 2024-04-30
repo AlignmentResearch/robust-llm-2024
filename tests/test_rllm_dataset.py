@@ -1,6 +1,6 @@
 import pytest
 
-from robust_llm.configs import DatasetConfig
+from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 

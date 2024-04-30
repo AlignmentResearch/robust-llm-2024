@@ -1,4 +1,4 @@
-from robust_llm.configs import DatasetConfig
+from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.rllm_datasets.supported_datasets.enron_spam_dataset import (
     EnronSpamDataset,

@@ -1,0 +1,24 @@
+# @package _global_
+
+# Training
+# This file shows you how you would set up the base yaml for a training
+# experiment.
+
+# Replace the ??? in the defaults list with the name of a yaml file from the
+# relevant directory.
+defaults:
+# For example, to set the dataset to PasswordMatch, you would replace
+# ??? with passwordmatch  (which is in `hydra_conf/dataset`)
+- /dataset: ???
+- /training: DEFAULT
+- /model: ???
+- _self_
+
+# You also need to specify the size of the dataset you want.
+dataset:
+  n_train: ???
+  n_val: ???
+
+experiment_name: ???
+run_name: ???
+experiment_type: "training"

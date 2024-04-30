@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+- Eval/pm_random-token-len-10
+
+dataset:
+  n_val: 50
+model:
+  name_or_path: "AlignmentResearch/robust_llm_pythia-tt-31m-mz-ada-v3-ch-140000"
+
+experiment_name: pm_random-token-derivative
+run_name: pm_random-token-derivative-1

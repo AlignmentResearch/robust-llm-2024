@@ -19,7 +19,7 @@ from robust_llm.attacks.search_based.utils import (
     ReplacementCandidate,
     TokenizationChangeException,
 )
-from robust_llm.configs import GCGAttackConfig, SearchBasedAttackConfig
+from robust_llm.config import GCGAttackConfig
 from robust_llm.utils import FakeModelForSequenceClassification
 
 ACCELERATOR = Accelerator(cpu=True)
@@ -32,14 +32,11 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
         tokenizer,
         accelerator=ACCELERATOR,
     )
-    config = SearchBasedAttackConfig(
-        search_type="gcg",
+    config = GCGAttackConfig(
         n_candidates_per_it=1,
         n_its=1,
         n_attack_tokens=11,
-        gcg_attack_config=GCGAttackConfig(
-            top_k=1,
-        ),
+        top_k=1,
     )
     prompt_template = PromptTemplate(
         before_attack=before_attack_text, after_attack=after_attack_text
@@ -69,14 +66,11 @@ def bert_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
         tokenizer,
         accelerator=ACCELERATOR,
     )
-    config = SearchBasedAttackConfig(
-        search_type="gcg",
+    config = GCGAttackConfig(
         n_candidates_per_it=1,
         n_its=1,
         n_attack_tokens=11,
-        gcg_attack_config=GCGAttackConfig(
-            top_k=1,
-        ),
+        top_k=1,
     )
     prompt_template = PromptTemplate(
         before_attack=before_attack_text, after_attack=after_attack_text
@@ -107,14 +101,11 @@ def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRun
         tokenizer,
         accelerator=ACCELERATOR,
     )
-    config = SearchBasedAttackConfig(
-        search_type="gcg",
+    config = GCGAttackConfig(
         n_candidates_per_it=1,
         n_its=1,
         n_attack_tokens=11,
-        gcg_attack_config=GCGAttackConfig(
-            top_k=1,
-        ),
+        top_k=1,
     )
     prompt_template = PromptTemplate(
         before_attack=before_attack_text, after_attack=after_attack_text

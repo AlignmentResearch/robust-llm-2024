@@ -1,7 +1,7 @@
 import pytest
 import semver
 
-from robust_llm.configs import DatasetConfig
+from robust_llm.config import DatasetConfig
 from robust_llm.rllm_datasets.dataset_utils import get_largest_version_below
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 

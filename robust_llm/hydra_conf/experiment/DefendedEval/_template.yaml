@@ -1,0 +1,27 @@
+# @package _global_
+
+# Defended Evaluation
+# This file shows you how you would set up the base yaml for an evaluation
+# experiment with defenses.
+
+defaults:
+- /dataset: ???
+- /evaluation: DEFAULT
+# This line says to take a config from `/attack` (which points to
+# `hydra_config/attack`) and place it at `evaluation.evaluation_attack`.
+# So if we wanted to use TRL, we would put trl in place of ???
+- /attack@evaluation.evaluation_attack: ???
+- /defense: ???
+# If the defense needs a decoder, this is how it can be specified.
+# Otherwise, this line can be deleted.
+- /model@defense.decoder: ???
+- /model: ???
+- _self_
+
+dataset:
+  n_train: ???
+  n_val: ???
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

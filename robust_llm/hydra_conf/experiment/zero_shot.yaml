@@ -1,7 +1,0 @@
-experiment_type: "training"
-
-environment:
-  dataset_type: tensor_trust
-
-training:
-  num_train_epochs: 0

@@ -5,6 +5,7 @@ from datasets import Dataset
 from tdigest import TDigest
 from transformers import PreTrainedTokenizerBase
 
+from robust_llm.config.defense_configs import PerplexityDefenseConfig
 from robust_llm.defenses.defense import DefendedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel
@@ -289,20 +290,19 @@ def compute_max_min_percentile_perplexity(
 class PerplexityDefendedModel(DefendedModel):
     def __post_init__(self) -> None:
         super().__post_init__()
-
+        assert isinstance(self.defense_config, PerplexityDefenseConfig)
+        self.perplexity_defense = self.defense_config
         assert self.decoder is not None
         assert isinstance(self.device, torch.device)
         self.decoder.to(device=self.device)  # type: ignore
-        self.window_size = self.defense_config.perplexity_defense_config.window_size
-        self.report_max_perplexity = (
-            self.defense_config.perplexity_defense_config.report_max_perplexity
-        )
-        self.batch_size = self.defense_config.perplexity_defense_config.batch_size
-        self.verbose = self.defense_config.perplexity_defense_config.verbose
+        self.window_size = self.perplexity_defense.window_size
+        self.report_max_perplexity = self.perplexity_defense.report_max_perplexity
+        self.batch_size = self.perplexity_defense.batch_size
+        self.verbose = self.perplexity_defense.verbose
 
         # We subtract from 1 because perplexities are sorted low -> high,
         # and we want to get the x% _highest_ (not lowest) perplexity value.
-        perplexity_config = self.defense_config.perplexity_defense_config
+        perplexity_config = self.perplexity_defense
         proportion = perplexity_config.perplexity_threshold_proportion
 
         assert self.dataset is not None

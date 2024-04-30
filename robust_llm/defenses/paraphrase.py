@@ -17,6 +17,7 @@ from transformers.tokenization_utils_base import (
 )
 from transformers.utils import PaddingStrategy, TensorType
 
+from robust_llm.config.defense_configs import ParaphraseDefenseConfig
 from robust_llm.defenses.defense import DefendedModel
 
 TextOrTokenSeqInput: TypeAlias = TextInput | PreTokenizedInput | list[PreTokenizedInput]
@@ -127,6 +128,8 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
 class ParaphraseDefendedModel(DefendedModel):
     def __post_init__(self) -> None:
         super().__post_init__()
+        assert isinstance(self.defense_config, ParaphraseDefenseConfig)
+        self.paraphrase_defense = self.defense_config
         self.paraphraser = AutoModelForCausalLM.from_pretrained(
             self.paraphraser_name
         ).to(self.device)
@@ -145,27 +148,27 @@ class ParaphraseDefendedModel(DefendedModel):
 
     @property
     def device(self) -> torch.device:
-        return torch.device(self.defense_config.paraphrase_defense_config.device)
+        return torch.device(self.paraphrase_defense.device)
 
     @property
     def padding_side(self) -> str:
-        return self.defense_config.paraphrase_defense_config.padding_side
+        return self.paraphrase_defense.padding_side
 
     @property
     def verbose(self) -> bool:
-        return self.defense_config.paraphrase_defense_config.verbose
+        return self.paraphrase_defense.verbose
 
     @property
     def paraphraser_name(self) -> str:
-        return self.defense_config.paraphrase_defense_config.model_name
+        return self.paraphrase_defense.model_name
 
     @property
     def meta_prompt(self) -> str:
-        return self.defense_config.paraphrase_defense_config.meta_prompt
+        return self.paraphrase_defense.meta_prompt
 
     @property
     def temperature(self) -> float:
-        return self.defense_config.paraphrase_defense_config.temperature
+        return self.paraphrase_defense.temperature
 
     def forward(self, **inputs) -> Any:
         return self.model(**inputs)

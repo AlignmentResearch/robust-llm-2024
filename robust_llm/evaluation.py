@@ -447,7 +447,7 @@ def _maybe_record_defense_specific_metrics(
 
     if (
         isinstance(model, PerplexityDefendedModel)
-        and model.defense_config.perplexity_defense_config.save_perplexity_curves
+        and model.perplexity_defense.save_perplexity_curves
     ):
         # Get the approximate perplexities of the decoder on both
         # the original and attacked datasets.

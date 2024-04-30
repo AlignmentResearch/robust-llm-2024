@@ -1,7 +1,0 @@
-defaults:
-  - /datasets/passwordmatch_eval_small@dataset
-  - /evaluations/random_token@evaluation
-  - /environments/pythia_14m@environment
-  - _self_
-experiment_type: "evaluation"
-experiment_name: "dataset-testing"

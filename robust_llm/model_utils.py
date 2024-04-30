@@ -2,7 +2,7 @@ from typing import Type, cast
 
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from robust_llm.configs import ModelFamily
+from robust_llm.config.constants import ModelFamily
 from robust_llm.model_loaders import (
     BERTModelLoader,
     GPT2ModelLoader,

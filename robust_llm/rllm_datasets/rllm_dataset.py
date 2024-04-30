@@ -9,7 +9,7 @@ import semver
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 
-from robust_llm.configs import DatasetConfig
+from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.dataset_utils import (
     get_largest_version,
     get_largest_version_below,

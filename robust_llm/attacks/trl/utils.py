@@ -13,7 +13,7 @@ from transformers import (
 from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer
 from typing_extensions import override
 
-from robust_llm.configs import AttackConfig
+from robust_llm.config.attack_configs import TRLAttackConfig
 from robust_llm.model_utils import _prepare_tokenizer
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
@@ -22,18 +22,18 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
 
 
 def make_ppo_trainer(
-    attack_config: AttackConfig,
+    attack_config: TRLAttackConfig,
     adversary_model: PreTrainedModel,
     adversary_tokenizer: PreTrainedTokenizerBase,
     dataset: Dataset,
 ) -> PPOTrainer:
     ppo_config = {
         "exp_name": "rl-adversary",
-        "batch_size": attack_config.trl_attack_config.batch_size,
-        "mini_batch_size": attack_config.trl_attack_config.mini_batch_size,
-        "gradient_accumulation_steps": attack_config.trl_attack_config.gradient_accumulation_steps,  # noqa: E501
+        "batch_size": attack_config.batch_size,
+        "mini_batch_size": attack_config.mini_batch_size,
+        "gradient_accumulation_steps": attack_config.gradient_accumulation_steps,  # noqa: E501
         "seed": attack_config.seed,
-        "ppo_epochs": attack_config.trl_attack_config.ppo_epochs,
+        "ppo_epochs": attack_config.ppo_epochs,
         # Needed in order to not delete "text_chunked"
         "remove_unused_columns": False,
         # TODO(niki): log locally too?
@@ -81,22 +81,22 @@ def trl_data_collator(datapoints: Sequence[Any]) -> Mapping[str, Any]:
 
 
 def prepare_adversary_model_and_tokenizer(
-    attack_config: AttackConfig,
+    attack_config: TRLAttackConfig,
     num_classes: int,
     device: torch.device,
 ) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
-    base_model_name = attack_config.trl_attack_config.adversary_base_model_name
-    if "pythia" not in base_model_name:
+    base_model_name = attack_config.adversary.name_or_path
+    base_model_family = attack_config.adversary.family
+    base_model_revision = attack_config.adversary.revision
+
+    if base_model_family != "pythia":
         raise NotImplementedError(
             "Only Pythia models are currently supported for RL adversaries."
         )
 
-    checkpoint = attack_config.trl_attack_config.adversary_base_model_checkpoint
-    checkpoint_string = f"step{checkpoint}"
-
     adversary_model = AutoModelForCausalLMWithValueHead.from_pretrained(
         base_model_name,
-        revision=checkpoint_string,
+        revision=base_model_revision,
         use_cache=False,  # otherwise returns last key/values attentions
         num_labels=num_classes,
     ).to(device)
@@ -104,8 +104,8 @@ def prepare_adversary_model_and_tokenizer(
 
     adversary_tokenizer = _prepare_tokenizer(
         model_name_or_path=base_model_name,
-        model_family="pythia",
-        revision=checkpoint_string,
+        model_family=base_model_family,
+        revision=base_model_revision,
         padding_side="left",
     )
 

@@ -3,12 +3,11 @@ from typing import Any, Optional, Sequence
 import torch
 
 from robust_llm.attacks.random_token import RandomTokenAttack
-from robust_llm.configs import (
-    AttackConfig,
+from robust_llm.config import (
     DatasetConfig,
     EvaluationConfig,
     ExperimentConfig,
-    OverallConfig,
+    ModelConfig,
     RandomTokenAttackConfig,
 )
 from robust_llm.pipelines.utils import prepare_victim_models
@@ -18,33 +17,36 @@ from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 # Get an overall config and change the random token attack
 # max and min to be the same to avoid randomness in tests
-overall_config = OverallConfig(
-    experiment=ExperimentConfig(
-        dataset=DatasetConfig(
-            dataset_type="AlignmentResearch/PasswordMatch",
-            n_val=10,
-        ),
-        evaluation=EvaluationConfig(
-            evaluation_attack=AttackConfig(
-                random_token_attack_config=RandomTokenAttackConfig(
-                    min_tokens=3,
-                    max_tokens=3,
-                )
-            )
-        ),
-    )
+exp_config = ExperimentConfig(
+    experiment_type="evaluation",
+    dataset=DatasetConfig(
+        dataset_type="AlignmentResearch/PasswordMatch",
+        n_val=10,
+    ),
+    model=ModelConfig(
+        name_or_path="EleutherAI/pythia-14m",
+        family="pythia",
+    ),
+    evaluation=EvaluationConfig(
+        evaluation_attack=RandomTokenAttackConfig(
+            min_tokens=3,
+            max_tokens=3,
+        )
+    ),
 )
-attack_config = overall_config.experiment.evaluation.evaluation_attack
-dataset_config = overall_config.experiment.dataset
+assert exp_config.evaluation is not None
+attack_config = exp_config.evaluation.evaluation_attack
+dataset_config = exp_config.dataset
 dataset = load_rllm_dataset(dataset_config, split="validation")
 # hack to get around the fact that the dataset DOES have a ground_truth_label_fn
 # but it's not used in the test
 dataset.ground_truth_label_fn = lambda text, label: label  # type: ignore[method-assign]
 
 # Get victim model and tokenizer
-victim_model, victim_tokenizer, _ = prepare_victim_models(overall_config, num_classes=2)
+victim_model, victim_tokenizer, _ = prepare_victim_models(exp_config, num_classes=2)
 
 # Set up the attack
+assert isinstance(attack_config, RandomTokenAttackConfig)
 attack = RandomTokenAttack(
     attack_config=attack_config,
     victim_model=victim_model,

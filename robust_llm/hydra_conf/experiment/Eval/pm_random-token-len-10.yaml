@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+- /dataset: passwordmatch
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: random-token-len-10
+- /model: pythia-14m
+- _self_
+
+dataset:
+  n_val: 10
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

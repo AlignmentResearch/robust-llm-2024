@@ -32,7 +32,7 @@ class CustomLoggingWandbCallback(WandbCallback):
 
     Additionally, the default HuggingFace Trainer's "global_step" is reset to 0 at the
     start of each `train` call. We want to record training progress over several rounds
-    of iterative training, so we need a step/datapoint count that is not reset in this
+    of adversarial training, so we need a step/datapoint count that is not reset in this
     way. So we ignore HuggingFace's step and define our own steps.
     """
 

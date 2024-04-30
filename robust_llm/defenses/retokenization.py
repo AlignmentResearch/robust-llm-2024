@@ -5,6 +5,7 @@ from typing import Any, Sequence, Tuple, Union, cast
 import torch
 from transformers import PreTrainedTokenizerBase
 
+from robust_llm.config.defense_configs import RetokenizationDefenseConfig
 from robust_llm.defenses.defense import DefendedModel
 
 
@@ -255,6 +256,9 @@ class BytePairDecomposer:
 class RetokenizationDefendedModel(DefendedModel):
     def __post_init__(self) -> None:
         super().__post_init__()
+        assert isinstance(self.defense_config, RetokenizationDefenseConfig)
+        self.retokenization_defense = self.defense_config
+
         self.bpe_decomposer = BytePairDecomposer(self.tokenizer)
         tokens_to_keep = int(
             len(self.bpe_decomposer.merge_tokens) * self.drop_percentage
@@ -263,11 +267,11 @@ class RetokenizationDefendedModel(DefendedModel):
 
     @property
     def verbose(self) -> bool:
-        return self.defense_config.retokenization_defense_config.verbose
+        return self.retokenization_defense.verbose
 
     @property
     def drop_percentage(self) -> float:
-        return self.defense_config.retokenization_defense_config.drop_percentage
+        return self.retokenization_defense.drop_percentage
 
     def forward(self, **inputs) -> Any:
         assert self.tokenizer.pad_token_id is not None

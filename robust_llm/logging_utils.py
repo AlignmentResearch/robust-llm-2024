@@ -7,7 +7,7 @@ import wandb
 import yaml
 from omegaconf import OmegaConf
 
-from robust_llm.configs import ExperimentConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 

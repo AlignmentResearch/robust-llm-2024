@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+- /dataset: imdb
+- /training: DEFAULT
+- /model: pythia-14m
+- /training/adversarial: DEFAULT
+- /attack@training.adversarial.training_attack: GCG
+- _self_
+
+dataset:
+  n_train: 20
+  n_val: 2
+experiment_name: ???
+run_name: ???
+experiment_type: "training"

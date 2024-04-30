@@ -6,7 +6,7 @@ import wandb
 from datasets import Dataset
 from tqdm import tqdm
 from transformers import PreTrainedTokenizerBase
-from trl import PPOConfig, PPOTrainer
+from trl import PPOTrainer
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
@@ -17,7 +17,7 @@ from robust_llm.attacks.trl.utils import (
     prepare_adversary_model_and_tokenizer,
     prepare_prompts,
 )
-from robust_llm.configs import AttackConfig
+from robust_llm.config.attack_configs import TRLAttackConfig
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import LanguageModel
@@ -36,7 +36,7 @@ class TRLAttack(Attack):
 
     def __init__(
         self,
-        attack_config: AttackConfig,
+        attack_config: TRLAttackConfig,
         logging_name: str,
         victim_model: LanguageModel,
         victim_tokenizer: PreTrainedTokenizerBase,
@@ -75,17 +75,21 @@ class TRLAttack(Attack):
         )
 
         self.victim_batch_size = attack_config.victim_inference_batch_size
+        self.adversary_batch_size = attack_config.batch_size
+
+        self.reward_type = attack_config.reward_type
 
         self.seed = attack_config.seed
         self.device = victim_model.device
 
-        self.model_name_to_save = attack_config.trl_attack_config.model_name_to_save
+        self.model_name_to_save = attack_config.model_name_to_save
+        self.model_save_path_prefix = attack_config.model_save_path_prefix
 
         (
             self.adversary_model,
             self.adversary_tokenizer,
         ) = prepare_adversary_model_and_tokenizer(
-            self.attack_config,
+            attack_config,
             num_classes=victim_model.config.num_labels,
             device=self.device,
         )
@@ -97,12 +101,12 @@ class TRLAttack(Attack):
         # TRL quickstart example is here
         #   https://huggingface.co/docs/trl/v0.7.4/en/quickstart#minimal-example
         self.generation_kwargs = {
-            "min_length": self.attack_config.trl_attack_config.min_length,
+            "min_length": attack_config.min_length,
             "top_k": 0.0,
             "top_p": 1.0,
             "do_sample": True,
             "pad_token_id": self.adversary_tokenizer.eos_token_id,
-            "max_new_tokens": self.attack_config.trl_attack_config.max_new_tokens,
+            "max_new_tokens": attack_config.max_new_tokens,
         }
         self.ppo_trainer: Optional[PPOTrainer] = None
 
@@ -111,9 +115,10 @@ class TRLAttack(Attack):
         self,
         dataset: RLLMDataset,
     ) -> None:
-        batch_size = self.attack_config.trl_attack_config.batch_size
+        batch_size = self.adversary_batch_size
         assert batch_size <= len(dataset.ds)
 
+        assert isinstance(self.attack_config, TRLAttackConfig)
         self.ppo_trainer = make_ppo_trainer(
             attack_config=self.attack_config,
             adversary_model=self.adversary_model,
@@ -122,7 +127,6 @@ class TRLAttack(Attack):
         )
 
         assert self.ppo_trainer is not None
-        assert isinstance(self.ppo_trainer.config, PPOConfig)
         ppo_epochs: int = self.ppo_trainer.config.ppo_epochs
         for epoch in tqdm(range(ppo_epochs), "epoch: "):
             epoch_rewards = []
@@ -176,7 +180,7 @@ class TRLAttack(Attack):
         self._maybe_save_model_to_path_or_hf()
 
     def _get_reward(self, label: int, logits: torch.Tensor) -> torch.Tensor:
-        reward_type = self.attack_config.trl_attack_config.reward_type
+        reward_type = self.reward_type
 
         if reward_type == "minus_correct_logit_plus_incorrect_logits":
             return logits.sum() - 2 * logits[label]
@@ -298,16 +302,13 @@ class TRLAttack(Attack):
         )
 
     def _maybe_save_model_to_path_or_hf(self) -> None:
-        model_save_path_prefix = (
-            self.attack_config.trl_attack_config.model_save_path_prefix
-        )
 
-        if model_save_path_prefix is None:
+        if self.model_save_path_prefix is None:
             print("No model_save_path_prefix provided; not saving the model")
             return
         assert wandb.run is not None
         output_dir = os.path.join(
-            model_save_path_prefix, "models", self.model_name_to_save
+            self.model_save_path_prefix, "models", self.model_name_to_save
         )
         wandb.run.summary["saved_dir"] = output_dir  # type: ignore
         print(f"Saving the trl model to {output_dir}")

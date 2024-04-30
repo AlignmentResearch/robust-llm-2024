@@ -7,26 +7,32 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
-from robust_llm.configs import OverallConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.model_utils import _prepare_decoder, _prepare_model, _prepare_tokenizer
 from robust_llm.utils import LanguageModel
 
 
 def prepare_victim_models(
-    args: OverallConfig,
+    args: ExperimentConfig,
     num_classes: int,
 ) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase, Optional[PreTrainedModel]]:
     """Returns the victim model, tokenizer, and optionally decoder used in defenses."""
 
     print("Preparing model and tokenizer (and maybe decoder)...")
 
-    model_name_or_path = args.experiment.environment.model_name_or_path
-    model_family = args.experiment.environment.model_family
-    revision = args.experiment.training.revision
+    model_name_or_path = args.model.name_or_path
+    model_family = args.model.family
+    revision = args.model.revision
 
-    decoder_name = args.experiment.environment.decoder_name
-    decoder_family = args.experiment.environment.decoder_family
-    decoder_revision = args.experiment.environment.decoder_revision
+    # TODO (ian): Load the decoder separately, rather than all in this one function
+    try:
+        decoder_name = args.defense.decoder.name_or_path  # type: ignore
+        decoder_family = args.defense.decoder.family  # type: ignore
+        decoder_revision = args.defense.decoder.revision  # type: ignore
+    except AttributeError:
+        decoder_name = None
+        decoder_family = None
+        decoder_revision = None
 
     model = _prepare_model(
         model_name_or_path=model_name_or_path,
@@ -62,7 +68,7 @@ def prepare_victim_models(
 
 
 def prepare_attack(
-    args: OverallConfig,
+    args: ExperimentConfig,
     model: LanguageModel,
     tokenizer: PreTrainedTokenizerBase,
     accelerator: Accelerator,
@@ -71,11 +77,14 @@ def prepare_attack(
     print("Preparing attack...")
 
     if training:
+        assert args.training is not None
+        assert args.training.adversarial is not None
         logging_name = "training_attack"
-        attack_config = args.experiment.training.iterative.training_attack
+        attack_config = args.training.adversarial.training_attack
     else:
+        assert args.evaluation is not None
         logging_name = "eval_attack"
-        attack_config = args.experiment.evaluation.evaluation_attack
+        attack_config = args.evaluation.evaluation_attack
 
     return create_attack(
         attack_config=attack_config,

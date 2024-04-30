@@ -1,0 +1,26 @@
+# @package _global_
+
+# Adversarial Training
+# This file shows you how you would set up the base yaml for an adversarial
+# training experiment.
+
+# Replace the ??? in the defaults list with the name of a yaml file from the
+# relevant directory.
+defaults:
+- /dataset: ???
+- /training: DEFAULT
+- /model: ???
+- /training/adversarial: DEFAULT
+# For example, to set the training attack to multi-prompt GCG, you would replace
+# ??? with multiprompt-gcg (which is in `hydra_conf/attack`)
+- /attack@training.adversarial.training_attack: ???
+- _self_
+
+dataset:
+  n_train: ???
+  n_val: ???
+
+
+experiment_name: ???
+run_name: ???
+experiment_type: "training"

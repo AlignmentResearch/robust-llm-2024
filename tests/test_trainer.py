@@ -1,6 +1,6 @@
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from robust_llm.configs import DatasetConfig, EnvironmentConfig, EvaluationConfig
+from robust_llm.config.configs import DatasetConfig, EnvironmentConfig, EvaluationConfig
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import Training
 

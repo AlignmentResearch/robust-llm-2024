@@ -9,7 +9,8 @@ import torch.utils.data
 from datasets import Dataset
 from transformers import PreTrainedModel
 
-from robust_llm.configs import DefenseConfig, PerplexityDefenseConfig
+from robust_llm.config import PerplexityDefenseConfig
+from robust_llm.config.defense_configs import RetokenizationDefenseConfig
 from robust_llm.defenses.perplexity import (
     PerplexityDefendedModel,
     compute_max_min_percentile_perplexity,
@@ -256,7 +257,7 @@ def test_retokenization_defended_model_forward():
         }
     )
 
-    defense_config = DefenseConfig()
+    retokenization_config = RetokenizationDefenseConfig()
 
     init_model = MagicMock()
     tokenizer = MagicMock()
@@ -287,7 +288,7 @@ def test_retokenization_defended_model_forward():
         tokenizer=tokenizer,
         decoder=decoder,
         dataset=dataset,
-        defense_config=defense_config,
+        defense_config=retokenization_config,
     )
     model.broken_tokens = broken_tokens
 
@@ -324,11 +325,7 @@ def test_perplexity_defended_model_forward():
     )
 
     # Create a dummy defense config
-    perplexity_config = PerplexityDefenseConfig()
-    perplexity_config.perplexity_threshold_proportion = 0.01
-    defense_config = DefenseConfig(
-        perplexity_defense_config=perplexity_config,
-    )
+    perplexity_config = PerplexityDefenseConfig(perplexity_threshold_proportion=0.01)
 
     init_model = MagicMock()
 
@@ -369,7 +366,7 @@ def test_perplexity_defended_model_forward():
         tokenizer=tokenizer,
         decoder=decoder,
         dataset=dataset,
-        defense_config=defense_config,
+        defense_config=perplexity_config,
     )
 
     # Call the forward method

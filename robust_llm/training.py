@@ -20,7 +20,7 @@ from typing_extensions import override
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import CustomLoggingWandbCallback
-from robust_llm.configs import AttackConfig, EnvironmentConfig, EvaluationConfig
+from robust_llm.config.configs import AttackConfig, EnvironmentConfig, EvaluationConfig
 from robust_llm.evaluation import (
     do_adversarial_evaluation,
     get_prediction_logits_and_labels_and_maybe_flag_values,
@@ -225,10 +225,12 @@ class AdversarialTraining(Training):
     Creates an AdversarialTrainer wrapped for logging, etc.
 
     Parameters:
-        num_iterative_training_rounds:
+        num_adv_training_rounds:
+            Number of rounds of adversarial training to do.
             One round of adversarial training involves first finding some number
             of adversarial examples, adding them to an "augmented train set",
             and training on that for some number of epochs.
+            NOTE: The first round doesn't include adversarial examples.
         training_attack_config:
             Config for the attack to use in adversarial training.
         validation_attack_config:
@@ -245,7 +247,7 @@ class AdversarialTraining(Training):
             otherwise, add all trials, successful or not.
     """
 
-    num_iterative_training_rounds: int
+    num_adversarial_training_rounds: int
     training_attack_config: AttackConfig
     validation_attack_config: AttackConfig
     num_examples_to_generate_each_round: int
@@ -260,7 +262,7 @@ class AdversarialTraining(Training):
         assert type(self.eval_rllm_dataset) is dict
         assert "validation" in self.eval_rllm_dataset
 
-        self.current_iterative_training_round: int = 0
+        self.current_adversarial_training_round: int = 0
 
     @override
     def setup_trainer(self) -> AdversarialTrainer:
@@ -332,14 +334,14 @@ class AdversarialTraining(Training):
                 self.log_datasets()
 
         # Run the adversarial training loop
-        for round in range(self.num_iterative_training_rounds):
+        for round in range(self.num_adversarial_training_rounds):
             print(
-                f"Iterative training round {round} started "
+                f"Adversarial training round {round} started "
                 f"at logging counts: {self.victim_training_logging_counter._parent}"
             )
-            self.current_iterative_training_round = round
+            self.current_adversarial_training_round = round
             # Can be useful for x axis in plots
-            wandb.log({"iterative_training_round": round}, commit=False)
+            wandb.log({"adversarial_training_round": round}, commit=False)
 
             # Train for "one round" (i.e., num_train_epochs)
             # on the (eventually, adversarial example-augmented) train set
@@ -406,7 +408,7 @@ class AdversarialTraining(Training):
             # Now generate adversarial examples using the training attack; possibly
             # select only successful ones; and add them to the training set so that they
             # are used in the next round of training.
-            if round < self.num_iterative_training_rounds - 1:
+            if round < self.num_adversarial_training_rounds - 1:
                 assert (
                     len(self.train_rllm_dataset.ds)
                     >= self.num_examples_to_generate_each_round
@@ -469,7 +471,7 @@ class AdversarialTraining(Training):
                 )
 
             print(
-                f"Iterative training round {round} finished "
+                f"Adversarial training round {round} finished "
                 f"at logging counts: {self.victim_training_logging_counter._parent}"
             )
 

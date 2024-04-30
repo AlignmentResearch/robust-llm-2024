@@ -48,37 +48,117 @@ pip install -e '.[dev,tensorflow]'
 
 We have various kinds of pipelines that you can run. Currently we have training pipeline (used for supervised fine-tuning of models or adversarial training), and an evaluation pipeline (used to evaluate adversarial attack on a fixed model). To choose appropriate pipeline, you need to define the `experiment.experiment_type` in a Hydra config (see below). Note that there is also a defense pipeline which is currently non-operational.
 
-### Running ad-hoc experiments locally / on a devbox
+### Working with Hydra
 
-Experiments are configured with [Hydra](https://hydra.cc/). You can run the default configuration with:
+Experiments are configured with [Hydra](https://hydra.cc/).
 
+The config structure is defined as nested `dataclasses` in `configs.py`.
+Many values are left intentionally `MISSING` so that experiments don't accidentally use defaults, and so that the final config is cleaner.
+
+Full, runnable experiment configs are defined in `yaml` files in `robust_llm/hydra_conf`.
+
+Experiments are run with `python robust_llm +experiment=path/to/exp.yaml` (where `path/to/exp.yaml` is relative to `robust_llm/hydra_conf/experiment`).
+
+This setup takes inspiration from [the Hydra docs experiment example](https://hydra.cc/docs/1.3/patterns/configuring_experiments/).
+
+The `yaml` files are set up in such a way as to be composable -- for example, we can write a `yaml` file for a model once (say `pythia-14m`) and then use that in multiple experiments and in multiple places in the config.
+To do this we take advantage of [Hydra package overriding](https://hydra.cc/docs/1.0/advanced/overriding_packages/#overriding-the-package-via-the-defaults-list) (note that the linked documentation is for an older version, but is clearer than the [current version](https://hydra.cc/docs/1.3/advanced/overriding_packages/#overriding-packages-using-the-defaults-list)).
+
+#### Package overriding
+A Hydra config consists of nested _packages_: collections of values under a given path, like `training.adversarial.training_attack` or `evaluation.evaluation_attack`.
+This is closely related to the concept of a _config group_, which is the path of a collection of values that Hydra is aware of.
+These paths can be defined either in a directory tree of `yaml` files or in a `ConfigStore` instance in Python.
+
+Sometimes we want to change which config group is used in a given position in the config.
+As an example, let's consider setting the `training_attack` and `evaluation_attack` in an adversarial training run.
+We define our attacks to be in the `attack` config group.
+This is done by using `group="attack"` in `robust_llm/config/attack_configs.py` and by putting `yaml` files in the `robusts_llm/hydra_conf/attack` directory.
+However, we want these configs to be placed at `training.adversarial.training_attack` and `evaluation.evaluation_attack`, _not_ at `attack`.
+This requires [overriding packages](https://hydra.cc/docs/advanced/overriding_packages/) in the Defaults List.
+
+The syntax to take an attack (say, `GCG`) from the config group `attack` and place it at `evaluation.evaluation_attack` is:
+```yaml
+attack@evaluation.evaluation_attack: GCG
 ```
-python robust_llm
+However, there's an added complication: most of the time we want to write these overrides in a `yaml` script in `hydra_conf/experiment`, which is outside of the standard hierarchy.
+To do this we have to use the `# @package _global_` directive, which says that the paths we define should be relative to the `hydra_conf` root, rather than relative to the current file (which would be `hydra_conf/experiment` if we didn't change anything).
+With that change, we now need to put a slash in front of `attack` to indicate that Hydra should look relative to the root `hydra_conf` rather than relative to `hydra_conf/experiment`:
+```yaml
+/attack@evaluation.evaluation_attack: GCG
 ```
+(TODO: work out why we don't need to write `/evaluation.evaluation_attack`)
 
-All config options are defined in `robust_llm/configs.py`. Defaults can be overridden via the command line, e.g.:
+#### Some conventions
+We'll put experiments in `experiment/<ExperimentType>` directories for organization; e.g. `experiment/AdvTraining`.
+(Because we're using `@package _global_`, it's fine for our experiment configs to be nested since everything is relative to the top-level config group anyway.)
 
+In `yaml` files, we'll use `unquoted` strings to refer to other configs, and `"quoted"` strings for literal string values.
+Names of other `yaml` files will be `lowercase-with-hyphens`, while defaults from python will be `UPPERCASE_WITH_UNDERSCORES` (Python defaults are explained in more detail in the worked example below).
+
+#### Full `yaml` example
+Let's look at the contents of `robust_llm/hydra_conf/experiment/Eval/pm_gcg.yaml`, which defines an evaluation experiment.
+We'll go through some of the important lines.
+
+```yaml
+# @package _global_
+defaults:
+- /dataset: passwordmatch
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: GCG
+- /model: pythia-14m
+- _self_
+
+dataset:
+    n_val: 10
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"
 ```
-python robust_llm experiment.experiment_type=training experiment.environment.seed=42
-```
+##### `@package _global_`
+The `@package _global_` directive is important to relocate the overrides in the file.
+For example, without the `@package _global_` directive, the dataset below would be placed at `args.experiment.Eval.dataset` rather than `args.dataset`, which doesn't exist (since `experiment` is not part of the config structure).
 
-or
+Similarly, we have to use absolute paths for the overrides below so hydra knows to look for these config files relative to the `hydra_conf` root: For example, at `dataset` rather than `experiment/Eval/dataset`.
 
-```
-python robust_llm experiment.experiment_type=evaluation experiment.environment.dataset_type=hf/imdb experiment.evaluation.evaluation_attack.attack_type=search_based
-```
+##### `/dataset: passwordmatch`
+This means to look in the `/dataset` directory (which is `hydra_conf/dataset`, since `hydra_conf` is the root) and use `passwordmatch.yaml`.
 
-Alternatively, you can also define new config files, which is the recommended strategy for saving experiment configurations long term. You can see example config files in /robust_llm/hydra_conf/experiment. If you add a new file to /robust_llm/hydra_conf/experiment called `my_exp.yaml` then you can use it with:
+##### `/evaluation: DEFAULT`
+This line is a little tricky. Strictly speaking, `/evaluation` means to look in the `/evaluation` _config group_ rather than the `/evaluation` _directory_ (and analogously for `/dataset`).
+Things can end up in the `/evaluation` config group either by being in `hydra_conf/evaluation` or by being defined in Python using `hydra.ConfigStore`.
 
-```
-python robust_llm +experiment=my_exp
-```
+In this case, we have defined the default `evaluation` config in `configs.py`, using `cs.store(name="DEFAULT", group="evaluation", node=EvaluationConfig)`. One reason for doing this is because we rarely change most of the attributes of `EvaluationConfig` (except `evaluation_attack`, which we will handle next), and another, maybe more compelling reason is because we want to have the default value of `evaluation` in `ExperimentConfig` be `None` to avoid clogging up the config when we don't need it, but then it's tricky to specify that we want an instance of `EvaluationConfig` just from the `yaml`.
 
-Note that you can use a new config file as a starting point (for example, for a collection of experiments) and then adjust individual options in the same way as above, for example:
+##### `/attack@evaluation.evaluation_attack: GCG`
+This line says to take a config from the `/attack` config group and put it at
+`evaluation.evaluation_attack`.  In particular, we want to take `/attack/GCG`
+(which we know is defined in Python because it's `UPPERCASE`; in particular it's
+in `config/attack_configs.py`) and set this as the `evaluation_attack`. This
+uses Hydra's [package override](https://hydra.cc/docs/1.3/advanced/overriding_packages/#overriding-packages-using-the-defaults-list)
+syntax.
 
-`python robust_llm +experiment=my_exp experiment.environment.seed=43`
+##### `/model: pythia-14m`
+Analogous to the `/dataset` line: look in `/model` and use `pythia-14m`.
 
-The complete configuration used will be printed as `Configuration arguments:`. This description can be copied into a new file in the /robust_llm/hydra_conf/experiment directory if you want to repeat it later.
+##### `_self_`
+This line is important as it tells Hydra that the stuff that comes after the [Defaults List](https://hydra.cc/docs/1.3/advanced/defaults_list/) should override the stuff _in_ the defaults list.
+
+##### `n_val: 10`
+The previous stuff was all in the [Defaults List](https://hydra.cc/docs/1.3/advanced/defaults_list/).
+This line overrides whatever value `dataset.n_val` had before (which was `0`, from `configs.py`).
+
+#### Examples of different kinds of configs
+- See `robust_llm/hydra_conf/Eval/_template.yaml` for a template for `evaluation` experiments that explains some of what's going on
+    - See also `_template.yaml` under `AdvTraining`, `Training`, and `DefendedEval`.
+- See `random-token-len-10` and `trl-stronger-adversary` in `robust_llm/hydra_conf/attack` for examples of extending/overriding the `AttackConfig` defaults.
+- See `robust_llm/hydra_conf/experiment/ian/20240429_pm_random-token-fted.yaml` for an example of extending a generic experiment `yaml` for a specific experiment.
+- See the scripts in `experiments/_example` for examples of how these configs could be used for real experiments.
+
+#### Other gotchas
+- On the command line or in a Python experiment script:
+    - When we want to override a default value with a _config_ (like `ModelConfig`), not just a _value_ (like `model_family`), if the default value comes from the `dataclass` and was not set using the [Defaults List](https://hydra.cc/docs/advanced/defaults_list/), then we have to [prepend a `+`](https://hydra.cc/docs/1.2/advanced/override_grammar/basic/#modifying-the-defaults-list) to the override string to add it to the Defaults List.
+    - An example of this is given in `experiments/_example/example_003_Eval_imdb_trl-different-adversaries.py`.
 
 ### Running a single batch job
 

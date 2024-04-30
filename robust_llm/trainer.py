@@ -168,7 +168,7 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
                 self.training.trainer.get_augmented_training_set()  # type: ignore
             )
 
-            current_round = self.training.current_iterative_training_round
+            current_round = self.training.current_adversarial_training_round
             dataset_name = f"augmented_train_set_start_round_{current_round}"
             log_dataset_to_wandb(train_dataset_plus_adv_examples, dataset_name)
             wandb.log(

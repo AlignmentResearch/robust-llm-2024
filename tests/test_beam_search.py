@@ -14,7 +14,7 @@ from robust_llm.attacks.search_based.models import (
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.runners.beam_search_runner import BeamSearchRunner
 from robust_llm.attacks.search_based.utils import PreppedExample, PromptTemplate
-from robust_llm.configs import BeamSearchAttackConfig, SearchBasedAttackConfig
+from robust_llm.config import BeamSearchAttackConfig
 from robust_llm.utils import FakeModelForSequenceClassification
 
 
@@ -24,12 +24,7 @@ def _get_runner(
     beam_search_width: int,
     wrapped_model: SearchBasedAttackWrappedModel,
 ) -> BeamSearchRunner:
-    config = SearchBasedAttackConfig(
-        search_type="beam_search",
-        beam_search_attack_config=BeamSearchAttackConfig(
-            beam_search_width=beam_search_width
-        ),
-    )
+    config = BeamSearchAttackConfig(beam_search_width=beam_search_width)
     prompt_template = PromptTemplate(
         before_attack=before_attack_text, after_attack=after_attack_text
     )

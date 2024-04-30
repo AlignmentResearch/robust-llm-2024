@@ -6,7 +6,7 @@ import wandb
 from omegaconf import OmegaConf
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from robust_llm.configs import OverallConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.logging_utils import wandb_cleanup, wandb_initialize
 from robust_llm.pipelines.utils import prepare_victim_models
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
@@ -15,17 +15,16 @@ from robust_llm.utils import make_unique_name_to_save
 
 
 def run_training_pipeline(
-    args: OverallConfig,
+    args: ExperimentConfig,
 ) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase, PreTrainedModel | None]:
-    experiment = args.experiment
-
+    assert args.training is not None
     print("Configuration arguments:\n")
-    print(OmegaConf.to_yaml(experiment))
+    print(OmegaConf.to_yaml(args))
     print()
 
     # TODO (ian): load the tokenizer first, then the datasets, then the model
-    untokenized_train_set = load_rllm_dataset(experiment.dataset, split="train")
-    untokenized_val_set = load_rllm_dataset(experiment.dataset, split="validation")
+    untokenized_train_set = load_rllm_dataset(args.dataset, split="train")
+    untokenized_val_set = load_rllm_dataset(args.dataset, split="validation")
 
     num_classes = untokenized_train_set.num_classes
     model, tokenizer, decoder = prepare_victim_models(args, num_classes=num_classes)
@@ -33,17 +32,16 @@ def run_training_pipeline(
     train_set = untokenized_train_set.tokenize(tokenizer)
     val_set = untokenized_val_set.tokenize(tokenizer)
 
-    model_name_to_save = (
-        args.experiment.training.force_name_to_save
-        or make_unique_name_to_save(experiment.environment.model_name_or_path)
+    model_name_to_save = args.training.force_name_to_save or make_unique_name_to_save(
+        args.model.name_or_path
     )
     # NOTE: the "validation" dataset is one of what will be
     # several datasets that we perform model evaluation on,
     # hence "eval_dataset" is a dict[str, Dataset], not a Dataset.
     base_training_args = {
-        "experiment_name": experiment.experiment_name,
-        "run_name": experiment.run_name,
-        "job_type": experiment.job_type,
+        "experiment_name": args.experiment_name,
+        "run_name": args.run_name,
+        "job_type": args.job_type,
         "train_rllm_dataset": train_set,
         "eval_rllm_dataset": {
             "validation": val_set,
@@ -51,36 +49,41 @@ def run_training_pipeline(
         "model": model,
         "tokenizer": tokenizer,
         "model_name_to_save": model_name_to_save,
-        "environment_config": experiment.environment,
-        "evaluation_config": experiment.evaluation,
-        "train_epochs": experiment.training.num_train_epochs,
-        "learning_rate": experiment.training.learning_rate,
-        "train_batch_size": experiment.training.batch_size,
-        "eval_batch_size": experiment.evaluation.batch_size,
-        "optimizer": experiment.training.optimizer,
-        "gradient_checkpointing": experiment.training.gradient_checkpointing,
-        "eval_steps": experiment.training.eval_steps,
-        "logging_steps": experiment.training.logging_steps,
-        "save_strategy": experiment.training.save_strategy,
-        "save_steps": experiment.training.save_steps,
-        "seed": experiment.training.seed,
-        "log_full_datasets_to_wandb": experiment.training.log_full_datasets_to_wandb,
+        "environment_config": args.environment,
+        "evaluation_config": args.evaluation,
+        "train_epochs": args.training.num_train_epochs,
+        "learning_rate": args.training.learning_rate,
+        "train_batch_size": args.training.batch_size,
+        # TODO (ian): Choose a *training* eval batch size somewhere (previously
+        # it was using the attack eval batch size).
+        "eval_batch_size": args.training.batch_size,
+        "optimizer": args.training.optimizer,
+        "gradient_checkpointing": args.training.gradient_checkpointing,
+        "eval_steps": args.training.eval_steps,
+        "logging_steps": args.training.logging_steps,
+        "save_strategy": args.training.save_strategy,
+        "save_steps": args.training.save_steps,
+        "seed": args.training.seed,
+        "log_full_datasets_to_wandb": args.training.log_full_datasets_to_wandb,
     }
 
     # Set up the training environment
     training: Training
-    it = experiment.training.iterative
-    if it.iterative_training:
+    if args.training.adversarial is not None:
+        adv = args.training.adversarial
+        assert (
+            args.evaluation is not None
+        ), "Must provide EvaluationConfig for adversarial training"
         training = AdversarialTraining(
             **base_training_args,
-            num_iterative_training_rounds=it.num_iterative_training_rounds,
-            training_attack_config=it.training_attack,
-            validation_attack_config=experiment.evaluation.evaluation_attack,
-            num_examples_to_generate_each_round=it.num_examples_to_generate_each_round,
-            num_examples_to_log_to_wandb_each_round=it.num_examples_to_log_to_wandb_each_round,  # noqa: E501
-            skip_first_training_round=it.skip_first_training_round,
-            use_balanced_sampling=it.use_balanced_sampling,
-            only_add_successful_adversarial_examples=it.only_add_successful_adversarial_examples,  # noqa: E501
+            num_adversarial_training_rounds=adv.num_adversarial_training_rounds,
+            training_attack_config=adv.training_attack,
+            validation_attack_config=args.evaluation.evaluation_attack,
+            num_examples_to_generate_each_round=adv.num_examples_to_generate_each_round,
+            num_examples_to_log_to_wandb_each_round=adv.num_examples_to_log_to_wandb_each_round,  # noqa: E501
+            skip_first_training_round=adv.skip_first_training_round,
+            use_balanced_sampling=adv.use_balanced_sampling,
+            only_add_successful_adversarial_examples=adv.only_add_successful_adversarial_examples,  # noqa: E501
         )
     else:
         training = Training(**base_training_args)
@@ -93,7 +96,7 @@ def run_training_pipeline(
         # are set to be) because HuggingFace sets up its own metrics when we initialize
         # the Trainer, and we wait until that is done to overwrite them with our own.
         # We do this in the `CustomLoggingWandbCallback`'s `setup` method.
-        wandb_initialize(experiment, set_up_step_metrics=False)
+        wandb_initialize(args, set_up_step_metrics=False)
 
         assert wandb.run is not None
         # Log the model size to wandb for use in plots, so we don't
@@ -106,7 +109,7 @@ def run_training_pipeline(
     training.run_trainer()
 
     training.maybe_save_model_to_path_or_hf(
-        path_prefix_or_hf=experiment.training.model_save_path_prefix_or_hf
+        path_prefix_or_hf=args.training.model_save_path_prefix_or_hf
     )
 
     if trainer.is_world_process_zero():

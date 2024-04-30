@@ -1,0 +1,22 @@
+# @package _global_
+# (The @package _global_ directive is important to relocate the overrides below.
+# For example, without the @package _global_ directive, the dataset below would be
+# placed at args.experiment.dataset rather than args.dataset).
+# Similarly, we have to use absolute paths for the overrides below so hydra knows
+# to look for these config files relative to the `hydra_conf` root: For
+# example, at `dataset` rather than `experiment/dataset`.
+defaults:
+- /dataset: passwordmatch
+- /evaluation: DEFAULT
+# This line says to take a config from `/attack` (which points to
+# `hydra_config/attack`) and place it at `evaluation.evaluation_attack`. In
+# particular, we are using the trl attack as the evaluation attack.
+- /attack@evaluation.evaluation_attack: TRL
+- /model: pythia-14m
+- _self_
+
+dataset:
+  n_val: 2
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

@@ -16,7 +16,7 @@ from hydra.core.config_store import ConfigStore
 from hydra.errors import HydraException
 from names_generator import generate_name
 
-from robust_llm.configs import OverallConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.utils import ask_for_confirmation
 
 JOB_TEMPLATE_PATH = Path(__file__).parent.parent / "k8s" / "batch_job.yaml"
@@ -56,12 +56,12 @@ class FlamingoRun:
         # since the entry point is not __main__.py, we need to initialize Hydra
         with hydra.initialize(version_base=None, config_path="hydra_conf"):
             cs = ConfigStore.instance()
-            cs.store(name="base_config", node=OverallConfig)
+            cs.store(name="base_config", node=ExperimentConfig)
             formatted_overrides = []
             formatted_overrides.append(f"+experiment={self.hydra_config}")
             formatted_overrides.extend(_prepare_override_args(self.override_args))
             try:
-                hydra.compose("default_config", overrides=formatted_overrides)
+                hydra.compose("base_config", overrides=formatted_overrides)
             except HydraException as e:
                 raise ValueError("override_args are invalid, aborting.") from e
 
@@ -120,7 +120,7 @@ def create_job_for_multiple_runs(
             *run.base_command.split(" "),
             run.script_path,
             f"+experiment={run.hydra_config}",
-            f"experiment.run_name={name}-{index+i}",
+            f"run_name={name}-{index+i}",
             *aux_args,
         ]
         single_commands.append(shlex.join(split_command))
@@ -313,7 +313,7 @@ def run_multiple(
                 script_path=script_path,
                 hydra_config=hydra_config,
                 override_args={
-                    "experiment.experiment_name": experiment_name,
+                    "experiment_name": experiment_name,
                     **override_args,
                 },
                 n_max_parallel=n_max_parallel[i] if n_max_parallel else 1,

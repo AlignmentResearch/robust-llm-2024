@@ -11,7 +11,7 @@ from datasets import Dataset
 from torch.nn.parameter import Parameter
 from transformers import PretrainedConfig, PreTrainedModel, PreTrainedTokenizerBase
 
-from robust_llm.configs import DefenseConfig
+from robust_llm.config.configs import DefenseConfig
 from robust_llm.utils import LanguageModel
 
 

@@ -1,0 +1,29 @@
+# @package _global_
+
+# Evaluation
+# This file shows you how you would set up the base yaml for an evaluation
+# experiment.
+
+# The @package _global_ directive is important to relocate the overrides below.
+# For example, without the @package _global_ directive, the dataset below would be
+# placed at args.experiment.dataset rather than args.dataset.
+# Similarly, we have to use absolute paths for the overrides below so hydra knows
+# to look for these config files relative to the `hydra_conf` root: For
+# example, at `dataset` rather than `experiment/dataset`.
+defaults:
+- /dataset: ???
+- /evaluation: DEFAULT
+# This line says to take a config from `/attack` (which points to
+# `hydra_config/attack`) and place it at `evaluation.evaluation_attack`.
+# So if we wanted to use TRL, we would put trl in place of ???
+- /attack@evaluation.evaluation_attack: ???
+- /model: ???
+- _self_
+
+dataset:
+  n_train: ???
+  n_val: ???
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

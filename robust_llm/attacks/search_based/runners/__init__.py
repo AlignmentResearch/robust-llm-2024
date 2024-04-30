@@ -11,7 +11,12 @@ from robust_llm.attacks.search_based.runners.search_based_runner import (
     SearchBasedRunner,
 )
 from robust_llm.attacks.search_based.utils import PreppedExample
-from robust_llm.configs import SearchBasedAttackConfig
+from robust_llm.config.attack_configs import (
+    BeamSearchAttackConfig,
+    GCGAttackConfig,
+    MultipromptGCGAttackConfig,
+    SearchBasedAttackConfig,
+)
 
 
 def make_runner(
@@ -31,23 +36,24 @@ def make_runner(
         "random_seed": random_seed,
     }
 
-    search_type = config.search_type
+    # This match-case statement uses class patterns, as described in this SO
+    # answer: https://stackoverflow.com/a/67524642
+    match config:
+        case BeamSearchAttackConfig():
+            return BeamSearchRunner(
+                **base_args,  # type: ignore
+                beam_search_width=config.beam_search_width,
+            )
 
-    if search_type == "beam_search":
-        return BeamSearchRunner(
-            **base_args,  # type: ignore
-            beam_search_width=config.beam_search_attack_config.beam_search_width,
-        )
-
-    elif search_type == "gcg":
-        return GCGRunner(
-            **base_args,  # type: ignore
-            top_k=config.gcg_attack_config.top_k,
-        )
-    elif search_type == "multiprompt_gcg":
-        return MultiPromptGCGRunner(
-            **base_args,  # type: ignore
-            top_k=config.gcg_attack_config.top_k,
-        )
-    else:
-        raise ValueError(f"Unknown search type: {search_type}")
+        case GCGAttackConfig():
+            return GCGRunner(
+                **base_args,  # type: ignore
+                top_k=config.top_k,
+            )
+        case MultipromptGCGAttackConfig():
+            return MultiPromptGCGRunner(
+                **base_args,  # type: ignore
+                top_k=config.top_k,
+            )
+        case _:
+            raise ValueError(f"Unknown SearchBasedAttackConfig type for: {config}")

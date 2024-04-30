@@ -3,7 +3,7 @@
 import wandb
 from accelerate import Accelerator
 
-from robust_llm.configs import OverallConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.defenses import make_defended_model
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import wandb_cleanup, wandb_initialize
@@ -12,14 +12,15 @@ from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.utils import prepare_model_with_accelerate
 
 
-def run_evaluation_pipeline(args: OverallConfig) -> None:
-    use_cpu = args.experiment.environment.device == "cpu"
+def run_evaluation_pipeline(args: ExperimentConfig) -> None:
+    assert args.evaluation is not None
+    use_cpu = args.environment.device == "cpu"
     accelerator = Accelerator(cpu=use_cpu)
 
     if accelerator.is_main_process:
-        wandb_initialize(args.experiment)
+        wandb_initialize(args)
 
-    validation = load_rllm_dataset(args.experiment.dataset, split="validation")
+    validation = load_rllm_dataset(args.dataset, split="validation")
     num_classes = validation.num_classes
 
     model, tokenizer, decoder = prepare_victim_models(args, num_classes)
@@ -52,22 +53,22 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
         # different dataset, such as the train dataset.
         attack.train(dataset=validation)
 
-    if args.experiment.defense is not None:
+    if args.defense is not None:
         # TODO (GH#322): Propagate RLLMDataset into defenses.
         # For now, we just make the minimal change to make these compatible
-        train = load_rllm_dataset(args.experiment.dataset, split="train")
+        train = load_rllm_dataset(args.dataset, split="train")
         # NOTE: 'train.ds' has a column called 'clf_label' rather than 'label',
         # but the current defense code does not actually use the label column so this
         # is fine for now. This will also be fixed in GH#322.
         defense_prep_dataset = train.ds
 
-        if args.experiment.defense.num_preparation_examples is not None:
+        if args.defense.num_preparation_examples is not None:
             defense_prep_dataset = defense_prep_dataset.select(
-                range(args.experiment.defense.num_preparation_examples)
+                range(args.defense.num_preparation_examples)
             )
 
         model = make_defended_model(
-            defense_config=args.experiment.defense,
+            defense_config=args.defense,
             init_model=model,
             tokenizer=tokenizer,
             dataset=defense_prep_dataset,
@@ -80,8 +81,8 @@ def run_evaluation_pipeline(args: OverallConfig) -> None:
         accelerator=accelerator,
         dataset=validation,
         attack=attack,
-        batch_size=args.experiment.evaluation.batch_size,
-        num_examples_to_log_detailed_info=args.experiment.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
+        batch_size=args.evaluation.batch_size,
+        num_examples_to_log_detailed_info=args.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
     )
 
     if accelerator.is_main_process:

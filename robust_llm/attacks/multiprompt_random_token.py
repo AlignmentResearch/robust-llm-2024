@@ -9,7 +9,7 @@ from transformers import PreTrainedTokenizerBase, pipeline
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
-from robust_llm.configs import AttackConfig
+from robust_llm.config.attack_configs import MultipromptRandomTokenAttackConfig
 from robust_llm.logging_utils import LoggingCounter
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -39,7 +39,7 @@ class MultiPromptRandomTokenAttack(Attack):
 
     def __init__(
         self,
-        attack_config: AttackConfig,
+        attack_config: MultipromptRandomTokenAttackConfig,
         victim_model: LanguageModel,
         victim_tokenizer: PreTrainedTokenizerBase,
     ) -> None:
@@ -55,17 +55,13 @@ class MultiPromptRandomTokenAttack(Attack):
         self.victim_model = victim_model
         self.victim_tokenizer = victim_tokenizer
 
-        self.torch_rng = torch.random.manual_seed(self.attack_config.seed)
+        self.torch_rng = torch.random.manual_seed(attack_config.seed)
 
-        self.min_tokens = self.attack_config.random_token_attack_config.min_tokens
-        self.max_tokens = self.attack_config.random_token_attack_config.max_tokens
-        self.max_iterations = (
-            self.attack_config.random_token_attack_config.max_iterations
-        )
-        self.logging_frequency = (
-            self.attack_config.random_token_attack_config.logging_frequency
-        )
-        self.batch_size = self.attack_config.random_token_attack_config.batch_size
+        self.min_tokens = attack_config.min_tokens
+        self.max_tokens = attack_config.max_tokens
+        self.max_iterations = attack_config.max_iterations
+        self.logging_frequency = attack_config.logging_frequency
+        self.batch_size = attack_config.batch_size
 
         self.victim_pipeline = pipeline(
             "text-classification",

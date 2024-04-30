@@ -3,7 +3,7 @@ from typing import Any, Optional
 
 from typing_extensions import override
 
-from robust_llm.configs import AttackConfig
+from robust_llm.config.configs import AttackConfig
 from robust_llm.logging_utils import LoggingCounter
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
