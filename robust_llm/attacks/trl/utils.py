@@ -32,6 +32,7 @@ def make_ppo_trainer(
         "batch_size": attack_config.batch_size,
         "mini_batch_size": attack_config.mini_batch_size,
         "gradient_accumulation_steps": attack_config.gradient_accumulation_steps,  # noqa: E501
+        "learning_rate": attack_config.learning_rate,
         "seed": attack_config.seed,
         "ppo_epochs": attack_config.ppo_epochs,
         # Needed in order to not delete "text_chunked"

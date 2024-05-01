@@ -313,5 +313,6 @@ class TRLAttack(Attack):
         wandb.run.summary["saved_dir"] = output_dir  # type: ignore
         print(f"Saving the trl model to {output_dir}")
 
+        # TODO(niki): enable saving on hf hub
         self.adversary_model.save_pretrained(output_dir)
         self.adversary_tokenizer.save_pretrained(output_dir)

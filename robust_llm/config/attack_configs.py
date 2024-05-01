@@ -150,6 +150,8 @@ class TRLAttackConfig(AttackConfig):
         gradient_accumulation_steps (int):
             The TRL gradient accumulation steps (how many minibatches
             to accumulate before taking a single gradient update step).
+        learning_rate (float):
+            The learning rate to use for TRL.
         ppo_epochs (int):
             The number of ppo epochs to run TRL on the provided dataset.
         adversary (ModelConfig):
@@ -174,6 +176,7 @@ class TRLAttackConfig(AttackConfig):
     batch_size: int = 128
     mini_batch_size: int = 128
     gradient_accumulation_steps: int = 1
+    learning_rate: float = 1.41e-5
     ppo_epochs: int = 10
 
     adversary: ModelConfig = MISSING

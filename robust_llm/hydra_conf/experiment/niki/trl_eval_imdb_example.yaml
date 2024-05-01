@@ -1,0 +1,13 @@
+# @package _global_
+defaults:
+- /dataset: imdb
+- /evaluation: DEFAULT
+- /model: pythia-14m
+- /attack@evaluation.evaluation_attack: trl-simple-adversary
+
+dataset:
+  n_train: 10
+  n_val: 10
+
+experiment_name: "trl_eval_example"
+experiment_type: "evaluation"
