@@ -1,0 +1,19 @@
+experiment_type: "evaluation"
+
+environment:
+  model_name_or_path: "CHANGE THIS" # Default that raises an error
+  model_family: "pythia"
+
+dataset:
+  dataset_type: "CHANGE THIS"
+  n_val: 200
+
+evaluation:
+  batch_size: 32
+  evaluation_attack:
+    attack_type: "search_based"
+    search_based_attack_config:
+      search_type: "gcg"
+      forward_pass_batch_size: 32
+      n_its: 25
+      n_candidates_per_it: 128
