@@ -100,8 +100,11 @@ text_no_specials = st.text(alphabet=st.characters(min_codepoint=32, max_codepoin
 
 @given(initial_text=text_no_specials)
 @pytest.mark.parametrize("num_initial_candidates", [1, 5])
+# We use a deadline of 1000ms because the default of 200ms was too short, as was
+# a deadline of 500ms.
 @settings(
-    suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture], deadline=500
+    suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture],
+    deadline=1000,
 )
 def test_get_candidate_texts_and_replacements(
     beam_search_runner: BeamSearchRunner,

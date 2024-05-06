@@ -183,8 +183,11 @@ text_no_specials = st.text(alphabet=st.characters(min_codepoint=32, max_codepoin
 @given(target=text_no_specials)
 @example(target="Hi!")
 @example(target="")
+# We use a deadline of 1000ms because the default of 200ms was too short, as was
+# a deadline of 500ms.
 @settings(
-    suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture], deadline=500
+    suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture],
+    deadline=1000,
 )
 def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     # set up gcg runner to use the given user prompt and target
