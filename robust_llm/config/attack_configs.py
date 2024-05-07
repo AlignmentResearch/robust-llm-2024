@@ -95,8 +95,8 @@ class RandomTokenAttackConfig(AttackConfig):
             to check whether the attack was successful.
     """
 
-    min_tokens: int = 1
-    max_tokens: int = 3
+    min_tokens: int = 10
+    max_tokens: int = 10
     max_iterations: int = 100
     logging_frequency: int = 10
     batch_size: int = 8
