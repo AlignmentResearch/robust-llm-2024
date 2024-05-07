@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+- AdvTraining/imdb_random-token
+- /attack@evaluation.evaluation_attack: random-token-len-10
+
+training:
+  force_name_to_save: "niki-test-saving-every-adv-round"
+  model_save_path_prefix_or_hf: "hf"
+  adversarial:
+    num_examples_to_generate_each_round: 1
+
+experiment_name: "adv_train_example"

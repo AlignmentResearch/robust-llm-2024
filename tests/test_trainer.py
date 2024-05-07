@@ -28,6 +28,7 @@ def test_basic_constructor():
         model=model,
         tokenizer=tokenizer,
         model_name_to_save="test_model",
+        model_save_path_prefix_or_hf="test-save-path",
         environment_config=EnvironmentConfig(),
         evaluation_config=EvaluationConfig(),
     )

@@ -49,6 +49,7 @@ def run_training_pipeline(
         "model": model,
         "tokenizer": tokenizer,
         "model_name_to_save": model_name_to_save,
+        "model_save_path_prefix_or_hf": args.training.model_save_path_prefix_or_hf,
         "environment_config": args.environment,
         "evaluation_config": args.evaluation,
         "train_epochs": args.training.num_train_epochs,
@@ -107,10 +108,6 @@ def run_training_pipeline(
 
     # Perform the training
     training.run_trainer()
-
-    training.maybe_save_model_to_path_or_hf(
-        path_prefix_or_hf=args.training.model_save_path_prefix_or_hf
-    )
 
     if trainer.is_world_process_zero():
         wandb_cleanup()

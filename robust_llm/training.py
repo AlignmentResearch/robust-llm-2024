@@ -46,6 +46,7 @@ class Training:
     model: PreTrainedModel
     tokenizer: PreTrainedTokenizerBase
     model_name_to_save: str  # Used for saving the model to disk/hf
+    model_save_path_prefix_or_hf: str
     environment_config: EnvironmentConfig
     evaluation_config: EvaluationConfig
     train_epochs: int = 3
@@ -137,6 +138,10 @@ class Training:
 
         trainer.train()
 
+        self.maybe_save_model_to_path_or_hf(
+            path_prefix_or_hf=self.model_save_path_prefix_or_hf
+        )
+
     def compute_metrics(self, eval_preds: EvalPrediction) -> dict:
         logits, labels = eval_preds
         predictions = np.argmax(logits, axis=-1)
@@ -174,13 +179,19 @@ class Training:
             self.trainer.eval_dataset["validation"], "validation_dataset"  # type: ignore  # noqa: E501
         )
 
-    def maybe_save_model_to_path_or_hf(self, path_prefix_or_hf: Optional[str]) -> None:
+    def maybe_save_model_to_path_or_hf(
+        self, path_prefix_or_hf: Optional[str], adv_tr_round: Optional[int] = None
+    ) -> None:
         assert self.trainer is not None
 
         # Make sure everything is in sync before saving.
         self.trainer.accelerator.wait_for_everyone()
         # In case of FSDP, we need to make sure we get correct state_dict to save.
         state_dict = self.trainer.accelerator.get_state_dict(self.trainer.model)
+
+        adv_tr_round_str = (
+            f"adv-training-round-{adv_tr_round}" if adv_tr_round is not None else None
+        )
 
         if self.trainer.is_world_process_zero():
             assert wandb.run is not None
@@ -192,19 +203,38 @@ class Training:
                 # without that, it does not work with accelerate. The model is saved
                 # here to default local directory.
                 self.trainer._save(state_dict=state_dict)
+
+                # Save the model on hf hub, with the adversarial training
+                # round as the revision.
+                # The trainer.args.hub_model_id is used to push the model to hub,
+                # and the trainer.hub_model_id (no `args`!), which
+                # was previously None, is set.
+                assert self.trainer.args.hub_model_id is not None
+                self.model.push_to_hub(
+                    repo_id=self.trainer.args.hub_model_id, revision=adv_tr_round_str  # type: ignore # noqa: E501
+                )
+
+                # Even though the above line should push both model and tokenizer,
+                # in practice the tokenizer sometimes doesn't get pushed,
+                # so we do it explicitly here.
+                self.tokenizer.push_to_hub(
+                    self.trainer.args.hub_model_id, revision=adv_tr_round_str  # type: ignore # noqa: E501
+                )
+
+                # Record the saving on wandb.
                 hf_name = self.trainer.args.hub_model_id
-                wandb.run.summary["saved_hf_name"] = hf_name  # type: ignore[has-type]
                 print(f"Saving the model/tokenizer to HuggingFace as {hf_name}")
-                self.trainer.push_to_hub()
-                # Even though above line should push both model and tokenizer, in
-                # practice tokenizer sometimes doesn't get pushed, so we do it
-                # explicitly here.
-                assert self.trainer.hub_model_id is not None
-                self.tokenizer.push_to_hub(self.trainer.hub_model_id)
+                wandb.run.summary["saved_hf_name"] = hf_name  # type: ignore[has-type]
 
             else:
                 output_dir = os.path.join(
-                    path_prefix_or_hf, "models", self.model_name_to_save
+                    path_prefix_or_hf,
+                    "models",
+                    (
+                        self.model_name_to_save + adv_tr_round_str
+                        if adv_tr_round_str
+                        else ""
+                    ),
                 )
                 wandb.run.summary["saved_dir"] = output_dir  # type: ignore[has-type]
                 print(f"Saving the model/tokenizer to {output_dir}")
@@ -473,6 +503,10 @@ class AdversarialTraining(Training):
             print(
                 f"Adversarial training round {round} finished "
                 f"at logging counts: {self.victim_training_logging_counter._parent}"
+            )
+
+            self.maybe_save_model_to_path_or_hf(
+                path_prefix_or_hf=self.model_save_path_prefix_or_hf, adv_tr_round=round
             )
 
 
