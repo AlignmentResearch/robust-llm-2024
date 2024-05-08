@@ -51,7 +51,7 @@ class TrainerWithBatchSizeStoring(Trainer):
 
 
 class AdversarialTrainer(TrainerWithBatchSizeStoring):
-    train_dataset: Dataset | None
+    train_dataset: Dataset
 
     def __init__(self, use_balanced_sampling: bool, **trainer_kwargs):
         super().__init__(**trainer_kwargs)
@@ -60,7 +60,6 @@ class AdversarialTrainer(TrainerWithBatchSizeStoring):
 
         # text_chunked is not needed for training.
         # Remove it so that it's possible to merge datasets later on.
-        assert self.train_dataset is not None
         if "text_chunked" in self.train_dataset.features:
             self.train_dataset = self.train_dataset.remove_columns("text_chunked")
 
@@ -84,8 +83,6 @@ class AdversarialTrainer(TrainerWithBatchSizeStoring):
         # TODO: test this to make sure the dataloader pulls from the augmented dataset
 
     def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
-        assert self.train_dataset is not None
-
         use_balanced_sampling = self.use_balanced_sampling
         if use_balanced_sampling and len(self.adversarial_dataset) == 0:
             warnings.warn(

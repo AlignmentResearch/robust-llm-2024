@@ -9,6 +9,7 @@ import torch
 import transformers
 import wandb
 import wandb.util
+from datasets import Dataset
 from transformers import (
     EvalPrediction,
     PreTrainedModel,
@@ -163,21 +164,20 @@ class Training:
             )
         if self.trainer.train_dataset is None:
             raise ValueError(
-                "self.trainer.train_dataset should have been assigned by now, exiting..."  # noqa: E501
+                "self.trainer.train_dataset should have been "
+                "assigned by now, exiting..."
             )
         if self.trainer.eval_dataset is None:
             raise ValueError(
-                "self.trainer.eval_dataset should have been assigned by now, exiting..."  # noqa: E501
+                "self.trainer.eval_dataset should have been "
+                "assigned by now, exiting..."
             )
 
-        in_train = "label" in self.trainer.train_dataset.column_names  # type: ignore
-        in_eval = "label" in self.trainer.eval_dataset["validation"].column_names  # type: ignore  # noqa: E501
-        assert in_train == in_eval
-
-        log_dataset_to_wandb(self.trainer.train_dataset, "train_dataset")  # type: ignore  # noqa: E501
-        log_dataset_to_wandb(
-            self.trainer.eval_dataset["validation"], "validation_dataset"  # type: ignore  # noqa: E501
-        )
+        validation_dataset = self.trainer.eval_dataset["validation"]
+        assert isinstance(self.trainer.train_dataset, Dataset)
+        assert isinstance(validation_dataset, Dataset)
+        log_dataset_to_wandb(self.trainer.train_dataset, "train_dataset")
+        log_dataset_to_wandb(validation_dataset, "validation_dataset")
 
     def maybe_save_model_to_path_or_hf(
         self, path_prefix_or_hf: Optional[str], adv_tr_round: Optional[int] = None
@@ -484,13 +484,13 @@ class AdversarialTraining(Training):
                     commit=False,
                 )
                 log_dataset_to_wandb(
-                    new_adv_examples,
-                    f"data/all_new_adv_examples_r_{round}",
+                    dataset=new_adv_examples.ds,
+                    dataset_name=f"data/all_new_adv_examples_r_{round}",
                     max_n_examples=self.num_examples_to_log_to_wandb_each_round,
                 )
                 log_dataset_to_wandb(
-                    selected_new_adv_examples,
-                    f"data/selected_new_adv_examples_r_{round}",
+                    dataset=selected_new_adv_examples.ds,
+                    dataset_name=f"data/selected_new_adv_examples_r_{round}",
                     max_n_examples=self.num_examples_to_log_to_wandb_each_round,
                 )
 

@@ -5,10 +5,10 @@ from typing import Optional
 
 import wandb
 import yaml
+from datasets import Dataset
 from omegaconf import OmegaConf
 
 from robust_llm.config.configs import ExperimentConfig
-from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 
 @dataclass
@@ -116,16 +116,26 @@ def wandb_set_really_finished():
 
 
 def log_dataset_to_wandb(
-    dataset: RLLMDataset, dataset_name: str, max_n_examples: Optional[int] = None
+    dataset: Dataset, dataset_name: str, max_n_examples: Optional[int] = None
 ) -> None:
     if max_n_examples is not None:
-        dataset = dataset.get_subset(range(min(len(dataset), max_n_examples)))
+        dataset = dataset.select(range(min(len(dataset), max_n_examples)))
 
     dataset_table = wandb.Table(columns=["text", "label"])
 
+    if "label" in dataset.column_names and "clf_label" in dataset.column_names:
+        raise ValueError("Dataset has both 'label' and 'clf_label' columns.")
+
+    if "label" in dataset.column_names:
+        label_column = "label"
+    elif "clf_label" in dataset.column_names:
+        label_column = "clf_label"
+    else:
+        raise ValueError("Dataset has neither 'label' nor 'clf_label' columns.")
+
     for text, label in zip(
-        dataset.ds["text"],
-        dataset.ds["clf_label"],
+        dataset["text"],
+        dataset[label_column],
     ):
         dataset_table.add_data(text, label)
 
