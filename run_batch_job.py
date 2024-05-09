@@ -11,8 +11,8 @@ def main(args):
         script_path=args.script_path,
         hydra_config=args.hydra_config,
         override_args={
-            "experiment.experiment_name": args.experiment_name,
-            "experiment.job_type": args.job_type,
+            "experiment_name": args.experiment_name,
+            "job_type": args.job_type,
         },
         CONTAINER_TAG=args.container_tag,
         CPU=args.cpu,
