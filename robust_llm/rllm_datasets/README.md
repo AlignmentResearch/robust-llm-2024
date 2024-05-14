@@ -23,6 +23,14 @@
     - E.g. `"pos"` for only positive-class example
     - Default is `"default"`, which should point to the standard, full version of the dataset
 
+### Notes on existing version formats
+- Versions 0.x.x have `"text"`, `"chunked_text"`, and `"clf_label"` columns.
+- Versions 1.x.x have `"instructions"`, `"content"`, `"answer_prompt"`, `"clf_label"`, and `"gen_target"` columns.
+    - Versions 1.0.x are versions of the datasets that have the exact same data as the latest 0.x.x version but formatted with the new columns.
+    - Versions <2.0.0, >=1.1.0 are different from the 0.x.x versions:
+        - They all have instructions and answer prompts to allow models not trained on the tasks to perform them.
+        - `PasswordMatch` and `WordLength` have their structures changed a bit.
+
 ## Generating datasets
 - Dataset generation and uploading scripts can be found in `robust_llm/rllm_datasets/generation_scripts`.
 - To add a new dataset, suggested workflows is:

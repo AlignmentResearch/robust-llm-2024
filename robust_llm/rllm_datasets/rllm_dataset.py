@@ -11,6 +11,8 @@ from transformers import PreTrainedTokenizerBase
 
 from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.dataset_utils import (
+    EXPECTED_COLUMNS,
+    construct_text_and_chunked_text,
     get_largest_version,
     get_largest_version_below,
     tokenize_dataset,
@@ -73,7 +75,9 @@ class RLLMDataset(ABC):
             tokenizer=tokenizer,
         )
         # Make sure the dataset has the expected columns
-        assert {"text", "chunked_text", "clf_label"}.issubset(set(ds.column_names))
+        assert {"text", "chunked_text", "clf_label", "gen_target"}.issubset(
+            set(ds.column_names)
+        )
         self.ds = ds
 
     @property
@@ -154,7 +158,31 @@ class RLLMDataset(ABC):
     def _load_untokenized_dataset(
         self, cfg: DatasetConfig, split: str, revision: str
     ) -> Dataset:
-        """Load the raw dataset from huggingface."""
+        """Load the untokenized dataset from huggingface.
+
+        This first loads the raw dataset and then post-processes it.
+        """
+
+        raw_dataset = self._load_raw_dataset(cfg, split, revision)
+        assert set(raw_dataset.column_names) == EXPECTED_COLUMNS
+        dataset = self._post_process_dataset(raw_dataset)
+        return dataset
+
+    def _post_process_dataset(self, ds: Dataset) -> Dataset:
+        """Post-process the dataset after loading it.
+
+        Currently this involves constructing 'text', and 'chunked_text' columns
+        out of the 'instructions', 'content', and 'answer_prompt' columns.
+        """
+        return construct_text_and_chunked_text(ds)
+
+    def _load_raw_dataset(
+        self, cfg: DatasetConfig, split: str, revision: str
+    ) -> Dataset:
+        """Load the raw dataset from huggingface.
+
+        This is used to load the dataset without post-processing the columns.
+        """
         if cfg.inference_type == "generation":
             raise NotImplementedError("Generation datasets not yet supported")
         if split == "train":

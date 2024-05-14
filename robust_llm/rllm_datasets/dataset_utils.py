@@ -1,8 +1,8 @@
 """Utilities used in the generation of all datasets."""
 
 import sys
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, fields
+from typing import Callable, Optional
 
 import datasets
 import huggingface_hub as hf_hub
@@ -17,22 +17,17 @@ DS_SHUFFLE_SEED = 0
 
 @dataclass
 class RLLMExample:
-    """Represents a single example in a RLLMDataset.
+    """Represents a single example in a RLLMDataset."""
 
-    TODO (ian): Add fields for generative tasks.
-    """
-
-    text: str
-    chunked_text: list[str]
+    instructions: str
+    content: list[str]
+    answer_prompt: str
     clf_label: int
+    gen_target: str
 
-    def to_dict(self):
-        return {
-            "text": self.text,
-            "chunked_text": self.chunked_text,
-            "clf_label": self.clf_label,
-        }
 
+# Get the fields of a dataclass: https://stackoverflow.com/a/66499324
+EXPECTED_COLUMNS = {f.name for f in fields(RLLMExample)}
 
 # Contains one model from each family of models we care (or might
 # care) about for use in filtering to appropriate context lengths
@@ -86,14 +81,54 @@ def filter_length_for_model(
     context_length = _get_context_length(model_name)
     token_target = context_length - buffer
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    def tokenize(x):
+        return tokenizer(x["text"])["input_ids"]
+
+    # Add a default text column to the dataset to use for filtering.
+    dataset = dataset.map(
+        lambda x: {"text": example_dict_to_text(x)},
+    )
     tokenized_dataset = dataset.map(
-        lambda x: {"input_ids": tokenizer(x["text"])["input_ids"]},
+        lambda x: {"input_ids": tokenize(x)},
         batched=True,
     )
     filtered_dataset = tokenized_dataset.filter(
         lambda x: len(x["input_ids"]) <= token_target
     )
-    return filtered_dataset.remove_columns("input_ids")
+    # Remove the columns that were added for filtering.
+    return filtered_dataset.remove_columns(["input_ids", "text"])
+
+
+def example_dict_to_text(example: dict) -> str:
+    """Default way to convert a dataset example to a single string.
+
+    Note that we might want more complicated ways to do this for chat models
+    that have different roles for different messages.
+    """
+    return "".join(
+        (example["instructions"], *example["content"], example["answer_prompt"])
+    )
+
+
+def example_dict_to_chunked_text(example: dict) -> list[str]:
+    """Default way to convert a dataset example to a 'chunked_text' list.
+
+    Note that we might want more complicated ways to do this for chat models
+    that have different roles for different messages.
+    """
+    return [example["instructions"], *example["content"], example["answer_prompt"]]
+
+
+def construct_text_and_chunked_text(ds: Dataset) -> Dataset:
+    """Construct a dataset with both text and chunked_text columns."""
+    ds = ds.map(
+        lambda x: {
+            "text": example_dict_to_text(x),
+            "chunked_text": example_dict_to_chunked_text(x),
+        },
+    )
+    return ds
 
 
 def _get_context_length(model_name: str) -> int:
@@ -274,8 +309,9 @@ def make_pos_neg_versions(ds_dict: DatasetDict) -> tuple[DatasetDict, DatasetDic
     return pos_dict, neg_dict
 
 
-def prep_huggingface_dataset(
+def prepare_huggingface_dataset(
     repo_id: str,
+    ds_specific_callback: Callable[[Dataset], Dataset],
     split_map: Optional[dict[str, str]] = None,
 ) -> dict[str, DatasetDict]:
     """Prepare a huggingface dataset for use in RLLMDatasets.
@@ -286,6 +322,10 @@ def prep_huggingface_dataset(
 
     Args:
         repo_id: The id of the dataset on the hub.
+        ds_specific_callback: A function specific to the dataset that processes
+            it to have the necessary columns and structure for RLLMDatasets.
+            Currently, this means adding 'instructions', 'content', 'answer_prompt',
+            and 'gen_target' columns.
         split_map: A mapping from the split names in the dataset to the
             names we want to use in RLLMDatasets. If None, uses a
             default split map.
@@ -304,10 +344,16 @@ def prep_huggingface_dataset(
     assert isinstance(train, Dataset)
     assert isinstance(val, Dataset)
     # make sure it has the necessary columns
-    processed_train = process_hf_split(train)
-    processed_val = process_hf_split(val)
+    prepped_train = prep_hf_split(train)
+    prepped_val = prep_hf_split(val)
 
-    full_ds_dict = DatasetDict({"train": processed_train, "validation": processed_val})
+    processed_train = ds_specific_callback(prepped_train)
+    processed_val = ds_specific_callback(prepped_val)
+
+    filtered_train = filter_dataset_length(processed_train)
+    filtered_val = filter_dataset_length(processed_val)
+
+    full_ds_dict = DatasetDict({"train": filtered_train, "validation": filtered_val})
     pos_ds_dict, neg_ds_dict = make_pos_neg_versions(full_ds_dict)
     out_dict = {
         "default": full_ds_dict,
@@ -317,7 +363,7 @@ def prep_huggingface_dataset(
     return out_dict
 
 
-def process_hf_split(ds: Dataset) -> Dataset:
+def prep_hf_split(ds: Dataset) -> Dataset:
     """Process a huggingface dataset split for use in RLLMDatasets."""
     assert {"text", "label"} <= set(ds.column_names)
 
@@ -328,21 +374,14 @@ def process_hf_split(ds: Dataset) -> Dataset:
         " manually if you want."
     )
     assert set(ds["label"]) == {0, 1}, "labels must be 0 and 1"
-    ds = filter_dataset_length(ds)
-    # shuffle deterministically
+    # Shuffle deterministically.
     ds = ds.shuffle(seed=DS_SHUFFLE_SEED)
-    ds = ds.map(
-        # assume that we only have one chunk
-        lambda x: {"chunked_text": [x["text"]]},
-    )
-    # classification target should be called clf_label
+    # Classification target should be called clf_label.
     ds = ds.rename_column("label", "clf_label")
-    # drop all columns except the ones we need
-    # TODO (ian): work out where to put these so they aren't
-    # duplicated with DatasetUploadHandler
-    EXPECTED_COLUMNS = ["text", "chunked_text", "clf_label"]
+    # Drop all columns except the ones we need.
+    HF_EXPECTED_COLUMNS = ["text", "clf_label"]
     ds = ds.remove_columns(
-        [col for col in ds.column_names if col not in EXPECTED_COLUMNS]
+        [col for col in ds.column_names if col not in HF_EXPECTED_COLUMNS]
     )
     return ds
 

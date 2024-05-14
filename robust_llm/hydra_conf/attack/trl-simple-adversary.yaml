@@ -8,4 +8,4 @@ mini_batch_size: 10
 gradient_accumulation_steps: 1
 learning_rate: 3e-6
 ppo_epochs: 3
-model_save_path_prefix: None
+model_save_path_prefix: null

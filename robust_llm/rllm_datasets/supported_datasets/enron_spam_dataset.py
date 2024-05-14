@@ -19,5 +19,12 @@ class EnronSpamDataset(RLLMDataset):
     @property
     @override
     def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
-        """EnronSpam consists of a single PERTURBABLE chunk."""
-        return ModifiableChunkSpec(ChunkType.PERTURBABLE)
+        """EnronSpam consists of a three chunks:
+        1. The instructions (IMMUTABLE)
+        2. The email text (PERTURBABLE)
+        3. The answer prompt (IMMUTABLE)"""
+        return ModifiableChunkSpec(
+            ChunkType.IMMUTABLE,
+            ChunkType.PERTURBABLE,
+            ChunkType.IMMUTABLE,
+        )

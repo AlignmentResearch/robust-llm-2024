@@ -63,7 +63,7 @@ def test_ground_truth_label_fn(dataset: RLLMDataset):
     assert example["clf_label"] == 1
     text = example["text"]
     chunks = example["chunked_text"][:]  # Copy the list to avoid mutation
-    chunks[1] = "some_other_word"
+    chunks[2] = "some_other_word"
     attacked_text = "".join(chunks)
 
     # The ground truth label function should return 1 for the original text and 0
@@ -78,7 +78,7 @@ def test_with_attacked_text(dataset: RLLMDataset, tokenizer):
         assert isinstance(example, dict)
         assert example["clf_label"] == 1
         chunks = example["chunked_text"][:]
-        chunks[1] = "some_other_word"
+        chunks[2] = "some_other_word"
         attacked_text = "".join(chunks)
         attacked_texts.append(attacked_text)
 

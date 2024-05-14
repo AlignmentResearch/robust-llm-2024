@@ -2,17 +2,12 @@
 defaults:
 - /dataset: passwordmatch
 - /evaluation: DEFAULT
-- /attack@evaluation.evaluation_attack: TRL
+- /attack@evaluation.evaluation_attack: gcg-small
 - /model: pythia-14m
 - _self_
 
 dataset:
-  n_val: 2
-
-evaluation:
-  evaluation_attack:
-    batch_size: 2
-    mini_batch_size: 2
+  n_val: 10
 
 experiment_name: ???
 run_name: ???

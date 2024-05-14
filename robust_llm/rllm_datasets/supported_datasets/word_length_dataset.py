@@ -18,8 +18,15 @@ class WordLengthDataset(RLLMDataset):
     @override
     def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
         """
-        WordLength has two chunks:
-        1. The main chunk with instructions and the two words to compare (IMMUTABLE).
-        2. The random tokens at the end of the example (OVERWRITABLE).
+        PasswordMatch has four chunks:
+        1. The instructions (IMMUTABLE).
+        2. The two words (IMMUTABLE).
+        3. The empty chunk after the two words (OVERWRITABLE).
+        4. The answer prompt (IMMUTABLE).
         """
-        return ModifiableChunkSpec(ChunkType.IMMUTABLE, ChunkType.OVERWRITABLE)
+        return ModifiableChunkSpec(
+            ChunkType.IMMUTABLE,
+            ChunkType.IMMUTABLE,
+            ChunkType.OVERWRITABLE,
+            ChunkType.IMMUTABLE,
+        )

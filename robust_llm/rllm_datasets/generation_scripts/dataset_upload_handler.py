@@ -2,6 +2,7 @@ import semver
 from datasets import Dataset, DatasetDict
 
 from robust_llm.rllm_datasets.dataset_utils import (
+    EXPECTED_COLUMNS,
     create_rllm_tag,
     maybe_abort_for_larger_version,
     valid_tag,
@@ -38,8 +39,7 @@ class DatasetUploadHandler:
         patch_version: The patch version of the dataset.
     """
 
-    MAJOR_VERSION = 0
-    EXPECTED_COLUMNS = ["text", "chunked_text", "clf_label"]
+    MAJOR_VERSION = 1
 
     def __init__(
         self,
@@ -78,7 +78,12 @@ class DatasetUploadHandler:
         - Each 'config_name' must be unique within the ds_dict being uploaded.
         - At least one 'config_name' must be 'default'.
         - Dataset must have splits 'train' and 'validation'.
-        - Dataset must have columns 'text', 'chunked_text', 'clf_label'.
+        - Dataset must have columns:
+            - instructions
+            - content
+            - answer_prompt
+            - clf_label
+            - gen_target
         - Dataset must have at least one example.
         - Dataset repo name must start with 'AlignmentResearch'.
         - If the config_name is "pos", the dataset must only have examples with
@@ -92,7 +97,6 @@ class DatasetUploadHandler:
         Non-conditions that should maybe be added in the future:
         - Dataset is filtered for context length.
         - Dataset is shuffled.
-        - Dataset has a 'gen_target' column.
         """
         # Validate config names
         if len(set(self.ds_dicts.keys())) != len(self.ds_dicts):
@@ -138,11 +142,10 @@ class DatasetUploadHandler:
         """
         if len(ds) == 0:
             raise ValueError("Dataset must have at least one example.")
-        expected_columns = self.EXPECTED_COLUMNS
-        if set(ds.column_names) != set(expected_columns):
+        if set(ds.column_names) != EXPECTED_COLUMNS:
             raise ValueError(
                 "Dataset must have exactly columns: "
-                f"{expected_columns}, got {ds.column_names}."
+                f"{EXPECTED_COLUMNS}, got {ds.column_names}."
             )
         if config_name == "pos" and not all(label == 1 for label in ds["clf_label"]):
             raise ValueError("'pos' dataset must only have examples with clf_label=1.")
