@@ -18,7 +18,6 @@ def dataset() -> RLLMDataset:
         dataset_type="AlignmentResearch/PasswordMatch",
         n_train=5,
         n_val=5,
-        revision="main",
         config_name="pos",
     )
     dataset = load_rllm_dataset(cfg, split="validation")

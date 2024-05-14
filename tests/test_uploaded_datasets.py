@@ -15,17 +15,13 @@ UPLOADED_DATASETS = [
 def test_uploaded_datasets(repo_id: str):
     """Test all datasets on the hub.
 
-    We make the conscious decision to only test the most recent version
+    We make the conscious decision to only test the default version
     because we can't go back and fix old versions.
-
-    TODO (ian): Make these tests specific to major version 0 and only
-    test largest 0.x.x version.
     """
     config = DatasetConfig(
         dataset_type=repo_id,
         n_train=5,
         n_val=5,
-        revision="main",
     )
     dataset = load_rllm_dataset(config, split="validation")
     assert len(dataset.ds) == 5
