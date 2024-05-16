@@ -1,6 +1,7 @@
 """Test that the various defenses don't crash."""
 
 import pytest
+from omegaconf import OmegaConf
 
 from robust_llm.config import (
     DatasetConfig,
@@ -45,14 +46,31 @@ def exp_config() -> ExperimentConfig:
     return config
 
 
+def _run_evaluation_pipeline(exp_config: ExperimentConfig) -> None:
+    """Small wrapper around run_evaluation_pipeline to run interpolation.
+
+    - First we convert to an OmegaConf structured config, which enables
+    interpolation.
+    - Then we convert back to an ExperimentConfig object, and use
+    that to run the pipeline.
+    """
+    config = OmegaConf.to_object(OmegaConf.structured(exp_config))
+    assert isinstance(config, ExperimentConfig)
+    run_evaluation_pipeline(config)
+
+
 def test_doesnt_crash_perplexity_defense(
     exp_config: ExperimentConfig,
 ) -> None:
     assert exp_config.evaluation is not None
     exp_config.defense = PerplexityDefenseConfig(
-        decoder=ModelConfig(name_or_path="EleutherAI/pythia-14m", family="pythia"),
+        decoder=ModelConfig(
+            name_or_path="EleutherAI/pythia-14m",
+            family="pythia",
+            inference_type="generation",
+        ),
     )
-    run_evaluation_pipeline(exp_config)
+    _run_evaluation_pipeline(exp_config)
 
 
 def test_doesnt_crash_retokenization_defense(
@@ -60,7 +78,7 @@ def test_doesnt_crash_retokenization_defense(
 ) -> None:
     assert exp_config.evaluation is not None
     exp_config.defense = RetokenizationDefenseConfig()
-    run_evaluation_pipeline(exp_config)
+    _run_evaluation_pipeline(exp_config)
 
 
 def test_doesnt_crash_paraphrase_defense(
@@ -68,6 +86,12 @@ def test_doesnt_crash_paraphrase_defense(
 ) -> None:
     assert exp_config.evaluation is not None
     exp_config.defense = ParaphraseDefenseConfig(
-        model_name="EleutherAI/pythia-14m", device="cpu"
+        paraphraser=ModelConfig(
+            name_or_path="EleutherAI/pythia-14m",
+            family="pythia",
+            inference_type="generation",
+            strict_load=True,
+            padding_side="left",
+        ),
     )
-    run_evaluation_pipeline(exp_config)
+    _run_evaluation_pipeline(exp_config)

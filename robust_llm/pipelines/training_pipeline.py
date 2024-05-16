@@ -1,22 +1,19 @@
 """Pipeline for adversarial training."""
 
-from typing import Tuple
+from typing import Any
 
 import wandb
 from omegaconf import OmegaConf
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.logging_utils import wandb_cleanup, wandb_initialize
-from robust_llm.pipelines.utils import prepare_victim_models
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import AdversarialTraining, Training
 from robust_llm.utils import make_unique_name_to_save
 
 
-def run_training_pipeline(
-    args: ExperimentConfig,
-) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase, PreTrainedModel | None]:
+def run_training_pipeline(args: ExperimentConfig) -> None:
     assert args.training is not None
     print("Configuration arguments:\n")
     print(OmegaConf.to_yaml(args))
@@ -27,10 +24,12 @@ def run_training_pipeline(
     untokenized_val_set = load_rllm_dataset(args.dataset, split="validation")
 
     num_classes = untokenized_train_set.num_classes
-    model, tokenizer, decoder = prepare_victim_models(args, num_classes=num_classes)
+    victim = WrappedModel.from_config(
+        args.model, accelerator=None, num_classes=num_classes
+    )
 
-    train_set = untokenized_train_set.tokenize(tokenizer)
-    val_set = untokenized_val_set.tokenize(tokenizer)
+    train_set = untokenized_train_set.tokenize(victim.tokenizer)
+    val_set = untokenized_val_set.tokenize(victim.tokenizer)
 
     model_name_to_save = args.training.force_name_to_save or make_unique_name_to_save(
         args.model.name_or_path
@@ -38,7 +37,7 @@ def run_training_pipeline(
     # NOTE: the "validation" dataset is one of what will be
     # several datasets that we perform model evaluation on,
     # hence "eval_dataset" is a dict[str, Dataset], not a Dataset.
-    base_training_args = {
+    base_training_args: dict[str, Any] = {
         "experiment_name": args.experiment_name,
         "run_name": args.run_name,
         "job_type": args.job_type,
@@ -46,8 +45,7 @@ def run_training_pipeline(
         "eval_rllm_dataset": {
             "validation": val_set,
         },
-        "model": model,
-        "tokenizer": tokenizer,
+        "victim": victim,
         "model_name_to_save": model_name_to_save,
         "model_save_path_prefix_or_hf": args.training.model_save_path_prefix_or_hf,
         "environment_config": args.environment,
@@ -104,12 +102,10 @@ def run_training_pipeline(
         # have to try to get it out of the model name.
         # We use `commit=False` to avoid incrementing the step counter.
         # TODO (GH#348): Move this to a more appropriate place.
-        wandb.log({"model_size": model.num_parameters()}, commit=False)
+        wandb.log({"model_size": victim.model.num_parameters()}, commit=False)
 
     # Perform the training
     training.run_trainer()
 
     if trainer.is_world_process_zero():
         wandb_cleanup()
-
-    return model, tokenizer, decoder

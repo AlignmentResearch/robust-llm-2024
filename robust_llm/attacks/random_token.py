@@ -1,18 +1,18 @@
 import copy
 from collections import deque
-from typing import Any, Sequence
+from typing import Any, Sequence, cast
 
 import torch
 import wandb
-from transformers import PreTrainedTokenizerBase, pipeline
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
+from robust_llm.evaluation import FilteredEvaluationPipeline
 from robust_llm.logging_utils import LoggingCounter
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.utils import LanguageModel
 
 
 class RandomTokenAttack(Attack):
@@ -31,20 +31,17 @@ class RandomTokenAttack(Attack):
     def __init__(
         self,
         attack_config: RandomTokenAttackConfig,
-        victim_model: LanguageModel,
-        victim_tokenizer: PreTrainedTokenizerBase,
+        victim: WrappedModel,
     ) -> None:
         """Constructor for RandomTokenAttack.
 
         Args:
             attack_config: config of the attack
-            victim_model: the model to be attacked
-            victim_tokenizer: tokenizer used by the victim model
+            victim: the WrappedModel to be attacked
         """
         super().__init__(attack_config)
 
-        self.victim_model = victim_model
-        self.victim_tokenizer = victim_tokenizer
+        self.victim = victim
 
         self.torch_rng = torch.random.manual_seed(self.attack_config.seed)
 
@@ -54,11 +51,17 @@ class RandomTokenAttack(Attack):
         self.logging_frequency = attack_config.logging_frequency
         self.batch_size = attack_config.batch_size
 
-        self.victim_pipeline = pipeline(
-            "text-classification",
-            model=victim_model,  # type: ignore
-            tokenizer=victim_tokenizer,  # type: ignore
-            device=victim_model.device,
+        # We use the FilteredEvaluationPipeline so we can pass in a WrappedModel
+        # and reuse the check_model_type logic.
+        # The plan is to remove pipelines in the next PR anyway.
+        # TODO (GH#374): Remove pipelines.
+        self.victim_pipeline = FilteredEvaluationPipeline(
+            model=victim,
+            tokenizer=victim.tokenizer,
+            device=victim.device,
+            # We have to specify the framework explicitly because the pipeline
+            # will not be able to infer it from a WrappedModel.
+            framework="pt",
         )
 
         self.logging_counter = LoggingCounter(_name="random_token_attack")
@@ -148,12 +151,12 @@ class RandomTokenAttack(Attack):
 
         flat_random_tokens = torch.randint(
             low=0,
-            high=self.victim_tokenizer.vocab_size,  # type: ignore
+            high=self.victim.vocab_size,
             size=(total_num_tokens,),
             generator=self.torch_rng,
         )
         decoded_flat_random_tokens = deque(
-            self.victim_tokenizer.batch_decode(flat_random_tokens)
+            self.victim.tokenizer.batch_decode(flat_random_tokens)
         )
 
         new_chunked_datapoints = []
@@ -217,15 +220,18 @@ class RandomTokenAttack(Attack):
             if not success
         ]
 
-        results = self.victim_pipeline(datapoints, batch_size=self.batch_size)
+        # The filtered pipeline returns defense flag values, which we don't need.
+        pipeline_out = self.victim_pipeline(datapoints, batch_size=self.batch_size)
+        assert isinstance(pipeline_out, list)
+        pipeline_out = cast(list[tuple[dict, None]], pipeline_out)
+        results = [result_and_flag[0] for result_and_flag in pipeline_out]
 
         assert isinstance(results, list)
         assert len(results) == len(datapoints)
 
-        result_labels = [result["label"] for result in results]  # type: ignore
+        result_labels = [result["label"] for result in results]
         result_int_labels = [
-            self.victim_model.config.label2id[result_label]  # type: ignore
-            for result_label in result_labels
+            self.victim.config.label2id[result_label] for result_label in result_labels
         ]
         assert all(isinstance(label, int) for label in result_int_labels)
 

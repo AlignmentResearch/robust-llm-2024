@@ -2,15 +2,7 @@ from dataclasses import dataclass
 from typing import Sequence, Tuple
 
 import torch
-from accelerate import Accelerator
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from robust_llm.attacks.search_based.models import (
-    SearchBasedAttackWrappedModel,
-    WrappedBERTModel,
-    WrappedGPT2Model,
-    WrappedGPTNeoXModel,
-)
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 
 
@@ -27,21 +19,6 @@ class AttackTokenizationChangeException(TokenizationChangeException):
 
 class TargetTokenizationChangeException(TokenizationChangeException):
     """Tokenization change because of target tokens."""
-
-
-def get_wrapped_model(
-    model: PreTrainedModel, tokenizer: PreTrainedTokenizerBase, accelerator: Accelerator
-) -> SearchBasedAttackWrappedModel:
-    # we just assume that the tokenizer matches
-    if model.config.model_type == "gpt2":
-        return WrappedGPT2Model(model, tokenizer, accelerator)
-    # pythia models are gpt_neox models
-    elif model.config.model_type == "gpt_neox":
-        return WrappedGPTNeoXModel(model, tokenizer, accelerator)
-    elif model.config.model_type == "bert":
-        return WrappedBERTModel(model, tokenizer, accelerator)
-    else:
-        raise ValueError(f"Unknown model type: {model.config.type=}")
 
 
 @dataclass(frozen=True)

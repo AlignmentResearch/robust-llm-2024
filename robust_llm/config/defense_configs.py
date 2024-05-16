@@ -85,21 +85,23 @@ class ParaphraseDefenseConfig(DefenseConfig):
     Configs used in paraphrase-based defenses.
 
     Attributes:
-        model_name (str): Model to use for paraphrasing.
+        paraphraser (ModelConfig): Model to use for paraphrasing.
         meta_prompt (str): Meta-prompt to use for paraphrasing.
         temperature (float): Temperature to use for generation.
         verbose (bool): Verbosity.
-        device (str): Device to store paraphrase model on.
-        padding_side (str):
-            Padding side when paraphrasing. Should be left for decoder models.
     """
 
-    model_name: str = "mistralai/Mistral-7B-Instruct-v0.1"
+    paraphraser: ModelConfig = ModelConfig(
+        name_or_path="mistralai/Mistral-7B-Instruct-v0.1",
+        family="mistralai",
+        revision="main",
+        inference_type="generation",
+        strict_load=True,
+        padding_side="left",
+    )
     meta_prompt: str = "Paraphrase the following sentences: "
     temperature: float = 0.7
     verbose: bool = False
-    device: str = "cuda:0"
-    padding_side: str = "left"
 
 
 cs = ConfigStore.instance()

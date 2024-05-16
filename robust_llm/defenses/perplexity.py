@@ -7,8 +7,9 @@ from transformers import PreTrainedTokenizerBase
 
 from robust_llm.config.defense_configs import PerplexityDefenseConfig
 from robust_llm.defenses.defense import DefendedModel
+from robust_llm.models import WrappedModel
+from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.utils import LanguageModel
 
 
 def _get_logits_in_windows(
@@ -145,7 +146,7 @@ def _get_single_datapoint_perplexity(
 
 
 def compute_perplexity(
-    model: LanguageModel,
+    model: WrappedModel,
     model_inputs,  # TODO(niki): type
     window_size: int,
     report_max_perplexity: bool,
@@ -244,7 +245,7 @@ def compute_perplexity(
 
 
 def compute_max_min_percentile_perplexity(
-    model: LanguageModel,
+    model: WrappedModel,
     tokenizer: PreTrainedTokenizerBase,
     dataset: Dataset,
     batch_size: int,
@@ -255,6 +256,16 @@ def compute_max_min_percentile_perplexity(
     Computes the maximum, minimum, and approximate percentile perplexities
     of the model on the given dataset.
     This is useful for setting the perplexity threshold.
+
+    Args:
+        model: The model to evaluate.
+        tokenizer: The tokenizer to use (NOTE: could be different from the
+            model's tokenizer because we have a mismatch; see GH#370).
+        dataset: The dataset to compute perplexity for.
+        Batch_size: The batch size to use.
+        Window_size: The size of the sliding window.
+        report_max_perplexity: Whether to report the maximum perplexity
+            across windows, rather than the average perplexity.
 
     Returns:
         A tuple of the maximum perplexity, minimum perplexity, and a TDigest
@@ -288,22 +299,34 @@ def compute_max_min_percentile_perplexity(
 
 
 class PerplexityDefendedModel(DefendedModel):
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        assert isinstance(self.defense_config, PerplexityDefenseConfig)
-        self.perplexity_defense = self.defense_config
-        assert self.decoder is not None
-        assert isinstance(self.device, torch.device)
-        self.decoder.to(device=self.device)  # type: ignore
-        self.window_size = self.perplexity_defense.window_size
-        self.report_max_perplexity = self.perplexity_defense.report_max_perplexity
-        self.batch_size = self.perplexity_defense.batch_size
-        self.verbose = self.perplexity_defense.verbose
+    def __init__(
+        self,
+        victim: WrappedModel,
+        defense_config: PerplexityDefenseConfig,
+        dataset: Dataset,
+    ) -> None:
+        super().__init__(victim)
+        self.cfg = defense_config
+        # NOTE: We load the decoder as a WrappedModel but we don't use the
+        # tokenizer because the old code uses the *victim's* tokenizer, not the
+        # decoder's tokenizer.
+        # TODO (GH#370): Fix the tokenizer mismatch.
+        self.decoder = WrappedModel.from_config(
+            config=self.cfg.decoder, accelerator=victim.accelerator
+        )
+        # We need logits for tokens, so we need to be in generation mode.
+        assert self.decoder.inference_type == InferenceType.GENERATION
+
+        self.dataset = dataset
+        self.window_size = self.cfg.window_size
+        self.report_max_perplexity = self.cfg.report_max_perplexity
+        self.batch_size = self.cfg.batch_size
+        self.verbose = self.cfg.verbose
 
         # We subtract from 1 because perplexities are sorted low -> high,
         # and we want to get the x% _highest_ (not lowest) perplexity value.
-        perplexity_config = self.perplexity_defense
-        proportion = perplexity_config.perplexity_threshold_proportion
+        self.cfg = self.cfg
+        proportion = self.cfg.perplexity_threshold_proportion
 
         assert self.dataset is not None
         self.max_perplexity, self.min_perplexity, self.tdigest = (
@@ -333,7 +356,7 @@ class PerplexityDefendedModel(DefendedModel):
             wandb.log(
                 {
                     "defense/perplexity_threshold_proportion_pre_attack": (
-                        perplexity_config.perplexity_threshold_proportion
+                        self.cfg.perplexity_threshold_proportion
                     ),
                     "defense/perplexity_threshold_value": self.threshold,
                     "defense/max_perplexity_pre_attack": self.max_perplexity,
@@ -341,6 +364,10 @@ class PerplexityDefendedModel(DefendedModel):
                 },
                 commit=False,
             )
+
+    @property
+    def defense_config(self) -> PerplexityDefenseConfig:
+        return self.cfg
 
     def forward(self, **inputs):
         assert self.decoder is not None
@@ -350,7 +377,7 @@ class PerplexityDefendedModel(DefendedModel):
             window_size=self.window_size,
             report_max_perplexity=self.report_max_perplexity,
         )
-        output = self.model(**inputs)
+        output = self._underlying_model(**inputs)
         output["filters"] = perplexity > self.threshold
         if self.verbose:
             print(

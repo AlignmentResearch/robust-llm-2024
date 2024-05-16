@@ -4,13 +4,17 @@ defaults:
 - /training: DEFAULT
 - /model: pythia-14m
 - /training/adversarial: DEFAULT
-- /attack@training.adversarial.training_attack: RANDOM_TOKEN
+- /attack@training.adversarial.training_attack: random-token-len-10
+- /attack@evaluation.evaluation_attack: random-token-len-10
 - _self_
 
 dataset:
   n_train: 20
   n_val: 2
 
+training:
+  adversarial:
+    num_examples_to_generate_each_round: 2
 experiment_name: ???
 run_name: ???
 experiment_type: "training"

@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+- DefendedEval/pm_gcg_perplexity.yaml
+
+experiment_name: "20240506-defense-testing"
+run_name: "1"

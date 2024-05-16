@@ -3,6 +3,10 @@ defaults:
 - /model@adversary: pythia-14m
 - _self_
 
+adversary:
+  inference_type: "trl"
+  padding_side: "left"
+
 batch_size: 10
 mini_batch_size: 10
 gradient_accumulation_steps: 1

@@ -6,11 +6,6 @@ from hypothesis import example, given, settings
 from hypothesis import strategies as st
 from transformers import AutoTokenizer
 
-from robust_llm.attacks.search_based.models import (
-    WrappedBERTModel,
-    WrappedGPT2Model,
-    WrappedGPTNeoXModel,
-)
 from robust_llm.attacks.search_based.runners import GCGRunner, make_runner
 from robust_llm.attacks.search_based.utils import (
     AttackIndices,
@@ -20,6 +15,8 @@ from robust_llm.attacks.search_based.utils import (
     TokenizationChangeException,
 )
 from robust_llm.config import GCGAttackConfig
+from robust_llm.models import GPT2Model, GPTNeoXModel
+from robust_llm.models.model_utils import InferenceType
 from robust_llm.utils import FakeModelForSequenceClassification
 
 ACCELERATOR = Accelerator(cpu=True)
@@ -27,44 +24,11 @@ ACCELERATOR = Accelerator(cpu=True)
 
 def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
-    wrapped_model = WrappedGPT2Model(
+    wrapped_model = GPT2Model(
         FakeModelForSequenceClassification(),  # type: ignore
         tokenizer,
         accelerator=ACCELERATOR,
-    )
-    config = GCGAttackConfig(
-        n_candidates_per_it=1,
-        n_its=1,
-        n_attack_tokens=11,
-        top_k=1,
-    )
-    prompt_template = PromptTemplate(
-        before_attack=before_attack_text, after_attack=after_attack_text
-    )
-    prepped_examples = [
-        PreppedExample(
-            prompt_template=prompt_template,
-            clf_target=0,
-        )
-    ]
-    runner = make_runner(
-        wrapped_model=wrapped_model,
-        prepped_examples=prepped_examples,
-        random_seed=0,
-        config=config,
-    )
-    # hack to change some of the runner's attributes for testing
-    runner.target = "^"
-    assert isinstance(runner, GCGRunner)
-    return runner
-
-
-def bert_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    wrapped_model = WrappedBERTModel(
-        FakeModelForSequenceClassification(),  # type: ignore
-        tokenizer,
-        accelerator=ACCELERATOR,
+        inference_type=InferenceType("classification"),
     )
     config = GCGAttackConfig(
         n_candidates_per_it=1,
@@ -96,10 +60,11 @@ def bert_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
 def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     # we need a model for pythia because we access the config
     tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped")
-    wrapped_model = WrappedGPTNeoXModel(
+    wrapped_model = GPTNeoXModel(
         FakeModelForSequenceClassification(),  # type: ignore
         tokenizer,
         accelerator=ACCELERATOR,
+        inference_type=InferenceType("classification"),
     )
     config = GCGAttackConfig(
         n_candidates_per_it=1,
@@ -130,7 +95,6 @@ def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRun
 
 RUNNERS = {
     "gpt2": gpt2_gcg_runner,
-    "bert": bert_gcg_runner,
     "pythia": pythia_gcg_runner,
 }
 
@@ -141,15 +105,6 @@ def get_gcg_runner(
     after_attack_text: str = "some after text",
 ) -> GCGRunner:
     return RUNNERS[model_name](before_attack_text, after_attack_text)
-
-
-def maybe_preprocess_str(gcg_runner: GCGRunner, s: str) -> str:
-    """BERT tokenizer is not case or space sensitive
-    so before we compare strings, we should preprocess them to match"""
-    if isinstance(gcg_runner.wrapped_model, WrappedBERTModel):
-        return s.lower().replace(" ", "")
-    else:
-        return s
 
 
 @pytest.fixture(params=RUNNERS.keys())
@@ -176,11 +131,7 @@ def test_AttackIndices() -> None:
     assert tokens[attack_indices.target_slice] == target
 
 
-# hypothesis was generating hex characters that messed up BERT tokenizer
-text_no_specials = st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126))
-
-
-@given(target=text_no_specials)
+@given(target=st.text())
 @example(target="Hi!")
 @example(target="")
 # We use a deadline of 1000ms because the default of 200ms was too short, as was
@@ -233,14 +184,10 @@ def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     new_attack_text = gcg_runner._decode_tokens(
         full_tokens[:, attack_indices.attack_slice]
     )
-    assert maybe_preprocess_str(gcg_runner, new_attack_text) == maybe_preprocess_str(
-        gcg_runner, initial_attack_text
-    )
+    assert new_attack_text == initial_attack_text
 
     new_target = gcg_runner._decode_tokens(full_tokens[:, attack_indices.target_slice])
-    assert maybe_preprocess_str(gcg_runner, new_target) == maybe_preprocess_str(
-        gcg_runner, target
-    )
+    assert new_target == target
 
 
 @pytest.mark.parametrize("model_name", RUNNERS.keys())
@@ -284,12 +231,7 @@ def test_filter_candidates(model_name: str, before_attack_text: str) -> None:
         (attack_text, candidate) for candidate in bad_candidates
     ]
     bad_filtered_candidates = gcg_runner._filter_candidates(text_bad_replacement_pairs)
-    if isinstance(gcg_runner.wrapped_model, WrappedBERTModel):
-        # BERT tokenizer doesn't merge adjacent @'s so only the unchanging
-        # candidate should be filtered
-        assert len(bad_filtered_candidates) == 3
-    else:
-        assert len(bad_filtered_candidates) == 0
+    assert len(bad_filtered_candidates) == 0
 
     # this char is sufficiently different that it shouldn't merge with @ or q
     nonmerge_char = "%"
@@ -315,17 +257,18 @@ def test_get_replacement_candidates_from_gradients(gcg_runner: GCGRunner) -> Non
     # need to make it the same shape as it really would be because
     # some tokenizers (e.g. bert) care about special indices
     gradients = torch.zeros((2, vocab_size))
-    gradients[0, 0] = -1.0
-    gradients[0, 2] = -1.0
-    gradients[1, 1] = -1.0
-    gradients[1, 3] = -1.0
+    # Don't use 0 as a token id because for some tokenizers it's a
+    gradients[0, 100] = -1.0
+    gradients[0, 102] = -1.0
+    gradients[1, 101] = -1.0
+    gradients[1, 103] = -1.0
 
     expected_candidates = set(
         [
-            ReplacementCandidate(0, 0),
-            ReplacementCandidate(0, 2),
-            ReplacementCandidate(1, 1),
-            ReplacementCandidate(1, 3),
+            ReplacementCandidate(0, 100),
+            ReplacementCandidate(0, 102),
+            ReplacementCandidate(1, 101),
+            ReplacementCandidate(1, 103),
         ]
     )
     actual_candidates = set(
@@ -354,9 +297,7 @@ def test_replacements(gcg_runner: GCGRunner) -> None:
                 gcg_runner._get_tokens(initial_attack_text)
             )
         )
-        assert maybe_preprocess_str(gcg_runner, updated) == maybe_preprocess_str(
-            gcg_runner, expected
-        )
+        assert updated == expected
 
 
 def test_apply_replacements_and_eval_candidates(gcg_runner: GCGRunner) -> None:
@@ -376,9 +317,7 @@ def test_apply_replacements_and_eval_candidates(gcg_runner: GCGRunner) -> None:
     scores_and_final_texts = gcg_runner._apply_replacements_and_eval_candidates(
         text_replacement_pairs
     )
-    assert expected_final_texts == [
-        maybe_preprocess_str(gcg_runner, t) for _, t in scores_and_final_texts
-    ]
+    assert expected_final_texts == [t for _, t in scores_and_final_texts]
 
 
 def test_chat_prompt_template():

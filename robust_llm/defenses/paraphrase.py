@@ -2,13 +2,7 @@
 
 from typing import Any, TypeAlias
 
-import torch
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    PreTrainedModel,
-    PreTrainedTokenizerBase,
-)
+from transformers import PreTrainedTokenizerBase
 from transformers.tokenization_utils_base import (
     BatchEncoding,
     PreTokenizedInput,
@@ -17,8 +11,9 @@ from transformers.tokenization_utils_base import (
 )
 from transformers.utils import PaddingStrategy, TensorType
 
-from robust_llm.config.defense_configs import ParaphraseDefenseConfig
+from robust_llm.config.defense_configs import DefenseConfig, ParaphraseDefenseConfig
 from robust_llm.defenses.defense import DefendedModel
+from robust_llm.models import WrappedModel
 
 TextOrTokenSeqInput: TypeAlias = TextInput | PreTokenizedInput | list[PreTokenizedInput]
 
@@ -34,23 +29,28 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
 
     def __init__(
         self,
-        tokenizer: PreTrainedTokenizerBase,
+        victim_tokenizer: PreTrainedTokenizerBase,
         meta_prompt: str,
         temperature: float,
-        paraphraser: PreTrainedModel,
-        paraphraser_tokenizer: PreTrainedTokenizerBase,
+        paraphraser: WrappedModel,
         verbose: bool = False,
     ):
-        self.tokenizer = tokenizer
+        self.victim_tokenizer = victim_tokenizer
         self.meta_prompt = meta_prompt
         self.temperature = temperature
         self.paraphraser = paraphraser
-        self.paraphraser_tokenizer = paraphraser_tokenizer
         self.verbose = verbose
 
     @property
     def model_max_length(self) -> int:
-        return self.tokenizer.model_max_length
+        return self.victim_tokenizer.model_max_length
+
+    # pyright complains because we don't have a setter for this property
+    # while the base class does, but we really don't need one so we ignore
+    # the error.
+    @property
+    def pad_token_id(self) -> int | None:  # type: ignore[reportIncompatibleMethodOverride]  # noqa: E501
+        return self.victim_tokenizer.pad_token_id
 
     def __call__(
         self,
@@ -80,7 +80,7 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
         if isinstance(text, TextInput):
             text = [text]
         assert all(isinstance(t, str) for t in text)
-        paraphrase_tokens = self.paraphraser_tokenizer(
+        paraphrase_tokens = self.paraphraser.tokenizer(
             [self.meta_prompt + str(t) for t in text],
             return_tensors="pt",
             padding=True,
@@ -88,20 +88,20 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
         )
         paraphrase_tokens.to(self.paraphraser.device)
         orig_len = paraphrase_tokens.input_ids.shape[1]  # original sequence length
-        paraphrase = self.paraphraser.generate(
+        paraphrase = self.paraphraser.model.generate(
             **paraphrase_tokens,  # type: ignore
             temperature=self.temperature,
             max_new_tokens=orig_len,
-            pad_token_id=self.paraphraser_tokenizer.pad_token_id,
+            pad_token_id=self.paraphraser.tokenizer.pad_token_id,
             do_sample=True,
         )
         paraphrase = paraphrase[:, orig_len:]
-        paraphrased_text = self.paraphraser_tokenizer.batch_decode(paraphrase)
+        paraphrased_text = self.paraphraser.tokenizer.batch_decode(paraphrase)
         if self.verbose:
             print(f"Original text: {text}")
             print(f"Paraphrase: {paraphrased_text}")
         # Now tokenize the paraphrase
-        return self.tokenizer(
+        return self.victim_tokenizer(
             paraphrased_text,
             text_pair,
             text_target,  # type: ignore
@@ -126,49 +126,33 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
 
 
 class ParaphraseDefendedModel(DefendedModel):
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        assert isinstance(self.defense_config, ParaphraseDefenseConfig)
-        self.paraphrase_defense = self.defense_config
-        self.paraphraser = AutoModelForCausalLM.from_pretrained(
-            self.paraphraser_name
-        ).to(self.device)
-        self.paraphrase_tokenizer = AutoTokenizer.from_pretrained(self.paraphraser_name)
-        self.paraphrase_tokenizer.padding_side = self.padding_side
-        if "pad_token" not in self.paraphrase_tokenizer.special_tokens_map:
-            self.paraphrase_tokenizer.pad_token = self.paraphrase_tokenizer.eos_token
-        self.tokenizer = ParaphraseTokenizer(
-            tokenizer=self.tokenizer,
-            meta_prompt=self.meta_prompt,
-            temperature=self.temperature,
+    def __init__(
+        self, victim: WrappedModel, defense_config: ParaphraseDefenseConfig
+    ) -> None:
+        super().__init__(victim)
+        self.cfg = defense_config
+        self.paraphraser = WrappedModel.from_config(
+            config=self.cfg.paraphraser,
+            accelerator=victim.accelerator,
+        )
+        if "pad_token" not in self.paraphraser.tokenizer.special_tokens_map:
+            self.paraphraser.tokenizer.pad_token = self.paraphraser.tokenizer.eos_token
+
+        self.paraphrase_tokenizer = ParaphraseTokenizer(
+            victim_tokenizer=victim.tokenizer,
+            meta_prompt=self.cfg.meta_prompt,
+            temperature=self.cfg.temperature,
             paraphraser=self.paraphraser,
-            paraphraser_tokenizer=self.paraphrase_tokenizer,
-            verbose=self.verbose,
+            verbose=self.cfg.verbose,
         )
 
     @property
-    def device(self) -> torch.device:
-        return torch.device(self.paraphrase_defense.device)
+    def tokenizer(self) -> PreTrainedTokenizerBase:
+        return self.paraphrase_tokenizer
 
     @property
-    def padding_side(self) -> str:
-        return self.paraphrase_defense.padding_side
-
-    @property
-    def verbose(self) -> bool:
-        return self.paraphrase_defense.verbose
-
-    @property
-    def paraphraser_name(self) -> str:
-        return self.paraphrase_defense.model_name
-
-    @property
-    def meta_prompt(self) -> str:
-        return self.paraphrase_defense.meta_prompt
-
-    @property
-    def temperature(self) -> float:
-        return self.paraphrase_defense.temperature
+    def defense_config(self) -> DefenseConfig:
+        return self.cfg
 
     def forward(self, **inputs) -> Any:
-        return self.model(**inputs)
+        return self._underlying_model(**inputs)

@@ -10,7 +10,7 @@ from robust_llm.config import (
     ModelConfig,
     RandomTokenAttackConfig,
 )
-from robust_llm.pipelines.utils import prepare_victim_models
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -26,6 +26,9 @@ exp_config = ExperimentConfig(
     model=ModelConfig(
         name_or_path="EleutherAI/pythia-14m",
         family="pythia",
+        # We have to set this explicitly because we are not loading with Hydra,
+        # so interpolation doesn't happen.
+        inference_type="classification",
     ),
     evaluation=EvaluationConfig(
         evaluation_attack=RandomTokenAttackConfig(
@@ -42,15 +45,13 @@ dataset = load_rllm_dataset(dataset_config, split="validation")
 # but it's not used in the test
 dataset.ground_truth_label_fn = lambda text, label: label  # type: ignore[method-assign]
 
-# Get victim model and tokenizer
-victim_model, victim_tokenizer, _ = prepare_victim_models(exp_config, num_classes=2)
+victim = WrappedModel.from_config(exp_config.model, accelerator=None, num_classes=2)
 
 # Set up the attack
 assert isinstance(attack_config, RandomTokenAttackConfig)
 attack = RandomTokenAttack(
     attack_config=attack_config,
-    victim_model=victim_model,
-    victim_tokenizer=victim_tokenizer,
+    victim=victim,
 )
 
 
@@ -91,11 +92,11 @@ def _sequential_get_adversarial_tokens(
             )
             random_tokens = torch.randint(
                 low=0,
-                high=rt_attack.victim_tokenizer.vocab_size,  # type: ignore
+                high=rt_attack.victim.vocab_size,
                 size=(num_tokens,),
                 generator=rt_attack.torch_rng,
             )
-            random_token_text = rt_attack.victim_tokenizer.decode(random_tokens)
+            random_token_text = rt_attack.victim.tokenizer.decode(random_tokens)
 
             if chunk_type == ChunkType.PERTURBABLE:
                 new_chunked_datapoint.append(chunk)
@@ -128,9 +129,10 @@ def _sequential_check_success(
 
     convo = "".join(attacked_chunked_datapoint)
     result = rt_attack.victim_pipeline(convo)
+    result = [r[0] for r in result]  # type: ignore
 
     result_label = result[0]["label"]  # type: ignore
-    result_int_label = rt_attack.victim_model.config.label2id[result_label]  # type: ignore # noqa: E501
+    result_int_label = rt_attack.victim.config.label2id[result_label]  # type: ignore
 
     true_label = dataset.ground_truth_label_fn(convo, original_label)
 
@@ -140,7 +142,7 @@ def _sequential_check_success(
 # Override the pipeline with something simple
 def custom_pipeline(
     input: str | list[str], batch_size: Optional[int] = None
-) -> list[dict[str, Any]]:
+) -> list[tuple[dict[str, Any], None]]:
 
     def check(input: str) -> bool:
         return input in {"ABC", "DEF", "GHI", "JKL"}
@@ -149,7 +151,9 @@ def custom_pipeline(
         input = [input]
 
     labels = [check(i) for i in input]
-    return [{"label": f"LABEL_{int(x)}"} for x in labels]
+    # This is a hack to make the return type match the actual pipeline,
+    # which now contains None because we're using the FilteredEvaluationPipeline.
+    return [({"label": f"LABEL_{int(x)}"}, None) for x in labels]
 
 
 attack.victim_pipeline = custom_pipeline  # type: ignore

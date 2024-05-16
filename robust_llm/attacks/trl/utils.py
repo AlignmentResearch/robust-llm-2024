@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, Sequence, Tuple
+from typing import Any, Mapping, Sequence
 
 import numpy as np
-import torch
+from accelerate import Accelerator
 from datasets import Dataset
-from transformers import (
-    PreTrainedModel,
-    PreTrainedTokenizerBase,
-    TextClassificationPipeline,
-)
-from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
+from trl import PPOConfig, PPOTrainer
 from typing_extensions import override
 
 from robust_llm.config.attack_configs import TRLAttackConfig
-from robust_llm.model_utils import _prepare_tokenizer
+from robust_llm.evaluation import FilteredEvaluationPipeline
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
     ModifiableChunkSpec,
@@ -56,7 +53,16 @@ def make_ppo_trainer(
     return ppo_trainer
 
 
-class LogitTextClassificationPipeline(TextClassificationPipeline):
+class LogitTextClassificationPipeline(FilteredEvaluationPipeline):
+    """A simple text classification pipeline that returns logits.
+
+    We subclass FilteredEvaluationPipeline because we want to inherit
+    the ability to pass in a WrappedModel rather than a PreTrainedModel.
+    This is not very clean but we'll be removing pipelines soon anyway.
+
+    TODO (GH#374): Remove pipelines.
+    """
+
     @override
     def postprocess(self, model_outputs, function_to_apply=None, top_k=1, _legacy=True):
         return model_outputs["logits"]
@@ -81,36 +87,20 @@ def trl_data_collator(datapoints: Sequence[Any]) -> Mapping[str, Any]:
     return batch
 
 
-def prepare_adversary_model_and_tokenizer(
+def prepare_adversary(
     attack_config: TRLAttackConfig,
     num_classes: int,
-    device: torch.device,
-) -> Tuple[PreTrainedModel, PreTrainedTokenizerBase]:
-    base_model_name = attack_config.adversary.name_or_path
-    base_model_family = attack_config.adversary.family
-    base_model_revision = attack_config.adversary.revision
-
-    if base_model_family != "pythia":
-        raise NotImplementedError(
-            "Only Pythia models are currently supported for RL adversaries."
-        )
-
-    adversary_model = AutoModelForCausalLMWithValueHead.from_pretrained(
-        base_model_name,
-        revision=base_model_revision,
-        use_cache=False,  # otherwise returns last key/values attentions
-        num_labels=num_classes,
-    ).to(device)
-    adversary_model.config.pad_token_id = adversary_model.config.eos_token_id
-
-    adversary_tokenizer = _prepare_tokenizer(
-        model_name_or_path=base_model_name,
-        model_family=base_model_family,
-        revision=base_model_revision,
-        padding_side="left",
+    accelerator: Accelerator,
+) -> WrappedModel:
+    assert attack_config.adversary is not None
+    assert attack_config.adversary.inference_type == "trl"
+    adversary = WrappedModel.from_config(
+        config=attack_config.adversary,
+        accelerator=accelerator,
+        num_classes=num_classes,
     )
 
-    return adversary_model, adversary_tokenizer
+    return adversary
 
 
 def prepare_prompts(

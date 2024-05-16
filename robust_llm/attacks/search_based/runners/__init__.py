@@ -1,4 +1,3 @@
-from robust_llm.attacks.search_based.models import SearchBasedAttackWrappedModel
 from robust_llm.attacks.search_based.runners.beam_search_runner import BeamSearchRunner
 from robust_llm.attacks.search_based.runners.gcg_runner import GCGRunner
 from robust_llm.attacks.search_based.runners.multiprompt_gcg_runner import (
@@ -17,10 +16,11 @@ from robust_llm.config.attack_configs import (
     MultipromptGCGAttackConfig,
     SearchBasedAttackConfig,
 )
+from robust_llm.models import WrappedModel
 
 
 def make_runner(
-    wrapped_model: SearchBasedAttackWrappedModel,
+    wrapped_model: WrappedModel,
     prepped_examples: list[PreppedExample],
     random_seed: int,
     config: SearchBasedAttackConfig,

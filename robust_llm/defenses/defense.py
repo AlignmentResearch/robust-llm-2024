@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Iterator, Optional
 
 import torch
-from datasets import Dataset
-from torch.nn.parameter import Parameter
-from transformers import PretrainedConfig, PreTrainedModel, PreTrainedTokenizerBase
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
-from robust_llm.config.configs import DefenseConfig
-from robust_llm.utils import LanguageModel
+from robust_llm.config.defense_configs import DefenseConfig
+from robust_llm.config.model_configs import ModelConfig
+from robust_llm.models import WrappedModel
+from robust_llm.models.model_utils import SuppressPadTokenWarning
 
 
 class Defenses(Enum):
@@ -22,76 +21,84 @@ class Defenses(Enum):
     PARAPHRASE = "paraphrase"
 
 
-@dataclass
-class DefendedModel(LanguageModel):
-    """Wrapper class for model modified to be robust to attacks.
-
-    The model can be any model that implements the `LanguageModel` protocol, but most
-    likely it will be a `transformers.PreTrainedModel`.
+class DefendedModel(WrappedModel, ABC):
+    """Wrapper class for WrappedModel modified to be robust to attacks that is
+    also a subclass of WrappedModel.
 
     The wrapper is designed to be subclassed by specific defenses, which can then
-    override the `__call__` and `__post_init__` methods to implement the defense.
-    By default, it is an identity wrapper.
+    override the `forward` and `__init__` methods to implement the defense.
 
     Args:
-        defense_config: config of the defense
-        init_model: the model to be defended
-        tokenizer: tokenizer used by the model
-        dataset: dataset used to train or tune the defense, e.g. setting max perplexity
-        decoder: additional model used in some defenses, such as to compute perplexity
+        victim: The model to be defended.
     """
 
-    defense_config: DefenseConfig
-    init_model: LanguageModel
-    tokenizer: PreTrainedTokenizerBase
-    dataset: Optional[Dataset] = None
-    decoder: Optional[PreTrainedModel] = None
+    def __init__(self, victim: WrappedModel):
+        self._underlying_model = victim
 
-    def __post_init__(self) -> None:
-        """Perform any necessary post-initialization steps,
-        in particular updating the model.
+    @property
+    @abstractmethod
+    def defense_config(self) -> DefenseConfig:
+        """Return the DefenseConfig of the defense.
+
+        The reason we make this a property rather than having it in init is that
+        we want the DefendedModel subclasses to be able to use their respective
+        configs without having to typecheck that self.defense_config is the
+        correct subclass of DefenseConfig.
         """
-        self._model = self.init_model
-
-        # It was necessary to add this since being a pipeline
-        # means you have a "can_generate" method
-        self.can_generate = lambda: False
-
-    def __call__(self, **inputs):
-        return self.forward(**inputs)
+        pass
 
     @property
-    def config(self) -> PretrainedConfig:
-        return self.model.config
-
-    def to(self, *args, **kwargs):
-        # For torch modules (but not tensors), "to" modifies in-place.
-        self._model.to(*args, **kwargs)
-        return self
-
-    def forward(self, **inputs):
-        """Run the inputs through self.model, with required safety considerations."""
-        return self.model(**inputs)
+    def model(self) -> PreTrainedModel:
+        return self._underlying_model.model
 
     @property
-    def model(self) -> LanguageModel:
-        return self._model
+    def accelerator(self):
+        return self._underlying_model.accelerator
 
     @property
-    def training(self) -> bool:
-        return self.model.training
-
-    def eval(self) -> LanguageModel:
-        self.model.eval()
-        return self
-
-    def train(self) -> LanguageModel:
-        self.model.train()
-        return self
+    def tokenizer(self):
+        return self._underlying_model.tokenizer
 
     @property
-    def device(self) -> torch.device:
-        return self.model.device
+    def inference_type(self):
+        return self._underlying_model.inference_type
 
-    def parameters(self) -> Iterator[Parameter]:
-        return self.model.parameters()
+    @classmethod
+    def load_tokenizer(
+        cls,
+        model_config: ModelConfig,
+    ) -> PreTrainedTokenizerBase:
+        raise NotImplementedError(
+            "DefendedModel can't load a tokenizer;"
+            " this should be done by the underlying WrappedModel."
+        )
+
+    def call_model(
+        self,
+        inp: torch.Tensor | None = None,
+        add_cls: bool = True,
+        add_sep: bool = True,
+        inputs_embeds: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Call the underlying model with the given inputs.
+
+        Currently assumes that we don't have to do anything with special tokens.
+
+        TODO (ian): Deprecate this method to reduce code duplication.
+        """
+        assert add_cls is False
+        assert add_sep is False
+        # return _call_model(self, inp, inputs_embeds)
+
+        assert (inp is not None) != (
+            inputs_embeds is not None
+        ), "exactly one of inp, inputs_embeds must be provided"
+
+        if inp is not None:
+            return self(input_ids=inp).logits
+
+        if inputs_embeds is not None:
+            with SuppressPadTokenWarning(self):
+                return self(inputs_embeds=inputs_embeds).logits
+
+        raise ValueError("exactly one of inp, inputs_embeds must be provided")

@@ -3,3 +3,4 @@ defaults:
 
 min_tokens: 10
 max_tokens: 10
+max_iterations: 1280

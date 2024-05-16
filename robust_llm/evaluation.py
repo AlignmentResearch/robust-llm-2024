@@ -11,21 +11,46 @@ import torch
 import wandb
 from accelerate import Accelerator
 from datasets import Dataset
-from transformers import PreTrainedTokenizerBase, TextClassificationPipeline
+from transformers import TextClassificationPipeline
 
 from robust_llm.attacks.attack import Attack
 from robust_llm.defenses.perplexity import PerplexityDefendedModel
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.utils import LanguageModel, div_maybe_nan
+from robust_llm.utils import div_maybe_nan
 
 
 class FilteredEvaluationPipeline(TextClassificationPipeline):
+    """A pipeline wrapper that records the filter value, if applicable.
+
+    This pipeline takes a WrappedModel as input rather than a PreTrainedModel.
+
+    TODO (GH#374): Remove pipelines.
+    """
+
     @contextmanager
     def override_model(self):
-        # Save the old value
-        old_model = self.model  # type: ignore
-        # Set the new value
-        self.model = getattr(self.model, "init_model", old_model)  # type: ignore
+        """Context manager to temporarily override the model with the underlying model.
+
+        The TextClassificationPipeline expects a PreTrainedModel, but we are
+        using a WrappedModel. The WrappedModel has at least one layer of
+        nesting, and a second if it's a DefendedModel. We need to get to the
+        PreTrainedModel to use the pipeline, so we temporarily override
+        self.model with the underlying model.
+
+        The typehinting is a bit of a mess, and I just hacked it together enough
+        to work. We'll be removing pipelines soon, so I considered it not worth
+        the effort to dive deeper.
+        """
+        old_model = self.model  # type: ignore [has-type]
+
+        wrapped_model: Any = getattr(  # type: ignore [call-overload]
+            self.model,  # type: ignore [has-type]
+            "_underlying_model",
+            self.model,  # type: ignore [has-type]
+        )
+
+        self.model = wrapped_model.model
 
         try:
             # Now allow the code block to run with the new value
@@ -440,27 +465,25 @@ class AttackResults:
 
 
 def _maybe_record_defense_specific_metrics(
-    model: LanguageModel, dataset: RLLMDataset, attacked_dataset: RLLMDataset
-) -> dict:
+    model: WrappedModel, dataset: RLLMDataset, attacked_dataset: RLLMDataset
+) -> dict[str, Any]:
 
-    metrics = {}
+    metrics: dict[str, Any] = {}
 
-    if (
-        isinstance(model, PerplexityDefendedModel)
-        and model.perplexity_defense.save_perplexity_curves
-    ):
+    if isinstance(model, PerplexityDefendedModel) and model.cfg.save_perplexity_curves:
         # Get the approximate perplexities of the decoder on both
         # the original and attacked datasets.
-        metrics["perplexity/decoder_perplexities_original"] = (  # type: ignore
-            model.get_all_perplexity_thresholds(
-                dataset=dataset, text_column_to_use="text"
-            )
+        original_perplexities = model.get_all_perplexity_thresholds(
+            dataset=dataset,
+            text_column_to_use="text",
         )
-        metrics["perplexity/decoder_perplexities_attacked"] = (  # type: ignore
-            model.get_all_perplexity_thresholds(
-                dataset=attacked_dataset, text_column_to_use="attacked_text"
-            )
+        attacked_perplexities = model.get_all_perplexity_thresholds(
+            dataset=attacked_dataset,
+            text_column_to_use="attacked_text",
         )
+
+        metrics["perplexity/decoder_perplexities_original"] = original_perplexities
+        metrics["perplexity/decoder_perplexities_attacked"] = attacked_perplexities
 
     return metrics
 
@@ -534,19 +557,20 @@ def _get_prediction_labels(
 
 def get_prediction_logits_and_labels_and_maybe_flag_values(
     dataset: Dataset,
-    model: LanguageModel,
-    tokenizer: PreTrainedTokenizerBase,
+    victim: WrappedModel,
     batch_size: int,
     input_column: str = "text",
 ) -> tuple[list[list[float]], list[int], list[bool] | list[None]]:
     hf_pipeline = FilteredEvaluationPipeline(
-        model=model,
-        tokenizer=tokenizer,
-        device=model.device,
+        model=victim,
+        tokenizer=victim.tokenizer,
+        device=victim.device,
         # Even though this option is deprecated, we use it instead of setting
         # `top_k=None`. They differ by the order of returned classes. In the following
         # option, we get classes in the order of the classes defined in the model.
         return_all_scores=True,
+        # We have to specify the framework explicitly because the pipeline
+        # will not be able to infer it from a WrappedModel.
         framework="pt",
     )
     pred_logits, pred_flag_values = _get_prediction_logits_and_maybe_flag_values(
@@ -604,22 +628,19 @@ def _log_examples_to_wandb(
 
 def compute_attack_results(
     attacked_dataset: RLLMDataset,
-    model: LanguageModel,
-    tokenizer: PreTrainedTokenizerBase,
-    accelerator: Accelerator,
+    victim: WrappedModel,
     batch_size: int,
     num_examples_to_log_detailed_info: Optional[int],
 ) -> AttackResults:
     """Performs an attack and reports its results."""
 
     assert attacked_dataset.ds is not None
-    model.eval()
+    victim.eval()
 
     _, original_pred_labels, original_flag_values = (
         get_prediction_logits_and_labels_and_maybe_flag_values(
             dataset=attacked_dataset.ds,
-            model=model,
-            tokenizer=tokenizer,
+            victim=victim,
             batch_size=batch_size,
             input_column="text",
         )
@@ -627,8 +648,7 @@ def compute_attack_results(
     attacked_pred_logits, attacked_pred_labels, attacked_flag_values = (
         get_prediction_logits_and_labels_and_maybe_flag_values(
             dataset=attacked_dataset.ds,
-            model=model,
-            tokenizer=tokenizer,
+            victim=victim,
             batch_size=batch_size,
             input_column="attacked_text",
         )
@@ -644,7 +664,12 @@ def compute_attack_results(
         attacked_pred_logits=attacked_pred_logits,
     )
 
-    if num_examples_to_log_detailed_info is not None and accelerator.is_main_process:
+    if victim.accelerator is None:
+        raise ValueError("Accelerator must be provided")
+    if (
+        num_examples_to_log_detailed_info is not None
+        and victim.accelerator.is_main_process
+    ):
         _log_examples_to_wandb(
             original_texts=attacked_dataset.ds["text"],
             original_labels=attacked_dataset.ds["clf_label"],
@@ -661,9 +686,7 @@ def compute_attack_results(
 
 
 def do_adversarial_evaluation(
-    model: LanguageModel,
-    tokenizer: PreTrainedTokenizerBase,
-    accelerator: Accelerator,
+    victim: WrappedModel,
     dataset: RLLMDataset,
     attack: Attack,
     batch_size: int,
@@ -671,14 +694,16 @@ def do_adversarial_evaluation(
 ) -> dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
 
+    if victim.accelerator is None:
+        raise ValueError("Accelerator must be provided")
     # Sanity check in case of a distributed run (with accelerate): check if every
     # process has the same dataset.
     # TODO(michal): Look into datasets code and make sure the dataset creation is
     # deterministic given seeds; this is especially important when using accelerate.
-    _assert_same_data_between_processes(accelerator, dataset.ds["text"])
-    _assert_same_data_between_processes(accelerator, dataset.ds["clf_label"])
+    _assert_same_data_between_processes(victim.accelerator, dataset.ds["text"])
+    _assert_same_data_between_processes(victim.accelerator, dataset.ds["clf_label"])
 
-    model.eval()
+    victim.eval()
 
     print("Doing adversarial evaluation...")
 
@@ -686,9 +711,7 @@ def do_adversarial_evaluation(
 
     attack_results = compute_attack_results(
         attacked_dataset=attacked_dataset,
-        model=model,
-        tokenizer=tokenizer,
-        accelerator=accelerator,
+        victim=victim,
         batch_size=batch_size,
         num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
     )
@@ -698,11 +721,11 @@ def do_adversarial_evaluation(
     metrics |= info_dict
 
     metrics |= _maybe_record_defense_specific_metrics(
-        model=model, dataset=dataset, attacked_dataset=attacked_dataset
+        model=victim, dataset=dataset, attacked_dataset=attacked_dataset
     )
 
     # TODO(GH#158): Refactor/unify logging.
-    if accelerator.is_main_process:
+    if victim.accelerator.is_main_process:
         wandb.log(metrics, commit=True)
         print("Adversarial evaluation metrics:")
         print(metrics)

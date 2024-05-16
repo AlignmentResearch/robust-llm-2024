@@ -7,7 +7,6 @@ from typing import Any, Optional, Sequence, Tuple
 import torch
 import torch.utils.data
 
-from robust_llm.attacks.search_based.models import SearchBasedAttackWrappedModel
 from robust_llm.attacks.search_based.utils import (
     AttackIndices,
     AttackTokenizationChangeException,
@@ -16,6 +15,7 @@ from robust_llm.attacks.search_based.utils import (
     ReplacementCandidate,
     create_onehot_embedding,
 )
+from robust_llm.models import WrappedModel
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
             replacement candidates
     """
 
-    wrapped_model: SearchBasedAttackWrappedModel
+    wrapped_model: WrappedModel
     n_candidates_per_it: int
     n_its: int
     n_attack_tokens: int

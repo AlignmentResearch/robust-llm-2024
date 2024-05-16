@@ -2,8 +2,6 @@ import logging
 from typing import Any
 
 import numpy as np
-import transformers
-from accelerate import Accelerator, DistributedType
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
@@ -12,13 +10,13 @@ from robust_llm.attacks.search_based.utils import (
     PreppedExample,
     PromptTemplate,
     get_chunking_for_search_based,
-    get_wrapped_model,
 )
 from robust_llm.config.attack_configs import SearchBasedAttackConfig
 from robust_llm.config.configs import AttackConfig
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.utils import LanguageModel, get_randint_with_exclusions
+from robust_llm.utils import get_randint_with_exclusions
 
 logger = logging.getLogger(__name__)
 
@@ -44,21 +42,14 @@ class MultiPromptSearchBasedAttack(Attack):
     def __init__(
         self,
         attack_config: AttackConfig,
-        model: LanguageModel,
-        tokenizer: transformers.PreTrainedTokenizerBase,
-        accelerator: Accelerator,
+        victim: WrappedModel,
     ) -> None:
         super().__init__(attack_config)
 
-        if accelerator.distributed_type == DistributedType.NO:
-            assert isinstance(model, transformers.PreTrainedModel)
+        if victim.accelerator is None:
+            raise ValueError("Accelerator must be provided")
 
-        self.model = model
-        self.tokenizer = tokenizer
-        self.accelerator = accelerator
-        self.wrapped_model = get_wrapped_model(
-            self.model, self.tokenizer, self.accelerator  # type: ignore
-        )
+        self.victim = victim
 
     @override
     def get_attacked_dataset(
@@ -108,7 +99,7 @@ class MultiPromptSearchBasedAttack(Attack):
 
         assert isinstance(self.attack_config, SearchBasedAttackConfig)
         runner = make_runner(
-            wrapped_model=self.wrapped_model,
+            wrapped_model=self.victim,
             prepped_examples=prepped_examples,
             random_seed=self.attack_config.seed,
             config=self.attack_config,

@@ -7,6 +7,7 @@ from transformers import PreTrainedTokenizerBase
 
 from robust_llm.config.defense_configs import RetokenizationDefenseConfig
 from robust_llm.defenses.defense import DefendedModel
+from robust_llm.models import WrappedModel
 
 
 def pad_list_of_lists(
@@ -254,10 +255,13 @@ class BytePairDecomposer:
 
 
 class RetokenizationDefendedModel(DefendedModel):
-    def __post_init__(self) -> None:
-        super().__post_init__()
-        assert isinstance(self.defense_config, RetokenizationDefenseConfig)
-        self.retokenization_defense = self.defense_config
+    def __init__(
+        self, victim: WrappedModel, defense_config: RetokenizationDefenseConfig
+    ) -> None:
+        super().__init__(victim)
+        self.cfg = defense_config
+        self.drop_percentage = self.cfg.drop_percentage
+        self.verbose = self.cfg.verbose
 
         self.bpe_decomposer = BytePairDecomposer(self.tokenizer)
         tokens_to_keep = int(
@@ -266,12 +270,8 @@ class RetokenizationDefendedModel(DefendedModel):
         self.broken_tokens = self.bpe_decomposer.merge_tokens[:tokens_to_keep]
 
     @property
-    def verbose(self) -> bool:
-        return self.retokenization_defense.verbose
-
-    @property
-    def drop_percentage(self) -> float:
-        return self.retokenization_defense.drop_percentage
+    def defense_config(self) -> RetokenizationDefenseConfig:
+        return self.cfg
 
     def forward(self, **inputs) -> Any:
         assert self.tokenizer.pad_token_id is not None
@@ -294,7 +294,7 @@ class RetokenizationDefendedModel(DefendedModel):
                 f"Retokenization: seq_len={input_ids.shape}, "
                 f"non_padding={attention_mask.sum(dim=1)}"
             )
-        return self.model(
+        return self._underlying_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
         )

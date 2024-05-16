@@ -1,6 +1,8 @@
 from transformers import AutoTokenizer
 
 from robust_llm.config.configs import DatasetConfig
+from robust_llm.models import GPTNeoXModel
+from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import _get_only_data_with_incorrect_predictions
 from robust_llm.utils import FakeClassifierWithPositiveList
@@ -20,6 +22,13 @@ def test_get_only_data_with_incorrect_predictions():
         train.ds["text"], padding=True, return_tensors="pt"
     ).input_ids
     model = FakeClassifierWithPositiveList(tokenizer=tokenizer, positives=positives)
+    # We ignore the type because we are using a FakeClassifierWithPositiveList
+    victim = GPTNeoXModel(
+        model,  # type: ignore
+        tokenizer,
+        accelerator=None,
+        inference_type=InferenceType("classification"),
+    )
 
     subset_indices = [
         i for i, d in enumerate(train.ds) if d["clf_label"] == 0  # type: ignore
@@ -28,8 +37,7 @@ def test_get_only_data_with_incorrect_predictions():
 
     filtered_dataset = _get_only_data_with_incorrect_predictions(
         dataset=train,
-        model=model,  # type: ignore
-        tokenizer=tokenizer,
+        victim=victim,
         batch_size=2,
     )
 

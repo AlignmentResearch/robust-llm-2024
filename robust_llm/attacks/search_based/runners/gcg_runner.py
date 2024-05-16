@@ -76,6 +76,10 @@ class GCGRunner(SearchBasedRunner):
         # full_prompt_tokens are only used to determine the target in the generation
         # case; they are not used in the classification case.
         loss = self._compute_loss(combined_embeddings, full_prompt_tokens)
+
+        if self.wrapped_model.accelerator is None:
+            raise ValueError("An accelerator must be added to the model.")
+
         self.wrapped_model.accelerator.backward(loss)
         assert attack_onehot.grad is not None
         return attack_onehot.grad.clone()
@@ -92,13 +96,10 @@ class GCGRunner(SearchBasedRunner):
         batch of self.n_candidates_per_it < (top k * n_attack_tokens) replacements
         from the resulting pool.
         """
-        # We forbid introducing cls and sep tokens
-        cls_token_id = self.wrapped_model.cls_token_id
-        sep_token_id = self.wrapped_model.sep_token_id
-        if cls_token_id is not None:
-            gradients[:, cls_token_id] = float("inf")
-        if sep_token_id is not None:
-            gradients[:, sep_token_id] = float("inf")
+        # We forbid introducing special tokens in the attack tokens.
+        excluded_token_ids = self.wrapped_model.tokenizer.all_special_ids
+        for special_token_id in excluded_token_ids:
+            gradients[:, special_token_id] = float("inf")
 
         # For each position, find the 'top_k' tokens with the largest negative gradient;
         # i.e. the tokens which if substituted are estimated to decrease loss the most.

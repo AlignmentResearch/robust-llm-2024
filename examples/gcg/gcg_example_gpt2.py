@@ -2,23 +2,22 @@ from accelerate import Accelerator
 from transformers import AutoTokenizer, GPT2LMHeadModel
 
 from robust_llm.attacks.search_based.runners import GCGRunner
-from robust_llm.attacks.search_based.utils import (
-    PreppedExample,
-    PromptTemplate,
-    get_wrapped_model,
-)
-from robust_llm.utils import prepare_model_with_accelerate
+from robust_llm.attacks.search_based.utils import PreppedExample, PromptTemplate
+from robust_llm.models import GPT2Model
+from robust_llm.models.model_utils import InferenceType
 
 
 def main():
     accelerator = Accelerator()
     model = GPT2LMHeadModel.from_pretrained("gpt2")
-    model = prepare_model_with_accelerate(accelerator, model)  # type: ignore
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     user_prompt = "Hello there."
     prompt_template = PromptTemplate(before_attack=user_prompt)
     # specify parameters for the attack
-    wrapped_model = get_wrapped_model(model, tokenizer, accelerator)
+    assert isinstance(model, GPT2LMHeadModel)
+    wrapped_model = GPT2Model(
+        model, tokenizer, accelerator, inference_type=InferenceType("generation")
+    )
 
     prepped_examples = [
         PreppedExample(

@@ -1,3 +1,7 @@
 defaults:
 - TRL
 - /model@adversary: pythia-31m
+
+adversary:
+  inference_type: "trl"
+  padding_side: "left"

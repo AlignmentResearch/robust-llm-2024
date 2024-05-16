@@ -2,6 +2,7 @@
 
 import pytest
 import textattack.shared.utils
+from omegaconf import OmegaConf
 
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.config import (
@@ -44,6 +45,9 @@ def exp_config() -> ExperimentConfig:
         model=ModelConfig(
             name_or_path="EleutherAI/pythia-14m",
             family="pythia",
+            # We have to set this explicitly because we are not loading with Hydra,
+            # so interpolation doesn't happen.
+            inference_type="classification",
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/PasswordMatch",
@@ -54,12 +58,22 @@ def exp_config() -> ExperimentConfig:
     return config
 
 
-def _test_doesnt_crash(config: ExperimentConfig) -> None:
+def _test_doesnt_crash(exp_config: ExperimentConfig) -> None:
+    """Small wrapper around run_evaluation_pipeline.
+
+    This resets a TextAttack global variable, and runs interpolation:
+    - First we convert to an OmegaConf structured config, which enables
+    interpolation.
+    - Then we convert back to an ExperimentConfig object, and use
+    that to run the pipeline.
+    """
     # This is a global variable that needs to be reset between attacks
     # of different types because of a bug in TextAttack.
     # See GH#341 for more details.
     textattack.shared.utils.strings._flair_pos_tagger = None
 
+    config = OmegaConf.to_object(OmegaConf.structured(exp_config))
+    assert isinstance(config, ExperimentConfig)
     run_evaluation_pipeline(config)
 
 
@@ -113,6 +127,10 @@ def test_doesnt_crash_trl(exp_config: ExperimentConfig) -> None:
         adversary=ModelConfig(
             name_or_path="EleutherAI/pythia-14m",
             family="pythia",
+            # Our inference type for the adversary is different because
+            # we need a ForCausalLMWithValueHead model
+            inference_type="trl",
+            strict_load=False,
         ),
     )
 

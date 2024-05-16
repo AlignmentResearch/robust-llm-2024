@@ -7,9 +7,9 @@ from robust_llm.config.configs import ExperimentConfig
 from robust_llm.defenses import make_defended_model
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import wandb_cleanup, wandb_initialize
-from robust_llm.pipelines.utils import prepare_attack, prepare_victim_models
+from robust_llm.models import WrappedModel
+from robust_llm.pipelines.utils import prepare_attack
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
-from robust_llm.utils import prepare_model_with_accelerate
 
 
 def run_evaluation_pipeline(args: ExperimentConfig) -> None:
@@ -23,25 +23,20 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> None:
     validation = load_rllm_dataset(args.dataset, split="validation")
     num_classes = validation.num_classes
 
-    model, tokenizer, decoder = prepare_victim_models(args, num_classes)
+    victim = WrappedModel.from_config(args.model, accelerator, num_classes)
 
     assert wandb.run is not None
     # Log the model size to wandb for use in plots, so we don't
     # have to try to get it out of the model name.
     # We use `commit=False` to avoid incrementing the step counter.
     # TODO (GH#348): Move this to a more appropriate place.
-    wandb.log({"model_size": model.num_parameters()}, commit=False)
+    wandb.log({"model_size": victim.model.num_parameters()}, commit=False)
 
-    model = prepare_model_with_accelerate(accelerator, model)
-    model.eval()
-    if decoder is not None:
-        decoder.eval()
+    victim.eval()
 
     attack = prepare_attack(
         args=args,
-        model=model,
-        tokenizer=tokenizer,
-        accelerator=accelerator,
+        victim=victim,
         training=False,
     )
 
@@ -67,18 +62,14 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> None:
                 range(args.defense.num_preparation_examples)
             )
 
-        model = make_defended_model(
+        victim = make_defended_model(
+            victim=victim,
             defense_config=args.defense,
-            init_model=model,
-            tokenizer=tokenizer,
             dataset=defense_prep_dataset,
-            decoder=decoder,
         )
 
     do_adversarial_evaluation(
-        model=model,
-        tokenizer=tokenizer,
-        accelerator=accelerator,
+        victim=victim,
         dataset=validation,
         attack=attack,
         batch_size=args.evaluation.batch_size,

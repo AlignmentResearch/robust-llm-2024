@@ -31,12 +31,12 @@ from typing_extensions import override
 from robust_llm.attacks.attack import Attack
 from robust_llm.config.attack_configs import TextAttackAttackConfig
 from robust_llm.defenses.defense import DefendedModel
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
     ModifiableChunkSpec,
 )
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.utils import LanguageModel
 
 SPECIAL_MODIFIABLE_WORD = "special_modifiable_word"
 
@@ -169,8 +169,7 @@ class TextAttackAttack(Attack):
     def __init__(
         self,
         attack_config: TextAttackAttackConfig,
-        model: LanguageModel,
-        tokenizer: transformers.PreTrainedTokenizerBase,
+        victim: WrappedModel,
     ) -> None:
         """Constructor for TextAttackAttack.
 
@@ -181,11 +180,17 @@ class TextAttackAttack(Attack):
         """
         super().__init__(attack_config)
 
-        assert isinstance(model, (transformers.PreTrainedModel, DefendedModel)), (
-            "`model` must be of type `transformers.PreTrainedModel` "
-            f"or `DefendedModel`, but got type {type(model)}."
+        assert isinstance(
+            victim.model, (transformers.PreTrainedModel, DefendedModel)
+        ), (
+            "`victim.model` must be of type `transformers.PreTrainedModel` "
+            f"or `DefendedModel`, but got type {type(victim.model)}."
         )
-        wrapped_model = LanguageModelWrapper(model, tokenizer)
+        # The reason we have to unwrap and then rewrap the model is that the
+        # LanguageModelWrapper is a subclass of TextAttack's HuggingFaceModelWrapper,
+        # which is the class that TextAttack attacks expect.
+        # TODO (ian): Avoid unwrapping and rewrapping.
+        wrapped_model = LanguageModelWrapper(victim.model, victim.tokenizer)
 
         self.num_modifiable_words_per_chunk = (
             attack_config.num_modifiable_words_per_chunk

@@ -10,12 +10,7 @@ import transformers
 import wandb
 import wandb.util
 from datasets import Dataset
-from transformers import (
-    EvalPrediction,
-    PreTrainedModel,
-    PreTrainedTokenizerBase,
-    TrainingArguments,
-)
+from transformers import EvalPrediction, TrainingArguments
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
@@ -27,6 +22,7 @@ from robust_llm.evaluation import (
     get_prediction_logits_and_labels_and_maybe_flag_values,
 )
 from robust_llm.logging_utils import LoggingCounter, log_dataset_to_wandb
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.trainer import (
     AdversarialTrainer,
@@ -44,8 +40,7 @@ class Training:
     job_type: str
     train_rllm_dataset: RLLMDataset
     eval_rllm_dataset: dict[str, RLLMDataset]
-    model: PreTrainedModel
-    tokenizer: PreTrainedTokenizerBase
+    victim: WrappedModel
     model_name_to_save: str  # Used for saving the model to disk/hf
     model_save_path_prefix_or_hf: str
     environment_config: EnvironmentConfig
@@ -116,13 +111,17 @@ class Training:
         )
 
         self.trainer = TrainerWithBatchSizeStoring(
-            model=self.model,
+            model=self.victim.model,
             args=hf_training_args,
             train_dataset=self.hf_train,
             eval_dataset=self.hf_eval,
-            data_collator=transformers.DataCollatorWithPadding(self.tokenizer),
+            data_collator=transformers.DataCollatorWithPadding(self.victim.tokenizer),
             compute_metrics=self.compute_metrics,
         )
+        # Since we didn't pass an accelerator when constructing the WrappedModel,
+        # we need to add it here.
+        self.victim.add_accelerator(self.trainer.accelerator)
+
         self.victim_training_logging_counter = LoggingCounter(
             _name="victim_training",
         )
@@ -210,14 +209,14 @@ class Training:
                 # and the trainer.hub_model_id (no `args`!), which
                 # was previously None, is set.
                 assert self.trainer.args.hub_model_id is not None
-                self.model.push_to_hub(
+                self.victim.model.push_to_hub(
                     repo_id=self.trainer.args.hub_model_id, revision=adv_tr_round_str  # type: ignore # noqa: E501
                 )
 
                 # Even though the above line should push both model and tokenizer,
                 # in practice the tokenizer sometimes doesn't get pushed,
                 # so we do it explicitly here.
-                self.tokenizer.push_to_hub(
+                self.victim.tokenizer.push_to_hub(
                     self.trainer.args.hub_model_id, revision=adv_tr_round_str  # type: ignore # noqa: E501
                 )
 
@@ -239,7 +238,7 @@ class Training:
                 wandb.run.summary["saved_dir"] = output_dir  # type: ignore[has-type]
                 print(f"Saving the model/tokenizer to {output_dir}")
                 self.trainer._save(output_dir=output_dir, state_dict=state_dict)
-                self.tokenizer.save_pretrained(output_dir)
+                self.victim.tokenizer.save_pretrained(output_dir)
 
     @property
     def output_dir(self) -> str:
@@ -319,14 +318,18 @@ class AdversarialTraining(Training):
         )
         self.trainer = AdversarialTrainer(
             use_balanced_sampling=self.use_balanced_sampling,
-            model=self.model,
+            model=self.victim.model,
             args=hf_training_args,
             train_dataset=self.hf_train,
             eval_dataset=self.hf_eval,
-            data_collator=transformers.DataCollatorWithPadding(self.tokenizer),
+            data_collator=transformers.DataCollatorWithPadding(self.victim.tokenizer),
             compute_metrics=self.compute_metrics,
-            tokenizer=self.tokenizer,
+            tokenizer=self.victim.tokenizer,
         )
+        # Since we didn't pass an accelerator when constructing the WrappedModel,
+        # we need to add it here.
+        self.victim.add_accelerator(self.trainer.accelerator)
+
         self.victim_training_logging_counter = LoggingCounter(
             _name="victim_training",
         )
@@ -345,16 +348,12 @@ class AdversarialTraining(Training):
         training_attack = create_attack(
             attack_config=self.training_attack_config,
             logging_name="training_attack",
-            victim_model=self.model,
-            victim_tokenizer=self.tokenizer,
-            accelerator=adversarial_trainer.accelerator,
+            victim=self.victim,
         )
         validation_attack = create_attack(
             attack_config=self.validation_attack_config,
             logging_name="validation_attack",
-            victim_model=self.model,
-            victim_tokenizer=self.tokenizer,
-            accelerator=adversarial_trainer.accelerator,
+            victim=self.victim,
         )
 
         if adversarial_trainer.is_world_process_zero():
@@ -391,7 +390,7 @@ class AdversarialTraining(Training):
 
             # Set the model to eval mode for the attacks. Model is set to train mode by
             # HF Trainer during training, otherwise we want it in eval mode.
-            self.model.eval()
+            self.victim.eval()
 
             # Train the train/validation attacks if they need training.
             print(
@@ -426,9 +425,7 @@ class AdversarialTraining(Training):
 
             # Perform adversarial evaluation every round
             do_adversarial_evaluation(
-                model=self.model,
-                tokenizer=self.tokenizer,
-                accelerator=adversarial_trainer.accelerator,
+                victim=self.victim,
                 dataset=self.eval_rllm_dataset["validation"],
                 attack=validation_attack,
                 batch_size=self.evaluation_config.batch_size,
@@ -466,8 +463,7 @@ class AdversarialTraining(Training):
                     selected_new_adv_examples = (
                         _get_only_data_with_incorrect_predictions(
                             dataset=new_adv_examples,
-                            model=self.model,
-                            tokenizer=self.tokenizer,
+                            victim=self.victim,
                             batch_size=self.eval_batch_size,
                         )
                     )
@@ -533,18 +529,16 @@ def _maybe_train_attack(
 @torch.no_grad()
 def _get_only_data_with_incorrect_predictions(
     dataset: RLLMDataset,
-    model: PreTrainedModel,
-    tokenizer: PreTrainedTokenizerBase,
+    victim: WrappedModel,
     batch_size: int,
 ) -> RLLMDataset:
     """Returns a dataset with only the examples that the model got wrong."""
-    model.eval()
+    victim.eval()
 
     pred_logits, pred_labels, _ = (
         get_prediction_logits_and_labels_and_maybe_flag_values(
             dataset=dataset.ds,
-            model=model,
-            tokenizer=tokenizer,
+            victim=victim,
             batch_size=batch_size,
         )
     )

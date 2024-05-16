@@ -5,16 +5,12 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from transformers import AutoTokenizer
 
-from robust_llm.attacks.search_based.models import (
-    SearchBasedAttackWrappedModel,
-    WrappedBERTModel,
-    WrappedGPT2Model,
-    WrappedGPTNeoXModel,
-)
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.runners.beam_search_runner import BeamSearchRunner
 from robust_llm.attacks.search_based.utils import PreppedExample, PromptTemplate
 from robust_llm.config import BeamSearchAttackConfig
+from robust_llm.models import GPT2Model, GPTNeoXModel, WrappedModel
+from robust_llm.models.model_utils import InferenceType
 from robust_llm.utils import FakeModelForSequenceClassification
 
 
@@ -22,7 +18,7 @@ def _get_runner(
     before_attack_text: str,
     after_attack_text: str,
     beam_search_width: int,
-    wrapped_model: SearchBasedAttackWrappedModel,
+    wrapped_model: WrappedModel,
 ) -> BeamSearchRunner:
     config = BeamSearchAttackConfig(beam_search_width=beam_search_width)
     prompt_template = PromptTemplate(
@@ -47,20 +43,17 @@ def _get_runner(
 ACCELERATOR = Accelerator(cpu=True)
 
 WRAPPED_MODELS = {
-    "gpt2": WrappedGPT2Model(
+    "gpt2": GPT2Model(
         FakeModelForSequenceClassification(),  # type: ignore
         AutoTokenizer.from_pretrained("gpt2"),
         accelerator=ACCELERATOR,
+        inference_type=InferenceType("classification"),
     ),
-    "bert": WrappedBERTModel(
-        FakeModelForSequenceClassification(),  # type: ignore
-        AutoTokenizer.from_pretrained("bert-base-uncased"),
-        accelerator=ACCELERATOR,
-    ),
-    "pythia": WrappedGPTNeoXModel(
+    "pythia": GPTNeoXModel(
         FakeModelForSequenceClassification(),  # type: ignore
         AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped"),
         accelerator=ACCELERATOR,
+        inference_type=InferenceType("classification"),
     ),
 }
 
@@ -94,11 +87,7 @@ def test_n_best_candidates_to_keep(model_name: str, beam_search_width: int) -> N
     assert runner.n_best_candidates_to_keep == beam_search_width
 
 
-# hypothesis was generating hex characters that messed up BERT tokenizer
-text_no_specials = st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126))
-
-
-@given(initial_text=text_no_specials)
+@given(initial_text=st.text())
 @pytest.mark.parametrize("num_initial_candidates", [1, 5])
 # We use a deadline of 1000ms because the default of 200ms was too short, as was
 # a deadline of 500ms.

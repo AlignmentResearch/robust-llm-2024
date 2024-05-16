@@ -9,7 +9,6 @@ import torch.utils.data
 from datasets import Dataset
 from tqdm import tqdm
 
-from robust_llm.attacks.search_based.models import SearchBasedAttackWrappedModel
 from robust_llm.attacks.search_based.utils import (
     AttackIndices,
     AttackTokenizationChangeException,
@@ -17,6 +16,7 @@ from robust_llm.attacks.search_based.utils import (
     ReplacementCandidate,
     create_onehot_embedding,
 )
+from robust_llm.models import WrappedModel
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class SearchBasedRunner(abc.ABC):
             replacement candidates
     """
 
-    wrapped_model: SearchBasedAttackWrappedModel
+    wrapped_model: WrappedModel
     n_candidates_per_it: int
     n_its: int
     n_attack_tokens: int
@@ -119,7 +119,6 @@ class SearchBasedRunner(abc.ABC):
         candidate_texts: Sequence[str],
     ) -> list[Tuple[str, ReplacementCandidate]]:
         """Proposes a set of (attack_text, replacement) candidate pairs to consider."""
-        pass
 
     def _select_next_candidates(self, candidates: list[Tuple[float, str]]) -> list[str]:
         """Selects text candidates for the next round, based on (score, text) pairs."""
@@ -215,12 +214,12 @@ class SearchBasedRunner(abc.ABC):
         skip_special_tokens: bool = True,
         try_squeeze: bool = True,
     ) -> str:
-        string = self.wrapped_model.decode_tokens(
+        strings = self.wrapped_model.decode_tokens(
             inp,
             skip_special_tokens=skip_special_tokens,
             try_squeeze=try_squeeze,
         )
-        return string
+        return strings
 
     def _get_attack_indices(
         self, attack_text: str, example: PreppedExample
@@ -322,6 +321,8 @@ class SearchBasedRunner(abc.ABC):
             targets = full_prompts_tokens[:, self.attack_indices.target_slice]
 
         accelerator = self.wrapped_model.accelerator
+        if accelerator is None:
+            raise ValueError("Accelerator must be provided")
 
         candidates_dataset = Dataset.from_dict(
             {

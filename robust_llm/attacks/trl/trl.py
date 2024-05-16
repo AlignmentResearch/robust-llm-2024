@@ -5,7 +5,6 @@ import torch
 import wandb
 from datasets import Dataset
 from tqdm import tqdm
-from transformers import PreTrainedTokenizerBase
 from trl import PPOTrainer
 from typing_extensions import override
 
@@ -14,13 +13,13 @@ from robust_llm.attacks.trl.utils import (
     LogitTextClassificationPipeline,
     check_for_not_finite,
     make_ppo_trainer,
-    prepare_adversary_model_and_tokenizer,
+    prepare_adversary,
     prepare_prompts,
 )
 from robust_llm.config.attack_configs import TRLAttackConfig
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.utils import LanguageModel
 
 TRL_RESPONSE_STR = "<USER INPUT HERE>"
 
@@ -38,8 +37,7 @@ class TRLAttack(Attack):
         self,
         attack_config: TRLAttackConfig,
         logging_name: str,
-        victim_model: LanguageModel,
-        victim_tokenizer: PreTrainedTokenizerBase,
+        victim: WrappedModel,
     ) -> None:
         """Constructor for TRLAttack.
 
@@ -65,13 +63,16 @@ class TRLAttack(Attack):
             )
             print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
-        self.victim_tokenizer = victim_tokenizer
+        # TODO (GH#374): Remove pipeline.
         self.victim_pipeline = LogitTextClassificationPipeline(
-            model=victim_model,
-            tokenizer=victim_tokenizer,
+            model=victim,
+            tokenizer=victim.tokenizer,
             # If we do not pass the device, the pipeline will move
-            # self.victim_model to cpu as a side-effect
-            device=victim_model.device,
+            # self.victim to cpu as a side-effect
+            device=victim.device,
+            # We have to specify the framework explicitly because the pipeline
+            # will not be able to infer it from a WrappedModel.
+            framework="pt",
         )
 
         self.victim_batch_size = attack_config.victim_inference_batch_size
@@ -80,18 +81,14 @@ class TRLAttack(Attack):
         self.reward_type = attack_config.reward_type
 
         self.seed = attack_config.seed
-        self.device = victim_model.device
+        self.device = victim.model.device
 
         self.model_name_to_save = attack_config.model_name_to_save
         self.model_save_path_prefix = attack_config.model_save_path_prefix
 
-        (
-            self.adversary_model,
-            self.adversary_tokenizer,
-        ) = prepare_adversary_model_and_tokenizer(
-            attack_config,
-            num_classes=victim_model.config.num_labels,
-            device=self.device,
+        assert victim.accelerator is not None
+        self.adversary = prepare_adversary(
+            attack_config, victim.model.config.num_labels, victim.accelerator
         )
 
         # NOTE: these values are taken from the TRL quickstart example
@@ -105,7 +102,7 @@ class TRLAttack(Attack):
             "top_k": 0.0,
             "top_p": 1.0,
             "do_sample": True,
-            "pad_token_id": self.adversary_tokenizer.eos_token_id,
+            "pad_token_id": self.adversary.tokenizer.eos_token_id,
             "max_new_tokens": attack_config.max_new_tokens,
         }
         self.ppo_trainer: Optional[PPOTrainer] = None
@@ -121,8 +118,8 @@ class TRLAttack(Attack):
         assert isinstance(self.attack_config, TRLAttackConfig)
         self.ppo_trainer = make_ppo_trainer(
             attack_config=self.attack_config,
-            adversary_model=self.adversary_model,
-            adversary_tokenizer=self.adversary_tokenizer,
+            adversary_model=self.adversary.model,
+            adversary_tokenizer=self.adversary.tokenizer,
             dataset=dataset.ds,
         )
 
@@ -264,7 +261,7 @@ class TRLAttack(Attack):
             response_text=TRL_RESPONSE_STR,
             modifiable_chunk_spec=modifiable_chunk_spec,
         )
-        context_tensors = self.adversary_tokenizer(
+        context_tensors = self.adversary.tokenizer(
             contexts, padding="max_length", truncation=True, return_tensors="pt"  # type: ignore # noqa: E501
         )
         context_tensor_list = [
@@ -285,7 +282,7 @@ class TRLAttack(Attack):
             for response in adversary_generated_responses
         )
 
-        adversary_generated_responses_txt = self.adversary_tokenizer.batch_decode(
+        adversary_generated_responses_txt = self.adversary.tokenizer.batch_decode(
             adversary_generated_responses
         )
 
@@ -314,5 +311,5 @@ class TRLAttack(Attack):
         print(f"Saving the trl model to {output_dir}")
 
         # TODO(niki): enable saving on hf hub
-        self.adversary_model.save_pretrained(output_dir)
-        self.adversary_tokenizer.save_pretrained(output_dir)
+        self.adversary.model.save_pretrained(output_dir)
+        self.adversary.tokenizer.save_pretrained(output_dir)

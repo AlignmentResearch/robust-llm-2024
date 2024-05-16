@@ -4,11 +4,11 @@ from robust_llm.config.configs import (
     ExperimentConfig,
     ModelConfig,
 )
-from robust_llm.pipelines.utils import prepare_victim_models
+from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 
 
-def test_prepare_victim_models_num_classes():
+def test_victim_num_classes():
     TEST_CASES = [
         # dataset_type, expected_num_classes
         ("AlignmentResearch/PasswordMatch", 2),
@@ -22,12 +22,17 @@ def test_prepare_victim_models_num_classes():
             model=ModelConfig(
                 name_or_path="EleutherAI/pythia-14m",
                 family="pythia",
+                # We have to set this explicitly because we are not loading with Hydra,
+                # so interpolation doesn't happen.
+                inference_type="classification",
             ),
             evaluation=EvaluationConfig(),
         )
 
         train_dataset = load_rllm_dataset(config.dataset, split="train")
         num_classes = train_dataset.num_classes
-        victim_model, _, _ = prepare_victim_models(config, num_classes=num_classes)
+        victim = WrappedModel.from_config(
+            config.model, accelerator=None, num_classes=num_classes
+        )
 
-        assert victim_model.config.num_labels == expected_num_classes
+        assert victim.config.num_labels == expected_num_classes

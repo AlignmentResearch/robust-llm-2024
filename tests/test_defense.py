@@ -11,6 +11,7 @@ from transformers import PreTrainedModel
 
 from robust_llm.config import PerplexityDefenseConfig
 from robust_llm.config.defense_configs import RetokenizationDefenseConfig
+from robust_llm.config.model_configs import ModelConfig
 from robust_llm.defenses.perplexity import (
     PerplexityDefendedModel,
     compute_max_min_percentile_perplexity,
@@ -20,6 +21,7 @@ from robust_llm.defenses.retokenization import (
     RetokenizationDefendedModel,
     broken_token_representations,
 )
+from robust_llm.models.model_utils import InferenceType
 
 
 @dataclass
@@ -212,21 +214,25 @@ def test_compute_max_perplexity():
         ],
         dtype=torch.float,
     )  # log of probabilities
-    mock_model.return_value.logits = mock_model_output
     mock_model.device = "cpu"
+    mock_model.tokenizer.device = torch.device("cpu")
 
     mock_tokenizer = MagicMock()
     mock_tokenizer.return_value = TokenizedInput(
         input_ids=torch.tensor([[0, 1, 2]], dtype=torch.long),
         attention_mask=torch.tensor([[1, 1, 1]], dtype=torch.long),
     )
+    mock_wrapped_model = MagicMock()
+    mock_wrapped_model.return_value.logits = mock_model_output
+    mock_wrapped_model.device = "cpu"
+    mock_wrapped_model.tokenizer = mock_tokenizer
 
     # Define a Mock dataset
     mock_dataset = TrivialTestDataset()
 
     # Step 2: Call function
     max_perplexity, _, _ = compute_max_min_percentile_perplexity(
-        model=mock_model,
+        model=mock_wrapped_model,
         tokenizer=mock_tokenizer,
         dataset=mock_dataset,  # type: ignore
         batch_size=1,  # type: ignore
@@ -249,17 +255,9 @@ def test_retokenization_defended_model_forward():
     }
     broken_tokens = [(2, [3, 4])]
 
-    # Create a dummy dataset
-    dataset = Dataset.from_dict(
-        {
-            "input_ids": [[0, 1, 2]],
-            "attention_mask": [[1, 1, 1]],
-        }
-    )
-
     retokenization_config = RetokenizationDefenseConfig()
 
-    init_model = MagicMock()
+    victim = MagicMock()
     tokenizer = MagicMock()
     decoder = MagicMock()
 
@@ -267,7 +265,7 @@ def test_retokenization_defended_model_forward():
     tokenizer.padding_side = "right"
     tokenizer.pad_token_id = 0
 
-    init_model.device = "cpu"
+    victim.device = "cpu"
     decoder.device = "cpu"
 
     def side_effect_function(*args, **kwargs):
@@ -280,20 +278,18 @@ def test_retokenization_defended_model_forward():
             )
         )
 
-    init_model.side_effect = side_effect_function
+    victim.side_effect = side_effect_function
+    victim.tokenizer = tokenizer
 
     # Create a RetokenizationDefendedModel instance
     model = RetokenizationDefendedModel(
-        init_model=init_model,
-        tokenizer=tokenizer,
-        decoder=decoder,
-        dataset=dataset,
+        victim=victim,
         defense_config=retokenization_config,
     )
     model.broken_tokens = broken_tokens
 
     # Call the forward method
-    output = model.forward(**inputs)
+    output = model(**inputs)
 
     assert (
         output.logits
@@ -308,7 +304,7 @@ def test_retokenization_defended_model_forward():
     assert output.filters is None
 
 
-def test_perplexity_defended_model_forward():
+def test_perplexity_defended_model_forward(mocker):
     # Create a dummy input
     inputs = {
         "input_ids": torch.tensor([[0, 1, 2], [2, 1, 0], [0, 1, 2]]),
@@ -325,21 +321,34 @@ def test_perplexity_defended_model_forward():
     )
 
     # Create a dummy defense config
-    perplexity_config = PerplexityDefenseConfig(perplexity_threshold_proportion=0.01)
+    perplexity_config = PerplexityDefenseConfig(
+        perplexity_threshold_proportion=0.01,
+        decoder=ModelConfig(
+            name_or_path="EleutherAI/pythia-14m",
+            family="pythia",
+            inference_type="generation",
+        ),
+    )
 
-    init_model = MagicMock()
+    victim = MagicMock()
 
     tokenizer = MagicMock()
+    tokenizer.device = torch.device("cpu")
     tokenizer.return_value = TokenizedInput(
         input_ids=torch.tensor([[0, 1, 2]]),
         attention_mask=torch.tensor([[1, 1, 1]]),
     )
     decoder = MagicMock()
     decoder.__class__ = PreTrainedModel
+    decoder.inference_type = InferenceType.GENERATION
 
-    init_model.device = torch.device("cpu")
+    # victim.device = torch.device("cpu")
+    victim.accelerator = MagicMock()
+    victim.accelerator.device = torch.device("cpu")
+    victim.accelerator.prepare().device = torch.device("cpu")
     decoder.device = torch.device("cpu")
 
+    victim.tokenizer = tokenizer
     output_logits = torch.tensor(
         [
             [-9.0, -1.0],
@@ -347,7 +356,7 @@ def test_perplexity_defended_model_forward():
             [-9.0, -1.0],
         ]
     )
-    init_model.return_value = Output(
+    victim.return_value = Output(
         logits=output_logits.clone().detach(),
     )
     decoder.return_value = Output(
@@ -360,17 +369,21 @@ def test_perplexity_defended_model_forward():
         )
     )
 
-    # Create a PerplexityDefendedModel instance
-    model = PerplexityDefendedModel(
-        init_model=init_model,
-        tokenizer=tokenizer,
-        decoder=decoder,
-        dataset=dataset,
-        defense_config=perplexity_config,
-    )
+    # Mock the function that will build the decoder.
+    # NOTE: We mock the version of WrappedModel *in the perplexity.py module*
+    # because that's the one that's used to instantiate the decoder.
+    # See https://pytest-mock.readthedocs.io/en/latest/usage.html#where-to-patch
+    mock_WrappedModel = mocker.patch("robust_llm.defenses.perplexity.WrappedModel")
+    mock_WrappedModel.from_config.return_value = decoder
 
+    # Create a PerplexityDefendedModel instance
+    defended_model = PerplexityDefendedModel(
+        victim=victim,
+        defense_config=perplexity_config,
+        dataset=dataset,
+    )
     # Call the forward method
-    output = model.forward(**inputs)
+    output = defended_model.forward(**inputs)
 
     assert (output.filters == torch.tensor([False, True, False])).all()
     assert (output.logits == output_logits).all()

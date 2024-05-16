@@ -1,6 +1,8 @@
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from robust_llm.config.configs import DatasetConfig, EnvironmentConfig, EvaluationConfig
+from robust_llm.models import GPTNeoXModel
+from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import Training
 
@@ -15,6 +17,12 @@ def test_basic_constructor():
     model_name = "EleutherAI/pythia-14m"
     model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    wrapped_model = GPTNeoXModel(
+        model,
+        tokenizer,
+        accelerator=None,
+        inference_type=InferenceType("classification"),
+    )
 
     train = load_rllm_dataset(dataset_cfg, split="train").tokenize(tokenizer)
     validation = load_rllm_dataset(dataset_cfg, split="validation").tokenize(tokenizer)
@@ -25,8 +33,7 @@ def test_basic_constructor():
         run_name="test-run",
         train_rllm_dataset=train,
         eval_rllm_dataset={"validation": validation},
-        model=model,
-        tokenizer=tokenizer,
+        victim=wrapped_model,
         model_name_to_save="test_model",
         model_save_path_prefix_or_hf="test-save-path",
         environment_config=EnvironmentConfig(),

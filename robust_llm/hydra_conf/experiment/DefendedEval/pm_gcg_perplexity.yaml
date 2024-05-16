@@ -11,6 +11,12 @@ defaults:
 dataset:
   n_train: 2
   n_val: 2
+
+defense:
+  decoder:
+    # Since we are looking at perplexity, we need a model that produces
+    # logits over tokens.
+    inference_type: "generation"
 experiment_name: ???
 run_name: ???
 experiment_type: "evaluation"

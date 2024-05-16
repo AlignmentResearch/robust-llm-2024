@@ -28,12 +28,9 @@ class BeamSearchRunner(SearchBasedRunner):
         self,
         candidate_texts: Sequence[str],
     ) -> list[Tuple[str, ReplacementCandidate]]:
-        # We forbid introducing cls and sep tokens
-        cls_token_id = self.wrapped_model.cls_token_id
-        sep_token_id = self.wrapped_model.sep_token_id
-        excluded_token_ids = [
-            tok for tok in [cls_token_id, sep_token_id] if tok is not None
-        ]
+
+        # We forbid introducing special tokens in the attack tokens.
+        excluded_token_ids = self.wrapped_model.tokenizer.all_special_ids
 
         text_replacement_pairs: list[Tuple[str, ReplacementCandidate]] = []
 

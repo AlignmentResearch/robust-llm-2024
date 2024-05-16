@@ -1,0 +1,227 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Optional
+
+import torch
+from accelerate import Accelerator
+from transformers import PretrainedConfig, PreTrainedModel, PreTrainedTokenizerBase
+
+from robust_llm.config.model_configs import ModelConfig
+from robust_llm.models.model_utils import (
+    InferenceType,
+    _get_embedding_weights,
+    load_hf_model,
+    prepare_model_with_accelerate,
+)
+
+
+class WrappedModel(ABC):
+    """Combines a model and a tokenizer."""
+
+    _registry: dict[str, type[WrappedModel]] = {}
+
+    def __init__(
+        self,
+        model: PreTrainedModel,
+        tokenizer: PreTrainedTokenizerBase,
+        accelerator: Accelerator | None,
+        inference_type: InferenceType,
+    ) -> None:
+        self.accelerator = accelerator
+        if self.accelerator is not None:
+            self.model = prepare_model_with_accelerate(self.accelerator, model)
+        else:
+            self.model = model
+
+        self.tokenizer = tokenizer
+        self.inference_type = inference_type
+
+    @classmethod
+    def register_subclass(cls, name):
+        """Registers a subclass of WrappedModel.
+
+        We use this so we can create subclasses of WrappedModel without circular
+        imports.
+
+        (From https://chat.openai.com/share/e/162dd905-0ce9-4981-b1a7-b0d0306ea99b)
+        """
+
+        def decorator(subclass):
+            cls._registry[name] = subclass
+            return subclass
+
+        return decorator
+
+    @classmethod
+    def from_config(
+        cls,
+        config: ModelConfig,
+        accelerator: Accelerator | None,
+        num_classes: Optional[int] = None,
+        **kwargs,
+    ) -> WrappedModel:
+        """Creates a WrappedModel from a ModelConfig."""
+        inference_type = InferenceType(config.inference_type)
+        model = load_hf_model(
+            name_or_path=config.name_or_path,
+            revision=config.revision,
+            inference_type=inference_type,
+            strict_load=config.strict_load,
+            num_classes=num_classes,
+        )
+
+        family = config.family
+        # Handle special case where Pythia models are based on GPTNeoX.
+        if family == "pythia":
+            family = "gpt_neox"
+        try:
+            subcls = cls._registry[family]
+        except KeyError:
+            raise ValueError(f"Unsupported model family: {family}")
+
+        tokenizer = subcls.load_tokenizer(config)
+        return subcls(model, tokenizer, accelerator, inference_type)
+
+    def __call__(self, **inputs):
+        return self.forward(**inputs)
+
+    def forward(self, **inputs):
+        return self.model.forward(**inputs)
+
+    def to(self, device: torch.device) -> WrappedModel:
+        """Move the model to the given device.
+
+        This moves the underlying model to the given device,
+        like the cpu or a cuda gpu.
+
+        TODO (ian): Remove this method when we stop using pipelines.
+        """
+        # For some reason, the type hint for to() is wrong in transformers
+        self.model.to(device=device)  # type: ignore[reportCallIssue]
+        return self
+
+    def can_generate(self) -> bool:
+        """Returns whether the model can generate text.
+
+        This is used by pipelines.
+
+        TODO (ian): Remove this method when we stop using pipelines.
+        """
+        return self.inference_type == InferenceType.GENERATION
+
+    @property
+    def config(self) -> PretrainedConfig:
+        """Return's the model's config.
+
+        NOTE: This is NOT our ModelConfig object:
+        this is the huggingface transformers.PretrainedConfig.
+        """
+        return self.model.config
+
+    def eval(self) -> WrappedModel:
+        """Sets the model to evaluation mode."""
+        self.model.eval()
+        return self
+
+    def train(self) -> WrappedModel:
+        """Sets the model to training mode."""
+        self.model.train()
+        return self
+
+    @classmethod
+    @abstractmethod
+    def load_tokenizer(
+        cls,
+        model_config: ModelConfig,
+    ) -> PreTrainedTokenizerBase:
+        pass
+
+    def add_accelerator(self, accelerator: Accelerator) -> None:
+        """Adds an accelerator to the model."""
+        if self.accelerator is not None:
+            raise ValueError("An accelerator has already been added to the model.")
+        self.model = prepare_model_with_accelerate(
+            accelerator=accelerator,
+            model=self.model,
+        )
+        self.accelerator = accelerator
+
+    def get_tokens(
+        self,
+        inp: str | list[str],
+        return_tensors: Optional[str] = "pt",
+        add_special: bool = False,
+    ) -> torch.Tensor:
+        """Handles all the arguments we have to add to the tokenizer."""
+        tokens = self.tokenizer(
+            inp,
+            return_tensors=return_tensors,
+            add_special_tokens=add_special,
+        ).input_ids
+        if return_tensors == "pt":
+            tokens = tokens.to(dtype=torch.int64)
+        return tokens
+
+    def decode_tokens(
+        self,
+        inp: torch.Tensor,
+        skip_special_tokens: bool = True,
+        try_squeeze: bool = True,
+    ) -> str:
+        if len(inp.shape) == 2 and inp.shape[0] == 1 and try_squeeze:
+            inp = inp.squeeze()
+
+        strings = self.tokenizer.decode(
+            inp,
+            skip_special_tokens=skip_special_tokens,
+            clean_up_tokenization_spaces=False,
+        )
+        return strings
+
+    @abstractmethod
+    def call_model(
+        self,
+        inp: torch.Tensor | None = None,
+        add_cls: bool = True,
+        add_sep: bool = True,
+        inputs_embeds: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Returns the logits from calling the model on a tensor of tokens.
+
+        NOTE (ian): This will be deprecated soon, once search-based are
+        refactored to use `ScoringCallback`s.
+        """
+        pass
+
+    def get_embeddings(self, token_ids: torch.Tensor) -> torch.Tensor:
+        """Returns the embeddings for the given token ids."""
+        self._check_for_padding_tokens(token_ids)
+        return self.model.get_input_embeddings()(token_ids)
+
+    def get_embedding_weights(self) -> torch.Tensor:
+        """Returns the embedding weights for the model."""
+        # TODO: work out if we should be adding positional embeddings
+        if self.accelerator is None:
+            raise ValueError("An accelerator must be added to the model.")
+        return _get_embedding_weights(
+            self.accelerator, self.model.get_input_embeddings()
+        )
+
+    def _check_for_padding_tokens(self, token_ids: torch.Tensor) -> None:
+        """Checks if padding tokens are present in the token ids.
+
+        When using inputs_embeds, it's important that there are no padding tokens,
+        since they are not handled properly."""
+        if self.tokenizer.pad_token_id is not None:
+            assert (
+                self.tokenizer.pad_token_id not in token_ids
+            ), "Padding tokens are present in the token ids."
+
+    @property
+    def vocab_size(self) -> int:
+        return self.tokenizer.vocab_size  # type: ignore
+
+    @property
+    def device(self) -> torch.device:
+        return self.model.device
