@@ -1,6 +1,9 @@
 # Inspired by https://gist.github.com/s-mawjee/ad0d8e0c7e07265cae097899fe48c023
 
+
 import nvidia_smi
+
+from robust_llm import logger
 
 
 def _check_gpu():
@@ -18,13 +21,15 @@ def _bytes_to_megabytes(bytes):
 def print_gpu_usage():
     gpu, num_gpu = _check_gpu()
     if not gpu:
-        print("No GPU found, so no usage to report.")
+        logger.info("No GPU found, so no usage to report.")
         return
 
     for i in range(num_gpu):
         handle = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
         info = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
-        print(
-            f"GPU-{i}: GPU-Memory: "
-            f"{_bytes_to_megabytes(info.used)}/{_bytes_to_megabytes(info.total)} MB"
+        logger.info(
+            "GPU-%s: GPU-Memory: %s/%s MB",
+            i,
+            _bytes_to_megabytes(info.used),
+            _bytes_to_megabytes(info.total),
         )

@@ -5,6 +5,7 @@ from datasets import Dataset
 from tdigest import TDigest
 from transformers import PreTrainedTokenizerBase
 
+from robust_llm import logger
 from robust_llm.config.defense_configs import PerplexityDefenseConfig
 from robust_llm.defenses.defense import DefendedModel
 from robust_llm.models import WrappedModel
@@ -339,17 +340,15 @@ class PerplexityDefendedModel(DefendedModel):
                 report_max_perplexity=self.report_max_perplexity,
             )
         )
-        print("the max perplexity was", self.max_perplexity)
-        print("the min perplexity was", self.min_perplexity)
+        logger.info("Max perplexity was: %s", self.max_perplexity)
+        logger.info("Min perplexity was: %s", self.min_perplexity)
 
         # TDigest takes percentages as input
         # Since we want to filter out `proportion` of the perplexities,
         # we take the (1 - proportion)th percentile.
         self.threshold = self.tdigest.percentile((1 - proportion) * 100)
-        print(
-            f"Setting perplexity threshold to {round(proportion * 100, 4)}% "
-            f"(perplexity={round(self.threshold, 4)})"
-        )
+        logger.info("Setting perplexity threshold to %s%%", round(proportion * 100, 4))
+        logger.info("(perplexity=%s)", round(self.threshold, 4))
 
         # Don't log to wandb if we're running tests
         if wandb.run is not None:
@@ -380,11 +379,9 @@ class PerplexityDefendedModel(DefendedModel):
         output = self._underlying_model(**inputs)
         output["filters"] = perplexity > self.threshold
         if self.verbose:
-            print(
-                f"Perplexity: {perplexity}\n"
-                f"Threshold: {self.threshold}\n"
-                f"Filter: {output['filters']}\n"
-            )
+            logger.debug("Perplexity: %s", perplexity)
+            logger.debug("Threshold: %s", self.threshold)
+            logger.debug("Filter: %s", output["filters"])
         return output
 
     def get_all_perplexity_thresholds(

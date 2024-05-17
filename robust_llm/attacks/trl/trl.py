@@ -8,6 +8,7 @@ from tqdm import tqdm
 from trl import PPOTrainer
 from typing_extensions import override
 
+from robust_llm import logger
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.trl.utils import (
     LogitTextClassificationPipeline,
@@ -55,13 +56,11 @@ class TRLAttack(Attack):
 
         # Check the logging frequency
         if self.attack_config.log_frequency is None:
-            print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-            print(
+            logger.warning(
                 "If you want to log trl training stats, "
                 "you need to set a positive log_frequency. "
                 "As is, no trl train stats will be logged."
             )
-            print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
         # TODO (GH#374): Remove pipeline.
         self.victim_pipeline = LogitTextClassificationPipeline(
@@ -172,7 +171,10 @@ class TRLAttack(Attack):
                 self._maybe_log_trl(train_stats, rewards)
 
             average_reward = torch.Tensor(epoch_rewards).squeeze().mean()
-            print(f"Training TRL; epoch {epoch} had average reward {average_reward}")
+
+            logger.info(
+                "Training TRL; epoch %s had average reward %s", epoch, average_reward
+            )
 
         self._maybe_save_model_to_path_or_hf()
 
@@ -301,14 +303,14 @@ class TRLAttack(Attack):
     def _maybe_save_model_to_path_or_hf(self) -> None:
 
         if self.model_save_path_prefix is None:
-            print("No model_save_path_prefix provided; not saving the model")
+            logger.warning("No model_save_path_prefix provided; not saving the model")
             return
         assert wandb.run is not None
         output_dir = os.path.join(
             self.model_save_path_prefix, "models", self.model_name_to_save
         )
         wandb.run.summary["saved_dir"] = output_dir  # type: ignore
-        print(f"Saving the trl model to {output_dir}")
+        logger.info("Saving the trl model to %s", output_dir)
 
         # TODO(niki): enable saving on hf hub
         self.adversary.model.save_pretrained(output_dir)

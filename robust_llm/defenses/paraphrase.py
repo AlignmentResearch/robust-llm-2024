@@ -11,6 +11,7 @@ from transformers.tokenization_utils_base import (
 )
 from transformers.utils import PaddingStrategy, TensorType
 
+from robust_llm import logger
 from robust_llm.config.defense_configs import DefenseConfig, ParaphraseDefenseConfig
 from robust_llm.defenses.defense import DefendedModel
 from robust_llm.models import WrappedModel
@@ -98,8 +99,8 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
         paraphrase = paraphrase[:, orig_len:]
         paraphrased_text = self.paraphraser.tokenizer.batch_decode(paraphrase)
         if self.verbose:
-            print(f"Original text: {text}")
-            print(f"Paraphrase: {paraphrased_text}")
+            logger.debug("Original text: %s", text)
+            logger.debug("Paraphrase: %s", paraphrased_text)
         # Now tokenize the paraphrase
         return self.victim_tokenizer(
             paraphrased_text,

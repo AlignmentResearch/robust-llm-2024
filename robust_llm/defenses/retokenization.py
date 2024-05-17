@@ -5,6 +5,7 @@ from typing import Any, Sequence, Tuple, Union, cast
 import torch
 from transformers import PreTrainedTokenizerBase
 
+from robust_llm import logger
 from robust_llm.config.defense_configs import RetokenizationDefenseConfig
 from robust_llm.defenses.defense import DefendedModel
 from robust_llm.models import WrappedModel
@@ -286,14 +287,12 @@ class RetokenizationDefendedModel(DefendedModel):
         if self.verbose:
             assert isinstance(input_ids, torch.Tensor)
             assert isinstance(attention_mask, torch.Tensor)
-            print(
-                f"Baseline tokenization: seq_len={inputs['input_ids'].shape}, "
-                f"non_padding={inputs['attention_mask'].sum(dim=1)}"
-            )
-            print(
-                f"Retokenization: seq_len={input_ids.shape}, "
-                f"non_padding={attention_mask.sum(dim=1)}"
-            )
+            logger.info("Baseline tokenization:\n")
+            logger.info("    seq_len=%s", inputs["input_ids"].shape)
+            logger.info("    non_padding=%s", inputs["attention_mask"].sum(dim=1))
+            logger.info("retokenization:\n")
+            logger.info("    seq_len=%s", input_ids.shape)
+            logger.info("    non_padding=%s", attention_mask.sum(dim=1))
         return self._underlying_model(
             input_ids=input_ids,
             attention_mask=attention_mask,

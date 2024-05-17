@@ -13,6 +13,7 @@ from datasets import Dataset
 from transformers import EvalPrediction, TrainingArguments
 from typing_extensions import override
 
+from robust_llm import logger
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import CustomLoggingWandbCallback
@@ -195,7 +196,9 @@ class Training:
         if self.trainer.is_world_process_zero():
             assert wandb.run is not None
             if path_prefix_or_hf is None:
-                print("Not saving the model/tokenizer since no save path was specified")
+                logger.info(
+                    "Not saving the model/tokenizer since no save path was specified"
+                )
 
             elif path_prefix_or_hf == "hf":
                 # Make sure the model is saved before pushing to HuggingFace;
@@ -222,7 +225,7 @@ class Training:
 
                 # Record the saving on wandb.
                 hf_name = self.trainer.args.hub_model_id
-                print(f"Saving the model/tokenizer to HuggingFace as {hf_name}")
+                logger.info("Saving the model/tokenizer to HuggingFace as %s", hf_name)
                 wandb.run.summary["saved_hf_name"] = hf_name  # type: ignore[has-type]
 
             else:
@@ -236,7 +239,7 @@ class Training:
                     ),
                 )
                 wandb.run.summary["saved_dir"] = output_dir  # type: ignore[has-type]
-                print(f"Saving the model/tokenizer to {output_dir}")
+                logger.info("Saving the model/tokenizer to %s", output_dir)
                 self.trainer._save(output_dir=output_dir, state_dict=state_dict)
                 self.victim.tokenizer.save_pretrained(output_dir)
 
@@ -364,10 +367,9 @@ class AdversarialTraining(Training):
 
         # Run the adversarial training loop
         for round in range(self.num_adversarial_training_rounds):
-            print(
-                f"Adversarial training round {round} started "
-                f"at logging counts: {self.victim_training_logging_counter._parent}"
-            )
+            logger.info("Adversarial training round %s started ", round)
+            self._log_debug_info()
+
             self.current_adversarial_training_round = round
             # Can be useful for x axis in plots
             wandb.log({"adversarial_training_round": round}, commit=False)
@@ -376,51 +378,47 @@ class AdversarialTraining(Training):
             # on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
             if round == 0 and self.skip_first_training_round:
-                print("Skipping first round of training...")
+                logger.info("Skipping first round of training...")
             else:
-                print(
-                    f"Victim started training in round {round} "
-                    f"at logging counts: {self.victim_training_logging_counter._parent}"
-                )
+                logger.info("Victim started training in round %s", round)
+                self._log_debug_info()
+
                 adversarial_trainer.train()
-                print(
-                    f"Victim finished training in round {round} "
-                    f"at logging counts: {self.victim_training_logging_counter._parent}"
-                )
+                logger.info("Victim finished training in round %s ", round)
+                self._log_debug_info()
 
             # Set the model to eval mode for the attacks. Model is set to train mode by
             # HF Trainer during training, otherwise we want it in eval mode.
             self.victim.eval()
 
             # Train the train/validation attacks if they need training.
-            print(
-                f"Adversary (training_attack) started training in round {round} "
-                f"at logging counts: {self.victim_training_logging_counter._parent}"
+            logger.info(
+                "Adversary (training_attack) started training in round %s ", round
             )
+            self._log_debug_info()
             _maybe_train_attack(
                 attack=training_attack,
                 dataset=self.train_rllm_dataset,
                 train_or_validation="train",
                 round=round,
             )
-            print(
-                f"Adversary (training_attack) finished training in round {round} "
-                f"at logging counts: {self.victim_training_logging_counter._parent}"
+            logger.info(
+                "Adversary (training_attack) finished training in round %s ", round
             )
+            self._log_debug_info()
 
-            print(
-                f"Adversary (validation_attack) started training in round {round} "
-                f"at logging counts: {self.victim_training_logging_counter._parent}"
+            logger.info(
+                "Adversary (validation_attack) started training in round %s", round
             )
+            self._log_debug_info()
             _maybe_train_attack(
                 attack=validation_attack,
                 dataset=self.eval_rllm_dataset["validation"],
                 train_or_validation="validation",
                 round=round,
             )
-            print(
-                f"Adversary (validation_attack) finished training in round {round} "
-                f"at logging counts: {self.victim_training_logging_counter._parent}"
+            logger.info(
+                "Adversary (validation_attack) finished training in round %s ", round
             )
 
             # Perform adversarial evaluation every round
@@ -449,12 +447,12 @@ class AdversarialTraining(Training):
                 )
 
                 new_adv_examples = attacked_dataset.as_adversarial_examples()
-                print(
-                    "Generated new adv examples for training, size (all):",
+                logger.info(
+                    "Generated new adv examples for training, size (all): %s",
                     len(new_adv_examples),
                 )
-                print(
-                    "The first few new adversarial examples are:",
+                logger.debug(
+                    "The first few new adversarial examples are:\n%s",
                     new_adv_examples.ds["text"][:3],
                 )
 
@@ -496,14 +494,18 @@ class AdversarialTraining(Training):
                     selected_new_adv_examples.for_hf_trainer()
                 )
 
-            print(
-                f"Adversarial training round {round} finished "
-                f"at logging counts: {self.victim_training_logging_counter._parent}"
-            )
+            logger.info("Adversarial training round %s finished", round)
+            self._log_debug_info()
 
             self.maybe_save_model_to_path_or_hf(
                 path_prefix_or_hf=self.model_save_path_prefix_or_hf, adv_tr_round=round
             )
+
+    def _log_debug_info(self):
+        logger.debug(
+            "Current logging counts: %s",
+            self.victim_training_logging_counter._parent,
+        )
 
 
 def _maybe_train_attack(
@@ -522,7 +524,9 @@ def _maybe_train_attack(
             train_this_round = True
 
         if train_this_round:
-            print(f"Training the {train_or_validation} attack on round {round}")
+            logger.info(
+                "Training the %s attack on round %s", train_or_validation, round
+            )
             attack.train(dataset=dataset)
 
 

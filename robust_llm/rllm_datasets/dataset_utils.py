@@ -10,6 +10,7 @@ import semver
 from datasets import Dataset, DatasetDict
 from transformers import AutoConfig, AutoTokenizer, PreTrainedTokenizerBase
 
+from robust_llm import logger
 from robust_llm.utils import ask_for_confirmation
 
 DS_SHUFFLE_SEED = 0
@@ -391,8 +392,8 @@ def _get_num_classes(ds: Dataset) -> int:
     try:
         return ds.features["label"].num_classes
     except AttributeError:
-        print(
-            "WARNING: 'label' column does not have num_classes attribute."
+        logger.warning(
+            "'label' column does not have num_classes attribute."
             " Using `set()` to get a lower bound on the number of classes."
         )
         return len(set(ds["label"]))

@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -20,10 +21,17 @@ class EnvironmentConfig:
     Attributes:
         device (str): Device to use for models.
         test_mode (bool): Whether or not we're currently testing
+        logging_level:
+            Logging level to use for console handler.
+            Choose among logging.DEBUG, logging.INFO,
+            logging.WARNING, logging.ERROR, logging.CRITICAL.
+        logging_filename: If set, logs will be saved to this file.
     """
 
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     test_mode: bool = False
+    logging_level: int = logging.INFO
+    logging_filename: str = "robust_llm.log"
 
 
 @dataclass

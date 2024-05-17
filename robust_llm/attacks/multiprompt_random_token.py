@@ -7,6 +7,7 @@ import wandb
 from tqdm import tqdm
 from typing_extensions import override
 
+from robust_llm import logger
 from robust_llm.attacks.attack import Attack
 from robust_llm.config.attack_configs import MultipromptRandomTokenAttackConfig
 from robust_llm.evaluation import FilteredEvaluationPipeline
@@ -116,7 +117,7 @@ class MultiPromptRandomTokenAttack(Attack):
         best_iteration_result = self._get_best_iteration_result(iteration_results)
         best_it = best_iteration_result.iteration
         best_rate = best_iteration_result.attack_success_rate
-        print(f"Best iteration: {best_it} with {best_rate} success rate.")
+        logger.info("Best iteration: %s with %s success rate.", best_it, best_rate)
 
         attacked_text_chunked = self._construct_attacked_text_chunked(
             dataset=dataset,
@@ -276,7 +277,8 @@ class MultiPromptRandomTokenAttack(Attack):
                 commit=True,
             )
 
-            print(
-                f"iteration {iteration} attack_success_rate: "
-                f"{sum(attack_success) / len(attack_success)}"
+            logger.info(
+                "iteration %s attack_success_rate: %s",
+                iteration,
+                sum(attack_success) / len(attack_success),
             )

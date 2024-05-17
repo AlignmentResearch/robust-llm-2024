@@ -2,11 +2,11 @@
 
 from typing import Any
 
-import wandb
 from omegaconf import OmegaConf
 
+from robust_llm import logger
 from robust_llm.config.configs import ExperimentConfig
-from robust_llm.logging_utils import wandb_cleanup, wandb_initialize
+from robust_llm.logging_utils import LoggingContext
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import AdversarialTraining, Training
@@ -15,9 +15,8 @@ from robust_llm.utils import make_unique_name_to_save
 
 def run_training_pipeline(args: ExperimentConfig) -> None:
     assert args.training is not None
-    print("Configuration arguments:\n")
-    print(OmegaConf.to_yaml(args))
-    print()
+    logger.info("Configuration arguments:\n")
+    logger.info("%s\n", OmegaConf.to_yaml(args))
 
     # TODO (ian): load the tokenizer first, then the datasets, then the model
     untokenized_train_set = load_rllm_dataset(args.dataset, split="train")
@@ -89,23 +88,16 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
 
     trainer = training.setup_trainer()
 
-    if trainer.is_world_process_zero():
-        # Unlike in the evaluation pipeline, we don't set up our wandb step metrics here
-        # (which logged values can be used as x-axes, and what the default x-axes
-        # are set to be) because HuggingFace sets up its own metrics when we initialize
-        # the Trainer, and we wait until that is done to overwrite them with our own.
-        # We do this in the `CustomLoggingWandbCallback`'s `setup` method.
-        wandb_initialize(args, set_up_step_metrics=False)
+    logging_context = LoggingContext(
+        is_main_process=trainer.is_world_process_zero(),
+        args=args,
+        set_up_step_metrics=True,
+        num_parameters=victim.model.num_parameters(),
+    )
 
-        assert wandb.run is not None
-        # Log the model size to wandb for use in plots, so we don't
-        # have to try to get it out of the model name.
-        # We use `commit=False` to avoid incrementing the step counter.
-        # TODO (GH#348): Move this to a more appropriate place.
-        wandb.log({"model_size": victim.model.num_parameters()}, commit=False)
+    logging_context.setup()
 
     # Perform the training
     training.run_trainer()
 
-    if trainer.is_world_process_zero():
-        wandb_cleanup()
+    logging_context.cleanup()

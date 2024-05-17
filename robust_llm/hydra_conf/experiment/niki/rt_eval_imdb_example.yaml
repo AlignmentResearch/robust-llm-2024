@@ -1,0 +1,17 @@
+# @package _global_
+defaults:
+- /dataset: imdb
+- /evaluation: DEFAULT
+- /model: pythia-14m
+- /attack@evaluation.evaluation_attack: random-token-len-10
+
+dataset:
+  n_train: 10
+  n_val: 10
+
+evaluation:
+  evaluation_attack:
+    max_iterations: 30
+
+experiment_name: "rt_eval_example"
+experiment_type: "evaluation"

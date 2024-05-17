@@ -1,5 +1,4 @@
 import abc
-import logging
 import random
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence, Tuple
@@ -9,6 +8,7 @@ import torch.utils.data
 from datasets import Dataset
 from tqdm import tqdm
 
+from robust_llm import logger
 from robust_llm.attacks.search_based.utils import (
     AttackIndices,
     AttackTokenizationChangeException,
@@ -17,8 +17,6 @@ from robust_llm.attacks.search_based.utils import (
     create_onehot_embedding,
 )
 from robust_llm.models import WrappedModel
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass

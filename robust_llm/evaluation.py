@@ -13,6 +13,7 @@ from accelerate import Accelerator
 from datasets import Dataset
 from transformers import TextClassificationPipeline
 
+from robust_llm import logger
 from robust_llm.attacks.attack import Attack
 from robust_llm.defenses.perplexity import PerplexityDefendedModel
 from robust_llm.models import WrappedModel
@@ -705,7 +706,7 @@ def do_adversarial_evaluation(
 
     victim.eval()
 
-    print("Doing adversarial evaluation...")
+    logger.info("Doing adversarial evaluation...")
 
     attacked_dataset, info_dict = attack.get_attacked_dataset(dataset=dataset)
 
@@ -727,8 +728,8 @@ def do_adversarial_evaluation(
     # TODO(GH#158): Refactor/unify logging.
     if victim.accelerator.is_main_process:
         wandb.log(metrics, commit=True)
-        print("Adversarial evaluation metrics:")
-        print(metrics)
+        logger.info("Adversarial evaluation metrics:")
+        logger.info(metrics)
 
     return metrics
 

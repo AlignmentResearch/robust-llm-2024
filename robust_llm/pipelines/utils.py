@@ -1,5 +1,6 @@
 """Common building blocks for pipelines."""
 
+from robust_llm import logger
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.config.configs import ExperimentConfig
@@ -11,7 +12,7 @@ def prepare_attack(
     victim: WrappedModel,
     training: bool,
 ) -> Attack:
-    print("Preparing attack...")
+    logger.info("Preparing attack...")
 
     if training:
         assert args.training is not None

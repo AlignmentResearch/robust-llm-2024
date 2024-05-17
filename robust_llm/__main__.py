@@ -22,8 +22,11 @@ EXPERIMENT_TYPE_TO_PIPELINE = {
 
 @hydra.main(version_base=None, config_path="hydra_conf", config_name="base_config")
 def main(args: DictConfig) -> None:
+    # Get the experiment config
     cfg = OmegaConf.to_object(args)
     assert isinstance(cfg, ExperimentConfig)
+
+    # Run the relevant pipeline
     run_pipeline = EXPERIMENT_TYPE_TO_PIPELINE[cfg.experiment_type]
     run_pipeline(cfg)
 

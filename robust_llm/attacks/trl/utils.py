@@ -9,6 +9,7 @@ from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from trl import PPOConfig, PPOTrainer
 from typing_extensions import override
 
+from robust_llm import logger
 from robust_llm.config.attack_configs import TRLAttackConfig
 from robust_llm.evaluation import FilteredEvaluationPipeline
 from robust_llm.models import WrappedModel
@@ -38,9 +39,11 @@ def make_ppo_trainer(
         "log_with": "wandb",
     }
     config = PPOConfig(**ppo_config)  # type: ignore
-    print("the RLAdversary config is", config)
-    print("the dataset is", dataset)
-    print("dataset size", len(dataset["text"]))
+
+    logger.debug("Creating PPOTrainer with config:\n %s", config)
+    logger.debug("The dataset is:\n %s", dataset)
+    logger.debug("The dataset size is:\n %s", len(dataset["text"]))
+
     ppo_trainer = PPOTrainer(
         config=config,
         model=adversary_model,  # type: ignore

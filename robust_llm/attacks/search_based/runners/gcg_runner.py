@@ -1,4 +1,3 @@
-import logging
 from dataclasses import dataclass
 from typing import Sequence, Tuple
 
@@ -10,8 +9,6 @@ from robust_llm.attacks.search_based.runners.search_based_runner import (
     SearchBasedRunner,
 )
 from robust_llm.attacks.search_based.utils import ReplacementCandidate
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(kw_only=True)

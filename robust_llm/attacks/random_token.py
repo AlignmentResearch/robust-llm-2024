@@ -6,6 +6,7 @@ import torch
 import wandb
 from typing_extensions import override
 
+from robust_llm import logger
 from robust_llm.attacks.attack import Attack
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
 from robust_llm.evaluation import FilteredEvaluationPipeline
@@ -284,7 +285,8 @@ class RandomTokenAttack(Attack):
                 commit=True,
             )
 
-            print(
-                f"iteration {iteration} attack_success_rate: "
-                f"{sum(attack_success) / len(attack_success)}"
+            logger.info(
+                "iteration %s attack_success_rate: %s",
+                iteration,
+                sum(attack_success) / len(attack_success),
             )

@@ -1,4 +1,3 @@
-import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Sequence, Tuple
@@ -9,6 +8,7 @@ from datasets import Dataset
 from tqdm import tqdm
 from typing_extensions import override
 
+from robust_llm import logger
 from robust_llm.attacks.search_based.runners.multiprompt_search_based_runner import (
     MultiPromptSearchBasedRunner,
 )
@@ -16,8 +16,6 @@ from robust_llm.attacks.search_based.utils import (
     ExampleWithAttackIndices,
     ReplacementCandidate,
 )
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(kw_only=True)

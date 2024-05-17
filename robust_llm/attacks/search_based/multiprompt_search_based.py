@@ -1,4 +1,3 @@
-import logging
 from typing import Any
 
 import numpy as np
@@ -17,8 +16,6 @@ from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import get_randint_with_exclusions
-
-logger = logging.getLogger(__name__)
 
 
 class MultiPromptSearchBasedAttack(Attack):

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import wandb
@@ -8,7 +10,16 @@ import yaml
 from datasets import Dataset
 from omegaconf import OmegaConf
 
+from robust_llm import logger
 from robust_llm.config.configs import ExperimentConfig
+
+LOGGING_LEVELS = {
+    logging.DEBUG,
+    logging.INFO,
+    logging.WARNING,
+    logging.ERROR,
+    logging.CRITICAL,
+}
 
 
 @dataclass
@@ -150,30 +161,115 @@ def log_config_to_wandb(config: ExperimentConfig) -> None:
     wandb.run.summary["experiment_yaml"] = config_yaml  # type: ignore[has-type]
 
 
-def wandb_initialize(
-    config: ExperimentConfig, set_up_step_metrics: bool = True
-) -> None:
-    """Initializes wandb run and does appropriate setup.
-
-    Args:
-        config: config of the experiment
-        set_up_step_metrics: whether to set up wandb step metrics which are used to
-            define default x-axes for logged values
+class LoggingContext:
     """
-    wandb.init(
-        project="robust-llm",
-        group=config.experiment_name,
-        job_type=config.job_type,
-        name=config.run_name,
-        # default if not in test_mode
-        mode="disabled" if config.environment.test_mode else None,
-    )
-    if set_up_step_metrics:
-        setup_wandb_metrics()
-    log_config_to_wandb(config)
+    Class to set up and clean up experiment logging to console, file, and wandb.
+    Args:
+        is_main_process: whether this process is the main process
+        args: config of the experiment
+        set_up_step_metrics:
+            whether to set up wandb step metrics which are used to
+            define default x-axes for logged values
+        num_parameters:
+            number of parameters in the model
+            TODO: #348 - recording of `num_parameters` would ideally be done elsewhere
+    """
 
+    def __init__(
+        self,
+        is_main_process: bool,
+        args: ExperimentConfig,
+        set_up_step_metrics: bool = False,
+        num_parameters: Optional[int] = None,
+    ) -> None:
+        self.logger = logger
+        self.args = args
+        self.is_main_process = is_main_process
+        self.set_up_step_metrics = set_up_step_metrics
+        self.num_parameters = num_parameters
 
-def wandb_cleanup() -> None:
-    """Does necessary cleanup for wandb before the experiment ends."""
-    wandb_set_really_finished()
-    wandb.finish()
+    def save_logs(self):
+        for handler in self.logger.handlers:
+            if isinstance(handler, logging.FileHandler):
+                handler.flush()
+
+        assert wandb.run is not None
+        wandb.run.save(self.args.environment.logging_filename)
+
+    def _setup_logging(self) -> None:
+        logging_level = self.args.environment.logging_level
+        logging_filename = self.args.environment.logging_filename
+        # Create logger and formatter
+        self.logger.setLevel(logging.DEBUG)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+
+        # Create console handler which logs at the configured level
+        console_handler = logging.StreamHandler()
+        assert (
+            logging_level in LOGGING_LEVELS
+        ), f"Invalid logging level: {logging_level}"
+        console_handler.setLevel(logging_level)
+
+        # Create file handler.
+        file_handler = logging.FileHandler(logging_filename)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+
+        # Also save a copy to the wandb directory.
+        # TODO(niki): find a nicer way to get the logs on wandb
+        assert wandb.run is not None
+        wandb_filename = Path(wandb.run.dir).joinpath(logging_filename)
+        wandb_file_handler = logging.FileHandler(wandb_filename)
+        wandb_file_handler.setLevel(logging.DEBUG)
+
+        # Add three handlers to logger
+        self.logger.addHandler(console_handler)
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(wandb_file_handler)
+
+    def wandb_initialize(self) -> None:
+        """Initializes wandb run and does appropriate setup.
+
+        In the training pipeline, unlike in the evaluation pipeline,
+        we don't set up our wandb step metrics here
+        (which logged values can be used as x-axes, and what the default x-axes
+        are set to be) because HuggingFace sets up its own metrics when we initialize
+        the Trainer, and we wait until that is done to overwrite them with our own.
+        We do this in the `CustomLoggingWandbCallback`'s `setup` method."""
+        config = self.args
+        wandb.init(
+            project="robust-llm",
+            group=config.experiment_name,
+            job_type=config.job_type,
+            name=config.run_name,
+            # default if not in test_mode
+            mode="disabled" if config.environment.test_mode else None,
+        )
+        if self.set_up_step_metrics:
+            setup_wandb_metrics()
+        log_config_to_wandb(config)
+        if self.num_parameters is not None:
+            # Log the model size to wandb for use in plots, so we don't
+            # have to try to get it out of the model name.
+            # We use `commit=False` to avoid incrementing the step counter.
+            assert wandb.run is not None
+            wandb.log({"model_size": self.num_parameters}, commit=False)
+
+    @staticmethod
+    def wandb_cleanup() -> None:
+        """Does necessary cleanup for wandb before the experiment ends."""
+        wandb_set_really_finished()
+        wandb.finish()
+
+    def setup(self) -> None:
+        if self.is_main_process:
+            self.wandb_initialize()
+
+        self._setup_logging()
+
+    def cleanup(self) -> None:
+        self.save_logs()
+        if self.is_main_process:
+            self.wandb_cleanup()

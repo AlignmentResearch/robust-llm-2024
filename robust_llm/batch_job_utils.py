@@ -16,6 +16,7 @@ from hydra.core.config_store import ConfigStore
 from hydra.errors import HydraException
 from names_generator import generate_name
 
+from robust_llm import logger
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.utils import ask_for_confirmation
 
@@ -237,18 +238,19 @@ def launch_jobs(
     )
     yamls_for_all_jobs = "\n\n---\n\n".join(jobs)
 
-    print(yamls_for_all_jobs)
+    logger.info(yamls_for_all_jobs)
 
     if not dry_run:
-        print(f"Launching jobs with launch_id={launch_id}...")
+        logger.info("Launching jobs with launch_id=%s...", launch_id)
         subprocess.run(
             ["kubectl", "create", "-f", "-"],
             check=True,
             input=yamls_for_all_jobs.encode(),
         )
-        print(
+        logger.info(
             "Jobs launched. To delete them run:\n"
-            f"kubectl delete jobs -l launch-id={launch_id}"
+            "kubectl delete jobs -l launch-id=%s",
+            launch_id,
         )
 
     return yamls_for_all_jobs, launch_id
