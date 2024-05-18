@@ -17,7 +17,12 @@ from robust_llm import logger
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import CustomLoggingWandbCallback
-from robust_llm.config.configs import AttackConfig, EnvironmentConfig, EvaluationConfig
+from robust_llm.config.configs import (
+    AttackConfig,
+    EnvironmentConfig,
+    EvaluationConfig,
+    TrainingConfig,
+)
 from robust_llm.evaluation import (
     do_adversarial_evaluation,
     get_prediction_logits_and_labels_and_maybe_flag_values,
@@ -36,6 +41,7 @@ from robust_llm.utils import get_readable_timestamp
 
 @dataclasses.dataclass
 class Training:
+    config: TrainingConfig
     experiment_name: str
     run_name: str
     job_type: str
@@ -43,22 +49,9 @@ class Training:
     eval_rllm_dataset: dict[str, RLLMDataset]
     victim: WrappedModel
     model_name_to_save: str  # Used for saving the model to disk/hf
-    model_save_path_prefix_or_hf: str
     environment_config: EnvironmentConfig
     evaluation_config: EvaluationConfig
-    train_epochs: int = 3
-    learning_rate: float = 5e-5
-    train_batch_size: int = 8
-    eval_batch_size: int = 8
-    optimizer: str = "adamw_torch"
-    gradient_checkpointing: bool = False
-    eval_steps: Optional[int | float] = None
-    logging_steps: int | float = 500
-    save_strategy: str = "steps"
-    save_steps: int | float = 500
     trainer: Optional[TrainerWithBatchSizeStoring] = None
-    log_full_datasets_to_wandb: bool = False
-    seed: int = 42
 
     def __post_init__(self):
         metrics = [evaluate.load("accuracy")]
@@ -81,25 +74,35 @@ class Training:
             key: ds.for_hf_trainer() for key, ds in self.eval_rllm_dataset.items()
         }
 
+    @property
+    def train_batch_size(self) -> int:
+        return self.config.batch_size
+
+    @property
+    def eval_batch_size(self) -> int:
+        # TODO (ian): Choose a *training* eval batch size somewhere (previously
+        # it was using the attack eval batch size).
+        return self.config.batch_size
+
     def setup_trainer(self) -> TrainerWithBatchSizeStoring:
         hf_training_args = TrainingArguments(
             output_dir=self.output_dir,
-            num_train_epochs=self.train_epochs,
-            learning_rate=self.learning_rate,
+            num_train_epochs=self.config.num_train_epochs,
+            learning_rate=self.config.learning_rate,
             per_device_train_batch_size=self.train_batch_size,
             per_device_eval_batch_size=self.eval_batch_size,
-            optim=self.optimizer,
-            gradient_checkpointing=self.gradient_checkpointing,
+            optim=self.config.optimizer,
+            gradient_checkpointing=self.config.gradient_checkpointing,
             # Using non-reentrant checkpointing avoids a warning and
             # is recommended in the PyTorch docs:
             # https://pytorch.org/docs/stable/checkpoint.html
             gradient_checkpointing_kwargs={"use_reentrant": False},
-            eval_steps=self.eval_steps,
+            eval_steps=self.config.eval_steps,
             evaluation_strategy="steps",
-            logging_steps=self.logging_steps,
-            save_strategy=self.save_strategy,
-            save_steps=self.save_steps,
-            seed=self.seed,
+            logging_steps=self.config.logging_steps,
+            save_strategy=self.config.save_strategy,
+            save_steps=self.config.save_steps,
+            seed=self.config.seed,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
             # This defaults to "all", which sets up several callbacks, including
             # a WandbCallback which increments the wandb internal step whenever
@@ -134,13 +137,13 @@ class Training:
         trainer = self.trainer
         assert trainer is not None
 
-        if trainer.is_world_process_zero() and self.log_full_datasets_to_wandb:
+        if trainer.is_world_process_zero() and self.config.log_full_datasets_to_wandb:
             self.log_datasets()
 
         trainer.train()
 
         self.maybe_save_model_to_path_or_hf(
-            path_prefix_or_hf=self.model_save_path_prefix_or_hf
+            path_prefix_or_hf=self.config.model_save_path_prefix_or_hf
         )
 
     def compute_metrics(self, eval_preds: EvalPrediction) -> dict:
@@ -263,30 +266,12 @@ class AdversarialTraining(Training):
             of adversarial examples, adding them to an "augmented train set",
             and training on that for some number of epochs.
             NOTE: The first round doesn't include adversarial examples.
-        training_attack_config:
-            Config for the attack to use in adversarial training.
         validation_attack_config:
             Config for the attack to use in validation.
-        num_examples_to_generate_each_round (int): The number of adversarial examples to
-            generate each round for training.
-        num_examples_to_log_to_wandb_each_round (int): The number of adversarial
-            examples to log to wandb each round.
-        skip_first_training_round:
-            Whether to skip the first round of training.
-            Useful for doing "exclusively" adversarial training.
-        only_add_successful_adversarial_examples:
-            Whether to add only successful adversarial examples to training set;
-            otherwise, add all trials, successful or not.
     """
 
-    num_adversarial_training_rounds: int
-    training_attack_config: AttackConfig
+    config: TrainingConfig
     validation_attack_config: AttackConfig
-    num_examples_to_generate_each_round: int
-    num_examples_to_log_to_wandb_each_round: int
-    skip_first_training_round: bool = False
-    use_balanced_sampling: bool = False
-    only_add_successful_adversarial_examples: bool = True
 
     def __post_init__(self):
         super().__post_init__()
@@ -295,32 +280,62 @@ class AdversarialTraining(Training):
         assert "validation" in self.eval_rllm_dataset
 
         self.current_adversarial_training_round: int = 0
+        assert self.config.adversarial is not None
+        self.adversarial_config = self.config.adversarial
+
+    @property
+    def num_adversarial_training_rounds(self) -> int:
+        return self.adversarial_config.num_adversarial_training_rounds
+
+    @property
+    def training_attack_config(self) -> AttackConfig:
+        return self.adversarial_config.training_attack
+
+    @property
+    def skip_first_training_round(self) -> bool:
+        return self.adversarial_config.skip_first_training_round
+
+    @property
+    def adv_use_balanced_sampling(self) -> bool:
+        return self.adversarial_config.use_balanced_sampling
+
+    @property
+    def num_examples_to_generate_each_round(self) -> int:
+        return self.adversarial_config.num_examples_to_generate_each_round
+
+    @property
+    def num_examples_to_log_to_wandb_each_round(self) -> int:
+        return self.adversarial_config.num_examples_to_log_to_wandb_each_round
+
+    @property
+    def only_add_successful_adversarial_examples(self) -> bool:
+        return self.adversarial_config.only_add_successful_adversarial_examples
 
     @override
     def setup_trainer(self) -> AdversarialTrainer:
         hf_training_args = TrainingArguments(
             output_dir=self.output_dir,
-            num_train_epochs=self.train_epochs,
-            learning_rate=self.learning_rate,
+            num_train_epochs=self.config.num_train_epochs,
+            learning_rate=self.config.learning_rate,
             per_device_train_batch_size=self.train_batch_size,
             per_device_eval_batch_size=self.eval_batch_size,
-            optim=self.optimizer,
-            gradient_checkpointing=self.gradient_checkpointing,
+            optim=self.config.optimizer,
+            gradient_checkpointing=self.config.gradient_checkpointing,
             # Using non-reentrant checkpointing avoids a warning and
             # is recommended in the PyTorch docs:
             # https://pytorch.org/docs/stable/checkpoint.html
             gradient_checkpointing_kwargs={"use_reentrant": False},
-            eval_steps=self.eval_steps,
+            eval_steps=self.config.eval_steps,
             evaluation_strategy="steps",
-            logging_steps=self.logging_steps,
-            save_strategy=self.save_strategy,
-            save_steps=self.save_steps,
-            seed=self.seed,
+            logging_steps=self.config.logging_steps,
+            save_strategy=self.config.save_strategy,
+            save_steps=self.config.save_steps,
+            seed=self.config.seed,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
             use_cpu=self.environment_config.device == "cpu",
         )
         self.trainer = AdversarialTrainer(
-            use_balanced_sampling=self.use_balanced_sampling,
+            use_balanced_sampling=self.adv_use_balanced_sampling,
             model=self.victim.model,
             args=hf_training_args,
             train_dataset=self.hf_train,
@@ -362,7 +377,7 @@ class AdversarialTraining(Training):
         if adversarial_trainer.is_world_process_zero():
             # At present, we always log training information to wandb
             assert wandb.run is not None
-            if self.log_full_datasets_to_wandb:
+            if self.config.log_full_datasets_to_wandb:
                 self.log_datasets()
 
         # Run the adversarial training loop
@@ -498,7 +513,8 @@ class AdversarialTraining(Training):
             self._log_debug_info()
 
             self.maybe_save_model_to_path_or_hf(
-                path_prefix_or_hf=self.model_save_path_prefix_or_hf, adv_tr_round=round
+                path_prefix_or_hf=self.config.model_save_path_prefix_or_hf,
+                adv_tr_round=round,
             )
 
     def _log_debug_info(self):

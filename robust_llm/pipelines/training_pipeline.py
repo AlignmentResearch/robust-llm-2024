@@ -46,42 +46,19 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
         },
         "victim": victim,
         "model_name_to_save": model_name_to_save,
-        "model_save_path_prefix_or_hf": args.training.model_save_path_prefix_or_hf,
         "environment_config": args.environment,
         "evaluation_config": args.evaluation,
-        "train_epochs": args.training.num_train_epochs,
-        "learning_rate": args.training.learning_rate,
-        "train_batch_size": args.training.batch_size,
-        # TODO (ian): Choose a *training* eval batch size somewhere (previously
-        # it was using the attack eval batch size).
-        "eval_batch_size": args.training.batch_size,
-        "optimizer": args.training.optimizer,
-        "gradient_checkpointing": args.training.gradient_checkpointing,
-        "eval_steps": args.training.eval_steps,
-        "logging_steps": args.training.logging_steps,
-        "save_strategy": args.training.save_strategy,
-        "save_steps": args.training.save_steps,
-        "seed": args.training.seed,
-        "log_full_datasets_to_wandb": args.training.log_full_datasets_to_wandb,
     }
 
     # Set up the training environment
     training: Training
     if args.training.adversarial is not None:
-        adv = args.training.adversarial
         assert (
             args.evaluation is not None
         ), "Must provide EvaluationConfig for adversarial training"
         training = AdversarialTraining(
             **base_training_args,
-            num_adversarial_training_rounds=adv.num_adversarial_training_rounds,
-            training_attack_config=adv.training_attack,
             validation_attack_config=args.evaluation.evaluation_attack,
-            num_examples_to_generate_each_round=adv.num_examples_to_generate_each_round,
-            num_examples_to_log_to_wandb_each_round=adv.num_examples_to_log_to_wandb_each_round,  # noqa: E501
-            skip_first_training_round=adv.skip_first_training_round,
-            use_balanced_sampling=adv.use_balanced_sampling,
-            only_add_successful_adversarial_examples=adv.only_add_successful_adversarial_examples,  # noqa: E501
         )
     else:
         training = Training(**base_training_args)

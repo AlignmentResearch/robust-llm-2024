@@ -1,6 +1,11 @@
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from robust_llm.config.configs import DatasetConfig, EnvironmentConfig, EvaluationConfig
+from robust_llm.config.configs import (
+    DatasetConfig,
+    EnvironmentConfig,
+    EvaluationConfig,
+    TrainingConfig,
+)
 from robust_llm.models import GPTNeoXModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
@@ -27,7 +32,12 @@ def test_basic_constructor():
     train = load_rllm_dataset(dataset_cfg, split="train").tokenize(tokenizer)
     validation = load_rllm_dataset(dataset_cfg, split="validation").tokenize(tokenizer)
 
+    config = TrainingConfig(
+        model_save_path_prefix_or_hf="test-save-path",
+    )
+
     Training(
+        config=config,
         experiment_name="test-experiment",
         job_type="test-job_type",
         run_name="test-run",
@@ -35,7 +45,6 @@ def test_basic_constructor():
         eval_rllm_dataset={"validation": validation},
         victim=wrapped_model,
         model_name_to_save="test_model",
-        model_save_path_prefix_or_hf="test-save-path",
         environment_config=EnvironmentConfig(),
         evaluation_config=EvaluationConfig(),
     )

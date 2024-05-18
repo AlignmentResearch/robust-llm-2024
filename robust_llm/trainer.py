@@ -158,7 +158,7 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ) -> None:
-        if self.training.log_full_datasets_to_wandb:
+        if self.training.config.log_full_datasets_to_wandb:
             assert self.training.trainer is not None
 
             train_dataset_plus_adv_examples = (
