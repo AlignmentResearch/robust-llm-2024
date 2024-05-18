@@ -45,7 +45,6 @@ class DefendedModel(WrappedModel, ABC):
         configs without having to typecheck that self.defense_config is the
         correct subclass of DefenseConfig.
         """
-        pass
 
     @property
     def model(self) -> PreTrainedModel:

@@ -136,6 +136,11 @@ jobs:
             mypy --version
             mypy --follow-imports=silent --show-error-codes --check-untyped-defs robust_llm/ tests/
       - run:
+          name: autoflake
+          command: |
+            autoflake --version
+            autoflake --in-place --remove-all-unused-imports --remove-duplicate-keys --remove-unused-variables -v --exclude venv --recursive .
+      - run:
           name: flake8
           command: |
             flake8 --version

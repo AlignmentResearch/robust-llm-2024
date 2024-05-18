@@ -192,7 +192,6 @@ class WrappedModel(ABC):
         NOTE (ian): This will be deprecated soon, once search-based are
         refactored to use `ScoringCallback`s.
         """
-        pass
 
     def get_embeddings(self, token_ids: torch.Tensor) -> torch.Tensor:
         """Returns the embeddings for the given token ids."""

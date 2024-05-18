@@ -26,7 +26,6 @@ class LanguageModel(Protocol):
     @abc.abstractmethod
     def __call__(self, **inputs) -> Any:
         """Run the inputs through self.model, with required safety considerations."""
-        pass
 
     @property
     @abc.abstractmethod

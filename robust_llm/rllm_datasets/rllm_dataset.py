@@ -90,7 +90,6 @@ class RLLMDataset(ABC):
     @abstractmethod
     def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
         """Specifies which parts of the dataset can be modified, and how."""
-        pass
 
     @property
     def is_tokenized(self) -> bool:

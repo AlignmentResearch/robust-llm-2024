@@ -52,7 +52,6 @@ class Attack(abc.ABC):
                 `info_dict` is a dictionary of additional information (e.g.
                     metrics) about the attack.
         """
-        pass
 
     def train(self, dataset: RLLMDataset) -> None:
         """Trains the attack on the given dataset.
