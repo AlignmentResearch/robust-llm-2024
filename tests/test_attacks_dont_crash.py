@@ -100,8 +100,9 @@ def test_doesnt_crash_multiprompt_random_token(exp_config: ExperimentConfig) -> 
 def test_doesnt_crash_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = GCGAttackConfig(
-        n_attack_tokens=3,
+        n_attack_tokens=2,
         n_its=2,
+        n_candidates_per_it=16,
     )
 
     _test_doesnt_crash(exp_config)
@@ -123,6 +124,7 @@ def test_doesnt_crash_trl(exp_config: ExperimentConfig) -> None:
         mini_batch_size=2,
         gradient_accumulation_steps=1,
         ppo_epochs=1,
+        max_new_tokens=2,
         model_save_path_prefix=None,
         adversary=ModelConfig(
             name_or_path="EleutherAI/pythia-14m",
@@ -153,6 +155,8 @@ def test_modifiable_words_text_attack_doesnt_crash(
     exp_config.evaluation.evaluation_attack = TextAttackAttackConfig(
         text_attack_recipe=text_attack_recipe,
         num_modifiable_words_per_chunk=1,
+        num_examples=2,
+        query_budget=10,
     )
     _test_doesnt_crash(exp_config)
 
@@ -168,5 +172,7 @@ def test_non_modifiable_words_text_attack_doesnt_crash(
     exp_config.evaluation.evaluation_attack = TextAttackAttackConfig(
         text_attack_recipe=text_attack_recipe,
         num_modifiable_words_per_chunk=None,
+        num_examples=2,
+        query_budget=10,
     )
     _test_doesnt_crash(exp_config)

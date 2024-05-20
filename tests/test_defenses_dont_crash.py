@@ -93,5 +93,6 @@ def test_doesnt_crash_paraphrase_defense(
             strict_load=True,
             padding_side="left",
         ),
+        num_preparation_examples=2,
     )
     _run_evaluation_pipeline(exp_config)
