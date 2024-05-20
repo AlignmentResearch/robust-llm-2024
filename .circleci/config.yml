@@ -35,8 +35,8 @@ commands:
               # Install remaining dependencies.
               # Note if we ever remove `-e` it'll become necessary to reinstall
               # robust_llm even if a virtual environment already exists, with:
-              # pip install --upgrade --force-reinstall --no-deps '.[dev]'
-              pip install -e '.[dev]'
+              # pip install --upgrade --force-reinstall --no-deps '.[dev,tensorflow]'
+              pip install -e '.[dev,tensorflow]'
             fi
 
       - save_cache:
