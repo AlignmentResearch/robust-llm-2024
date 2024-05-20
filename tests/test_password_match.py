@@ -76,7 +76,7 @@ def test_select_different_word():
     assert "Couldn't find a word other than" in str(e.value)
 
 
-def test_overlap():
+def test_password_match_overlap():
     """Test the overlap between the train and val sets."""
     train, val = construct_password_match(train_size=1000, val_size=1000)
 
@@ -87,7 +87,7 @@ def test_overlap():
     assert overlap == 0
 
 
-def test_ground_truth_label_fn(latest_password_match_dataset):
+def test_ground_truth_label_fn_password_match(latest_password_match_dataset):
     text_template = """
 The exact text here doesn't matter that much.
 What's important is that the structure is the same.

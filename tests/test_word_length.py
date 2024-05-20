@@ -32,7 +32,7 @@ def test_generate_example_for_words_same_length():
     assert generated_example.clf_label == 0
 
 
-def test_overlap():
+def test_word_length_overlap():
     """Test the overlap between the train and val sets."""
     train, val = construct_word_length(train_size=1000, val_size=1000)
     train_text = [example_dict_to_text(x) for x in train]  # type: ignore

@@ -83,6 +83,7 @@ commands:
 jobs:
   pytest:
     executor: python-executor
+    parallelism: 4
     resource_class: xlarge
     steps:
       - checkout
@@ -101,9 +102,74 @@ jobs:
       - run:
           name: Run tests
           command: |
-            pytest --cov=robust_llm \
-                   --cov=tests --junitxml=/tmp/test-reports/junit.xml \
-                   --durations=500 -vv -n ${NUM_PROCS} tests/
+            # Ensure that the script fails if any command fails
+            set -euo pipefail
+
+            # List all test functions in the specified directory
+            TESTFUNCTIONS=$(pytest --collect-only -q | grep '::' | grep -v '<Module')
+            echo "$TESTFUNCTIONS" > /tmp/node-ids.txt
+
+            # Check for duplicates in TESTFUNCTIONS
+            TOTAL_TESTFUNCTIONS=$(echo "$TESTFUNCTIONS" | wc -l)
+            UNIQUE_TESTFUNCTIONS=$(echo "$TESTFUNCTIONS" | sort | uniq | wc -l)
+            if [ "$TOTAL_TESTFUNCTIONS" -ne "$UNIQUE_TESTFUNCTIONS" ]; then
+                echo "Error: TESTFUNCTIONS contains duplicates!"
+                echo "Total test functions: $TOTAL_TESTFUNCTIONS"
+                echo "Unique test functions: $UNIQUE_TESTFUNCTIONS"
+                exit 1
+            fi
+
+            # Extract function names and save to a temporary file
+            FUNCTIONNAMES=$(echo "$TESTFUNCTIONS" | sed -E 's/^.+:://')
+            echo "$FUNCTIONNAMES" > /tmp/function-names.txt
+
+            # Check for duplicates in FUNCTIONNAMES
+            TOTAL_FUNCTIONNAMES=$(echo "$FUNCTIONNAMES" | wc -l)
+            UNIQUE_FUNCTIONNAMES=$(echo "$FUNCTIONNAMES" | sort | uniq | wc -l)
+            if [ "$TOTAL_FUNCTIONNAMES" -ne "$UNIQUE_FUNCTIONNAMES" ]; then
+                echo "Error: FUNCTIONNAMES contains duplicates!"
+                echo "Total test functions: $TOTAL_FUNCTIONNAMES"
+                echo "Unique test functions: $UNIQUE_FUNCTIONNAMES"
+                exit 1
+            fi
+
+            # Check if the number of test functions and function names matches
+            if [ "$TOTAL_TESTFUNCTIONS" -ne "$TOTAL_FUNCTIONNAMES" ]; then
+                echo "Error: Number of test functions and function names does not match!"
+                echo "Total test functions: $TOTAL_TESTFUNCTIONS"
+                echo "Total function names: $TOTAL_FUNCTIONNAMES"
+                echo "List of test functions: $TESTFUNCTIONS"
+                echo "List of function names: $FUNCTIONNAMES"
+                exit 1
+            fi
+
+            # Split the function names by timings using CircleCI's test splitting feature
+            SPLITFUNCTIONNAMES=$(circleci tests split --split-by=timings --timings-type=testname /tmp/function-names.txt)
+
+            # Reconstruct the full test paths by matching the function names with the original list
+            FULLTESTPATHS=$(echo "$SPLITFUNCTIONNAMES" | while read -r FUNCTIONNAME; do
+              ESCAPED_FUNCTIONNAME=$(echo "$FUNCTIONNAME" | sed 's/[]\/$*.^|[]/\\&/g')
+              grep "::$ESCAPED_FUNCTIONNAME$" /tmp/node-ids.txt;
+            done)
+
+            # Check if the number of split function names and full test paths matches
+            TOTAL_SPLITFUNCTIONNAMES=$(echo "$SPLITFUNCTIONNAMES" | wc -l)
+            TOTAL_FULLTESTPATHS=$(echo "$FULLTESTPATHS" | wc -l)
+
+            if [ "$TOTAL_SPLITFUNCTIONNAMES" -ne "$TOTAL_FULLTESTPATHS" ]; then
+                echo "Error: Number of split function names and full test paths does not match!"
+                echo "Total split function names: $TOTAL_SPLITFUNCTIONNAMES"
+                echo "Total full test paths: $TOTAL_FULLTESTPATHS"
+                echo "List of split function names: $SPLITFUNCTIONNAMES"
+                echo "List of full test paths: $FULLTESTPATHS"
+                exit 1
+            fi
+
+            # Ensure the output directory exists
+            mkdir -p /tmp/test-reports
+
+            # Run pytest with the split test functions
+            pytest --cov=robust_llm --cov=tests --junitxml=/tmp/test-reports/junit.xml --durations=500 -vv $FULLTESTPATHS
           environment:
             WANDB_MODE: offline
       - codecov/upload

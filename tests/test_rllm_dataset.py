@@ -52,7 +52,7 @@ def test_tokenization_and_subset(dataset: RLLMDataset, tokenizer):
     assert smaller_dataset.is_tokenized
 
 
-def test_ground_truth_label_fn(dataset: RLLMDataset):
+def test_ground_truth_label_fn_rllm(dataset: RLLMDataset):
     """Test the ground_truth_label_fn works as expected.
 
     We use the config_name='pos' PasswordMatch dataset as a test case, since
