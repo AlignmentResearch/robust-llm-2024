@@ -1,4 +1,5 @@
 import pytest
+from datasets import ClassLabel
 
 from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
@@ -38,6 +39,8 @@ def test_initialized_rllm_dataset(dataset: RLLMDataset):
     assert len(dataset) == 5
     # We didn't tokenize yet
     assert not dataset.is_tokenized
+    # 'clf_label' should be a ClassLabel feature
+    assert isinstance(dataset.ds.features["clf_label"], ClassLabel)
 
 
 def test_tokenization_and_subset(dataset: RLLMDataset, tokenizer):
@@ -91,6 +94,8 @@ def test_with_attacked_text(dataset: RLLMDataset, tokenizer):
         [ex["attacked_clf_label"] == 0 for ex in attacked_dataset.ds]  # type: ignore
     )
     assert all([ex["clf_label"] == 1 for ex in attacked_dataset.ds])  # type: ignore
+    # Check that 'attacked_clf_label' is still a ClassLabel feature
+    assert isinstance(attacked_dataset.ds.features["attacked_clf_label"], ClassLabel)
 
     # Test 'as_adversarial_examples'
     with pytest.raises(ValueError):
@@ -104,6 +109,8 @@ def test_with_attacked_text(dataset: RLLMDataset, tokenizer):
     # Check that the 'attacked_text' and 'attacked_clf_label' columns are gone
     assert "attacked_text" not in adv_dataset.ds
     assert "attacked_clf_label" not in adv_dataset.ds
+    # Check that the new 'clf_label' is still a ClassLabel feature
+    assert isinstance(adv_dataset.ds.features["clf_label"], ClassLabel)
 
 
 def test_for_hf_trainer(dataset: RLLMDataset, tokenizer):
@@ -119,3 +126,4 @@ def test_for_hf_trainer(dataset: RLLMDataset, tokenizer):
     assert "label" in hf_ds.features
     assert "clf_label" not in hf_ds.features
     assert "chunked_text" not in hf_ds.features
+    assert isinstance(hf_ds.features["label"], ClassLabel)

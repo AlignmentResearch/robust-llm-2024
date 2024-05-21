@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from abc import ABC, abstractmethod
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Sequence, overload
 
 import datasets
 import semver
@@ -12,6 +12,7 @@ from transformers import PreTrainedTokenizerBase
 from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.dataset_utils import (
     EXPECTED_COLUMNS,
+    cast_column_to_feature,
     construct_text_and_chunked_text,
     get_largest_version,
     get_largest_version_below,
@@ -227,27 +228,6 @@ class RLLMDataset(ABC):
             split=f"{split}[:{n_examples}]",
         )
         assert isinstance(ds, Dataset)
-        ds = self._remove_and_readd_clf_label(ds)
-        return ds
-
-    def _remove_and_readd_clf_label(self, ds: Dataset) -> Dataset:
-        """Remove and re-add the clf_label column to clear the ClassLabel feature.
-
-        We have to do this because the ClassLabel feature prevents concatenating
-        new examples generated in adversarial training with the original dataset
-        because the datasets.Features don't match.
-
-        TODO (GH#319): Find a cleaner way to do this, either here or when
-        generating adv examples.
-        """
-
-        clf_labels = ds["clf_label"]
-        ds = ds.remove_columns("clf_label")
-        ds = ds.add_column(
-            name="clf_label",
-            column=clf_labels,
-            new_fingerprint=None,  # type: ignore
-        )
         return ds
 
     def get_random_subset(self, n: int, seed: int | None = None) -> RLLMDataset:
@@ -279,13 +259,69 @@ class RLLMDataset(ABC):
             new_ds["attacked_text"],
             new_ds["clf_label"],
         )
+        attacked_gen_targets = self.clf_label_to_gen_target(attacked_labels)
         new_ds = new_ds.add_column(
             "attacked_clf_label",
             attacked_labels,
             new_fingerprint=None,  # type: ignore  # (bug in datasets?)
         )
+
+        new_ds = new_ds.add_column(
+            "attacked_gen_target",
+            attacked_gen_targets,
+            new_fingerprint=None,  # type: ignore  # (bug in datasets?)
+        )
+
+        # Make 'attacked_clf_label' have the same Feature as 'clf_label'
+        new_ds = cast_column_to_feature(
+            ds=new_ds,
+            column_name="attacked_clf_label",
+            feature=self.ds.features["clf_label"],
+        )
         attacked_ds = self.with_new_ds(new_ds)
         return attacked_ds
+
+    @overload
+    def clf_label_to_gen_target(self, clf_label: int) -> str: ...
+
+    @overload
+    def clf_label_to_gen_target(self, clf_label: list[int]) -> list[str]: ...
+
+    def clf_label_to_gen_target(
+        self,
+        clf_label: int | list[int],
+    ) -> str | list[str]:
+        """Convert one or more clf_label to gen_target.
+
+        Uses the int2str method of the clf_label feature to convert the label(s).
+        """
+        feature = self.ds.features["clf_label"]
+        assert isinstance(feature, datasets.ClassLabel)
+        gen_target = feature.int2str(clf_label)
+
+        assert isinstance(gen_target, str) or isinstance(gen_target, list)
+        return gen_target
+
+    @overload
+    def gen_target_to_clf_label(self, gen_target: str) -> int: ...
+
+    @overload
+    def gen_target_to_clf_label(self, gen_target: list[str]) -> list[int]: ...
+
+    def gen_target_to_clf_label(
+        self,
+        gen_target: str | list[str],
+    ) -> int | list[int]:
+        """Convert one or more clf_label to gen_target.
+
+        Uses the str2int method of the clf_label feature to convert the label(s).
+        """
+        feature = self.ds.features["clf_label"]
+        assert isinstance(feature, datasets.ClassLabel)
+        clf_label = feature.str2int(gen_target)
+
+        assert isinstance(clf_label, int) or isinstance(clf_label, list)
+        return clf_label
 
     def with_new_ds(self, new_ds: Dataset) -> RLLMDataset:
         """Make a new RLLMDataset with the given huggingface dataset."""
@@ -372,11 +408,14 @@ class RLLMDataset(ABC):
             raise ValueError("Dataset does not have attacked_text column")
         if not self.is_tokenized:
             raise ValueError("Dataset is not tokenized")
-        new_text = self.ds["attacked_text"]
-        new_labels = self.ds["attacked_clf_label"]
-        untokenized_new_ds = Dataset.from_dict(
-            {"text": new_text, "clf_label": new_labels}
-        )
+
+        columns_to_keep = ["attacked_text", "attacked_clf_label"]
+        columns_to_drop = [c for c in self.ds.column_names if c not in columns_to_keep]
+
+        untokenized_new_ds = self.ds.map(remove_columns=columns_to_drop)
+        untokenized_new_ds = untokenized_new_ds.rename_column(
+            "attacked_text", "text"
+        ).rename_column("attacked_clf_label", "clf_label")
 
         assert self.tokenizer is not None
         new_ds = tokenize_dataset(untokenized_new_ds, self.tokenizer)

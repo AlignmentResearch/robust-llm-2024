@@ -420,3 +420,42 @@ def tokenize_dataset(
 
     tokenized_dataset = dataset.map(tokenizer_fn, batched=True)
     return tokenized_dataset
+
+
+def cast_column_to_feature(
+    ds: Dataset,
+    column_name: str,
+    feature: datasets.ClassLabel | datasets.Value,
+) -> Dataset:
+    """Cast a column in a dataset to a given feature."""
+    new_features = ds.features.copy()
+    new_features[column_name] = feature
+    return ds.cast(new_features)
+
+
+def cast_and_concatenate(
+    ds: datasets.Dataset, other_ds: datasets.Dataset
+) -> datasets.Dataset:
+    """Cast the second dataset to the features of the first dataset and concatenate.
+
+    Args:
+        ds: The first dataset, whose features will be used.
+        other_ds: The second dataset, whose features will be updated.
+    """
+    if ds.features != other_ds.features:
+        other_ds = cast_features_like(ds, other_ds)
+    new_ds = datasets.concatenate_datasets([ds, other_ds])
+    return new_ds
+
+
+def cast_features_like(
+    ds: datasets.Dataset, other_ds: datasets.Dataset
+) -> datasets.Dataset:
+    """Cast the second dataset to the features of the first dataset.
+
+    Args:
+        ds: The dataset with features we want to copy.
+        other_ds: The dataset to cast to those features.
+    """
+    new_ds = other_ds.cast(ds.features)
+    return new_ds

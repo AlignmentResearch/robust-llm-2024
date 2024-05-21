@@ -1,8 +1,12 @@
 """Script to generate the IMDB dataset"""
 
+import datasets
 from datasets import Dataset
 
-from robust_llm.rllm_datasets.dataset_utils import prepare_huggingface_dataset
+from robust_llm.rllm_datasets.dataset_utils import (
+    cast_column_to_feature,
+    prepare_huggingface_dataset,
+)
 from robust_llm.rllm_datasets.generation_scripts.dataset_upload_handler import (
     DatasetUploadHandler,
 )
@@ -39,8 +43,15 @@ def process_spam_ds(ds: Dataset) -> Dataset:
     )
     ANSWER_PROMPT = "\n\nAnswer:"
 
+    # Make sure clf_label is a ClassLabel feature with labels that line up with
+    # the gen_targets.
+    label_feature = datasets.ClassLabel(names=["HAM", "SPAM"])
+    ds = cast_column_to_feature(ds=ds, column_name="clf_label", feature=label_feature)
+
     def gen_target_from_label(label: int) -> str:
-        return "SPAM" if label == 1 else "HAM"
+        gen_target = label_feature.int2str(label)
+        assert isinstance(gen_target, str)
+        return gen_target
 
     ds = ds.map(
         lambda x: {
@@ -58,5 +69,5 @@ if __name__ == "__main__":
     # bump the version here manually when you make changes
     # (see README for more info)
     MINOR_VERSION = 1
-    PATCH_VERSION = 0
+    PATCH_VERSION = 1
     main(minor_version=MINOR_VERSION, patch_version=PATCH_VERSION)

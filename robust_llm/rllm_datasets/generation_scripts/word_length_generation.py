@@ -1,11 +1,12 @@
 import dataclasses
 from pathlib import Path
 
+import datasets
 import numpy as np
 from datasets import Dataset
 from tqdm import tqdm
 
-from robust_llm.rllm_datasets.dataset_utils import RLLMExample
+from robust_llm.rllm_datasets.dataset_utils import RLLMExample, cast_column_to_feature
 
 WORD_PATH = Path("robust_llm/rllm_datasets/generation_scripts/resources/words.txt")
 
@@ -68,6 +69,14 @@ def construct_word_length(
     val_dicts = [dataclasses.asdict(ex) for ex in val_examples]
     train = Dataset.from_list(train_dicts)
     val = Dataset.from_list(val_dicts)
+
+    # Add ClassLabel feature to the clf_label column
+    label_feature = datasets.ClassLabel(names=["FIRST", "SECOND"])
+
+    train = cast_column_to_feature(
+        ds=train, column_name="clf_label", feature=label_feature
+    )
+    val = cast_column_to_feature(ds=val, column_name="clf_label", feature=label_feature)
     return train, val
 
 

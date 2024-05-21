@@ -4,13 +4,14 @@ import warnings
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 from robust_llm.logging_utils import log_dataset_to_wandb
+from robust_llm.rllm_datasets.dataset_utils import cast_and_concatenate
 
 if TYPE_CHECKING:
     from robust_llm.training import AdversarialTraining
 
 import torch.utils.data
 import wandb
-from datasets import Dataset, concatenate_datasets
+from datasets import Dataset
 from transformers import (
     Trainer,
     TrainerCallback,
@@ -103,12 +104,19 @@ class AdversarialTrainer(TrainerWithBatchSizeStoring):
             return super()._get_train_sampler()
 
     def get_augmented_training_set(self) -> Dataset:
+        """Return the training set with adversarial examples added.
+
+        If no adversarial examples have been added, this will return the
+        regular training set.
+
+        When adding the adversarial examples, we have to use a custom
+        concatenate function here to make sure the features line up (since
+        otherwise we'd have a mismatch between ClassLabel and Value(int)).
+        """
         if len(self.adversarial_dataset) > 0:
-            train_dataset_plus_adv_examples = concatenate_datasets(
-                [
-                    self.regular_dataset,
-                    self.adversarial_dataset,
-                ]
+            train_dataset_plus_adv_examples = cast_and_concatenate(
+                self.regular_dataset,
+                self.adversarial_dataset,
             )
         else:
             train_dataset_plus_adv_examples = self.regular_dataset
@@ -116,11 +124,18 @@ class AdversarialTrainer(TrainerWithBatchSizeStoring):
         return train_dataset_plus_adv_examples  # type: ignore
 
     def add_new_adversarial_examples(self, new_examples: Dataset) -> None:
+        """Add new adversarial examples to the adversarial dataset.
+
+        When adding the adversarial examples, we have to use a custom
+        concatenate function here to make sure the features line up (since
+        otherwise we'd have a mismatch between ClassLabel and Value(int)).
+        """
         if len(self.adversarial_dataset) == 0:
             self.adversarial_dataset = new_examples
         else:
-            self.adversarial_dataset = concatenate_datasets(
-                [self.adversarial_dataset, new_examples]
+            self.adversarial_dataset = cast_and_concatenate(
+                self.adversarial_dataset,
+                new_examples,
             )
 
 
