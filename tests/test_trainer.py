@@ -27,6 +27,8 @@ def test_basic_constructor():
         tokenizer,
         accelerator=None,
         inference_type=InferenceType("classification"),
+        train_minibatch_size=2,
+        eval_minibatch_size=2,
     )
 
     train = load_rllm_dataset(dataset_cfg, split="train").tokenize(tokenizer)

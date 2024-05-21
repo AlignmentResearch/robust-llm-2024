@@ -87,26 +87,23 @@ class RandomTokenAttackConfig(AttackConfig):
     """Options specific for RandomToken attacks.
 
     Attributes:
-        min_tokens (int): Minimum number of tokens to generate.
-        max_tokens (int): Maximum number of tokens to generate.
-        max_iterations (int): Maximum number of iterations to run the attack.
+        n_attack_tokens (int): The number of tokens to generate.
+        n_its (int): Maximum number of iterations to run the attack.
         logging_frequency (int): How often to log the attack.
-        batch_size (int): Batch size to use for the victim pipeline used
-            to check whether the attack was successful.
+        victim_success_binary_callback (str): The name of the ScoringCallback to use to
+            compute whether an attack was successful by computing whether the victim
+            got the right answer. Should refer to a BinaryCallback, because we need
+            discrete success/failure for each attacked input.
     """
 
-    min_tokens: int = 10
-    max_tokens: int = 10
-    max_iterations: int = 100
-    logging_frequency: int = 10
-    batch_size: int = 8
+    n_attack_tokens: int = 10
+    n_its: int = 100
+    victim_success_binary_callback: str = "successes_from_text"
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.min_tokens <= self.max_tokens
-        assert self.max_iterations > 0
-        assert self.logging_frequency >= 0
-        assert self.batch_size > 0
+        assert self.n_its > 0
+        assert self.n_attack_tokens > 0
 
 
 @dataclass

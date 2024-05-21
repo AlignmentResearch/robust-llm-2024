@@ -5,7 +5,7 @@ defaults:
 - /model: pythia-14m
 - /training/adversarial: DEFAULT
 - /attack@training.adversarial.training_attack: gcg-small
-- /attack@evaluation.evaluation_attack: random-token-len-10
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
 - _self_
 
 dataset:

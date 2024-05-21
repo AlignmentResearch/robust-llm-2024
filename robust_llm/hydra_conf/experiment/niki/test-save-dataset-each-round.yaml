@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
 - AdvTraining/imdb_random-token
-- /attack@evaluation.evaluation_attack: random-token-len-10
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
 
 training:
   force_name_to_save: "niki-test-saving-every-adv-round"

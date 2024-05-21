@@ -48,12 +48,16 @@ WRAPPED_MODELS = {
         AutoTokenizer.from_pretrained("gpt2"),
         accelerator=ACCELERATOR,
         inference_type=InferenceType("classification"),
+        train_minibatch_size=2,
+        eval_minibatch_size=2,
     ),
     "pythia": GPTNeoXModel(
         FakeModelForSequenceClassification(),  # type: ignore
         AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped"),
         accelerator=ACCELERATOR,
         inference_type=InferenceType("classification"),
+        train_minibatch_size=2,
+        eval_minibatch_size=2,
     ),
 }
 

@@ -1,19 +1,21 @@
-import copy
-from collections import deque
-from typing import Any, Sequence, cast
+import random
+from typing import Any, Sequence
 
-import torch
-import wandb
+from tqdm import tqdm
 from typing_extensions import override
 
-from robust_llm import logger
 from robust_llm.attacks.attack import Attack
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
-from robust_llm.evaluation import FilteredEvaluationPipeline
 from robust_llm.logging_utils import LoggingCounter
-from robust_llm.models import WrappedModel
-from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
+from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
+from robust_llm.models.wrapped_model import WrappedModel
+from robust_llm.rllm_datasets.modifiable_chunk_spec import (
+    ChunkType,
+    ModifiableChunkSpec,
+)
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
+from robust_llm.scoring_callbacks import CallbackRegistry
+from robust_llm.utils import get_randint_with_exclusions
 
 
 class RandomTokenAttack(Attack):
@@ -37,32 +39,20 @@ class RandomTokenAttack(Attack):
         """Constructor for RandomTokenAttack.
 
         Args:
-            attack_config: config of the attack
-            victim: the WrappedModel to be attacked
+            attack_config: Config of the attack.
+            victim: The WrappedModel to be attacked.
         """
         super().__init__(attack_config)
 
         self.victim = victim
 
-        self.torch_rng = torch.random.manual_seed(self.attack_config.seed)
+        self.rng = random.Random(self.attack_config.seed)
 
-        self.min_tokens = attack_config.min_tokens
-        self.max_tokens = attack_config.max_tokens
-        self.max_iterations = attack_config.max_iterations
-        self.logging_frequency = attack_config.logging_frequency
-        self.batch_size = attack_config.batch_size
+        self.n_attack_tokens = attack_config.n_attack_tokens
+        self.n_its = attack_config.n_its
 
-        # We use the FilteredEvaluationPipeline so we can pass in a WrappedModel
-        # and reuse the check_model_type logic.
-        # The plan is to remove pipelines in the next PR anyway.
-        # TODO (GH#374): Remove pipelines.
-        self.victim_pipeline = FilteredEvaluationPipeline(
-            model=victim,
-            tokenizer=victim.tokenizer,
-            device=victim.device,
-            # We have to specify the framework explicitly because the pipeline
-            # will not be able to infer it from a WrappedModel.
-            framework="pt",
+        self.victim_success_binary_callback = CallbackRegistry.get_binary_callback(
+            name=attack_config.victim_success_binary_callback,
         )
 
         self.logging_counter = LoggingCounter(_name="random_token_attack")
@@ -71,222 +61,205 @@ class RandomTokenAttack(Attack):
     def get_attacked_dataset(
         self, dataset: RLLMDataset
     ) -> tuple[RLLMDataset, dict[str, Any]]:
-        attacked_text_chunked = copy.deepcopy(dataset.ds["chunked_text"])
-        original_labels = dataset.ds["clf_label"]
-        attack_success = [False] * len(original_labels)
+        """Returns the attacked dataset and the attack metadata."""
+        attacked_texts = []
+        success_indices = []
+        success_index = None
+        for example in (pbar := tqdm(dataset.ds, mininterval=5, position=-1)):
+            pbar.set_description(f"Previous success index: {success_index}")
+            assert isinstance(example, dict)
+            attacked_text, success_index = self.attack_example(example, dataset)
+            attacked_texts.append(attacked_text)
+            success_indices.append(success_index)
 
-        # Replace all the modifiable text with random tokens from
-        # the tokenizer's vocabulary.
-        for iteration in range(self.max_iterations):
-            if sum(attack_success) == len(attack_success):
-                break
+        attacked_dataset = dataset.with_attacked_text(attacked_texts)
+        metadata = {"success_indices": success_indices}
+        return attacked_dataset, metadata
 
-            num_skips = sum(attack_success)
+    def attack_example(
+        self, example: dict[str, Any], dataset: RLLMDataset
+    ) -> tuple[str, int | None]:
+        """Attacks a single example.
 
-            attacked_text_chunked = self._batch_get_adversarial_tokens(
-                dataset,
-                chunked_datapoints=attacked_text_chunked,
-                successes=attack_success,
-            )
-            attack_success = self._batch_check_success(
-                dataset=dataset,
-                attacked_chunked_datapoints=attacked_text_chunked,
-                original_labels=original_labels,
-                previous_attack_success=attack_success,
-            )
+        Note that we are going per example and running all the iterations at
+        once to take advantage of caching and batching. Instead of batching
+        across examples, we batch across iterations because for RandomToken the
+        iterations are independent of each other. However, this means we may run
+        more iterations than necessary, e.g. if one of the early iterations
+        would be successful.
 
-            self._maybe_log_to_wandb(
-                iteration=iteration, attack_success=attack_success, num_skips=num_skips
-            )
-
-        # Also replace dataset text, and delete tokenized text
-        attacked_text = ["".join(line) for line in attacked_text_chunked]
-
-        # add new column to copy of original dataset
-        attacked_ds = dataset.with_attacked_text(attacked_text)
-
-        return attacked_ds, {}
-
-    def _batch_get_adversarial_tokens(
-        self,
-        dataset: RLLMDataset,
-        chunked_datapoints: Sequence[Sequence[str]],
-        successes: Sequence[bool],
-    ) -> list[list[str]]:
-        """Gets new random tokens in the modifiable chunks.
-
-        Operates on a list of chunked datapoints (strings which have been split into
-        "chunks", some of which are modifiable, some of which are not, as determined
-        by dataset.modifiable_chunk_spec). This method replaces those chunks which
-        are OVERWRITABLE with random tokens from the victim tokenizer's vocabulary.
-        If a chunk is PERTURBABLE but not OVERWRITABLE, the attack will add new
-        tokens after the chunk instead of replacing it. Note that this will
-        make it not match up with the modifiable_chunk_spec (GH#345).
+        TODO(GH#400): Maybe check if the attack is successful after each
+        minibatch? Currently seems like it would require refactoring
+        ScoringCallbacks to be generators.
 
         Args:
-            dataset: The original dataset
-            chunked_datapoints: The datapoints to operate on
-            successes: A list of booleans indicating whether the attack has already
-                been successful on this datapoint or not
+            example: The example to be attacked.
+            dataset: The RLLMDataset the example belongs to. We pass this so we
+                have access to the ModifiableChunkSpec and the
+                ground_truth_label_fn.
+
 
         Returns:
-            A list of chunked datapoints where previously successfully attacked
-            datapoints remain unchanged, and previously not successfully attacked
-            ones have their modifiable chunks replaced with random tokens.
+            The attacked text and the number of iterations it took
+            to get a successful attack (if not successful, this will
+            return the last attacked_text and None).
         """
-
-        assert len(chunked_datapoints) == len(successes)
-
-        num_modifiable_chunks = dataset.modifiable_chunk_spec.n_modifiable_chunks
-        assert num_modifiable_chunks > 0
-
-        num_not_success = len(chunked_datapoints) - sum(successes)
-
-        all_num_tokens = torch.randint(
-            low=self.min_tokens,
-            high=self.max_tokens + 1,
-            size=(num_not_success, num_modifiable_chunks),
-            generator=self.torch_rng,
+        attacked_inputs = self.get_attacked_inputs(
+            example=example,
+            n_attacks=self.n_its,
+            modifiable_chunk_spec=dataset.modifiable_chunk_spec,
         )
-        total_num_tokens = int(torch.sum(all_num_tokens).item())
-
-        flat_random_tokens = torch.randint(
-            low=0,
-            high=self.victim.vocab_size,
-            size=(total_num_tokens,),
-            generator=self.torch_rng,
-        )
-        decoded_flat_random_tokens = deque(
-            self.victim.tokenizer.batch_decode(flat_random_tokens)
+        original_labels = [example["clf_label"]] * self.n_its
+        updated_labels = dataset.maybe_recompute_labels(
+            texts=attacked_inputs,
+            labels=original_labels,
         )
 
-        new_chunked_datapoints = []
-        failed_datapoint_idx = 0
-        for chunked_datapoint, success in zip(chunked_datapoints, successes):
-            if success:
-                assert isinstance(chunked_datapoint, list)
-                new_chunked_datapoints.append(chunked_datapoint)
-            else:
-                new_chunked_datapoint = []
-                modifiable_chunk_idx = 0
-                for text, chunk_type in zip(
-                    chunked_datapoint, dataset.modifiable_chunk_spec
-                ):
-                    if chunk_type == ChunkType.IMMUTABLE:
-                        new_chunked_datapoint.append(text)
-                    else:  # Since the chunk is not IMMUTABLE, we attack it
-                        if chunk_type == ChunkType.PERTURBABLE:
-                            new_chunked_datapoint.append(text)
-                        tokens_to_add = []
-                        for _ in range(
-                            all_num_tokens[failed_datapoint_idx, modifiable_chunk_idx]
-                        ):
-                            tokens_to_add.append(decoded_flat_random_tokens.popleft())
-                        new_chunked_datapoint.append("".join(tokens_to_add))
-                        modifiable_chunk_idx += 1
-                new_chunked_datapoints.append(new_chunked_datapoint)
-                failed_datapoint_idx += 1
+        with get_caching_model_with_example(self.victim, example["text"]) as victim:
+            victim_successes = self.victim_success_binary_callback(
+                victim,
+                attacked_inputs,
+                updated_labels,
+            )
 
-        assert len(decoded_flat_random_tokens) == 0
+        attacked_text, attack_success_index = get_attacked_text_from_successes(
+            attacked_inputs, victim_successes
+        )
+        return attacked_text, attack_success_index
 
-        return new_chunked_datapoints
-
-    def _batch_check_success(
+    def get_attacked_inputs(
         self,
-        dataset: RLLMDataset,
-        attacked_chunked_datapoints: Sequence[Sequence[str]],
-        original_labels: Sequence[int],
-        previous_attack_success: Sequence[bool],
-    ) -> list[bool]:
-        """Checks the success of the attack on a batch of datapoints.
+        example: dict[str, Any],
+        n_attacks: int,
+        modifiable_chunk_spec: ModifiableChunkSpec,
+    ) -> list[str]:
+        """Returns the attacked inputs for one example.
 
         Args:
-            attacked_chunked_datapoints: The attacked texts
-            original_labels: The original labels of the texts. Will only be
-                used if the attack does not have a ground truth label function.
-            previous_attack_success: A list of booleans indicating whether the attack
-                has already been successful on each of the attacked texts.
+            example: The example to be attacked.
+            n_attacks: The number of attacked inputs to generate. (Typically
+                this will be the number of iterations we intend to run.)
+            modifiable_chunk_spec: The spec indicating which chunks are
+                modifiable, and how.
 
         Returns:
-            A list of booleans indicating whether the attack was successful on
-            each of the attacked texts.
+            The attacked inputs for the example.
         """
-        # Only run the victim model on the texts that
-        # have not yet been successfully attacked
-        datapoints = [
-            "".join(text_chunked)
-            for text_chunked, success in zip(
-                attacked_chunked_datapoints, previous_attack_success
+
+        # TODO (ian): Speed this up by parallelizing if it's a bottleneck.
+        attacked_inputs = []
+        for _ in range(n_attacks):
+            attacked_input = self._get_attacked_input(example, modifiable_chunk_spec)
+            attacked_inputs.append(attacked_input)
+        return attacked_inputs
+
+    def _get_attacked_input(
+        self, example: dict[str, Any], modifiable_chunk_spec: ModifiableChunkSpec
+    ) -> str:
+        """Returns one attacked input for one example.
+
+        Args:
+            example: The example to be attacked.
+            modifiable_chunk_spec: The spec indicating which chunks are
+                modifiable, and how.
+
+        Returns:
+            One attacked input for the example.
+        """
+        # We forbid introducing special tokens in the attack tokens.
+        excluded_token_ids = self.victim.tokenizer.all_special_ids
+
+        current_input = ""
+        for chunk_index, chunk_type in enumerate(modifiable_chunk_spec):
+            chunk_text = example["chunked_text"][chunk_index]
+            current_input += self._get_text_for_chunk(
+                chunk_text=chunk_text,
+                chunk_type=chunk_type,
+                excluded_token_ids=excluded_token_ids,
+                n_tokens=self.n_attack_tokens,
             )
-            if not success
-        ]
+        return current_input
 
-        # The filtered pipeline returns defense flag values, which we don't need.
-        pipeline_out = self.victim_pipeline(datapoints, batch_size=self.batch_size)
-        assert isinstance(pipeline_out, list)
-        pipeline_out = cast(list[tuple[dict, None]], pipeline_out)
-        results = [result_and_flag[0] for result_and_flag in pipeline_out]
-
-        assert isinstance(results, list)
-        assert len(results) == len(datapoints)
-
-        result_labels = [result["label"] for result in results]
-        result_int_labels = [
-            self.victim.config.label2id[result_label] for result_label in result_labels
-        ]
-        assert all(isinstance(label, int) for label in result_int_labels)
-
-        original_labels = [
-            label
-            for label, suc in zip(original_labels, previous_attack_success)
-            if not suc
-        ]
-        true_labels = dataset.maybe_recompute_labels(
-            texts=datapoints, labels=original_labels
-        )
-
-        new_successes = deque(
-            [result != true for result, true in zip(result_int_labels, true_labels)]
-        )
-
-        updated_successes = []
-        for success in previous_attack_success:
-            if success:
-                updated_successes.append(True)
-            else:
-                updated_successes.append(new_successes.popleft())
-
-        assert len(updated_successes) == len(previous_attack_success)
-        for old_suc, new_suc in zip(previous_attack_success, updated_successes):
-            if old_suc is True:
-                assert new_suc is True
-
-        return updated_successes
-
-    def _maybe_log_to_wandb(
+    def _get_text_for_chunk(
         self,
-        iteration: int,
-        attack_success: Sequence[bool],
-        num_skips: int,
-    ):
+        chunk_text: str,
+        chunk_type: ChunkType,
+        excluded_token_ids: list[int],
+        n_tokens: int,
+    ) -> str:
+        """Returns the text for a chunk based on its type.
 
-        self.logging_counter.increment(
-            step_count_to_add=1,
-            datapoint_count_to_add=len(attack_success) - num_skips,
-            commit=False,
-        )
+        Args:
+            chunk: The chunk text.
+            chunk_type: The chunk type.
+            excluded_token_ids: The token ids to exclude from the random selection (e.g.
+                special tokens).
+            n_tokens: The number of random tokens to append to the chunk.
 
-        if iteration % self.logging_frequency == 0:
-            wandb.log(
-                {
-                    "num_attack_success": sum(attack_success),
-                    "attack_success_rate": sum(attack_success) / len(attack_success),
-                },
-                commit=True,
+        Returns:
+            The text for the chunk based on its type.
+        """
+        match chunk_type:
+            case ChunkType.IMMUTABLE:
+                return chunk_text
+
+            case ChunkType.PERTURBABLE:
+                token_ids = self._n_random_token_ids_with_exclusions(
+                    n_tokens, excluded_token_ids
+                )
+                random_tokens = self.victim.tokenizer.decode(token_ids)
+                return chunk_text + random_tokens
+
+            case ChunkType.OVERWRITABLE:
+                token_ids = self._n_random_token_ids_with_exclusions(
+                    n_tokens, excluded_token_ids
+                )
+                random_tokens = self.victim.tokenizer.decode(token_ids)
+                return random_tokens
+
+            case _:
+                raise ValueError(f"Unknown chunk type: {chunk_type}")
+
+    def _n_random_token_ids_with_exclusions(
+        self, n: int, excluded_token_ids: list[int]
+    ) -> list[int]:
+        """Returns n random token ids with exclusions.
+
+        Args:
+            n: The number of random token ids to return.
+            excluded_token_ids: The token ids to exclude from the random selection (e.g.
+                special tokens).
+
+        Returns:
+            n random token ids with exclusions.
+        """
+        return [
+            get_randint_with_exclusions(
+                high=self.victim.vocab_size,
+                exclusions=excluded_token_ids,
+                rng=self.rng,
             )
+            for _ in range(n)
+        ]
 
-            logger.info(
-                "iteration %s attack_success_rate: %s",
-                iteration,
-                sum(attack_success) / len(attack_success),
-            )
+
+def get_attacked_text_from_successes(
+    attacked_inputs: Sequence[str], victim_successes: Sequence[bool]
+) -> tuple[str, int | None]:
+    """Returns the attacked text and the index of the successful attack.
+
+    Args:
+        attacked_inputs: The attacked inputs.
+        victim_successes: The successes of the model on the inputs.
+
+    Returns:
+        The attacked text and the index of the successful attack.
+        Returns the last attacked text and None if no attack was successful.
+    """
+    try:
+        # We look for False in the successes list, which indicates a successful
+        # attack (i.e. that the model got the answer wrong after the attack).
+        attack_success_index = victim_successes.index(False)
+        return attacked_inputs[attack_success_index], attack_success_index
+    except ValueError:
+        return attacked_inputs[-1], None

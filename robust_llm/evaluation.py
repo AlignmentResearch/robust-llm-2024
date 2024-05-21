@@ -638,6 +638,7 @@ def compute_attack_results(
     assert attacked_dataset.ds is not None
     victim.eval()
 
+    # TODO (ian): Use the BinaryCallback from EvaluationConfig here.
     _, original_pred_labels, original_flag_values = (
         get_prediction_logits_and_labels_and_maybe_flag_values(
             dataset=attacked_dataset.ds,

@@ -129,11 +129,15 @@ class EvaluationConfig:
         num_examples_to_log_detailed_info (Optional[int]): Number of adversarial
             examples for which we want to log detailed info, such as the original and
             attacked text, attack results and debug info. If None, do not log anything.
+        final_success_binary_callback (str): The name of the ScoringCallback to use
+            for final evaluation. Should refer to a BinaryCallback, because we need
+            discrete success/failure for each attacked input.
     """
 
     batch_size: int = 8
     evaluation_attack: AttackConfig = MISSING
     num_examples_to_log_detailed_info: Optional[int] = 10
+    final_success_binary_callback: str = "successes_from_text"
 
 
 @dataclass

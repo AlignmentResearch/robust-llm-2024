@@ -2,12 +2,16 @@
 defaults:
 - /dataset: passwordmatch
 - /evaluation: DEFAULT
-- /attack@evaluation.evaluation_attack: RANDOM_TOKEN  # len 10 is the default now.
+- /attack@evaluation.evaluation_attack: random-token-len-10
 - /model: pythia-14m
 - _self_
 
 dataset:
-  n_val: 10
+  n_val: 200
+
+model:
+  name_or_path: "AlignmentResearch/robust_llm_pythia-tt-31m-mz-ada-v3"
+  strict_load: true
 
 experiment_name: ???
 run_name: ???

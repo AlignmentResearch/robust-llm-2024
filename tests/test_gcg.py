@@ -29,6 +29,8 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
         tokenizer,
         accelerator=ACCELERATOR,
         inference_type=InferenceType("classification"),
+        train_minibatch_size=2,
+        eval_minibatch_size=2,
     )
     config = GCGAttackConfig(
         n_candidates_per_it=1,
@@ -65,6 +67,8 @@ def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRun
         tokenizer,
         accelerator=ACCELERATOR,
         inference_type=InferenceType("classification"),
+        train_minibatch_size=2,
+        eval_minibatch_size=2,
     )
     config = GCGAttackConfig(
         n_candidates_per_it=1,

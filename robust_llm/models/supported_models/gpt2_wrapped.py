@@ -18,6 +18,8 @@ class GPT2Model(WrappedModel):
         tokenizer: PreTrainedTokenizerBase,
         accelerator: Accelerator | None,
         inference_type: InferenceType,
+        train_minibatch_size: int,
+        eval_minibatch_size: int,
     ) -> None:
         # TODO (ian): Decide whether this assert is worthwhile (it makes testing
         # harder).
@@ -27,6 +29,8 @@ class GPT2Model(WrappedModel):
             tokenizer,
             accelerator,
             inference_type,
+            train_minibatch_size,
+            eval_minibatch_size,
         )
 
         # Special setup needed for gpt2.

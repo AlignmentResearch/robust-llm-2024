@@ -1,7 +1,10 @@
+from contextlib import contextmanager
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Sequence, TypeVar
 
+import datasets
 import torch
+import torch.nn.functional as F
 from accelerate import Accelerator, DistributedType
 from torch.distributed.fsdp import (
     FullStateDictConfig,  # pyright: ignore[reportPrivateImportUsage]
@@ -12,6 +15,7 @@ from torch.distributed.fsdp import (
 from torch.distributed.fsdp import (
     StateDictType,  # pyright: ignore[reportPrivateImportUsage]
 )
+from torch.utils.data import DataLoader
 from transformers import (
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
@@ -21,6 +25,11 @@ from trl import AutoModelForCausalLMWithValueHead
 
 if TYPE_CHECKING:
     from robust_llm.models import WrappedModel
+
+# The tensors are (batch_size, n_heads, seq_len, head_dim).
+PastKeyValues = tuple[tuple[torch.Tensor, ...], ...]
+
+Tdict = TypeVar("Tdict", bound=dict)
 
 
 class InferenceType(Enum):
@@ -94,6 +103,40 @@ def load_hf_model(
     if strict_load:
         assert loading_info_is_empty(loading_info)  # type: ignore
     return model
+
+
+def classification_losses_from_logits(
+    logits: torch.Tensor, goal: Sequence[int]
+) -> torch.Tensor:
+    """Compute the classification loss from the logits.
+
+    Args:
+        logits: Shape (batch, n_classes). The logits from the model.
+        goal: Len batch. The goal classes.
+
+    Returns:
+        The classification loss, shape (batch,).
+    """
+    assert logits.shape[0] == len(goal)
+    goal_tensor = torch.tensor(goal)
+    return F.cross_entropy(logits, goal_tensor, reduction="none")
+
+
+def classification_successes_from_logits(
+    logits: torch.Tensor, goal: Sequence[int]
+) -> list[bool]:
+    """Compute the classification successes from the logits.
+
+    Args:
+        logits: Shape (batch, n_classes). The logits from the model.
+        goal: List of length 'batch'. The goal classes.
+
+    Returns:
+        List of length 'batch'. Whether the goal class is the most likely class.
+    """
+    assert logits.shape[0] == len(goal)
+    predicted_classes = torch.argmax(logits, dim=1)
+    return (predicted_classes == torch.tensor(goal)).tolist()
 
 
 def _call_model(
@@ -199,3 +242,63 @@ class SuppressPadTokenWarning:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.model.config.pad_token_id = self.saved_pad_token
+
+
+def combine_output_dicts(dicts: Sequence[Tdict]) -> Tdict:
+    """Combine outputs into a single object."""
+    target_keys = dicts[0].keys()
+    target_type = type(dicts[0])
+    target_types = {k: type(dicts[0][k]) for k in target_keys}
+
+    assert all(d.keys() == target_keys for d in dicts)
+    assert all(isinstance(d, target_type) for d in dicts)
+    assert all(isinstance(d[k], target_types[k]) for d in dicts for k in target_keys)
+
+    combined = target_type()
+    for key in target_keys:
+        nones = [d[key] is None for d in dicts]
+        if any(nones):
+            assert all(nones)
+            combined[key] = None
+        combined[key] = torch.cat([d[key] for d in dicts])
+    return combined
+
+
+def build_dataloader(minibatch_size: int, **kwargs):
+    """Build a DataLoader from arbitrary keyword arguments.
+
+    This saves us having to manually specify the inputs multiple times.
+
+    Args:
+        minibatch_size: The size of the minibatches.
+        kwargs: The keyword arguments with the actual data we want in the
+            DataLoader. The keys should be the names of the fields in the dataset
+            (e.g. input_ids, attention_mask, ...).
+    """
+    dataset = datasets.Dataset.from_dict(
+        {
+            **kwargs,
+        }
+    ).with_format("torch")
+
+    dataloader = DataLoader(
+        dataset=dataset,  # type: ignore  # Typehint is wrong in DataLoader.
+        batch_size=minibatch_size,
+    )
+    return dataloader
+
+
+def dict_to_device(d: Tdict, device: str | torch.device) -> Tdict:
+    for k, v in d.items():
+        if isinstance(v, torch.Tensor):
+            d[k] = v.to(device=device)
+    return d
+
+
+@contextmanager
+def maybe_no_grad(use_no_grad: bool):
+    if use_no_grad:
+        with torch.no_grad():
+            yield
+    else:
+        yield

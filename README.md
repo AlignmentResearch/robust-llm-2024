@@ -151,7 +151,7 @@ This line overrides whatever value `dataset.n_val` had before (which was `0`, fr
 #### Examples of different kinds of configs
 - See `robust_llm/hydra_conf/Eval/_template.yaml` for a template for `evaluation` experiments that explains some of what's going on
     - See also `_template.yaml` under `AdvTraining`, `Training`, and `DefendedEval`.
-- See `random-token-len-10` and `trl-stronger-adversary` in `robust_llm/hydra_conf/attack` for examples of extending/overriding the `AttackConfig` defaults.
+- See `random-token-n-its-1280` and `trl-stronger-adversary` in `robust_llm/hydra_conf/attack` for examples of extending/overriding the `AttackConfig` defaults.
 - See `robust_llm/hydra_conf/experiment/ian/20240429_pm_random-token-fted.yaml` for an example of extending a generic experiment `yaml` for a specific experiment.
 - See the scripts in `experiments/_example` for examples of how these configs could be used for real experiments.
 

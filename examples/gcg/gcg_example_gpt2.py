@@ -1,23 +1,24 @@
 from accelerate import Accelerator
-from transformers import AutoTokenizer, GPT2LMHeadModel
 
 from robust_llm.attacks.search_based.runners import GCGRunner
 from robust_llm.attacks.search_based.utils import PreppedExample, PromptTemplate
-from robust_llm.models import GPT2Model
-from robust_llm.models.model_utils import InferenceType
+from robust_llm.config.model_configs import ModelConfig
+from robust_llm.models.wrapped_model import WrappedModel
 
 
 def main():
     accelerator = Accelerator()
-    model = GPT2LMHeadModel.from_pretrained("gpt2")
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    model_config = ModelConfig(
+        name_or_path="gpt2",
+        family="gpt2",
+        inference_type="generation",
+        train_minibatch_size=2,
+        eval_minibatch_size=2,
+    )
+    victim = WrappedModel.from_config(model_config, accelerator=accelerator)
+
     user_prompt = "Hello there."
     prompt_template = PromptTemplate(before_attack=user_prompt)
-    # specify parameters for the attack
-    assert isinstance(model, GPT2LMHeadModel)
-    wrapped_model = GPT2Model(
-        model, tokenizer, accelerator, inference_type=InferenceType("generation")
-    )
 
     prepped_examples = [
         PreppedExample(
@@ -27,7 +28,7 @@ def main():
     ]
 
     runner = GCGRunner(
-        wrapped_model=wrapped_model,
+        wrapped_model=victim,
         top_k=8,
         n_candidates_per_it=32,
         n_its=50,
@@ -45,12 +46,12 @@ def main():
     )
     print(f"{full_prompt=}")
     # confirm that the suffix works by using it to generate a continuation
-    tokens = tokenizer(full_prompt, return_tensors="pt").input_ids.to(
-        device=accelerator.device
+    tokens = victim.tokenizer(full_prompt, return_tensors="pt").input_ids.to(
+        device=victim.device
     )
-    all_tokens = model.generate(tokens, max_new_tokens=5)
+    all_tokens = victim.model.generate(tokens, max_new_tokens=5)
     print(f"{all_tokens=}")
-    print(f"{tokenizer.decode(all_tokens[0])=} ")
+    print(f"{victim.tokenizer.decode(all_tokens[0])=} ")
 
 
 if __name__ == "__main__":

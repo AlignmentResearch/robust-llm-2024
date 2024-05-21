@@ -5,13 +5,20 @@ from typing import Optional
 
 import torch
 from accelerate import Accelerator
+from tqdm import tqdm
 from transformers import PretrainedConfig, PreTrainedModel, PreTrainedTokenizerBase
+from transformers.modeling_outputs import ModelOutput
 
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.model_utils import (
     InferenceType,
+    SuppressPadTokenWarning,
     _get_embedding_weights,
+    build_dataloader,
+    combine_output_dicts,
+    dict_to_device,
     load_hf_model,
+    maybe_no_grad,
     prepare_model_with_accelerate,
 )
 
@@ -27,7 +34,20 @@ class WrappedModel(ABC):
         tokenizer: PreTrainedTokenizerBase,
         accelerator: Accelerator | None,
         inference_type: InferenceType,
+        train_minibatch_size: int,
+        eval_minibatch_size: int,
     ) -> None:
+        """Initialize a WrappedModel.
+
+        Args:
+            model: The model to wrap.
+            tokenizer: The tokenizer to use.
+            accelerator: The accelerator to use.
+            inference_type: The type of inference this model is for ('generation'
+                or 'classification' or 'trl')
+            train_minibatch_size: The minibatch size to use for training.
+            eval_minibatch_size: The minibatch size to use for evaluation.
+        """
         self.accelerator = accelerator
         if self.accelerator is not None:
             self.model = prepare_model_with_accelerate(self.accelerator, model)
@@ -36,6 +56,8 @@ class WrappedModel(ABC):
 
         self.tokenizer = tokenizer
         self.inference_type = inference_type
+        self.train_minibatch_size = train_minibatch_size
+        self.eval_minibatch_size = eval_minibatch_size
 
     @classmethod
     def register_subclass(cls, name):
@@ -81,12 +103,101 @@ class WrappedModel(ABC):
             raise ValueError(f"Unsupported model family: {family}")
 
         tokenizer = subcls.load_tokenizer(config)
-        return subcls(model, tokenizer, accelerator, inference_type)
+        return subcls(
+            model=model,
+            tokenizer=tokenizer,
+            accelerator=accelerator,
+            inference_type=inference_type,
+            train_minibatch_size=config.train_minibatch_size,
+            eval_minibatch_size=config.eval_minibatch_size,
+        )
+
+    def classification_output_from_tokens(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        use_cache: bool = True,
+        use_no_grad: bool = True,
+        minibatch_size: int | None = None,
+    ) -> ModelOutput:
+        """Returns the classification logits from the token ids.
+
+        Args:
+            input_ids: The token ids to calculate the logits on.
+            attention_mask: The attention mask for the input_ids. Only needed
+                if the input_ids are actually padded.
+            use_cache: Whether to return the computed KV values.
+            use_no_grad: Whether to use torch.no_grad(). Defaults to True because
+                usually we do not need gradient information, but it is needed
+                for gradient-based attacks like GCG.
+            minibatch_size: The minibatch size to use. If None, we use
+                self.eval_minibatch_size.
+
+        Returns:
+            A SequenceClassifierOutput object, which has a 'logits' attribute.
+            If 'use_cache' is True, it also has a 'past_key_values' attribute.
+        """
+
+        minibatch_size = minibatch_size or self.eval_minibatch_size
+
+        dataloader = build_dataloader(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            minibatch_size=minibatch_size,
+        )
+        assert self.accelerator is not None
+        dataloader = self.accelerator.prepare(dataloader)
+
+        outs: list[ModelOutput] = []
+        with maybe_no_grad(use_no_grad):
+            for minibatch in tqdm(
+                dataloader,
+                mininterval=5,
+                position=-1,
+                desc=f"mb size = {minibatch_size}",
+            ):
+                minibatch_out = self(
+                    input_ids=minibatch["input_ids"],
+                    attention_mask=minibatch["attention_mask"],
+                    use_cache=use_cache,
+                )
+                minibatch_out = dict_to_device(minibatch_out, "cpu")
+                outs.append(minibatch_out)
+        out = combine_output_dicts(outs)
+        return out
+
+    def classification_output_from_embeddings(
+        self,
+        embeddings: torch.Tensor,
+        use_cache: bool = True,
+    ) -> ModelOutput:
+        """Returns the classification logits from the embeddings.
+
+        Args:
+            embeddings: The embeddings to calculate the logits on.
+            use_cache: Whether to return the computed KV values.
+
+        Returns:
+            A SequenceClassifierOutput object, which has a 'logits' attribute.
+            If 'use_cache' is True, it also has a 'past_key_values' attribute.
+        """  # noqa: E501
+
+        with SuppressPadTokenWarning(self.model):
+            out = self(
+                inputs_embeds=embeddings,
+                use_cache=use_cache,
+            )
+        return out
 
     def __call__(self, **inputs):
         return self.forward(**inputs)
 
     def forward(self, **inputs):
+        # Accelerator will *usually* handle moving things to the right device,
+        # but occasionally we will run without a prepared DataLoader (e.g. in
+        # get_caching_model_with_example), so we need to handle that case.
+        # TODO (ian): Work out where to move things to the right device.
+        inputs = dict_to_device(inputs, self.model.device)
         return self.model.forward(**inputs)
 
     def to(self, device: torch.device) -> WrappedModel:

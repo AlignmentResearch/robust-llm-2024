@@ -80,9 +80,8 @@ def _test_doesnt_crash(exp_config: ExperimentConfig) -> None:
 def test_doesnt_crash_random_token(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
-        min_tokens=2,
-        max_tokens=3,
-        max_iterations=2,
+        n_attack_tokens=3,
+        n_its=2,
     )
     _test_doesnt_crash(exp_config)
 

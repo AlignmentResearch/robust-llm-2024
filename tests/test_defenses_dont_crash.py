@@ -28,9 +28,8 @@ def exp_config() -> ExperimentConfig:
         ),
         evaluation=EvaluationConfig(
             evaluation_attack=RandomTokenAttackConfig(
-                min_tokens=2,
-                max_tokens=3,
-                max_iterations=2,
+                n_attack_tokens=3,
+                n_its=2,
             )
         ),
         model=ModelConfig(

@@ -1,4 +1,6 @@
-from transformers import AutoTokenizer
+from typing import cast
+
+from transformers import AutoTokenizer, GPTNeoXPreTrainedModel
 
 from robust_llm.config.configs import DatasetConfig
 from robust_llm.models import GPTNeoXModel
@@ -22,12 +24,14 @@ def test_get_only_data_with_incorrect_predictions():
         train.ds["text"], padding=True, return_tensors="pt"
     ).input_ids
     model = FakeClassifierWithPositiveList(tokenizer=tokenizer, positives=positives)
-    # We ignore the type because we are using a FakeClassifierWithPositiveList
+    # We fake the type with 'cast' because we are using a FakeClassifierWithPositiveList
     victim = GPTNeoXModel(
-        model,  # type: ignore
+        cast(GPTNeoXPreTrainedModel, model),
         tokenizer,
         accelerator=None,
         inference_type=InferenceType("classification"),
+        train_minibatch_size=2,
+        eval_minibatch_size=2,
     )
 
     subset_indices = [
