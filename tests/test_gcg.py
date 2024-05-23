@@ -135,7 +135,11 @@ def test_AttackIndices() -> None:
     assert tokens[attack_indices.target_slice] == target
 
 
-@given(target=st.text())
+# hypothesis was generating hex characters that are not reversible in the tokenizer.
+text_no_specials = st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126))
+
+
+@given(target=text_no_specials)
 @example(target="Hi!")
 @example(target="")
 # We use a deadline of 1000ms because the default of 200ms was too short, as was
