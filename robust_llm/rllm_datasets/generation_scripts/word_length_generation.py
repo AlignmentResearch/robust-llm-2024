@@ -26,6 +26,10 @@ UNMODIFIABLE_CONTENT_TEMPLATE = (
 MODIFIABLE_CONTENT = ""
 ANSWER_PROMPT = "\n\nAnswer:"
 
+# 0 is for FIRST, 1 is for SECOND
+# Note the leading space in the class labels
+CLASS_LABELS = [" FIRST", " SECOND"]
+
 
 def construct_word_length(
     train_size: int = 25000, val_size: int = 25000, seed: int = 0
@@ -71,7 +75,7 @@ def construct_word_length(
     val = Dataset.from_list(val_dicts)
 
     # Add ClassLabel feature to the clf_label column
-    label_feature = datasets.ClassLabel(names=["FIRST", "SECOND"])
+    label_feature = datasets.ClassLabel(names=CLASS_LABELS)
 
     train = cast_column_to_feature(
         ds=train, column_name="clf_label", feature=label_feature
@@ -90,7 +94,7 @@ def _generate_example_for_words(
     )
     # if first word is same length or longer, label is 0
     label = 0 if len(first_word) >= len(second_word) else 1
-    gen_target = "FIRST" if label == 0 else "SECOND"
+    gen_target = CLASS_LABELS[label]
     content = [unmodifiable_content, MODIFIABLE_CONTENT]
     example = RLLMExample(
         instructions=INSTRUCTIONS,

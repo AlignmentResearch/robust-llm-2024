@@ -67,5 +67,5 @@ if __name__ == "__main__":
     # bump the version here manually when you make changes
     # (see README for more info)
     MINOR_VERSION = 1
-    PATCH_VERSION = 1
+    PATCH_VERSION = 2
     main(minor_version=MINOR_VERSION, patch_version=PATCH_VERSION)

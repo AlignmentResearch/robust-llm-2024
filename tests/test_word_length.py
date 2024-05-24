@@ -20,7 +20,7 @@ def test_generate_example_for_words():
     assert second_word in generated_example.content[0]
     assert generated_example.content[1] == ""
     assert generated_example.clf_label == clf_label
-    assert generated_example.gen_target == "SECOND"
+    assert generated_example.gen_target == " SECOND"
 
 
 def test_generate_example_for_words_same_length():

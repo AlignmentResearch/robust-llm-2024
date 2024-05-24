@@ -13,6 +13,10 @@ from robust_llm.rllm_datasets.generation_scripts.dataset_upload_handler import (
 
 DATASET_REPO_NAME = "AlignmentResearch/EnronSpam"
 
+# 0 is for HAM, 1 is for SPAM
+# Note the leading space in the class labels
+CLASS_LABELS = [" HAM", " SPAM"]
+
 
 def main(minor_version: int, patch_version: int):
     """Create and save the Enron Spam dataset.
@@ -45,7 +49,7 @@ def process_spam_ds(ds: Dataset) -> Dataset:
 
     # Make sure clf_label is a ClassLabel feature with labels that line up with
     # the gen_targets.
-    label_feature = datasets.ClassLabel(names=["HAM", "SPAM"])
+    label_feature = datasets.ClassLabel(names=CLASS_LABELS)
     ds = cast_column_to_feature(ds=ds, column_name="clf_label", feature=label_feature)
 
     def gen_target_from_label(label: int) -> str:
@@ -69,5 +73,5 @@ if __name__ == "__main__":
     # bump the version here manually when you make changes
     # (see README for more info)
     MINOR_VERSION = 1
-    PATCH_VERSION = 1
+    PATCH_VERSION = 2
     main(minor_version=MINOR_VERSION, patch_version=PATCH_VERSION)
