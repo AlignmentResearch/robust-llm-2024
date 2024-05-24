@@ -200,6 +200,7 @@ class LoggingContext:
         logging_level = self.args.environment.logging_level
         logging_filename = self.args.environment.logging_filename
         # Create logger and formatter
+        self.logger.propagate = False
         self.logger.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -211,6 +212,7 @@ class LoggingContext:
             logging_level in LOGGING_LEVELS
         ), f"Invalid logging level: {logging_level}"
         console_handler.setLevel(logging_level)
+        console_handler.setFormatter(formatter)
 
         # Create file handler.
         file_handler = logging.FileHandler(logging_filename)
