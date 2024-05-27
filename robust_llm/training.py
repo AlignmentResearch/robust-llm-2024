@@ -42,9 +42,6 @@ from robust_llm.utils import get_readable_timestamp
 @dataclasses.dataclass
 class Training:
     config: TrainingConfig
-    experiment_name: str
-    run_name: str
-    job_type: str
     train_rllm_dataset: RLLMDataset
     eval_rllm_dataset: dict[str, RLLMDataset]
     victim: WrappedModel

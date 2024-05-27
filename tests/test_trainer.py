@@ -40,9 +40,6 @@ def test_basic_constructor():
 
     Training(
         config=config,
-        experiment_name="test-experiment",
-        job_type="test-job_type",
-        run_name="test-run",
         train_rllm_dataset=train,
         eval_rllm_dataset={"validation": validation},
         victim=wrapped_model,

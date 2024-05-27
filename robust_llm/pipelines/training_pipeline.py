@@ -37,9 +37,7 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
     # several datasets that we perform model evaluation on,
     # hence "eval_dataset" is a dict[str, Dataset], not a Dataset.
     base_training_args: dict[str, Any] = {
-        "experiment_name": args.experiment_name,
-        "run_name": args.run_name,
-        "job_type": args.job_type,
+        "config": args.training,
         "train_rllm_dataset": train_set,
         "eval_rllm_dataset": {
             "validation": val_set,
