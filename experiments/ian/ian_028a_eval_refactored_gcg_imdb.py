@@ -1,10 +1,14 @@
-# Compare to ian_017
+# Compare to mz_062.
+# Hyperparams pulled together from mz_062[...].py and
+# https://wandb.ai/farai/robust-llm/groups/mz_062_search_based_imdb_ada_small_cheaper/files/wandb-summary.json?runName=asp0v9ov  # noqa: E501
+
+# Rerun of 028 with more memory so 2.8 won't OOM and with caching.
 import os
 
 from robust_llm.batch_job_utils import run_multiple
 
 EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
-HYDRA_CONFIG = "ian/027_eval_refactored_random_token_imdb"
+HYDRA_CONFIG = "ian/028_eval_refactored_gcg_imdb"
 
 MODELS_AND_N_MAX_PARALLEL = [
     ("AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3", 2),
@@ -12,9 +16,9 @@ MODELS_AND_N_MAX_PARALLEL = [
     ("AlignmentResearch/robust_llm_pythia-imdb-70m-mz-ada-v3", 2),
     ("AlignmentResearch/robust_llm_pythia-imdb-160m-mz-ada-v3", 1),
     ("AlignmentResearch/robust_llm_pythia-imdb-410m-mz-ada-v3", 1),
-    # ("AlignmentResearch/robust_llm_pythia-imdb-1b-mz-ada-v3", 1),
-    # ("AlignmentResearch/robust_llm_pythia-imdb-1.4b-mz-ada-v3", 1),
-    # ("AlignmentResearch/robust_llm_pythia-imdb-2.8b-mz-ada-v3", 1),
+    ("AlignmentResearch/robust_llm_pythia-imdb-1b-mz-ada-v3", 1),
+    ("AlignmentResearch/robust_llm_pythia-imdb-1.4b-mz-ada-v3", 1),
+    ("AlignmentResearch/robust_llm_pythia-imdb-2.8b-mz-ada-v3", 1),
 ]
 
 
@@ -37,7 +41,7 @@ if __name__ == "__main__":
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         N_MAX_PARALLEL,
-        memory="50G",
-        cpu=12,
-        priority="high-batch",
+        memory="20G",
+        cpu=6,
+        priority="normal-batch",
     )

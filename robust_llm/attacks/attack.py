@@ -1,4 +1,5 @@
 import abc
+from enum import Enum
 from typing import Any, Optional
 
 from typing_extensions import override
@@ -84,3 +85,13 @@ class IdentityAttack(Attack):
         )
 
         return dataset, {}
+
+
+class PromptAttackMode(Enum):
+    """Enum class for prompt attack modes.
+
+    Currently this just covers single vs multi-prompt.
+    """
+
+    SINGLEPROMPT = "single-prompt"
+    MULTIPROMPT = "multi-prompt"

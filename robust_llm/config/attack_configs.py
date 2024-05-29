@@ -5,7 +5,6 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
-from robust_llm.attacks.trl.constants import TRL_REWARD_TYPES
 from robust_llm.config.constants import SHARED_DATA_DIR
 from robust_llm.config.model_configs import ModelConfig
 
@@ -94,43 +93,22 @@ class RandomTokenAttackConfig(AttackConfig):
             compute whether an attack was successful by computing whether the victim
             got the right answer. Should refer to a BinaryCallback, because we need
             discrete success/failure for each attacked input.
+        prompt_attack_mode (PromptAttackMode): The mode to use for prompt
+            attacks. "single-prompt" for attacking one prompt at a time,
+            "multi-prompt" for attacking multiple prompts at once. Defaults to
+            "single-prompt".
+            TODO(GH#402): Use this for GCG as well and move into AttackConfig?
     """
 
     n_attack_tokens: int = 10
     n_its: int = 100
     victim_success_binary_callback: str = "successes_from_text"
+    prompt_attack_mode: str = "single-prompt"
 
     def __post_init__(self):
         super().__post_init__()
         assert self.n_its > 0
         assert self.n_attack_tokens > 0
-
-
-@dataclass
-class MultipromptRandomTokenAttackConfig(AttackConfig):
-    """Options specific for multi-prompt RandomToken attacks.
-
-    Attributes:
-        min_tokens (int): Minimum number of tokens to generate.
-        max_tokens (int): Maximum number of tokens to generate.
-        max_iterations (int): Maximum number of iterations to run the attack.
-        logging_frequency (int): How often to log the attack.
-        batch_size (int): Batch size to use for the victim pipeline used
-            to check whether the attack was successful.
-    """
-
-    min_tokens: int = 1
-    max_tokens: int = 3
-    max_iterations: int = 100
-    logging_frequency: int = 10
-    batch_size: int = 8
-
-    def __post_init__(self):
-        super().__post_init__()
-        assert self.min_tokens <= self.max_tokens
-        assert self.max_iterations > 0
-        assert self.logging_frequency >= 0
-        assert self.batch_size > 0
 
 
 @dataclass
@@ -160,8 +138,13 @@ class TRLAttackConfig(AttackConfig):
         max_new_tokens (int):
             The maximum number of tokens to generate.
             Name copied from trl code.
-        reward_type (str):
-            determines reward funtion to use in TRL.
+        rewards_from_victim_callback (str):
+            The name of the ScoringCallback to use to compute rewards for the
+            inputs. Must take text as input, and return floats that can be used
+            as rewards for the inputs. Default is "losses_from_text", which is
+            equivalent to the old "minus_correct_logprob" `reward_type`. The
+            other `reward_type`s can be implemented as ScoringCallbacks.
+            TODO(GH#406): Add the other reward types as ScoringCallbacks.
         model_name_to_save (str):
             The name to use for saving the model.
         model_save_path_prefix (Optional[str]): Where to save the final
@@ -181,7 +164,7 @@ class TRLAttackConfig(AttackConfig):
     min_length: int = -1
     max_new_tokens: int = 3
 
-    reward_type: str = "minus_correct_logit_plus_incorrect_logits"
+    rewards_from_victim_callback: str = "losses_from_text"
 
     model_name_to_save: str = "trl"
     model_save_path_prefix: Optional[str] = SHARED_DATA_DIR
@@ -192,13 +175,11 @@ class TRLAttackConfig(AttackConfig):
             self.batch_size == self.mini_batch_size * self.gradient_accumulation_steps
         )
 
-        assert self.reward_type in TRL_REWARD_TYPES
-
 
 @dataclass
 class SearchBasedAttackConfig(AttackConfig):
     """
-    Required options with defaults for the search based attack.
+    Required options with defaults for search based attacks.
 
     Args:
         n_candidates_per_it: the total number of token replacements
@@ -206,26 +187,18 @@ class SearchBasedAttackConfig(AttackConfig):
             top_k * n_attack_tokens, which is the total number of candidates).
         n_its: total number of iterations to run
         n_attack_tokens: number of attack tokens to optimize
-        forward_pass_batch_size: batch size used for forward pass when evaluating
-            candidates. If None, defaults to n_candidates_per_it.
-        seq_clf: whether we are using a SequenceClassification model
-            (default alternative is a CausalLM)
+        scores_from_text_callback: The name of the ScoringCallback to use to
+            compute scores for the inputs. Must take text as input, and return
+            floats that can be used to rank the inputs.
     """
 
-    n_candidates_per_it: int = 512
-    n_its: int = 50
+    n_candidates_per_it: int = 128
+    n_its: int = 10
     n_attack_tokens: int = 10
-    forward_pass_batch_size: Optional[int] = None
-    seq_clf: bool = True
+    scores_from_text_callback: str = "losses_from_text"
 
     def __post_init__(self):
         super().__post_init__()
-        if self.forward_pass_batch_size is None:
-            self.forward_pass_batch_size = self.n_candidates_per_it
-        elif self.forward_pass_batch_size > self.n_candidates_per_it:
-            raise ValueError(
-                "forward_pass_batch_size must be at most n_candidates_per_it"
-            )
 
 
 @dataclass
@@ -233,10 +206,14 @@ class GCGAttackConfig(SearchBasedAttackConfig):
     """Required options with defaults for the GCG attack.
 
     Args:
+        differentiable_embeds_callback (str): The name of the ScoringCallback to use to
+            compute gradients for generating candidates. Must take embeddings as input,
+            and must be differentiable with respect to the embeddings.
         top_k: the number of token replacements to consider at each
             position in the attack tokens.
     """
 
+    differentiable_embeds_callback: str = "losses_from_embeds"
     top_k: int = 256
 
     def __post_init__(self):
@@ -252,10 +229,14 @@ class MultipromptGCGAttackConfig(SearchBasedAttackConfig):
     """Required options with defaults for the multi-prompt GCG attack.
 
     Args:
+        differentiable_embeds_callback (str): The name of the ScoringCallback to use to
+            compute gradients for generating candidates. Must take embeddings as input,
+            and must be differentiable with respect to the embeddings.
         top_k: the number of token replacements to consider at each
             position in the attack tokens.
     """
 
+    differentiable_embeds_callback: str = "losses_from_embeds"
     top_k: int = 256
 
     def __post_init__(self):
@@ -290,11 +271,6 @@ for text_attack_recipe in TEXT_ATTACK_ATTACK_TYPES:
     )
 cs.store(group="attack", name="IDENTITY", node=IdentityAttackConfig)
 cs.store(group="attack", name="RANDOM_TOKEN", node=RandomTokenAttackConfig)
-cs.store(
-    group="attack",
-    name="MULTIPROMPT_RANDOM_TOKEN",
-    node=MultipromptRandomTokenAttackConfig,
-)
 cs.store(group="attack", name="TRL", node=TRLAttackConfig)
 cs.store(group="attack", name="GCG", node=GCGAttackConfig)
 cs.store(group="attack", name="MULTIPROMPT_GCG", node=MultipromptGCGAttackConfig)

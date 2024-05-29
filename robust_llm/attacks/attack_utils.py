@@ -1,5 +1,4 @@
 from robust_llm.attacks.attack import Attack, IdentityAttack
-from robust_llm.attacks.multiprompt_random_token import MultiPromptRandomTokenAttack
 from robust_llm.attacks.random_token import RandomTokenAttack
 from robust_llm.attacks.search_based.multiprompt_search_based import (
     MultiPromptSearchBasedAttack,
@@ -12,7 +11,6 @@ from robust_llm.config.attack_configs import (
     GCGAttackConfig,
     IdentityAttackConfig,
     MultipromptGCGAttackConfig,
-    MultipromptRandomTokenAttackConfig,
     RandomTokenAttackConfig,
     TextAttackAttackConfig,
     TRLAttackConfig,
@@ -37,11 +35,6 @@ def create_attack(
             )
         case RandomTokenAttackConfig():
             return RandomTokenAttack(
-                attack_config=attack_config,
-                victim=victim,
-            )
-        case MultipromptRandomTokenAttackConfig():
-            return MultiPromptRandomTokenAttack(
                 attack_config=attack_config,
                 victim=victim,
             )

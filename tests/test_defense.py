@@ -180,7 +180,11 @@ def test_compute_perplexity():
 
     # Step 2: Call function
     output = compute_perplexity(
-        model=mock_model, model_inputs=inputs, window_size=1, report_max_perplexity=True
+        model=mock_model,
+        input_ids=inputs["input_ids"],
+        attention_mask=inputs["attention_mask"],
+        window_size=1,
+        report_max_perplexity=True,
     )
 
     # Step 3: Assert the output is as expected
@@ -223,6 +227,7 @@ def test_compute_max_perplexity():
         attention_mask=torch.tensor([[1, 1, 1]], dtype=torch.long),
     )
     mock_wrapped_model = MagicMock()
+    mock_wrapped_model.eval_minibatch_size = 1
     mock_wrapped_model.return_value.logits = mock_model_output
     mock_wrapped_model.device = "cpu"
     mock_wrapped_model.tokenizer = mock_tokenizer
@@ -233,9 +238,7 @@ def test_compute_max_perplexity():
     # Step 2: Call function
     max_perplexity, _, _ = compute_max_min_percentile_perplexity(
         model=mock_wrapped_model,
-        tokenizer=mock_tokenizer,
         dataset=mock_dataset,  # type: ignore
-        batch_size=1,  # type: ignore
         window_size=1,
         report_max_perplexity=True,
     )
@@ -304,19 +307,18 @@ def test_retokenization_defended_model_forward():
     assert output.filters is None
 
 
-def test_perplexity_defended_model_forward(mocker):
+def test_perplexity_defended_model_filter(mocker):
     # Create a dummy input
     inputs = {
-        "input_ids": torch.tensor([[0, 1, 2], [2, 1, 0], [0, 1, 2]]),
+        "input_ids": torch.tensor([[0, 1, 2], [0, 1, 2], [0, 1, 2]]),
         "attention_mask": torch.tensor([[1, 1, 1], [1, 1, 1], [1, 1, 1]]),
     }
 
     # Create a dummy dataset
     dataset = Dataset.from_dict(
         {
-            "text": ["hello test test"],
-            "input_ids": [[0, 1, 2]],
-            "attention_mask": [[1, 1, 1]],
+            "text": ["hello test test", "test test test", "hello test test"],
+            **inputs,
         }
     )
 
@@ -335,20 +337,25 @@ def test_perplexity_defended_model_forward(mocker):
     tokenizer = MagicMock()
     tokenizer.device = torch.device("cpu")
     tokenizer.return_value = TokenizedInput(
-        input_ids=torch.tensor([[0, 1, 2]]),
-        attention_mask=torch.tensor([[1, 1, 1]]),
+        input_ids=inputs["input_ids"],
+        attention_mask=inputs["attention_mask"],
     )
     decoder = MagicMock()
     decoder.__class__ = PreTrainedModel
     decoder.inference_type = InferenceType.GENERATION
 
     # victim.device = torch.device("cpu")
+    victim.model.device = torch.device("cpu")
     victim.accelerator = MagicMock()
     victim.accelerator.device = torch.device("cpu")
     victim.accelerator.prepare().device = torch.device("cpu")
+    victim.accelerator.prepare.side_effect = lambda x: x
+    decoder.model.device = torch.device("cpu")
     decoder.device = torch.device("cpu")
+    decoder.eval_minibatch_size = 3
+    victim.eval_minibatch_size = 3
+    decoder.tokenizer = tokenizer
 
-    victim.tokenizer = tokenizer
     output_logits = torch.tensor(
         [
             [-9.0, -1.0],
@@ -362,9 +369,9 @@ def test_perplexity_defended_model_forward(mocker):
     decoder.return_value = Output(
         logits=torch.tensor(
             [
-                [[-9.0, -1.0, -9.0], [-9.0, -9.0, -1.0], [-1.0, -1.0, -1.0]],
-                [[-9.0, -1.0, -9.0], [-9.0, -9.0, -1.0], [-1.0, -1.0, -1.0]],
-                [[-9.0, -1.0, -9.0], [-9.0, -9.0, -1.0], [-1.0, -1.0, -1.0]],
+                [[-9.0, -1.0, -1.0], [-9.0, -1.0, -1.0], [-9.0, -1.0, -1.0]],
+                [[-9.0, -1.0, -1.0], [-9.0, -1.0, -1.0], [-9.0, -1.0, -1.0]],
+                [[-9.0, -1.0, -1.0], [-9.0, -1.0, -1.0], [-9.0, -1.0, -1.0]],
             ]
         )
     )
@@ -375,15 +382,24 @@ def test_perplexity_defended_model_forward(mocker):
     # See https://pytest-mock.readthedocs.io/en/latest/usage.html#where-to-patch
     mock_WrappedModel = mocker.patch("robust_llm.defenses.perplexity.WrappedModel")
     mock_WrappedModel.from_config.return_value = decoder
-
     # Create a PerplexityDefendedModel instance
     defended_model = PerplexityDefendedModel(
         victim=victim,
         defense_config=perplexity_config,
         dataset=dataset,
     )
-    # Call the forward method
-    output = defended_model.forward(**inputs)
+    # Modify the input so the second sample is filtered out.
+    modified_inputs = {
+        "input_ids": torch.tensor([[0, 1, 2], [0, 0, 0], [0, 1, 2]]),
+        "attention_mask": torch.tensor([[1, 1, 1], [1, 1, 1], [1, 1, 1]]),
+    }
+    defended_model.decoder.tokenizer.return_value = TokenizedInput(  # type: ignore
+        input_ids=modified_inputs["input_ids"],
+        attention_mask=modified_inputs["attention_mask"],
+    )
 
-    assert (output.filters == torch.tensor([False, True, False])).all()
-    assert (output.logits == output_logits).all()
+    # Call the filter method
+    filters = defended_model.filter(dataset["text"])
+    defended_model(**inputs)
+
+    assert filters == [False, True, False]

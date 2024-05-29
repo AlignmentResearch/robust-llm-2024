@@ -118,7 +118,7 @@ def classification_losses_from_logits(
         The classification loss, shape (batch,).
     """
     assert logits.shape[0] == len(goal)
-    goal_tensor = torch.tensor(goal)
+    goal_tensor = torch.tensor(goal, device=logits.device)
     return F.cross_entropy(logits, goal_tensor, reduction="none")
 
 
@@ -136,28 +136,7 @@ def classification_successes_from_logits(
     """
     assert logits.shape[0] == len(goal)
     predicted_classes = torch.argmax(logits, dim=1)
-    return (predicted_classes == torch.tensor(goal)).tolist()
-
-
-def _call_model(
-    model: PreTrainedModel,
-    inp: torch.Tensor | None = None,
-    inputs_embeds: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """Calls a pretrained model and returns the logits."""
-
-    assert (inp is not None) != (
-        inputs_embeds is not None
-    ), "exactly one of inp, inputs_embeds must be provided"
-
-    if inp is not None:
-        return model(input_ids=inp).logits
-
-    if inputs_embeds is not None:
-        with SuppressPadTokenWarning(model):
-            return model(inputs_embeds=inputs_embeds).logits
-
-    raise ValueError("exactly one of inp, inputs_embeds must be provided")
+    return (predicted_classes == torch.tensor(goal, device=logits.device)).tolist()
 
 
 def _get_embedding_weights(

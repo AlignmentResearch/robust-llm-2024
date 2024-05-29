@@ -14,11 +14,7 @@ from robust_llm.config import (
     TextAttackAttackConfig,
     TRLAttackConfig,
 )
-from robust_llm.config.attack_configs import (
-    GCGAttackConfig,
-    MultipromptGCGAttackConfig,
-    MultipromptRandomTokenAttackConfig,
-)
+from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAttackConfig
 from robust_llm.config.configs import EvaluationConfig
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 
@@ -43,11 +39,15 @@ def exp_config() -> ExperimentConfig:
         ),
         evaluation=EvaluationConfig(),
         model=ModelConfig(
-            name_or_path="EleutherAI/pythia-14m",
+            # We use a finetuned model so that the classification head isn't
+            # randomly initalized. It's fine to use a model that isn't finetuned
+            # for the task, because we are only testing that the attack doesn't crash.
+            name_or_path="AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3",
             family="pythia",
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
             inference_type="classification",
+            strict_load=True,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/PasswordMatch",
@@ -88,10 +88,10 @@ def test_doesnt_crash_random_token(exp_config: ExperimentConfig) -> None:
 
 def test_doesnt_crash_multiprompt_random_token(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
-    exp_config.evaluation.evaluation_attack = MultipromptRandomTokenAttackConfig(
-        min_tokens=2,
-        max_tokens=3,
-        max_iterations=2,
+    exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
+        n_attack_tokens=3,
+        n_its=2,
+        prompt_attack_mode="multi-prompt",
     )
     _test_doesnt_crash(exp_config)
 
@@ -132,6 +132,7 @@ def test_doesnt_crash_trl(exp_config: ExperimentConfig) -> None:
             # we need a ForCausalLMWithValueHead model
             inference_type="trl",
             strict_load=False,
+            padding_side="left",
         ),
     )
 

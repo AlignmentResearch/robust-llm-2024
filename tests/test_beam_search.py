@@ -18,7 +18,7 @@ def _get_runner(
     before_attack_text: str,
     after_attack_text: str,
     beam_search_width: int,
-    wrapped_model: WrappedModel,
+    victim: WrappedModel,
 ) -> BeamSearchRunner:
     config = BeamSearchAttackConfig(beam_search_width=beam_search_width)
     prompt_template = PromptTemplate(
@@ -27,11 +27,12 @@ def _get_runner(
     prepped_examples = [
         PreppedExample(
             prompt_template=prompt_template,
-            clf_target=0,
+            clf_label=0,
+            gen_target="0",
         )
     ]
     runner = make_runner(
-        wrapped_model=wrapped_model,
+        victim=victim,
         prepped_examples=prepped_examples,
         random_seed=0,
         config=config,
@@ -73,7 +74,7 @@ def get_beam_search_runner(
         before_attack_text=before_attack_text,
         after_attack_text=after_attack_text,
         beam_search_width=beam_search_width,
-        wrapped_model=wrapped_model,
+        victim=wrapped_model,
     )
 
 

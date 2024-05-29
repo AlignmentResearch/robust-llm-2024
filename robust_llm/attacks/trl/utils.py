@@ -7,11 +7,9 @@ from accelerate import Accelerator
 from datasets import Dataset
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from trl import PPOConfig, PPOTrainer
-from typing_extensions import override
 
 from robust_llm import logger
 from robust_llm.config.attack_configs import TRLAttackConfig
-from robust_llm.evaluation import FilteredEvaluationPipeline
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
@@ -56,21 +54,6 @@ def make_ppo_trainer(
     return ppo_trainer
 
 
-class LogitTextClassificationPipeline(FilteredEvaluationPipeline):
-    """A simple text classification pipeline that returns logits.
-
-    We subclass FilteredEvaluationPipeline because we want to inherit
-    the ability to pass in a WrappedModel rather than a PreTrainedModel.
-    This is not very clean but we'll be removing pipelines soon anyway.
-
-    TODO (GH#374): Remove pipelines.
-    """
-
-    @override
-    def postprocess(self, model_outputs, function_to_apply=None, top_k=1, _legacy=True):
-        return model_outputs["logits"]
-
-
 def trl_data_collator(datapoints: Sequence[Any]) -> Mapping[str, Any]:
     """A simple data collator to use when the dataset contains "chunked_text".
 
@@ -79,11 +62,13 @@ def trl_data_collator(datapoints: Sequence[Any]) -> Mapping[str, Any]:
     use our own or modify the output of the default data collator
     after the fact.
     """
+    assert all("gen_target" in datapoint for datapoint in datapoints)
     assert all("clf_label" in datapoint for datapoint in datapoints)
     assert all("text" in datapoint for datapoint in datapoints)
     assert all("chunked_text" in datapoint for datapoint in datapoints)
 
     batch = {}
+    batch["gen_target"] = [datapoint["gen_target"] for datapoint in datapoints]
     batch["clf_label"] = [datapoint["clf_label"] for datapoint in datapoints]
     batch["text"] = [datapoint["text"] for datapoint in datapoints]
     batch["chunked_text"] = [datapoint["chunked_text"] for datapoint in datapoints]
@@ -110,7 +95,7 @@ def prepare_prompts(
     text_chunked: Sequence[Sequence[str]],
     modifiable_chunk_spec: ModifiableChunkSpec,
     response_text: str | Sequence[str],
-) -> Sequence[str]:
+) -> list[str]:
     """Prepare prompts either for the adversary model or for the victim model.
 
     For a given sequence of chunks of text, works by concatenating all the chunks

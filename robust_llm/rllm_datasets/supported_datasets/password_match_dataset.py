@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 from typing_extensions import override
 
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
@@ -34,7 +38,35 @@ class PasswordMatchDataset(RLLMDataset):
         )
 
     @override
-    def ground_truth_label_fn(self, text: str, label: int) -> int:
+    def update_example_based_on_text(
+        self,
+        example: dict[str, Any],
+        column_prefix: str = "",
+    ) -> dict[str, Any]:
+        """Update the columns of an example based on the text column.
+
+        For PasswordMatch, we need to extract the system password and user
+        password from the text column and use these to update the `clf_label`
+        and `gen_target` columns.
+        """
+        example = example.copy()
+        text_column = f"{column_prefix}text"
+        text = example[text_column]
+        new_clf_label = self.ground_truth_label_fn(text)
+        # Only update gen_target based on clf_label if we're doing
+        # classification as generation, since otherwise the gen_target is
+        # unrelated to the clf_label.
+        # TODO(ian): Find a way to avoid this if-else.
+        if self.classification_as_generation:
+            new_gen_target = self.clf_label_to_gen_target(new_clf_label)
+        else:
+            new_gen_target = example[f"{column_prefix}gen_target"]
+
+        example[f"{column_prefix}clf_label"] = new_clf_label
+        example[f"{column_prefix}gen_target"] = new_gen_target
+        return example
+
+    def ground_truth_label_fn(self, text: str) -> int:
         """The ground truth label is determined by comparing
         the user's password to the correct password.
 
@@ -43,11 +75,11 @@ class PasswordMatchDataset(RLLMDataset):
         we want to maintain both at once.
         """
         try:
-            return self.new_ground_truth_label_fn(text, label)
+            return self.new_ground_truth_label_fn(text)
         except IndexError:
-            return self.old_ground_truth_label_fn(text, label)
+            return self.old_ground_truth_label_fn(text)
 
-    def new_ground_truth_label_fn(self, text: str, label: int) -> int:
+    def new_ground_truth_label_fn(self, text: str) -> int:
         """The ground truth label is determined by comparing
         the user's password to the correct password.
 
@@ -87,7 +119,7 @@ class PasswordMatchDataset(RLLMDataset):
 
         return int(system_password == user_password)
 
-    def old_ground_truth_label_fn(self, text: str, label: int) -> int:
+    def old_ground_truth_label_fn(self, text: str) -> int:
         """NOTE: This is the old version of this method, kept for compatibility.
 
         The ground truth label is determined by comparing

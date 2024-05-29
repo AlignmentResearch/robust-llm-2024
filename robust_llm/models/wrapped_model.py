@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import warnings
 from abc import ABC, abstractmethod
 from typing import Optional
 
 import torch
 from accelerate import Accelerator
-from tqdm import tqdm
 from transformers import PretrainedConfig, PreTrainedModel, PreTrainedTokenizerBase
 from transformers.modeling_outputs import ModelOutput
 
@@ -116,7 +116,6 @@ class WrappedModel(ABC):
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
-        use_cache: bool = True,
         use_no_grad: bool = True,
         minibatch_size: int | None = None,
     ) -> ModelOutput:
@@ -126,16 +125,16 @@ class WrappedModel(ABC):
             input_ids: The token ids to calculate the logits on.
             attention_mask: The attention mask for the input_ids. Only needed
                 if the input_ids are actually padded.
-            use_cache: Whether to return the computed KV values.
-            use_no_grad: Whether to use torch.no_grad(). Defaults to True because
-                usually we do not need gradient information, but it is needed
-                for gradient-based attacks like GCG.
+            use_no_grad: Whether to use torch.no_grad(). Defaults to True
+                because usually we do not need gradient information, but it is
+                needed for gradient-based attacks like GCG. Additionally, this will
+                fail loudly if we try to backpropagate through it, whereas False
+                will just be silently inefficient.
             minibatch_size: The minibatch size to use. If None, we use
                 self.eval_minibatch_size.
 
         Returns:
             A SequenceClassifierOutput object, which has a 'logits' attribute.
-            If 'use_cache' is True, it also has a 'past_key_values' attribute.
         """
 
         minibatch_size = minibatch_size or self.eval_minibatch_size
@@ -148,18 +147,13 @@ class WrappedModel(ABC):
         assert self.accelerator is not None
         dataloader = self.accelerator.prepare(dataloader)
 
+        # TODO (ian): Maybe I need an accelerator.gather_for_metrics somewhere here?
         outs: list[ModelOutput] = []
         with maybe_no_grad(use_no_grad):
-            for minibatch in tqdm(
-                dataloader,
-                mininterval=5,
-                position=-1,
-                desc=f"mb size = {minibatch_size}",
-            ):
+            for minibatch in dataloader:
                 minibatch_out = self(
                     input_ids=minibatch["input_ids"],
                     attention_mask=minibatch["attention_mask"],
-                    use_cache=use_cache,
                 )
                 minibatch_out = dict_to_device(minibatch_out, "cpu")
                 outs.append(minibatch_out)
@@ -168,31 +162,55 @@ class WrappedModel(ABC):
 
     def classification_output_from_embeddings(
         self,
+        input_ids: torch.Tensor,
         embeddings: torch.Tensor,
-        use_cache: bool = True,
+        use_no_grad: bool = True,
     ) -> ModelOutput:
         """Returns the classification logits from the embeddings.
 
+        TODO (ian): Make this run on batch size >1.
         Args:
+            input_ids: The token ids to calculate the logits on.
+                These are needed to check for cache hits.
             embeddings: The embeddings to calculate the logits on.
-            use_cache: Whether to return the computed KV values.
+            use_no_grad: Whether to use torch.no_grad(). Defaults to True
+                because usually we do not need gradient information, but it is
+                needed for gradient-based attacks like GCG. Additionally, this will
+                fail loudly if we try to backpropagate through it, whereas False
+                will just be silently inefficient.
 
         Returns:
             A SequenceClassifierOutput object, which has a 'logits' attribute.
-            If 'use_cache' is True, it also has a 'past_key_values' attribute.
-        """  # noqa: E501
+        """
 
-        with SuppressPadTokenWarning(self.model):
-            out = self(
-                inputs_embeds=embeddings,
-                use_cache=use_cache,
-            )
+        if embeddings.shape[0] != 1:
+            raise ValueError("This method currently only works for batch size 1.")
+        assert embeddings.shape[0] == input_ids.shape[0]
+        assert embeddings.shape[1] == input_ids.shape[1]
+
+        with maybe_no_grad(use_no_grad):
+            with SuppressPadTokenWarning(self.model):
+                out = self(
+                    input_ids=input_ids,
+                    inputs_embeds=embeddings,
+                )
         return out
 
     def __call__(self, **inputs):
         return self.forward(**inputs)
 
     def forward(self, **inputs):
+        # If we have both inputs_embeds and input_ids, we drop the input_ids
+        # because we can't pass both to the underlying model.
+        # TODO (ian): Add a warning here?
+        if "inputs_embeds" in inputs and "input_ids" in inputs:
+            warnings.warn(
+                "Both 'inputs_embeds' and 'input_ids' are present in the inputs."
+                " Dropping 'input_ids'. (This is fine if the intention was to"
+                " pass 'input_ids' in case we were using caching.)"
+            )
+            inputs.pop("input_ids")
+
         # Accelerator will *usually* handle moving things to the right device,
         # but occasionally we will run without a prepared DataLoader (e.g. in
         # get_caching_model_with_example), so we need to handle that case.
@@ -290,22 +308,9 @@ class WrappedModel(ABC):
         )
         return strings
 
-    @abstractmethod
-    def call_model(
-        self,
-        inp: torch.Tensor | None = None,
-        add_cls: bool = True,
-        add_sep: bool = True,
-        inputs_embeds: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        """Returns the logits from calling the model on a tensor of tokens.
-
-        NOTE (ian): This will be deprecated soon, once search-based are
-        refactored to use `ScoringCallback`s.
-        """
-
     def get_embeddings(self, token_ids: torch.Tensor) -> torch.Tensor:
         """Returns the embeddings for the given token ids."""
+        token_ids = token_ids.to(self.model.device)
         self._check_for_padding_tokens(token_ids)
         return self.model.get_input_embeddings()(token_ids)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 from abc import ABC, abstractmethod
-from typing import Any, Iterable, Sequence, overload
+from typing import Any, Iterable, Sequence, TypeVar, overload
 
 import datasets
 import semver
@@ -10,9 +10,11 @@ from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 
 from robust_llm.config.configs import DatasetConfig
+from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.dataset_utils import (
     EXPECTED_COLUMNS,
     cast_column_to_feature,
+    cast_features_like,
     construct_text_and_chunked_text,
     get_largest_version,
     get_largest_version_below,
@@ -20,6 +22,9 @@ from robust_llm.rllm_datasets.dataset_utils import (
     valid_tag,
 )
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
+
+# TypeVar for the return type of methods that return a new RLLMDataset.
+D = TypeVar("D", bound="RLLMDataset")
 
 
 class RLLMDataset(ABC):
@@ -41,11 +46,15 @@ class RLLMDataset(ABC):
             perturbed and the rest overwritten. modifiable_chunk_spec is a
             tuple of ChunkType, an enum that specifies whether each chunk is
             IMMUTABLE, PERTURBABLE, or OVERWRITABLE.
-        ground_truth_label_fn: A function that maps an input to its ground truth
-            label. This is ideal to have because sometimes adversarial attacks can
-            change the true label. Not all datasets can easily define such a
-            function though, in which case the labels are not changed and we assume
-            the attack does not change the labels.
+        update_dataset_based_on_text: A function that updates a dataset based on a
+            (possibly updated) 'text' column. An example use of this is when we can
+            easily compute the ground truth label based on the text. This is ideal
+            to have because sometimes adversarial attacks can change the true label.
+            Not all datasets can easily define such a function though, in which case
+            the columns are not changed and we assume the attack does not change
+            anything except the text.
+        update_example_based_on_text: Like update_dataset_based_on_text, but for a
+            single example rather than a whole Dataset.
     """
 
     def __init__(
@@ -69,6 +78,8 @@ class RLLMDataset(ABC):
         self.version = self._maybe_get_version(
             dataset_config.dataset_type, dataset_config.revision
         )
+        self.inference_type = InferenceType(dataset_config.inference_type)
+        self.classification_as_generation = dataset_config.classification_as_generation
         ds = self._load_dataset(
             cfg=dataset_config,
             revision=self.version,
@@ -101,12 +112,56 @@ class RLLMDataset(ABC):
         assert self.tokenizer is not None
         return True
 
-    def ground_truth_label_fn(self, text: str, label: int) -> int:
-        """If there is a simple rule for how the ground truth
-        label depends on the text, this function should return it.
-        By default, just returns the existing label.
+    def update_dataset_based_on_text(
+        self, ds: Dataset, column_prefix: str = ""
+    ) -> Dataset:
+        """Update columns based on a text column.
+
+        This supersedes the ground_truth_label_fn method as it is more general
+        and can update multiple columns.
+
+        By default, this method does nothing, since many datasets do not need to
+        update columns based on text. Subclasses can override this method to
+        update columns based on text.
+
+        Args:
+            ds: The dataset to update.
+            column_prefix: The prefix of the columns to update. For example, if
+                column_prefix is 'attacked_', then the attacked_text column will be
+                used to (potentially) update the 'attacked_clf_label' and
+                'attacked_gen_target' columns.
         """
-        return label
+        # for-loop to avoid type issues.
+        examples = []
+        for example in ds:
+            assert isinstance(example, dict)
+            new_example = self.update_example_based_on_text(example, column_prefix)
+            examples.append(new_example)
+
+        new_ds = Dataset.from_list(examples)
+        new_ds = cast_features_like(ds, new_ds)
+        return new_ds
+
+    def update_example_based_on_text(
+        self, example: dict[str, Any], column_prefix: str = ""
+    ) -> dict[str, Any]:
+        """Update an example based on a text column.
+
+        This supersedes the ground_truth_label_fn method as it is more general
+        and can update multiple columns.
+
+        By default, this method does nothing, since many datasets do not need to
+        update examples based on text. Subclasses can override this method to
+        update examples based on text.
+
+        Args:
+            example: The example to update.
+            column_prefix: The prefix of the columns to update. For example, if
+                column_prefix is 'attacked_', then the attacked_text column will be
+                used to (potentially) update the 'attacked_clf_label' and
+                'attacked_gen_target' columns.
+        """
+        return example
 
     def _maybe_get_version(self, dataset_type: str, revision: str) -> str:
         """Maybe process the version given into an actual version to use.
@@ -183,8 +238,10 @@ class RLLMDataset(ABC):
 
         This is used to load the dataset without post-processing the columns.
         """
-        if cfg.inference_type == "generation":
+        inference_type = InferenceType(cfg.inference_type)
+        if inference_type == InferenceType.GENERATION:
             raise NotImplementedError("Generation datasets not yet supported")
+
         if split == "train":
             if cfg.n_train == 0:
                 raise ValueError(
@@ -208,9 +265,6 @@ class RLLMDataset(ABC):
     ) -> Dataset:
         """Load a split of the dataset with a given number of examples.
 
-        We clear the ClassLabel feature from the `clf_label` column because
-        it interferes with generating new examples in adversarial training.
-
         Args:
             cfg: The DatasetConfig specifying the dataset to load.
             split: The split of the dataset to load.
@@ -230,13 +284,13 @@ class RLLMDataset(ABC):
         assert isinstance(ds, Dataset)
         return ds
 
-    def get_random_subset(self, n: int, seed: int | None = None) -> RLLMDataset:
+    def get_random_subset(self: D, n: int, seed: int | None = None) -> D:
         """Return an RLLMDataset with a random subset of the original dataset."""
 
         new_ds = self.ds.shuffle(seed=seed).select(range(n))
         return self.with_new_ds(new_ds)
 
-    def get_subset(self, indices: Iterable[Any]) -> RLLMDataset:
+    def get_subset(self: D, indices: Iterable[Any]) -> D:
         """Return an RLLMDataset with a subset of the original dataset.
 
         Iterable[Any] typing is to match Dataset.select
@@ -244,33 +298,35 @@ class RLLMDataset(ABC):
         new_ds = self.ds.select(indices)
         return self.with_new_ds(new_ds)
 
-    def with_attacked_text(self, attacked_text: Sequence[str]) -> RLLMDataset:
+    def with_attacked_text(self: D, attacked_text: Sequence[str]) -> D:
         """Returns a new RLLMDataset with the attacked text and attacked labels."""
         if "attacked_text" in self.ds.column_names:
             raise ValueError("Dataset already has attacked_text column")
+
+        if len(attacked_text) != len(self.ds):
+            raise ValueError("attacked_text must have the same length as the dataset")
 
         new_ds = self.ds.add_column(
             "attacked_text",
             attacked_text,
             new_fingerprint=None,  # type: ignore  # (bug in datasets?)
         )
-        # If the dataset allows for recomputation of the ground truth label, use it.
-        attacked_labels = self.maybe_recompute_labels(
-            new_ds["attacked_text"],
-            new_ds["clf_label"],
-        )
-        attacked_gen_targets = self.clf_label_to_gen_target(attacked_labels)
+        # Add initial 'attacked_' columns
         new_ds = new_ds.add_column(
             "attacked_clf_label",
-            attacked_labels,
+            self.ds["clf_label"],
+            new_fingerprint=None,  # type: ignore  # (bug in datasets?)
+        )
+        new_ds = new_ds.add_column(
+            "attacked_gen_target",
+            self.ds["gen_target"],
             new_fingerprint=None,  # type: ignore  # (bug in datasets?)
         )
 
-        new_ds = new_ds.add_column(
-            "attacked_gen_target",
-            attacked_gen_targets,
-            new_fingerprint=None,  # type: ignore  # (bug in datasets?)
-        )
+        # Maybe update the attacked columns based on the new column.
+        # E.g. if the dataset allows for recomputation of the ground truth
+        # label, use it.
+        new_ds = self.update_dataset_based_on_text(new_ds, "attacked_")
 
         # Make 'attacked_clf_label' have the same Feature as 'clf_label'
         new_ds = cast_column_to_feature(
@@ -323,7 +379,7 @@ class RLLMDataset(ABC):
         assert isinstance(clf_label, int) or isinstance(clf_label, list)
         return clf_label
 
-    def with_new_ds(self, new_ds: Dataset) -> RLLMDataset:
+    def with_new_ds(self: D, new_ds: Dataset) -> D:
         """Make a new RLLMDataset with the given huggingface dataset."""
         # We make a shallow copy of the RLLMDataset and replace the dataset.
         # This should be fine because the ds is the only attribute that might be
@@ -334,7 +390,7 @@ class RLLMDataset(ABC):
         new_dataset.ds = new_ds
         return new_dataset
 
-    def tokenize(self, tokenizer: PreTrainedTokenizerBase) -> RLLMDataset:
+    def tokenize(self: D, tokenizer: PreTrainedTokenizerBase) -> D:
         """Return a tokenized version of the dataset"""
         if self.is_tokenized:
             raise ValueError("Dataset is already tokenized")
@@ -343,25 +399,6 @@ class RLLMDataset(ABC):
         new_dataset = self.with_new_ds(tokenized_ds)
         new_dataset.tokenizer = tokenizer
         return new_dataset
-
-    def maybe_recompute_labels(
-        self, texts: Sequence[str], labels: Sequence[int]
-    ) -> list[int]:
-        """Recompute labels using the ground truth label function.
-
-        If ground_truth_label_fn is not overridden, this will return the original
-        labels.
-        """
-        # preconditions
-        assert len(texts) == len(labels)
-
-        new_labels = [
-            self.ground_truth_label_fn(text, label)
-            for (text, label) in zip(texts, labels)
-        ]
-        # postconditions
-        assert len(new_labels) == len(labels)
-        return new_labels
 
     def for_hf_trainer(self) -> Dataset:
         """Returns a datasets.Dataset that is suitable for the hf Trainer.
@@ -384,7 +421,7 @@ class RLLMDataset(ABC):
 
         return ds_for_trainer
 
-    def as_adversarial_examples(self) -> RLLMDataset:
+    def as_adversarial_examples(self: D) -> D:
         """Returns a version of an attacked dataset that is formatted as
             adversarial examples.
 

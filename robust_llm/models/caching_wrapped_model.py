@@ -57,13 +57,22 @@ class CachingWrappedModel(WrappedModel):
                 )
 
             inputs["input_ids"] = input_ids[:, len(prefix) :]
+            # If we have inputs_embeds, we need to truncate them as well.
+            if "inputs_embeds" in inputs:
+                inputs["inputs_embeds"] = inputs["inputs_embeds"][:, len(prefix) :]
+
             inputs["past_key_values"] = overlapping_cached_kv
         return self._wrapped_model.forward(**inputs)
 
+    @torch.no_grad()
     def add_to_cache(self, input_ids: torch.Tensor) -> None:
         """Add to the KV cache for the given token_ids.
 
-        The input should contain no padding tokens."""
+        The input should contain no padding tokens.
+
+        We use torch.no_grad because having gradients in the cache is
+        unnecessary and causes issues with trying to backprop twice.
+        """
         # Preconditions.
         assert input_ids.shape[0] == 1, "Only one input sequence at a time (for now)."
         assert self._wrapped_model.tokenizer.pad_token_id not in input_ids
@@ -121,9 +130,6 @@ class CachingWrappedModel(WrappedModel):
     @classmethod
     def load_tokenizer(cls, model_config):
         raise NotImplementedError("Does not need load_tokenizer.")
-
-    def call_model(self, inp=None, add_cls=True, add_sep=True, inputs_embeds=None):
-        raise NotImplementedError("Does not need call_model.")
 
 
 def get_common_prefix(input_ids: torch.Tensor, key: tuple[int]) -> torch.Tensor:

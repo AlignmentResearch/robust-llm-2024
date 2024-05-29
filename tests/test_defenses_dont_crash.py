@@ -33,8 +33,15 @@ def exp_config() -> ExperimentConfig:
             )
         ),
         model=ModelConfig(
-            name_or_path="EleutherAI/pythia-14m",
+            # We use a finetuned model so that the classification head isn't
+            # randomly initalized. It's fine to use a model that isn't finetuned
+            # for the task, because we are only testing that the attack doesn't crash.
+            name_or_path="AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3",
             family="pythia",
+            # We have to set this explicitly because we are not loading with Hydra,
+            # so interpolation doesn't happen.
+            inference_type="classification",
+            strict_load=True,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/PasswordMatch",

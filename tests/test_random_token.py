@@ -4,7 +4,9 @@ Methods to test:
     "get_randint_with_exclusions",
 """
 
-from unittest.mock import MagicMock
+import dataclasses
+from unittest import mock
+from unittest.mock import MagicMock, PropertyMock
 
 import pytest
 from transformers import AutoTokenizer
@@ -59,35 +61,41 @@ def test_get_attacked_text_from_successes():
 
     successes = [True, False, True]
     rv = get_attacked_text_from_successes(attacked_inputs, successes)
-    assert rv == ("b", 1)
+    assert rv == ("b", [1])
 
     successes = [True, True, True]
     rv = get_attacked_text_from_successes(attacked_inputs, successes)
-    assert rv == ("c", None)
+    assert rv == ("c", [])
 
     successes = [False, False, False]
     rv = get_attacked_text_from_successes(attacked_inputs, successes)
-    assert rv == ("a", 0)
+    assert rv == ("a", [0, 1, 2])
 
 
 def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
+    excluded_token_ids = [0, 1, 2, 3, 4, 5]
     mocked_victim.tokenizer = tokenizer
-    attack = RandomTokenAttack(random_token_config, mocked_victim)
+    # Mock the all_special_ids property of the tokenizer
+    with mock.patch(
+        "transformers.GPT2TokenizerFast.all_special_ids", new_callable=PropertyMock
+    ) as mock_specials:
+        mock_specials.return_value = excluded_token_ids
+        config = dataclasses.replace(random_token_config, n_attack_tokens=10)
+        attack = RandomTokenAttack(config, mocked_victim)
+
     chunk_text = "Chunk text"
-    n_tokens = 10
-    excluded_tokens = [0, 1, 2, 3, 4, 5]
 
     chunk_type = ChunkType.IMMUTABLE
-    rv = attack._get_text_for_chunk(chunk_text, chunk_type, excluded_tokens, n_tokens)
+    rv = attack._get_text_for_chunk(chunk_text, chunk_type, current_iteration=0)
     assert rv == "Chunk text"
 
     chunk_type = ChunkType.PERTURBABLE
-    rv = attack._get_text_for_chunk(chunk_text, chunk_type, excluded_tokens, n_tokens)
+    rv = attack._get_text_for_chunk(chunk_text, chunk_type, current_iteration=0)
     assert rv.startswith("Chunk text")
     assert rv != "Chunk text"
 
     chunk_type = ChunkType.OVERWRITABLE
-    rv = attack._get_text_for_chunk(chunk_text, chunk_type, excluded_tokens, n_tokens)
+    rv = attack._get_text_for_chunk(chunk_text, chunk_type, current_iteration=0)
     assert not rv.startswith("Chunk text")
 
 
@@ -108,23 +116,28 @@ def test_get_attacked_input(random_token_config, mocked_victim, tokenizer):
     modifiable_chunk_spec = ModifiableChunkSpec(
         ChunkType.IMMUTABLE, ChunkType.IMMUTABLE, ChunkType.IMMUTABLE
     )
-    attacked_input = attack._get_attacked_input(example, modifiable_chunk_spec)
+    attacked_input = attack._get_attacked_input(
+        example, modifiable_chunk_spec, current_iteration=0
+    )
     assert attacked_input == "abc"
 
     modifiable_chunk_spec = ModifiableChunkSpec(
         ChunkType.IMMUTABLE, ChunkType.IMMUTABLE, ChunkType.PERTURBABLE
     )
-    attacked_input = attack._get_attacked_input(example, modifiable_chunk_spec)
+    attacked_input = attack._get_attacked_input(
+        example, modifiable_chunk_spec, current_iteration=0
+    )
     assert attacked_input.startswith("abc")
     assert attacked_input != "abc"
 
     modifiable_chunk_spec = ModifiableChunkSpec(
-        ChunkType.OVERWRITABLE, ChunkType.PERTURBABLE, ChunkType.IMMUTABLE
+        ChunkType.OVERWRITABLE, ChunkType.IMMUTABLE, ChunkType.IMMUTABLE
     )
-    attacked_input = attack._get_attacked_input(example, modifiable_chunk_spec)
+    attacked_input = attack._get_attacked_input(
+        example, modifiable_chunk_spec, current_iteration=0
+    )
     assert attacked_input.endswith("c")
-    # The three characters from the original chunks, plus at least 3 random
-    # tokens from the first two modifiable chunks, minus 1 for the OVERWRITABLE
-    # chunk. (In practice it'll be much more than this, this is just a lower
-    # bound.)
-    assert len(attacked_input) >= 8
+    # The two characters from the original chunks, plus at least 1 random tokens
+    # from the modifiable chunk (In practice it'll be much more than
+    # this, this is just a lower bound.)
+    assert len(attacked_input) >= 5

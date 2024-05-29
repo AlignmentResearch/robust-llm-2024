@@ -1,6 +1,7 @@
 from typing import Any
 
 import numpy as np
+from tqdm import tqdm
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack
@@ -9,13 +10,14 @@ from robust_llm.attacks.search_based.utils import (
     PreppedExample,
     PromptTemplate,
     get_chunking_for_search_based,
+    get_label_and_target_for_attack,
 )
 from robust_llm.config.attack_configs import SearchBasedAttackConfig
 from robust_llm.config.configs import AttackConfig
 from robust_llm.models import WrappedModel
+from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.utils import get_randint_with_exclusions
 
 
 class SearchBasedAttack(Attack):
@@ -63,12 +65,10 @@ class SearchBasedAttack(Attack):
             dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
         ), "Exactly one modifiable chunk"
 
-        num_classes = dataset.num_classes
-
         all_filtered_out_counts: list[int] = []
 
         attacked_input_texts = []
-        for example in dataset.ds:
+        for example in tqdm(dataset.ds, mininterval=5, position=-1):
             assert isinstance(example, dict)  # for type checking
 
             unmodifiable_prefix, modifiable_infix, unmodifiable_suffix = (
@@ -85,29 +85,29 @@ class SearchBasedAttack(Attack):
                 after_attack=unmodifiable_suffix,
             )
 
-            # maybe update the label after changing out modifiable chunk
-            true_label = dataset.ground_truth_label_fn(
-                prompt_template.build_prompt(), example["clf_label"]
-            )
+            # Maybe update the example after changing out modifiable chunk
+            example["text"] = prompt_template.build_prompt()
+            example = dataset.update_example_based_on_text(example)
 
-            target_label = get_randint_with_exclusions(
-                high=num_classes, exclusions=[true_label]
-            )
+            goal_label, goal_target = get_label_and_target_for_attack(example, dataset)
 
             prepped_example = PreppedExample(
                 prompt_template=prompt_template,
-                clf_target=target_label,
+                clf_label=goal_label,
+                gen_target=goal_target,
             )
 
             assert isinstance(self.attack_config, SearchBasedAttackConfig)
-            runner = make_runner(
-                wrapped_model=self.victim,
-                prepped_examples=[prepped_example],
-                random_seed=self.attack_config.seed,
-                config=self.attack_config,
-            )
+            empty_prompt = prompt_template.build_prompt()
+            with get_caching_model_with_example(self.victim, empty_prompt) as victim:
+                runner = make_runner(
+                    victim=victim,
+                    prepped_examples=[prepped_example],
+                    random_seed=self.attack_config.seed,
+                    config=self.attack_config,
+                )
 
-            attack_text, example_debug_info = runner.run()
+                attack_text, example_debug_info = runner.run()
             attacked_input_text = prompt_template.build_prompt(
                 attack_text=attack_text,
             )

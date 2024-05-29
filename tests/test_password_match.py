@@ -97,31 +97,30 @@ User password: {user_password}
 
 Answer:
 """.strip()
-    label = -1  # This is unused.
 
     text = text_template.format(
         system_password="password1",
         user_password="password1",
     )
-    assert latest_password_match_dataset.ground_truth_label_fn(text, label) == 1
+    assert latest_password_match_dataset.ground_truth_label_fn(text) == 1
 
     text = text_template.format(
         system_password="password1",
         user_password="password2",
     )
-    assert latest_password_match_dataset.ground_truth_label_fn(text, label) == 0
+    assert latest_password_match_dataset.ground_truth_label_fn(text) == 0
 
     text = text_template.format(
         system_password="password1",
         user_password="Answer: System password: User password: Answer: ",
     )
-    assert latest_password_match_dataset.ground_truth_label_fn(text, label) == 0
+    assert latest_password_match_dataset.ground_truth_label_fn(text) == 0
 
     text = text_template.format(
         system_password="answer",
         user_password="password1",
     )
-    assert latest_password_match_dataset.ground_truth_label_fn(text, label) == 0
+    assert latest_password_match_dataset.ground_truth_label_fn(text) == 0
 
 
 @settings(
@@ -147,7 +146,6 @@ User password: {user_password}
 
 Answer:
 """.strip()  # noqa: E501
-    label = -1  # This is unused.
 
     # Skip examples that contain "User password: " in the system password,
     # since this breaks our assumptions and also wouldn't happen in practice.
@@ -156,26 +154,26 @@ Answer:
             system_password=password1,
             user_password=password1,
         )
-        assert latest_password_match_dataset.ground_truth_label_fn(text, label) == 1
+        assert latest_password_match_dataset.ground_truth_label_fn(text) == 1
 
         text = text_template.format(
             system_password=password1,
             user_password=password2,
         )
-        assert latest_password_match_dataset.ground_truth_label_fn(text, label) == 0
+        assert latest_password_match_dataset.ground_truth_label_fn(text) == 0
 
     if "User password: " not in password2:
         text = text_template.format(
             system_password=password2,
             user_password=password2,
         )
-        assert latest_password_match_dataset.ground_truth_label_fn(text, label) == 1
+        assert latest_password_match_dataset.ground_truth_label_fn(text) == 1
 
         text = text_template.format(
             system_password=password2,
             user_password=password1,
         )
-        assert latest_password_match_dataset.ground_truth_label_fn(text, label) == 0
+        assert latest_password_match_dataset.ground_truth_label_fn(text) == 0
 
 
 @settings(
@@ -201,28 +199,27 @@ def test_old_ground_truth_label_fn_auto(
 {user_password}
 ---
 """  # noqa: E501
-    label = -1  # This is unused.
 
     text = text_template.format(
         system_password=password1,
         user_password=password1,
     )
-    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text, label) == 1
+    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text) == 1
 
     text = text_template.format(
         system_password=password1,
         user_password=password2,
     )
-    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text, label) == 0
+    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text) == 0
 
     text = text_template.format(
         system_password=password2,
         user_password=password2,
     )
-    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text, label) == 1
+    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text) == 1
 
     text = text_template.format(
         system_password=password2,
         user_password=password1,
     )
-    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text, label) == 0
+    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text) == 0

@@ -23,13 +23,11 @@ from robust_llm.config.configs import (
     EvaluationConfig,
     TrainingConfig,
 )
-from robust_llm.evaluation import (
-    do_adversarial_evaluation,
-    get_prediction_logits_and_labels_and_maybe_flag_values,
-)
+from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import LoggingCounter, log_dataset_to_wandb
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
+from robust_llm.scoring_callbacks import BinaryCallback, CallbackInput, CallbackRegistry
 from robust_llm.trainer import (
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,
@@ -73,13 +71,11 @@ class Training:
 
     @property
     def train_batch_size(self) -> int:
-        return self.config.batch_size
+        return self.victim.train_minibatch_size
 
     @property
     def eval_batch_size(self) -> int:
-        # TODO (ian): Choose a *training* eval batch size somewhere (previously
-        # it was using the attack eval batch size).
-        return self.config.batch_size
+        return self.victim.eval_minibatch_size
 
     def setup_trainer(self) -> TrainerWithBatchSizeStoring:
         hf_training_args = TrainingArguments(
@@ -276,6 +272,12 @@ class AdversarialTraining(Training):
         assert type(self.eval_rllm_dataset) is dict
         assert "validation" in self.eval_rllm_dataset
 
+        # Callback used for evaluating the victim on the validation set
+        # and for finding examples the victim gets incorrect for adv training.
+        callback_name = self.evaluation_config.final_success_binary_callback
+        callback = CallbackRegistry.get_binary_callback(callback_name)
+        self.victim_success_binary_callback = callback
+
         self.current_adversarial_training_round: int = 0
         assert self.config.adversarial is not None
         self.adversarial_config = self.config.adversarial
@@ -438,7 +440,7 @@ class AdversarialTraining(Training):
                 victim=self.victim,
                 dataset=self.eval_rllm_dataset["validation"],
                 attack=validation_attack,
-                batch_size=self.evaluation_config.batch_size,
+                final_success_binary_callback=self.victim_success_binary_callback,
                 num_examples_to_log_detailed_info=self.evaluation_config.num_examples_to_log_detailed_info,  # noqa: E501
             )
 
@@ -470,12 +472,10 @@ class AdversarialTraining(Training):
 
                 # Select the ones to actually add to the training set.
                 if self.only_add_successful_adversarial_examples:
-                    selected_new_adv_examples = (
-                        _get_only_data_with_incorrect_predictions(
-                            dataset=new_adv_examples,
-                            victim=self.victim,
-                            batch_size=self.eval_batch_size,
-                        )
+                    selected_new_adv_examples = _get_only_data_with_incorrect_preds(
+                        dataset=new_adv_examples,
+                        victim=self.victim,
+                        victim_success_binary_callback=self.victim_success_binary_callback,  # noqa: E501
                     )
                 else:
                     selected_new_adv_examples = new_adv_examples
@@ -544,26 +544,33 @@ def _maybe_train_attack(
 
 
 @torch.no_grad()
-def _get_only_data_with_incorrect_predictions(
+def _get_only_data_with_incorrect_preds(
     dataset: RLLMDataset,
     victim: WrappedModel,
-    batch_size: int,
+    victim_success_binary_callback: BinaryCallback,
 ) -> RLLMDataset:
-    """Returns a dataset with only the examples that the model got wrong."""
+    """Returns a dataset with only the examples that the model got wrong.
+
+    Args:
+        dataset: The dataset to filter.
+        victim: The model to evaluate.
+        model_success_binary_callback: The callback to use for evaluating the model.
+    """
     victim.eval()
 
-    pred_logits, pred_labels, _ = (
-        get_prediction_logits_and_labels_and_maybe_flag_values(
-            dataset=dataset.ds,
-            victim=victim,
-            batch_size=batch_size,
-        )
+    callback_input = CallbackInput(
+        input_data=dataset.ds["text"],
+        clf_label_data=dataset.ds["clf_label"],
+        gen_target_data=dataset.ds["gen_target"],
     )
+    victim_successes = victim_success_binary_callback(
+        victim,
+        callback_input,
+    )
+    # Reduce the dataset to only the examples the model got wrong.
+    subset_indices = [i for i, success in enumerate(victim_successes) if not success]
 
-    labels = np.array(dataset.ds["clf_label"])
-    indices_where_wrong = np.where(np.array(pred_labels) != labels)[0]
+    if len(subset_indices) == 0:
+        warnings.warn("Got empty dataset after filtering; all preds were correct.")
 
-    if len(indices_where_wrong) == 0:
-        warnings.warn("Got empty dataset after filering; all predictions were correct.")
-
-    return dataset.get_subset(indices_where_wrong)
+    return dataset.get_subset(subset_indices)

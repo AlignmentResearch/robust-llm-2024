@@ -9,13 +9,13 @@ from robust_llm.attacks.search_based.utils import (
     PreppedExample,
     PromptTemplate,
     get_chunking_for_search_based,
+    get_label_and_target_for_attack,
 )
 from robust_llm.config.attack_configs import SearchBasedAttackConfig
 from robust_llm.config.configs import AttackConfig
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.utils import get_randint_with_exclusions
 
 
 class MultiPromptSearchBasedAttack(Attack):
@@ -58,8 +58,6 @@ class MultiPromptSearchBasedAttack(Attack):
         TODO(GH#113): consider multi-model attacks in the future.
         """
 
-        num_classes = dataset.num_classes
-
         all_filtered_out_counts: list[int] = []
 
         attacked_input_texts = []
@@ -81,22 +79,22 @@ class MultiPromptSearchBasedAttack(Attack):
                 after_attack=unmodifiable_suffix,
             )
 
-            true_label = dataset.ground_truth_label_fn(
-                prompt_template.build_prompt(), example["clf_label"]
-            )
-            target_label = get_randint_with_exclusions(
-                high=num_classes, exclusions=[true_label]
-            )
+            # Maybe update the example after changing out modifiable chunk
+            example["text"] = prompt_template.build_prompt()
+            example = dataset.update_example_based_on_text(example)
+
+            goal_label, goal_target = get_label_and_target_for_attack(example, dataset)
 
             prepped_example = PreppedExample(
                 prompt_template=prompt_template,
-                clf_target=target_label,
+                clf_label=goal_label,
+                gen_target=goal_target,
             )
             prepped_examples.append(prepped_example)
 
         assert isinstance(self.attack_config, SearchBasedAttackConfig)
         runner = make_runner(
-            wrapped_model=self.victim,
+            victim=self.victim,
             prepped_examples=prepped_examples,
             random_seed=self.attack_config.seed,
             config=self.attack_config,

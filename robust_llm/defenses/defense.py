@@ -5,13 +5,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import Enum
 
-import torch
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 from robust_llm.config.defense_configs import DefenseConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models import WrappedModel
-from robust_llm.models.model_utils import SuppressPadTokenWarning
 
 
 class Defenses(Enum):
@@ -62,6 +60,14 @@ class DefendedModel(WrappedModel, ABC):
     def inference_type(self):
         return self._underlying_model.inference_type
 
+    @property
+    def train_minibatch_size(self):
+        return self._underlying_model.train_minibatch_size
+
+    @property
+    def eval_minibatch_size(self):
+        return self._underlying_model.eval_minibatch_size
+
     @classmethod
     def load_tokenizer(
         cls,
@@ -72,32 +78,32 @@ class DefendedModel(WrappedModel, ABC):
             " this should be done by the underlying WrappedModel."
         )
 
-    def call_model(
-        self,
-        inp: torch.Tensor | None = None,
-        add_cls: bool = True,
-        add_sep: bool = True,
-        inputs_embeds: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        """Call the underlying model with the given inputs.
 
-        Currently assumes that we don't have to do anything with special tokens.
+class FilteringDefendedModel(DefendedModel):
+    """A DefendedModel that works by filtering out adversarial examples.
 
-        TODO (ian): Deprecate this method to reduce code duplication.
+    FilteringDefendedModels don't modify the forward method but instead have a
+    separate filter method that takes a list of text inputs and returns a list
+    of booleans indicating whether the defense flagged each input as
+    adversarial.
+    """
+
+    @abstractmethod
+    def filter(self, text_inputs: list[str]) -> list[bool]:
+        """Indicates whether each input should be filtered out.
+
+        Args:
+            text_inputs: The list of text inputs to filter.
+
+        Returns:
+            A list of booleans indicating whether the defense flagged each input
+            as adversarial (True) or not (False).
         """
-        assert add_cls is False
-        assert add_sep is False
-        # return _call_model(self, inp, inputs_embeds)
 
-        assert (inp is not None) != (
-            inputs_embeds is not None
-        ), "exactly one of inp, inputs_embeds must be provided"
 
-        if inp is not None:
-            return self(input_ids=inp).logits
+class MutatingDefendedModel(DefendedModel):
+    """A DefendedModel that works by mutating the input.
 
-        if inputs_embeds is not None:
-            with SuppressPadTokenWarning(self):
-                return self(inputs_embeds=inputs_embeds).logits
-
-        raise ValueError("exactly one of inp, inputs_embeds must be provided")
+    MutatingDefendedModels modify the forward method directly, changing the input
+    before it is passed to the underlying model.
+    """

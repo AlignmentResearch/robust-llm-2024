@@ -11,6 +11,7 @@ from robust_llm.logging_utils import LoggingContext
 from robust_llm.models import WrappedModel
 from robust_llm.pipelines.utils import prepare_attack
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
+from robust_llm.scoring_callbacks import CallbackRegistry
 
 
 def run_evaluation_pipeline(args: ExperimentConfig) -> None:
@@ -71,12 +72,14 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> None:
             defense_config=args.defense,
             dataset=defense_prep_dataset,
         )
+    final_callback_name = args.evaluation.final_success_binary_callback
+    final_callback = CallbackRegistry.get_binary_callback(final_callback_name)
 
     do_adversarial_evaluation(
         victim=victim,
         dataset=validation,
         attack=attack,
-        batch_size=args.evaluation.batch_size,
+        final_success_binary_callback=final_callback,
         num_examples_to_log_detailed_info=args.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
     )
 

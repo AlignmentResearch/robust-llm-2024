@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+- Eval/pm_multiprompt-random-token
+- /environment: mac-testing
+- _self_
+
+model:
+  name_or_path: "AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3"
+
+dataset:
+  n_val: 20
+
+evaluation:
+  evaluation_attack:
+    n_its: 1280

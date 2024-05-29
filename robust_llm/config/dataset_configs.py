@@ -19,6 +19,10 @@ class DatasetConfig:
             new expected columns.
         inference_type (str): The type of inference performed ("classification"
             or "generation")
+        classification_as_generation (bool): Whether we are doing classification
+            using a generation model, in which case the 'gen_target' column
+            represents the classification target.
+            TODO(ian): Find a way to avoid an explicit flag here.
     """
 
     dataset_type: str = MISSING
@@ -27,3 +31,4 @@ class DatasetConfig:
     config_name: Optional[str] = None
     revision: str = "<1.1.0"
     inference_type: str = "classification"
+    classification_as_generation: bool = True

@@ -13,7 +13,7 @@ from transformers.utils import PaddingStrategy, TensorType
 
 from robust_llm import logger
 from robust_llm.config.defense_configs import DefenseConfig, ParaphraseDefenseConfig
-from robust_llm.defenses.defense import DefendedModel
+from robust_llm.defenses.defense import MutatingDefendedModel
 from robust_llm.models import WrappedModel
 
 TextOrTokenSeqInput: TypeAlias = TextInput | PreTokenizedInput | list[PreTokenizedInput]
@@ -126,7 +126,7 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
         )
 
 
-class ParaphraseDefendedModel(DefendedModel):
+class ParaphraseDefendedModel(MutatingDefendedModel):
     def __init__(
         self, victim: WrappedModel, defense_config: ParaphraseDefenseConfig
     ) -> None:

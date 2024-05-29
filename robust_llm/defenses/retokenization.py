@@ -7,7 +7,7 @@ from transformers import PreTrainedTokenizerBase
 
 from robust_llm import logger
 from robust_llm.config.defense_configs import RetokenizationDefenseConfig
-from robust_llm.defenses.defense import DefendedModel
+from robust_llm.defenses.defense import MutatingDefendedModel
 from robust_llm.models import WrappedModel
 
 
@@ -255,7 +255,7 @@ class BytePairDecomposer:
                     break
 
 
-class RetokenizationDefendedModel(DefendedModel):
+class RetokenizationDefendedModel(MutatingDefendedModel):
     def __init__(
         self, victim: WrappedModel, defense_config: RetokenizationDefenseConfig
     ) -> None:

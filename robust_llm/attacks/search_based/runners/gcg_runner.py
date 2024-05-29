@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Sequence, Tuple
 
 import torch
@@ -8,19 +7,46 @@ from typing_extensions import override
 from robust_llm.attacks.search_based.runners.search_based_runner import (
     SearchBasedRunner,
 )
-from robust_llm.attacks.search_based.utils import ReplacementCandidate
+from robust_llm.attacks.search_based.utils import PreppedExample, ReplacementCandidate
+from robust_llm.models.wrapped_model import WrappedModel
+from robust_llm.scoring_callbacks import CallbackInput, CallbackRegistry
 
 
-@dataclass(kw_only=True)
 class GCGRunner(SearchBasedRunner):
     """Runs GCG on a single model and a single prompt/target pair.
 
     Attributes:
+        differentiable_embeds_callback: the callback for computing the loss to
+            backprop through.
         top_k: the number of token replacements to consider at each
             position in the attack tokens.
     """
 
-    top_k: int = 256
+    def __init__(
+        self,
+        victim: WrappedModel,
+        n_candidates_per_it: int,
+        n_its: int,
+        n_attack_tokens: int,
+        scores_from_text_callback: str,
+        prepped_examples: Sequence[PreppedExample],
+        differentiable_embeds_callback: str,
+        random_seed: int = 0,
+        top_k: int = 256,
+    ) -> None:
+        super().__init__(
+            victim=victim,
+            n_candidates_per_it=n_candidates_per_it,
+            n_its=n_its,
+            n_attack_tokens=n_attack_tokens,
+            scores_from_text_callback=scores_from_text_callback,
+            prepped_examples=prepped_examples,
+            random_seed=random_seed,
+        )
+
+        cb = CallbackRegistry.get_tensor_callback(differentiable_embeds_callback)
+        self.differentiable_embeds_callback = cb
+        self.top_k = top_k
 
     @override
     def _get_candidate_texts_and_replacements(
@@ -32,7 +58,7 @@ class GCGRunner(SearchBasedRunner):
         assert len(candidate_texts) == 1
         attack_text = candidate_texts[0]
 
-        gradients = self._compute_gradients(self.target, attack_text)
+        gradients = self._compute_gradients(attack_text)
         replacements = self._get_replacement_candidates_from_gradients(gradients)
         candidate_texts_and_replacements = [
             (attack_text, replacement) for replacement in replacements
@@ -46,38 +72,45 @@ class GCGRunner(SearchBasedRunner):
 
     def _compute_gradients(
         self,
-        target: str,
         attack_text: str,
     ) -> torch.Tensor:
+        # NOTE: We don't add the target to the prompt here; that'll be handled
+        # in the callback.
         full_prompt = self.example.prompt_template.build_prompt(
             attack_text=attack_text,
-            target=target,
+            target="",
         )
 
-        # Only need specials if we're doing BERT
-        full_prompt_tokens = self._get_tokens(full_prompt, add_special=self.seq_clf).to(
-            self.wrapped_model.device
-        )
-        full_prompt_embeddings = self.wrapped_model.get_embeddings(
-            full_prompt_tokens
-        ).detach()
+        full_prompt_tokens = self._get_tokens(full_prompt)
+        full_prompt_embeddings = self.victim.get_embeddings(full_prompt_tokens).detach()
 
-        attack_tokens = self._get_tokens(attack_text).to(self.wrapped_model.device)
+        attack_tokens = self._get_tokens(attack_text).to(self.victim.device)
         attack_onehot = self._get_attack_onehot(attack_tokens)
-        attack_embeddings = attack_onehot @ self.wrapped_model.get_embedding_weights()
+        attack_embeddings = attack_onehot @ self.victim.get_embedding_weights()
 
         combined_embeddings = self._get_combined_embeddings(
             full_prompt_embeddings, attack_embeddings
         )
 
-        # full_prompt_tokens are only used to determine the target in the generation
-        # case; they are not used in the classification case.
-        loss = self._compute_loss(combined_embeddings, full_prompt_tokens)
+        input_data = {
+            "input_ids": full_prompt_tokens,
+            "embeddings": combined_embeddings,
+        }
 
-        if self.wrapped_model.accelerator is None:
+        callback_input = CallbackInput(
+            input_data=input_data,
+            clf_label_data=[self.example.clf_label],
+            gen_target_data=[self.example.gen_target],
+        )
+        losses = self.differentiable_embeds_callback(self.victim, callback_input)
+
+        assert len(losses) == 1, "Batch size should be 1."
+        loss = losses[0]
+
+        if self.victim.accelerator is None:
             raise ValueError("An accelerator must be added to the model.")
 
-        self.wrapped_model.accelerator.backward(loss)
+        self.victim.accelerator.backward(loss)
         assert attack_onehot.grad is not None
         return attack_onehot.grad.clone()
 
@@ -94,7 +127,7 @@ class GCGRunner(SearchBasedRunner):
         from the resulting pool.
         """
         # We forbid introducing special tokens in the attack tokens.
-        excluded_token_ids = self.wrapped_model.tokenizer.all_special_ids
+        excluded_token_ids = self.victim.tokenizer.all_special_ids
         for special_token_id in excluded_token_ids:
             gradients[:, special_token_id] = float("inf")
 

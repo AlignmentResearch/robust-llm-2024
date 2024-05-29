@@ -5,7 +5,9 @@ import os
 import random
 import uuid
 from argparse import Namespace
+from dataclasses import fields
 from datetime import datetime
+from functools import cached_property
 from typing import Any, Iterator, Optional, Protocol, Sequence, Sized
 
 import torch
@@ -169,11 +171,11 @@ class FakeModelForSequenceClassification:
 
 def equal_ignore_padding(x: torch.Tensor, y: torch.Tensor, pad_token_id: int) -> bool:
     """Checks if two 1D tensors are equal, ignoring padding at the end."""
-    while x[-1] == pad_token_id:
+    while len(x) > 0 and x[-1] == pad_token_id:
         x = x[:-1]
-    while y[-1] == pad_token_id:
+    while len(y) > 0 and y[-1] == pad_token_id:
         y = y[:-1]
-    return x.equal(y)
+    return x.equal(y.to(x.device))
 
 
 class FakeClassifierWithPositiveList(FakeModelForSequenceClassification):
@@ -229,3 +231,25 @@ class BalancedSampler(torch.utils.data.Sampler[int]):
 
     def __len__(self) -> int:
         return 2 * len(self.regular_data)
+
+
+def auto_repr(cls):
+    """Automatically generate __repr__ method for a class.
+
+    This is useful for including `property`s and `cached_property`s in the repr.
+    """
+
+    def __repr__(self):
+        cls_fields = fields(cls)
+        parts = []
+        for f in cls_fields:
+            value = getattr(self, f.name)
+            parts.append(f"{f.name}={value!r}")
+        # Include properties
+        for name, attr in cls.__dict__.items():
+            if isinstance(attr, property) or isinstance(attr, cached_property):
+                parts.append(f"{name}={getattr(self, name)!r}")
+        return f"{cls.__name__}({', '.join(parts)})"
+
+    cls.__repr__ = __repr__
+    return cls

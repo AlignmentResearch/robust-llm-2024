@@ -40,8 +40,6 @@ class PerplexityDefenseConfig(DefenseConfig):
             choose a window size that is larger than any example.
         report_max_perplexity (bool): Whether to report the maximum
             perplexity across windows, instead of the average.
-        batch_size (int): Batch size to use for perplexity calculations.
-        verbose (bool): Whether to print out the perplexity of each example.
         save_perplexity_curves (bool):
             Whether or not to save the full perplexity curves (what proportion
             of the dataset is filtered out at each perplexity value) for the
@@ -52,8 +50,6 @@ class PerplexityDefenseConfig(DefenseConfig):
     perplexity_threshold_proportion: float = 0.01
     window_size: int = 8
     report_max_perplexity: bool = True
-    batch_size: int = 4
-    verbose: bool = False
     save_perplexity_curves: bool = False
     decoder: ModelConfig = MISSING
 

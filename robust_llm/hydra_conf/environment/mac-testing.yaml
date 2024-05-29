@@ -1,0 +1,4 @@
+# This config is useful for running test experiments
+# with hardware acceleration on macOS.
+test_mode: true
+device: "mps"

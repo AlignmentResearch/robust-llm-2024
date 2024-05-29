@@ -1,12 +1,9 @@
 import abc
 import random
-from dataclasses import dataclass
 from typing import Any, Optional, Sequence, Tuple
 
 import torch
 import torch.utils.data
-from datasets import Dataset
-from tqdm import tqdm
 
 from robust_llm import logger
 from robust_llm.attacks.search_based.utils import (
@@ -17,9 +14,9 @@ from robust_llm.attacks.search_based.utils import (
     create_onehot_embedding,
 )
 from robust_llm.models import WrappedModel
+from robust_llm.scoring_callbacks import CallbackInput, CallbackRegistry
 
 
-@dataclass
 class SearchBasedRunner(abc.ABC):
     """Runs search based attack on a single model and a single prompt/target pair.
 
@@ -28,53 +25,43 @@ class SearchBasedRunner(abc.ABC):
     methods being implemented in subclasses.
 
     Attributes:
-        wrapped_model: The model to attack paired with a tokenizer
+        victim: The model to attack paired with a tokenizer
             and some model-specific methods
         n_candidates_per_it: the total number of token replacements
             to consider in each iteration (in GCG, this must be less than
             top_k * n_attack_tokens, which is the total number of candidates)
         n_its: Total number of iterations to run
         n_attack_tokens: number of attack tokens to optimize
-        forward_pass_batch_size: batch size used for forward pass when evaluating
-            candidates. If None, defaults to n_candidates_per_it
-        target: If using a CausalLM, it's the target string to optimize for.
-            If using a SequenceClassification model, it's ignored in favor of
-            the target specified by clf_target
+        scores_from_text_callback: the callback for computing the scores for
+            inputs in order to choose the best candidates.
         prepped_examples: List of PreppedExample which includes a
-            prompt_template and clf_target
-        seq_clf: Whether we are using a SequenceClassification model
-            (default alternative is a CausalLM)
+            prompt_template, clf_label, and gen_target
         random_seed: initial seed for a random.Random object used to sample
             replacement candidates
+
     """
 
-    wrapped_model: WrappedModel
-    n_candidates_per_it: int
-    n_its: int
-    n_attack_tokens: int
-    prepped_examples: Sequence[PreppedExample]
-    forward_pass_batch_size: Optional[int] = None
-    target: str = ""
-    seq_clf: bool = False
-    random_seed: int = 0
+    def __init__(
+        self,
+        victim: WrappedModel,
+        n_candidates_per_it: int,
+        n_its: int,
+        n_attack_tokens: int,
+        scores_from_text_callback: str,
+        prepped_examples: Sequence[PreppedExample],
+        random_seed: int = 0,
+    ) -> None:
+        self.victim = victim
+        cb = CallbackRegistry.get_tensor_callback(scores_from_text_callback)
+        self.scores_from_text_callback = cb
 
-    def __post_init__(self):
-        self.forward_pass_batch_size = (
-            self.forward_pass_batch_size or self.n_candidates_per_it
-        )
-        self.candidate_sample_rng = random.Random(self.random_seed)
-        assert len(self.prepped_examples) == 1, "only one prompt/target pair supported"
-        self.example = self.prepped_examples[0]
-        # TODO(GH#119): clean up if/elses for seq clf
-        if self.seq_clf:
-            assert self.example.clf_target is not None, "need clf target for seq clf"
-            assert (
-                self.example.clf_target < self.wrapped_model.model.num_labels
-            ), "clf target out of range"
-            # no string target for sequence classification, just an int (clf_target)
-            assert self.target == "", "string target provided for seq task"
-        else:
-            assert self.target != "", "need non-empty target for causal lm"
+        self.n_candidates_per_it = n_candidates_per_it
+        self.n_its = n_its
+        self.n_attack_tokens = n_attack_tokens
+        self.candidate_sample_rng = random.Random(random_seed)
+
+        assert len(prepped_examples) == 1, "only one prompt/target pair supported"
+        self.example = prepped_examples[0]
 
         self.initial_attack_text, self.attack_indices = (
             self._get_initial_attack_text_and_indices(self.n_attack_tokens)
@@ -88,7 +75,7 @@ class SearchBasedRunner(abc.ABC):
         # In how many iterations it happened that all candidates were filtered out
         all_filtered_out_count = 0
 
-        for _ in (pbar := tqdm(range(self.n_its))):
+        for _ in range(self.n_its):
             candidate_texts_and_replacements = (
                 self._get_candidate_texts_and_replacements(candidate_texts)
             )
@@ -103,9 +90,6 @@ class SearchBasedRunner(abc.ABC):
             )
             candidate_texts = self._select_next_candidates(evaluated_candidates)
             attack_text = candidate_texts[0]
-
-            # TODO(GH#112): track progress more cleanly
-            pbar.set_description(f"Attack text: {attack_text}")
 
         info_dict = {"all_filtered_out_count": all_filtered_out_count}
 
@@ -152,7 +136,7 @@ class SearchBasedRunner(abc.ABC):
         """
         optional_character = "&" if n_attack_tokens % 2 == 1 else ""
         attack_text = "&@" * (n_attack_tokens // 2) + optional_character
-        attack_tokens = self.wrapped_model.get_tokens(attack_text)
+        attack_tokens = self.victim.get_tokens(attack_text)
         assert len(attack_tokens[0]) == n_attack_tokens
 
         try:
@@ -179,9 +163,9 @@ class SearchBasedRunner(abc.ABC):
                 trials += 1
 
                 attack_tokens[0, i] = self.candidate_sample_rng.randint(
-                    0, self.wrapped_model.vocab_size - 1
+                    0, self.victim.vocab_size - 1
                 )
-                attack_text = self.wrapped_model.decode_tokens(attack_tokens)
+                attack_text = self.victim.decode_tokens(attack_tokens)
                 try:
                     attack_indices = self._get_attack_indices(attack_text, self.example)
                     return attack_text, attack_indices
@@ -202,7 +186,7 @@ class SearchBasedRunner(abc.ABC):
         Use tokenizer which is part of the wrapped model. Handle all the arguments we
         have to add to the tokenizer.
         """
-        return self.wrapped_model.get_tokens(
+        return self.victim.get_tokens(
             inputs, return_tensors=return_tensors, add_special=add_special
         )
 
@@ -212,7 +196,7 @@ class SearchBasedRunner(abc.ABC):
         skip_special_tokens: bool = True,
         try_squeeze: bool = True,
     ) -> str:
-        strings = self.wrapped_model.decode_tokens(
+        strings = self.victim.decode_tokens(
             inp,
             skip_special_tokens=skip_special_tokens,
             try_squeeze=try_squeeze,
@@ -246,9 +230,8 @@ class SearchBasedRunner(abc.ABC):
 
         after_attack_tokens = self._get_tokens(example.prompt_template.after_attack)
         target_start = attack_end + after_attack_tokens.shape[1]
-        # TODO (ian): include self.target in PreppedExample (or remove altogether)
-        # this will work fine for now because we are doing seq_clf
-        target_tokens = self._get_tokens(self.target)
+
+        target_tokens = self._get_tokens(example.gen_target)
         target_end = target_start + target_tokens.shape[1]
 
         attack_indices = AttackIndices(
@@ -258,10 +241,10 @@ class SearchBasedRunner(abc.ABC):
             target_end=target_end,
         )
 
-        # check that the attack indices actually line up
+        # Check that the attack indices actually line up.
         full_prompt = example.prompt_template.build_prompt(
             attack_text=attack_text,
-            target=self.target,
+            target=example.gen_target,
         )
         full_tokens = self._get_tokens(full_prompt)
         attack_tokens = self._get_tokens(attack_text)
@@ -283,7 +266,7 @@ class SearchBasedRunner(abc.ABC):
             for text, _ in text_replacement_pairs
         ]
 
-        candidate_attack_texts = self.wrapped_model.tokenizer.batch_decode(
+        candidate_attack_texts = self.victim.tokenizer.batch_decode(
             torch.cat(
                 [
                     candidate.compute_tokens_after_replacement(
@@ -297,62 +280,29 @@ class SearchBasedRunner(abc.ABC):
             skip_special_tokens=True,
         )
 
+        # NOTE: We don't add the target here; it'll be added inside the
+        # callback.
+        # TODO (ian): Check that this doesn't mess up tokenization.
         full_prompts = [
             self.example.prompt_template.build_prompt(
                 attack_text=attack_text,
-                target=self.target,
+                target="",
             )
             for attack_text in candidate_attack_texts
         ]
-        full_prompts_tokens = self._get_tokens(full_prompts).to(
-            self.wrapped_model.device
-        )
-        if self.seq_clf:
-            assert self.example.clf_target is not None
-            targets = torch.full(
-                size=(full_prompts_tokens.shape[0],),
-                fill_value=self.example.clf_target,
-                device=self.wrapped_model.device,
-            )
-        else:
-            # NOTE: target is the same for each candidate
-            targets = full_prompts_tokens[:, self.attack_indices.target_slice]
+        goal_clf_labels = [self.example.clf_label] * len(candidate_attack_texts)
+        goal_gen_targets = [self.example.gen_target] * len(candidate_attack_texts)
 
-        accelerator = self.wrapped_model.accelerator
-        if accelerator is None:
-            raise ValueError("Accelerator must be provided")
-
-        candidates_dataset = Dataset.from_dict(
-            {
-                "full_prompt_tokens": full_prompts_tokens,
-                "target": targets,
-                "candidate_attack_text": candidate_attack_texts,
-            }
-        ).with_format("torch")
-        candidates_dataloader = accelerator.prepare(
-            torch.utils.data.DataLoader(
-                dataset=candidates_dataset,  # type: ignore
-                batch_size=self.forward_pass_batch_size,
-            )
+        callback_input = CallbackInput(
+            input_data=full_prompts,
+            clf_label_data=goal_clf_labels,
+            gen_target_data=goal_gen_targets,
         )
+        losses = self.scores_from_text_callback(self.victim, callback_input)
 
         evaluated_candidates = []
-
-        for batch in candidates_dataloader:
-            full_prompt_tokens = batch["full_prompt_tokens"]
-            target = batch["target"]
-            candidate_attack_text = batch["candidate_attack_text"]
-
-            logits = self.wrapped_model.call_model(full_prompt_tokens)
-            loss = self._compute_loss_from_logits(logits, target)
-
-            candidate_attack_text = accelerator.gather_for_metrics(
-                candidate_attack_text
-            )
-            loss = accelerator.gather_for_metrics(loss)
-
-            for text, loss in zip(candidate_attack_text, loss):
-                evaluated_candidates.append((float(loss), text))
+        for loss, text in zip(losses.to(device="cpu"), candidate_attack_texts):
+            evaluated_candidates.append((float(loss), text))
 
         assert len(evaluated_candidates) == len(text_replacement_pairs)
 
@@ -394,7 +344,7 @@ class SearchBasedRunner(abc.ABC):
         original_full_prompt_list = [
             self.example.prompt_template.build_prompt(
                 attack_text=attack_text,
-                target=self.target,
+                target=self.example.gen_target,
             )
             for attack_text in attack_text_list
         ]
@@ -423,7 +373,7 @@ class SearchBasedRunner(abc.ABC):
             )
         ]
 
-        decoded_list = self.wrapped_model.tokenizer.batch_decode(
+        decoded_list = self.victim.tokenizer.batch_decode(
             torch.cat([tokens for tokens in candidate_full_prompt_tokens_list]),
             skip_special_tokens=True,
         )
@@ -439,12 +389,12 @@ class SearchBasedRunner(abc.ABC):
         # later in the code. It turns out that in some rare cases these two ways do not
         # coincide, and so the checks relying on the first way are not sufficient.
         # TODO(michal): refactor this so that we only have one type of check.
-        candidate_attack_texts = self.wrapped_model.tokenizer.batch_decode(
+        candidate_attack_texts = self.victim.tokenizer.batch_decode(
             torch.cat(candidate_attack_tokens_list)
         )
         candidate_full_prompt_list_alt = [
             self.example.prompt_template.build_prompt(
-                attack_text=attack_text, target=self.target
+                attack_text=attack_text, target=self.example.gen_target
             )
             for attack_text in candidate_attack_texts
         ]
@@ -531,51 +481,6 @@ class SearchBasedRunner(abc.ABC):
 
         return False
 
-    def _compute_loss(
-        self, combined_embeddings: torch.Tensor, full_prompt_tokens: torch.Tensor
-    ) -> torch.Tensor:
-        """Compute loss given the combined embeddings.
-
-        NOTE: we assume a batch dimension of size 1
-        """
-        # preconditions
-        assert len(combined_embeddings.shape) == 3
-        assert combined_embeddings.shape[0] == 1
-        assert len(full_prompt_tokens.shape) == 2
-        assert full_prompt_tokens.shape[0] == 1
-        assert combined_embeddings.shape[1] == full_prompt_tokens.shape[1]
-
-        logits = self.wrapped_model.call_model(inputs_embeds=combined_embeddings)
-        assert logits.shape[0] == 1
-        if self.seq_clf:
-            # add batch dim
-            targets = torch.tensor(
-                self.example.clf_target, device=self.wrapped_model.device
-            ).unsqueeze(0)
-        else:
-            targets = full_prompt_tokens[:, self.attack_indices.target_slice]
-        loss = self._compute_loss_from_logits(logits, targets)
-        assert loss.numel() == 1
-        return loss.mean()
-
-    def _compute_loss_from_logits(
-        self, logits: torch.Tensor, targets: torch.Tensor
-    ) -> torch.Tensor:
-        # only take a slice if it's a causal LM
-        if self.seq_clf:
-            target_logits = logits
-        else:
-            target_logits = logits[:, self.attack_indices.loss_slice, :]
-            assert len(target_logits.shape) == 3
-            # [batch_size, seq_len, vocab_size] -> [batch_size, vocab_size, seq_len]
-            target_logits = target_logits.transpose(1, 2)
-        ce_loss_func = torch.nn.CrossEntropyLoss(reduction="none")
-        loss = ce_loss_func(target_logits, targets)
-        if not self.seq_clf:
-            # Reduce by seq dimension
-            loss = loss.mean(dim=1)
-        return loss
-
     def _get_combined_embeddings(
         self,
         full_prompt_embeddings: torch.Tensor,
@@ -597,17 +502,14 @@ class SearchBasedRunner(abc.ABC):
         """Creates a one-hot encoding layer before the model embeddings.
 
         We can then backpropagate through it.
-
-        TODO: I think we're neglecting position embeddings here (and they do neglect
-        them in the reference impl afaict)
         """
-        embedding_weights = self.wrapped_model.get_embedding_weights()
+        embedding_weights = self.victim.get_embedding_weights()
         vocab_size = embedding_weights.shape[0]
         dtype = embedding_weights.dtype
         attack_onehot = create_onehot_embedding(
             token_ids=attack_tokens,
             vocab_size=vocab_size,
             dtype=dtype,
-            device=self.wrapped_model.model.device,
+            device=self.victim.model.device,
         )
         return attack_onehot

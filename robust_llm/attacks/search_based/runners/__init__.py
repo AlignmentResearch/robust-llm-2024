@@ -20,19 +20,18 @@ from robust_llm.models import WrappedModel
 
 
 def make_runner(
-    wrapped_model: WrappedModel,
+    victim: WrappedModel,
     prepped_examples: list[PreppedExample],
     random_seed: int,
     config: SearchBasedAttackConfig,
 ) -> SearchBasedRunner | MultiPromptSearchBasedRunner:
     base_args = {
-        "wrapped_model": wrapped_model,
+        "victim": victim,
         "n_candidates_per_it": config.n_candidates_per_it,
         "n_its": config.n_its,
         "n_attack_tokens": config.n_attack_tokens,
-        "forward_pass_batch_size": config.forward_pass_batch_size,
+        "scores_from_text_callback": config.scores_from_text_callback,
         "prepped_examples": prepped_examples,
-        "seq_clf": config.seq_clf,
         "random_seed": random_seed,
     }
 
@@ -48,11 +47,13 @@ def make_runner(
         case GCGAttackConfig():
             return GCGRunner(
                 **base_args,  # type: ignore
+                differentiable_embeds_callback=config.differentiable_embeds_callback,
                 top_k=config.top_k,
             )
         case MultipromptGCGAttackConfig():
             return MultiPromptGCGRunner(
                 **base_args,  # type: ignore
+                differentiable_embeds_callback=config.differentiable_embeds_callback,
                 top_k=config.top_k,
             )
         case _:

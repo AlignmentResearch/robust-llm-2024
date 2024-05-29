@@ -6,7 +6,8 @@ from typing_extensions import override
 from robust_llm.attacks.search_based.runners.search_based_runner import (
     SearchBasedRunner,
 )
-from robust_llm.attacks.search_based.utils import ReplacementCandidate
+from robust_llm.attacks.search_based.utils import PreppedExample, ReplacementCandidate
+from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.utils import get_randint_with_exclusions
 
 
@@ -18,7 +19,27 @@ class BeamSearchRunner(SearchBasedRunner):
         beam_search_width: how many candidates to keep after each iteration.
     """
 
-    beam_search_width: int = 5
+    def __init__(
+        self,
+        victim: WrappedModel,
+        n_candidates_per_it: int,
+        n_its: int,
+        n_attack_tokens: int,
+        scores_from_text_callback: str,
+        prepped_examples: Sequence[PreppedExample],
+        random_seed: int = 0,
+        beam_search_width: int = 5,
+    ) -> None:
+        super().__init__(
+            victim=victim,
+            n_candidates_per_it=n_candidates_per_it,
+            n_its=n_its,
+            n_attack_tokens=n_attack_tokens,
+            scores_from_text_callback=scores_from_text_callback,
+            prepped_examples=prepped_examples,
+            random_seed=random_seed,
+        )
+        self.beam_search_width = beam_search_width
 
     @override
     def _get_candidate_texts_and_replacements(
@@ -27,7 +48,7 @@ class BeamSearchRunner(SearchBasedRunner):
     ) -> list[Tuple[str, ReplacementCandidate]]:
 
         # We forbid introducing special tokens in the attack tokens.
-        excluded_token_ids = self.wrapped_model.tokenizer.all_special_ids
+        excluded_token_ids = self.victim.tokenizer.all_special_ids
 
         text_replacement_pairs: list[Tuple[str, ReplacementCandidate]] = []
 
@@ -38,7 +59,7 @@ class BeamSearchRunner(SearchBasedRunner):
                 0, self.n_attack_tokens - 1
             )
             token_id = get_randint_with_exclusions(
-                high=self.wrapped_model.vocab_size,
+                high=self.victim.vocab_size,
                 exclusions=excluded_token_ids,
                 rng=self.candidate_sample_rng,
             )

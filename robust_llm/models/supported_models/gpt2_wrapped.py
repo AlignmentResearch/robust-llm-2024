@@ -1,10 +1,9 @@
-import torch
 from accelerate import Accelerator, DistributedType
 from transformers import GPT2PreTrainedModel, GPT2TokenizerFast, PreTrainedTokenizerBase
 from typing_extensions import override
 
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.models.model_utils import InferenceType, _call_model
+from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
 
 
@@ -61,16 +60,3 @@ class GPT2Model(WrappedModel):
         # with GPT-2 in the future, investigate this.
         assert accelerator.distributed_type != DistributedType.FSDP, "not supported!"
         super().add_accelerator(accelerator)
-
-    @override
-    def call_model(
-        self,
-        inp: torch.Tensor | None = None,
-        add_cls: bool = False,
-        add_sep: bool = False,
-        inputs_embeds: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        # add cls and add_sep are ignored but included for consistency with other models
-        assert add_cls is False
-        assert add_sep is False
-        return _call_model(self.model, inp, inputs_embeds)

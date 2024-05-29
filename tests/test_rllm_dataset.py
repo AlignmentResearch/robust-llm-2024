@@ -55,8 +55,8 @@ def test_tokenization_and_subset(dataset: RLLMDataset, tokenizer):
     assert smaller_dataset.is_tokenized
 
 
-def test_ground_truth_label_fn_rllm(dataset: RLLMDataset):
-    """Test the ground_truth_label_fn works as expected.
+def test_update_example_based_on_text(dataset: RLLMDataset):
+    """Test the update_example_based_on_text works as expected.
 
     We use the config_name='pos' PasswordMatch dataset as a test case, since
     all of its labels are 1 so it's easy to flip the label.
@@ -64,15 +64,19 @@ def test_ground_truth_label_fn_rllm(dataset: RLLMDataset):
     # Test the ground truth label function
     example = dataset.ds[0]
     assert example["clf_label"] == 1
-    text = example["text"]
     chunks = example["chunked_text"][:]  # Copy the list to avoid mutation
     chunks[2] = "some_other_word"
     attacked_text = "".join(chunks)
+    example["attacked_text"] = attacked_text
+    example["attacked_clf_label"] = 1
 
-    # The ground truth label function should return 1 for the original text and 0
-    # for the attacked text.
-    assert dataset.ground_truth_label_fn(text, example["clf_label"]) == 1
-    assert dataset.ground_truth_label_fn(attacked_text, example["clf_label"]) == 0
+    # Update on both original text and attacked_text
+    example = dataset.update_example_based_on_text(example, column_prefix="")
+    example = dataset.update_example_based_on_text(example, column_prefix="attacked_")
+    # The label should be left as 1 for the original text and updated to 0 for
+    # the attacked text.
+    assert example["clf_label"] == 1
+    assert example["attacked_clf_label"] == 0
 
 
 def test_with_attacked_text(dataset: RLLMDataset, tokenizer):

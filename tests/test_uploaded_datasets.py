@@ -44,4 +44,5 @@ def test_uploaded_datasets(repo_id: str):
         assert len(chunked_text) > 0
         assert text == "".join(chunked_text)
         # Make sure the clf_label is valid.
-        assert dataset.ground_truth_label_fn(text, clf_label) == clf_label
+        example = dataset.update_example_based_on_text(example)
+        assert example["clf_label"] == clf_label

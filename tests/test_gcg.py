@@ -24,6 +24,8 @@ ACCELERATOR = Accelerator(cpu=True)
 
 def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    tokenizer.pad_token = tokenizer.eos_token
+
     wrapped_model = GPT2Model(
         FakeModelForSequenceClassification(),  # type: ignore
         tokenizer,
@@ -44,17 +46,16 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
     prepped_examples = [
         PreppedExample(
             prompt_template=prompt_template,
-            clf_target=0,
+            clf_label=0,
+            gen_target="^",
         )
     ]
     runner = make_runner(
-        wrapped_model=wrapped_model,
+        victim=wrapped_model,
         prepped_examples=prepped_examples,
         random_seed=0,
         config=config,
     )
-    # hack to change some of the runner's attributes for testing
-    runner.target = "^"
     assert isinstance(runner, GCGRunner)
     return runner
 
@@ -62,6 +63,8 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
 def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
     # we need a model for pythia because we access the config
     tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped")
+    tokenizer.pad_token = tokenizer.eos_token
+
     wrapped_model = GPTNeoXModel(
         FakeModelForSequenceClassification(),  # type: ignore
         tokenizer,
@@ -82,17 +85,16 @@ def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRun
     prepped_examples = [
         PreppedExample(
             prompt_template=prompt_template,
-            clf_target=0,
+            clf_label=0,
+            gen_target="^",
         )
     ]
     runner = make_runner(
-        wrapped_model=wrapped_model,
+        victim=wrapped_model,
         prepped_examples=prepped_examples,
         random_seed=0,
         config=config,
     )
-    # hack to change some of the runner's attributes for testing
-    runner.target = "^"
     assert isinstance(runner, GCGRunner)
     return runner
 
@@ -150,7 +152,7 @@ text_no_specials = st.text(alphabet=st.characters(min_codepoint=32, max_codepoin
 )
 def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     # set up gcg runner to use the given user prompt and target
-    gcg_runner.target = target
+    gcg_runner.example.gen_target = target
     initial_attack_text = gcg_runner.initial_attack_text
 
     # compute token lengths for checking that exceptions are raised when necessary
@@ -260,7 +262,7 @@ def test_get_replacement_candidates_from_gradients(gcg_runner: GCGRunner) -> Non
     gcg_runner.top_k = 2
     gcg_runner.n_candidates_per_it = 4
 
-    vocab_size = gcg_runner.wrapped_model.tokenizer.vocab_size  # type: ignore
+    vocab_size = gcg_runner.victim.tokenizer.vocab_size  # type: ignore
     # mocking gradients:
     # need to make it the same shape as it really would be because
     # some tokenizers (e.g. bert) care about special indices

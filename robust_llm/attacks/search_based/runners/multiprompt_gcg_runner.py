@@ -1,10 +1,8 @@
 from collections import defaultdict
-from dataclasses import dataclass
 from typing import Any, Sequence, Tuple
 
 import torch
 import torch.utils.data
-from datasets import Dataset
 from tqdm import tqdm
 from typing_extensions import override
 
@@ -14,11 +12,13 @@ from robust_llm.attacks.search_based.runners.multiprompt_search_based_runner imp
 )
 from robust_llm.attacks.search_based.utils import (
     ExampleWithAttackIndices,
+    PreppedExample,
     ReplacementCandidate,
 )
+from robust_llm.models.wrapped_model import WrappedModel
+from robust_llm.scoring_callbacks import CallbackInput, CallbackRegistry
 
 
-@dataclass(kw_only=True)
 class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
     """Runs GCG on a single model and a single prompt/target pair.
 
@@ -26,6 +26,32 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         top_k: the number of token replacements to consider at each
             position in the attack tokens.
     """
+
+    def __init__(
+        self,
+        victim: WrappedModel,
+        n_candidates_per_it: int,
+        n_its: int,
+        n_attack_tokens: int,
+        scores_from_text_callback: str,
+        prepped_examples: Sequence[PreppedExample],
+        differentiable_embeds_callback: str,
+        random_seed: int = 0,
+        top_k: int = 256,
+    ) -> None:
+        super().__init__(
+            victim=victim,
+            n_candidates_per_it=n_candidates_per_it,
+            n_its=n_its,
+            n_attack_tokens=n_attack_tokens,
+            scores_from_text_callback=scores_from_text_callback,
+            prepped_examples=prepped_examples,
+            random_seed=random_seed,
+        )
+
+        cb = CallbackRegistry.get_tensor_callback(differentiable_embeds_callback)
+        self.differentiable_embeds_callback = cb
+        self.top_k = top_k
 
     top_k: int = 256
 
@@ -132,7 +158,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         original_full_prompt_list = [
             example.prompt_template.build_prompt(
                 attack_text=attack_text,
-                target=self.target,
+                target=example.gen_target,
             )
             for attack_text in attack_text_list
         ]
@@ -166,7 +192,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             )
         ]
 
-        decoded_list = self.wrapped_model.tokenizer.batch_decode(
+        decoded_list = self.victim.tokenizer.batch_decode(
             torch.cat([tokens for tokens in candidate_full_prompt_tokens_list]),
             skip_special_tokens=True,
         )
@@ -182,12 +208,12 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         # later in the code. It turns out that in some rare cases these two ways do not
         # coincide, and so the checks relying on the first way are not sufficient.
         # TODO(michal): refactor this so that we only have one type of check.
-        candidate_attack_texts = self.wrapped_model.tokenizer.batch_decode(
+        candidate_attack_texts = self.victim.tokenizer.batch_decode(
             torch.cat(candidate_attack_tokens_list)
         )
         candidate_full_prompt_list_alt = [
             example.prompt_template.build_prompt(
-                attack_text=attack_text, target=self.target
+                attack_text=attack_text, target=example.gen_target
             )
             for attack_text in candidate_attack_texts
         ]
@@ -297,7 +323,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             for text, _ in text_replacement_pairs
         ]
 
-        candidate_attack_texts = self.wrapped_model.tokenizer.batch_decode(
+        candidate_attack_texts = self.victim.tokenizer.batch_decode(
             torch.cat(
                 [
                     candidate.compute_tokens_after_replacement(
@@ -311,64 +337,29 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             skip_special_tokens=True,
         )
 
+        # NOTE: we don't add the target to the prompt here; that'll be handled
+        # in the callback.
         full_prompts = [
             example.prompt_template.build_prompt(
                 attack_text=attack_text,
-                target=self.target,
+                target="",
             )
             for attack_text in candidate_attack_texts
         ]
-        full_prompts_tokens = self._get_tokens(full_prompts).to(
-            self.wrapped_model.device
+
+        goal_clf_labels = [example.clf_label] * len(candidate_attack_texts)
+        goal_gen_targets = [example.gen_target] * len(candidate_attack_texts)
+
+        callback_input = CallbackInput(
+            input_data=full_prompts,
+            clf_label_data=goal_clf_labels,
+            gen_target_data=goal_gen_targets,
         )
-        if self.seq_clf:
-            assert example.clf_target is not None
-            targets = torch.full(
-                size=(full_prompts_tokens.shape[0],),
-                fill_value=example.clf_target,
-                device=self.wrapped_model.device,
-            )
-        else:
-            # NOTE: target is the same for each candidate
-            targets = full_prompts_tokens[:, example.attack_indices.target_slice]
-
-        accelerator = self.wrapped_model.accelerator
-
-        candidates_dataset = Dataset.from_dict(
-            {
-                "full_prompt_tokens": full_prompts_tokens,
-                "target": targets,
-                "candidate_attack_text": candidate_attack_texts,
-            }
-        ).with_format("torch")
-
-        if accelerator is None:
-            raise ValueError("An accelerator must be added to the model.")
-
-        candidates_dataloader = accelerator.prepare(
-            torch.utils.data.DataLoader(
-                dataset=candidates_dataset,  # type: ignore
-                batch_size=self.forward_pass_batch_size,
-            )
-        )
+        losses = self.scores_from_text_callback(self.victim, callback_input)
 
         evaluated_candidates = []
-
-        for batch in candidates_dataloader:
-            full_prompt_tokens = batch["full_prompt_tokens"]
-            target = batch["target"]
-            candidate_attack_text = batch["candidate_attack_text"]
-
-            logits = self.wrapped_model.call_model(full_prompt_tokens)
-            loss = self._compute_loss_from_logits(logits, target, example)
-
-            candidate_attack_text = accelerator.gather_for_metrics(
-                candidate_attack_text
-            )
-            loss = accelerator.gather_for_metrics(loss)
-
-            for text, loss in zip(candidate_attack_text, loss):
-                evaluated_candidates.append((float(loss), text))
+        for loss, text in zip(losses, candidate_attack_texts):
+            evaluated_candidates.append((float(loss), text))
 
         assert len(evaluated_candidates) == len(text_replacement_pairs)
 
@@ -385,9 +376,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         assert len(candidate_texts) == 1
         attack_text = candidate_texts[0]
 
-        gradients = self._compute_gradients(
-            considered_examples, self.target, attack_text
-        )
+        gradients = self._compute_gradients(considered_examples, attack_text)
         replacements = self._get_replacement_candidates_from_gradients(gradients)
         candidate_texts_and_replacements = [
             (attack_text, replacement) for replacement in replacements
@@ -402,31 +391,28 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
     def _compute_gradients(
         self,
         considered_examples: Sequence[ExampleWithAttackIndices],
-        target: str,
         attack_text: str,
     ) -> torch.Tensor:
         """For multi-prompt, we have to sum gradients for all examples we
         consider at this iteration."""
         gradients = None
+        # TODO(ian): Batch this (once I make running on embeds support batches).
         for example in considered_examples:
+            # NOTE: We don't add the target to the prompt here; that'll be handled
+            # in the callback.
             full_prompt = example.prompt_template.build_prompt(
                 attack_text=attack_text,
-                target=target,
+                target="",
             )
 
-            # Only need specials if we're doing BERT
-            full_prompt_tokens = self._get_tokens(
-                full_prompt, add_special=self.seq_clf
-            ).to(self.wrapped_model.device)
-            full_prompt_embeddings = self.wrapped_model.get_embeddings(
+            full_prompt_tokens = self._get_tokens(full_prompt)
+            full_prompt_embeddings = self.victim.get_embeddings(
                 full_prompt_tokens
             ).detach()
 
-            attack_tokens = self._get_tokens(attack_text).to(self.wrapped_model.device)
+            attack_tokens = self._get_tokens(attack_text).to(self.victim.device)
             attack_onehot = self._get_attack_onehot(attack_tokens)
-            attack_embeddings = (
-                attack_onehot @ self.wrapped_model.get_embedding_weights()
-            )
+            attack_embeddings = attack_onehot @ self.victim.get_embedding_weights()
 
             combined_embeddings = self._get_combined_embeddings(
                 full_prompt_embeddings,
@@ -434,12 +420,25 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
                 example,
             )
 
-            # full_prompt_tokens are only used to determine the target in the generation
-            # case; they are not used in the classification case.
-            loss = self._compute_loss(combined_embeddings, full_prompt_tokens, example)
-            if self.wrapped_model.accelerator is None:
+            input_data = {
+                "input_ids": full_prompt_tokens,
+                "embeddings": combined_embeddings,
+            }
+
+            callback_input = CallbackInput(
+                input_data=input_data,
+                clf_label_data=[example.clf_label],
+                gen_target_data=[example.gen_target],
+            )
+            losses = self.differentiable_embeds_callback(self.victim, callback_input)
+
+            assert len(losses) == 1, "Batch size should be 1."
+            loss = losses[0]
+
+            if self.victim.accelerator is None:
                 raise ValueError("An accelerator must be added to the model.")
-            self.wrapped_model.accelerator.backward(loss)
+
+            self.victim.accelerator.backward(loss)
             assert attack_onehot.grad is not None
             # accumulate gradients, linearly in memory
             if gradients is None:
@@ -462,7 +461,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         from the resulting pool.
         """
         # We forbid introducing special tokens in the attack tokens.
-        excluded_token_ids = self.wrapped_model.tokenizer.all_special_ids
+        excluded_token_ids = self.victim.tokenizer.all_special_ids
         for token_id in excluded_token_ids:
             gradients[:, token_id] = float("inf")
 
@@ -482,57 +481,6 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
                 )
         candidates = self.candidate_sample_rng.sample(pool, self.n_candidates_per_it)
         return candidates
-
-    def _compute_loss(
-        self,
-        combined_embeddings: torch.Tensor,
-        full_prompt_tokens: torch.Tensor,
-        example: ExampleWithAttackIndices,
-    ) -> torch.Tensor:
-        """Compute loss given the combined embeddings.
-
-        NOTE: we assume a batch dimension of size 1
-        """
-        # preconditions
-        assert len(combined_embeddings.shape) == 3
-        assert combined_embeddings.shape[0] == 1
-        assert len(full_prompt_tokens.shape) == 2
-        assert full_prompt_tokens.shape[0] == 1
-        assert combined_embeddings.shape[1] == full_prompt_tokens.shape[1]
-
-        logits = self.wrapped_model.call_model(inputs_embeds=combined_embeddings)
-        assert logits.shape[0] == 1
-        if self.seq_clf:
-            # add batch dim
-            targets = torch.tensor(
-                example.clf_target, device=self.wrapped_model.device
-            ).unsqueeze(0)
-        else:
-            targets = full_prompt_tokens[:, example.attack_indices.target_slice]
-        loss = self._compute_loss_from_logits(logits, targets, example)
-        assert loss.numel() == 1
-        return loss.mean()
-
-    def _compute_loss_from_logits(
-        self,
-        logits: torch.Tensor,
-        targets: torch.Tensor,
-        example: ExampleWithAttackIndices,
-    ) -> torch.Tensor:
-        # only take a slice if it's a causal LM
-        if self.seq_clf:
-            target_logits = logits
-        else:
-            target_logits = logits[:, example.attack_indices.loss_slice, :]
-            assert len(target_logits.shape) == 3
-            # [batch_size, seq_len, vocab_size] -> [batch_size, vocab_size, seq_len]
-            target_logits = target_logits.transpose(1, 2)
-        ce_loss_func = torch.nn.CrossEntropyLoss(reduction="none")
-        loss = ce_loss_func(target_logits, targets)
-        if not self.seq_clf:
-            # Reduce by seq dimension
-            loss = loss.mean(dim=1)
-        return loss
 
     def _get_combined_embeddings(
         self,

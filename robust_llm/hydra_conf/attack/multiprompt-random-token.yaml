@@ -1,0 +1,4 @@
+defaults:
+- RANDOM_TOKEN
+
+prompt_attack_mode: "multi-prompt"

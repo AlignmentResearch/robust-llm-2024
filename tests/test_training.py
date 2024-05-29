@@ -1,5 +1,6 @@
 from typing import cast
 
+from accelerate import Accelerator
 from transformers import AutoTokenizer, GPTNeoXPreTrainedModel
 
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
@@ -16,11 +17,12 @@ from robust_llm.models import GPTNeoXModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
-from robust_llm.training import _get_only_data_with_incorrect_predictions
+from robust_llm.scoring_callbacks import CallbackRegistry
+from robust_llm.training import _get_only_data_with_incorrect_preds
 from robust_llm.utils import FakeClassifierWithPositiveList
 
 
-def test_get_only_data_with_incorrect_predictions():
+def test_get_only_data_with_incorrect_preds():
     cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
         n_train=10,
@@ -33,12 +35,13 @@ def test_get_only_data_with_incorrect_predictions():
     positives = tokenizer.batch_encode_plus(
         train.ds["text"], padding=True, return_tensors="pt"
     ).input_ids
+    accelerator = Accelerator()
     model = FakeClassifierWithPositiveList(tokenizer=tokenizer, positives=positives)
     # We fake the type with 'cast' because we are using a FakeClassifierWithPositiveList
     victim = GPTNeoXModel(
         cast(GPTNeoXPreTrainedModel, model),
         tokenizer,
-        accelerator=None,
+        accelerator=accelerator,
         inference_type=InferenceType("classification"),
         train_minibatch_size=2,
         eval_minibatch_size=2,
@@ -48,11 +51,11 @@ def test_get_only_data_with_incorrect_predictions():
         i for i, d in enumerate(train.ds) if d["clf_label"] == 0  # type: ignore
     ]
     expected_filtered_dataset = train.get_subset(subset_indices)
-
-    filtered_dataset = _get_only_data_with_incorrect_predictions(
+    callback = CallbackRegistry.get_binary_callback("successes_from_text")
+    filtered_dataset = _get_only_data_with_incorrect_preds(
         dataset=train,
         victim=victim,
-        batch_size=2,
+        victim_success_binary_callback=callback,
     )
 
     assert filtered_dataset.ds["text"] == expected_filtered_dataset.ds["text"]

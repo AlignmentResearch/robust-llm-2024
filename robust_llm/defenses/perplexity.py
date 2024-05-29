@@ -1,15 +1,16 @@
+from typing import cast
+
 import torch
 import torch.utils.data
 import wandb
 from datasets import Dataset
 from tdigest import TDigest
-from transformers import PreTrainedTokenizerBase
 
 from robust_llm import logger
 from robust_llm.config.defense_configs import PerplexityDefenseConfig
-from robust_llm.defenses.defense import DefendedModel
+from robust_llm.defenses.defense import FilteringDefendedModel
 from robust_llm.models import WrappedModel
-from robust_llm.models.model_utils import InferenceType
+from robust_llm.models.model_utils import InferenceType, build_dataloader
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 
@@ -148,7 +149,8 @@ def _get_single_datapoint_perplexity(
 
 def compute_perplexity(
     model: WrappedModel,
-    model_inputs,  # TODO(niki): type
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
     window_size: int,
     report_max_perplexity: bool,
 ) -> torch.Tensor:
@@ -171,7 +173,7 @@ def compute_perplexity(
     Returns:
         A batch-shaped tensor of perplexities (negative log probs).
     """
-    outputs = model(**model_inputs)
+    outputs = model(input_ids=input_ids, attention_mask=attention_mask)
 
     # Softmax the logits so now the last dimension
     # is a probability distribution over the vocabulary
@@ -212,7 +214,7 @@ def compute_perplexity(
     # (no vocab_size dimension because we extracted the probability
     # corresponding to the token in question along that dimension)
     logits_without_final_prediction = logits[:, :-1, :]
-    input_ids_without_initial_token = model_inputs["input_ids"][:, 1:].unsqueeze(-1)
+    input_ids_without_initial_token = input_ids[:, 1:].unsqueeze(-1)
     next_token_logits = torch.gather(
         input=logits_without_final_prediction,
         dim=2,
@@ -221,7 +223,7 @@ def compute_perplexity(
 
     # We ignore the probabilities of the padding tokens.
     # Shape is [batch_size, num_tokens_per_datapoint - 1]
-    mask = model_inputs["attention_mask"][:, 1:] == 1
+    mask = attention_mask[:, 1:] == 1
     masked_next_token_logits = torch.where(
         condition=mask,
         input=next_token_logits,
@@ -247,9 +249,7 @@ def compute_perplexity(
 
 def compute_max_min_percentile_perplexity(
     model: WrappedModel,
-    tokenizer: PreTrainedTokenizerBase,
     dataset: Dataset,
-    batch_size: int,
     window_size: int,
     report_max_perplexity: bool,
 ) -> tuple[float, float, TDigest]:
@@ -259,11 +259,10 @@ def compute_max_min_percentile_perplexity(
     This is useful for setting the perplexity threshold.
 
     Args:
-        model: The model to evaluate.
-        tokenizer: The tokenizer to use (NOTE: could be different from the
-            model's tokenizer because we have a mismatch; see GH#370).
+        model: The WrappedModel to evaluate.
+            NOTE: We now use the tokenizer from the decoder model, which
+            is different from the old way (see GH#370).
         dataset: The dataset to compute perplexity for.
-        Batch_size: The batch size to use.
         Window_size: The size of the sliding window.
         report_max_perplexity: Whether to report the maximum perplexity
             across windows, rather than the average perplexity.
@@ -274,22 +273,28 @@ def compute_max_min_percentile_perplexity(
     """
     dataset = dataset.with_format("torch")
     dataloader = torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, shuffle=False  # type: ignore
+        dataset,  # type: ignore
+        batch_size=model.eval_minibatch_size,
+        shuffle=False,
     )
     min_perplexity_so_far = float("inf")
     max_perplexity_so_far = 0.0
     tdigest = TDigest()
     for batch in dataloader:
-        encoded_input = tokenizer(
+        encoded_input = model.tokenizer(
             batch["text"],
             return_tensors="pt",
             padding=True,
             truncation=True,
         )
         encoded_input.to(model.device)
+        input_ids = cast(torch.Tensor, encoded_input["input_ids"])
+        attention_mask = cast(torch.Tensor, encoded_input["attention_mask"])
+
         perplexity = compute_perplexity(
             model=model,
-            model_inputs=encoded_input,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
             window_size=window_size,
             report_max_perplexity=report_max_perplexity,
         )
@@ -299,7 +304,7 @@ def compute_max_min_percentile_perplexity(
     return max_perplexity_so_far, min_perplexity_so_far, tdigest
 
 
-class PerplexityDefendedModel(DefendedModel):
+class PerplexityDefendedModel(FilteringDefendedModel):
     def __init__(
         self,
         victim: WrappedModel,
@@ -308,10 +313,6 @@ class PerplexityDefendedModel(DefendedModel):
     ) -> None:
         super().__init__(victim)
         self.cfg = defense_config
-        # NOTE: We load the decoder as a WrappedModel but we don't use the
-        # tokenizer because the old code uses the *victim's* tokenizer, not the
-        # decoder's tokenizer.
-        # TODO (GH#370): Fix the tokenizer mismatch.
         self.decoder = WrappedModel.from_config(
             config=self.cfg.decoder, accelerator=victim.accelerator
         )
@@ -321,21 +322,16 @@ class PerplexityDefendedModel(DefendedModel):
         self.dataset = dataset
         self.window_size = self.cfg.window_size
         self.report_max_perplexity = self.cfg.report_max_perplexity
-        self.batch_size = self.cfg.batch_size
-        self.verbose = self.cfg.verbose
 
         # We subtract from 1 because perplexities are sorted low -> high,
         # and we want to get the x% _highest_ (not lowest) perplexity value.
-        self.cfg = self.cfg
         proportion = self.cfg.perplexity_threshold_proportion
 
         assert self.dataset is not None
         self.max_perplexity, self.min_perplexity, self.tdigest = (
             compute_max_min_percentile_perplexity(
                 model=self.decoder,
-                tokenizer=self.tokenizer,
                 dataset=self.dataset,
-                batch_size=self.batch_size,
                 window_size=self.window_size,
                 report_max_perplexity=self.report_max_perplexity,
             )
@@ -368,21 +364,54 @@ class PerplexityDefendedModel(DefendedModel):
     def defense_config(self) -> PerplexityDefenseConfig:
         return self.cfg
 
-    def forward(self, **inputs):
-        assert self.decoder is not None
+    def filter(self, text_inputs: list[str]) -> list[bool]:
+        """Filter out adversarial examples from the input.
+
+        TODO(ian): Maybe use generation_output_from_tokens method here once
+        that's written? Feels like batching code might be out of place here.
+        """
+        dataloader = build_dataloader(
+            minibatch_size=self.decoder.eval_minibatch_size,
+            text_inputs=text_inputs,
+        )
+        assert self.accelerator is not None
+        dataloader = self.accelerator.prepare(dataloader)
+        all_filters = []
+        with torch.no_grad():
+            for batch in dataloader:
+                all_filters.extend(self._filter_batch(**batch))
+        return all_filters
+
+    def _filter_batch(self, text_inputs: list[str]) -> list[bool]:
+        """Filter out adversarial examples from the input.
+
+        Args:
+            inputs: The batch of text inputs to the model.
+
+        Returns:
+            A list of booleans indicating whether each input is flagged as
+            adversarial.
+        """
+        inputs = self.decoder.tokenizer(
+            text_inputs,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+        )
+        input_ids = cast(torch.Tensor, inputs["input_ids"])
+        attention_mask = cast(torch.Tensor, inputs["attention_mask"])
         perplexity = compute_perplexity(
             model=self.decoder,
-            model_inputs=inputs,
+            input_ids=input_ids,
+            attention_mask=attention_mask,
             window_size=self.window_size,
             report_max_perplexity=self.report_max_perplexity,
         )
-        output = self._underlying_model(**inputs)
-        output["filters"] = perplexity > self.threshold
-        if self.verbose:
-            logger.debug("Perplexity: %s", perplexity)
-            logger.debug("Threshold: %s", self.threshold)
-            logger.debug("Filter: %s", output["filters"])
-        return output
+        filtered = (perplexity > self.threshold).tolist()
+        logger.debug("Batch Perplexity: %s", perplexity)
+        logger.debug("Threshold: %s", self.threshold)
+        logger.debug("Batch Filter: %s", filtered)
+        return filtered
 
     def get_all_perplexity_thresholds(
         self, dataset: RLLMDataset, text_column_to_use: str
@@ -409,9 +438,7 @@ class PerplexityDefendedModel(DefendedModel):
         assert self.decoder is not None
         _, _, tdigest = compute_max_min_percentile_perplexity(
             model=self.decoder,
-            tokenizer=self.tokenizer,
             dataset=hf_dataset_only_text,
-            batch_size=self.batch_size,
             window_size=self.window_size,
             report_max_perplexity=self.report_max_perplexity,
         )

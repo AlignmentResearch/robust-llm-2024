@@ -1,6 +1,5 @@
 import abc
 import random
-from dataclasses import dataclass
 from typing import Any, Optional, Sequence, Tuple
 
 import torch
@@ -15,9 +14,9 @@ from robust_llm.attacks.search_based.utils import (
     create_onehot_embedding,
 )
 from robust_llm.models import WrappedModel
+from robust_llm.scoring_callbacks import CallbackRegistry
 
 
-@dataclass
 class MultiPromptSearchBasedRunner(abc.ABC):
     """Runs search based attack on a single model and a single prompt/target pair.
 
@@ -33,46 +32,34 @@ class MultiPromptSearchBasedRunner(abc.ABC):
             top_k * n_attack_tokens, which is the total number of candidates)
         n_its: Total number of iterations to run
         n_attack_tokens: number of attack tokens to optimize
-        forward_pass_batch_size: batch size used for forward pass when evaluating
-            candidates. If None, defaults to n_candidates_per_it
-        target: If using a CausalLM, it's the target string to optimize for.
-            If using a SequenceClassification model, it's ignored in favor of
-            the target specified by clf_target
+        scores_from_text_callback: the callback for computing the scores for
+            inputs in order to choose the best candidates.
         prepped_examples: A list of prepped examples, each containing a
             PromptTemplate and clf_target
-        seq_clf: Whether we are using a SequenceClassification model
-            (default alternative is a CausalLM)
         random_seed: initial seed for a random.Random object used to sample
             replacement candidates
     """
 
-    wrapped_model: WrappedModel
-    n_candidates_per_it: int
-    n_its: int
-    n_attack_tokens: int
-    prepped_examples: Sequence[PreppedExample]
-    forward_pass_batch_size: Optional[int] = None
-    target: str = ""
-    seq_clf: bool = False
-    random_seed: int = 0
+    def __init__(
+        self,
+        victim: WrappedModel,
+        n_candidates_per_it: int,
+        n_its: int,
+        n_attack_tokens: int,
+        scores_from_text_callback: str,
+        prepped_examples: Sequence[PreppedExample],
+        random_seed: int = 0,
+    ) -> None:
+        self.victim = victim
+        cb = CallbackRegistry.get_tensor_callback(scores_from_text_callback)
+        self.scores_from_text_callback = cb
 
-    def __post_init__(self):
-        self.forward_pass_batch_size = (
-            self.forward_pass_batch_size or self.n_candidates_per_it
-        )
-        self.candidate_sample_rng = random.Random(self.random_seed)
+        self.n_candidates_per_it = n_candidates_per_it
+        self.n_its = n_its
+        self.n_attack_tokens = n_attack_tokens
+        self.candidate_sample_rng = random.Random(random_seed)
 
-        # TODO(GH#119): clean up if/elses for seq clf
-        if self.seq_clf:
-            assert all(pe.clf_target is not None for pe in self.prepped_examples)
-            assert all(
-                pe.clf_target < self.wrapped_model.model.num_labels
-                for pe in self.prepped_examples
-            )
-            # no string target for sequence classification, just an int (clf_target)
-            assert self.target == "", "string target provided for seq task"
-        else:
-            assert self.target != "", "need non-empty target for causal lm"
+        self.prepped_examples = prepped_examples
 
         self.initial_attack_text, self.examples_with_attack_ix = (
             self._get_initial_attack_text_and_indices(
@@ -83,6 +70,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
     def run(self) -> Tuple[str, dict[str, Any]]:
         raise NotImplementedError("Not implemented in general for multi-prompt search")
 
+    @abc.abstractmethod
     def _get_candidate_texts_and_replacements(
         self,
         candidate_texts: Sequence[str],
@@ -128,7 +116,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         """
         optional_character = "&" if n_attack_tokens % 2 == 1 else ""
         attack_text = "&@" * (n_attack_tokens // 2) + optional_character
-        attack_tokens = self.wrapped_model.get_tokens(attack_text)
+        attack_tokens = self.victim.get_tokens(attack_text)
         assert len(attack_tokens[0]) == n_attack_tokens
 
         try:
@@ -161,9 +149,9 @@ class MultiPromptSearchBasedRunner(abc.ABC):
                 trials += 1
 
                 attack_tokens[0, i] = self.candidate_sample_rng.randint(
-                    0, self.wrapped_model.vocab_size - 1
+                    0, self.victim.vocab_size - 1
                 )
-                attack_text = self.wrapped_model.decode_tokens(attack_tokens)
+                attack_text = self.victim.decode_tokens(attack_tokens)
                 try:
                     attack_indices = [
                         self._get_attack_indices(attack_text, pe)
@@ -191,7 +179,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         Use tokenizer which is part of the wrapped model. Handle all the arguments we
         have to add to the tokenizer.
         """
-        return self.wrapped_model.get_tokens(
+        return self.victim.get_tokens(
             inputs, return_tensors=return_tensors, add_special=add_special
         )
 
@@ -201,7 +189,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         skip_special_tokens: bool = True,
         try_squeeze: bool = True,
     ) -> str:
-        string = self.wrapped_model.decode_tokens(
+        string = self.victim.decode_tokens(
             inp,
             skip_special_tokens=skip_special_tokens,
             try_squeeze=try_squeeze,
@@ -235,9 +223,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
 
         after_attack_tokens = self._get_tokens(example.prompt_template.after_attack)
         target_start = attack_end + after_attack_tokens.shape[1]
-        # TODO (ian): include self.target in PreppedExample (or remove altogether)
-        # this will work fine for now because we are doing seq_clf
-        target_tokens = self._get_tokens(self.target)
+        target_tokens = self._get_tokens(example.gen_target)
         target_end = target_start + target_tokens.shape[1]
 
         attack_indices = AttackIndices(
@@ -250,7 +236,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         # check that the attack indices actually line up
         full_prompt = example.prompt_template.build_prompt(
             attack_text=attack_text,
-            target=self.target,
+            target=example.gen_target,
         )
         full_tokens = self._get_tokens(full_prompt)
         attack_tokens = self._get_tokens(attack_text)
@@ -269,13 +255,13 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         TODO: I think we're neglecting position embeddings here (and they do neglect
         them in the reference impl afaict)
         """
-        embedding_weights = self.wrapped_model.get_embedding_weights()
+        embedding_weights = self.victim.get_embedding_weights()
         vocab_size = embedding_weights.shape[0]
         dtype = embedding_weights.dtype
         attack_onehot = create_onehot_embedding(
             token_ids=attack_tokens,
             vocab_size=vocab_size,
             dtype=dtype,
-            device=self.wrapped_model.model.device,
+            device=self.victim.model.device,
         )
         return attack_onehot
