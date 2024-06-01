@@ -49,3 +49,8 @@ repos:
         require_serial: true
         # Print the number of files as a sanity-check
         verbose: true
+  - repo: https://github.com/jshwi/docsig
+    rev: v0.54.1
+    hooks:
+      - id: docsig
+        args: ["--verbose"]

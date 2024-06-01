@@ -38,6 +38,7 @@ dev = [
     "pytest-xdist",
     "autoflake",
     "flake8",
+    "docsig",
     "names-generator",
     # For checking GPU memory usage
     "nvidia-ml-py3",
@@ -68,3 +69,11 @@ pythonVersion = "3.10"
 [tool.mypy]
 ignore_missing_imports = true
 python_version = "3.10"
+
+[tool.docsig]
+disable = [
+    "E113",
+    "E103",
+    "E105",
+    "E109",
+]

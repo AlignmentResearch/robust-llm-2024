@@ -162,13 +162,11 @@ def compute_perplexity(
 
     Args:
         model: the model to evaluate
+        input_ids: the input token IDs, a [batch, position] tensor
+        attention_mask: the attention mask, a [batch, position] tensor
         window_size: the size of the sliding window, if any
-        window_stride: the stride of the window. Required if `window_size`
-            is not None. Note that we always consider the rightmost
-            window as well, even if the stride doesn't match up with it.
         report_max_perplexity: whether to report the maximum perplexity
             across windows, rather than the average perplexity.
-        inputs: the inputs to the model
 
     Returns:
         A batch-shaped tensor of perplexities (negative log probs).
@@ -263,7 +261,7 @@ def compute_max_min_percentile_perplexity(
             NOTE: We now use the tokenizer from the decoder model, which
             is different from the old way (see GH#370).
         dataset: The dataset to compute perplexity for.
-        Window_size: The size of the sliding window.
+        window_size: The size of the sliding window.
         report_max_perplexity: Whether to report the maximum perplexity
             across windows, rather than the average perplexity.
 

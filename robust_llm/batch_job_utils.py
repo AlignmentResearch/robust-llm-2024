@@ -284,7 +284,7 @@ def run_multiple(
             maximum number of runs that can be fit together in the container that
             includes a run corresponding to `override_args_list[i]`. If None, every run
             will be allocated a separate container.
-        accelerate: whether to use accelerate for distributed training.
+        use_accelerate: whether to use accelerate for distributed training.
         script_path: path of the Python script to run.
         container_tag: Docker container tag to use.
         cpu: number of cpu cores per container.

@@ -82,7 +82,7 @@ class LoggingCounter:
 GLOBAL_LOGGING_COUNTER = LoggingCounter(_name="global", _is_global=True)
 
 
-def setup_wandb_metrics():
+def setup_wandb_metrics() -> None:
     # Set the default horizontal axis on wandb
     # NOTE: Older versions of wandb don't have "define_metric",
     # so try updating wandb if you get an error here.
@@ -117,7 +117,7 @@ def setup_wandb_metrics():
     GLOBAL_LOGGING_COUNTER._log_to_wandb()
 
 
-def wandb_set_really_finished():
+def wandb_set_really_finished() -> None:
     # Sometimes wandb runs are marked as finished even though in fact they are not.
     # In order to know for sure whether a run finished properly, we manually
     # call this function at the end of the run. This way, we have the guarantee
@@ -188,7 +188,7 @@ class LoggingContext:
         self.set_up_step_metrics = set_up_step_metrics
         self.num_parameters = num_parameters
 
-    def save_logs(self):
+    def save_logs(self) -> None:
         for handler in self.logger.handlers:
             if isinstance(handler, logging.FileHandler):
                 handler.flush()

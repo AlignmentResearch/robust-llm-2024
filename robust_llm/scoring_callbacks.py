@@ -51,7 +51,7 @@ class CallbackRegistry:
 
         Args:
             name: The name to associate with the ScoringCallback.
-            type: The return type of the ScoringCallback. Should be a str
+            return_type: The return type of the ScoringCallback. Should be a str
                 matching one of the values in CallbackReturnType.
         """
 

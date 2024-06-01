@@ -88,8 +88,6 @@ class PasswordMatchDataset(RLLMDataset):
 
         Args:
             text: The text of the example.
-            label: The original label of the example (unused, included for
-                compatibility).
 
         Returns:
             The ground truth label for the example.
@@ -128,8 +126,6 @@ class PasswordMatchDataset(RLLMDataset):
 
         Args:
             text: The text of the example.
-            label: The original label of the example (unused, included for
-                compatibility).
 
         Returns:
             The ground truth label for the example.
