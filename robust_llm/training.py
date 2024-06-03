@@ -116,8 +116,9 @@ class Training:
             compute_metrics=self.compute_metrics,
         )
         # Since we didn't pass an accelerator when constructing the WrappedModel,
-        # we need to add it here.
-        self.victim.add_accelerator(self.trainer.accelerator)
+        # we need to add it here, but note that we do NOT use .add_accelerator
+        # because the Trainer will handle 'preparing' the model.
+        self.victim.accelerator = self.trainer.accelerator
 
         self.victim_training_logging_counter = LoggingCounter(
             _name="victim_training",
