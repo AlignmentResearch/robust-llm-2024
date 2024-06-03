@@ -96,7 +96,11 @@ def test_adv_training_pipeline_doesnt_crash():
             evaluation_attack=RandomTokenAttackConfig(n_its=2),
         ),
         model=ModelConfig(
-            name_or_path="EleutherAI/pythia-14m",
+            # We use a finetuned model so that the classification head isn't
+            # randomly initialized. It's fine to use a model that is already
+            # partially trained; we are just testing that the attack doesn't
+            # crash and need non-zero pre-attack accuracy for that purpose.
+            name_or_path="AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3",
             family="pythia",
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.

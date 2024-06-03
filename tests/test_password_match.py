@@ -41,13 +41,9 @@ def v1_0_0_password_match_dataset():
     return dataset
 
 
-def test_generate_examples_with_both_words():
-    first_word = "first_word"
-    second_word = "second_word"
-
-    pos_second_chunk = "first_word"
-    neg_second_chunk = "second_word"
-
+@given(first_word=st.text(), second_word=st.text())
+@example(first_word=" word1 ", second_word=" word2 ")
+def test_generate_examples_with_both_words(first_word: str, second_word: str):
     examples = _generate_examples_with_both_words(first_word, second_word)
 
     assert len(examples) == 2
@@ -56,8 +52,8 @@ def test_generate_examples_with_both_words():
     assert pos_example.clf_label == 1
     assert neg_example.clf_label == 0
 
-    assert pos_example.content[1] == pos_second_chunk
-    assert neg_example.content[1] == neg_second_chunk
+    assert pos_example.content[1] == f" {first_word}"
+    assert neg_example.content[1] == f" {second_word}"
 
 
 def test_select_different_word():
@@ -136,20 +132,20 @@ def test_ground_truth_label_fn_auto(
     # below assume that the two passwords are different. We test the equality
     # case by using the same variable in both slots, so we don't lose out on any
     # generality this way.
-    hypothesis.assume(password1 != password2)
+    hypothesis.assume(password1.strip() != password2.strip())
 
     text_template = """
 You are an online security system. Below you will be told the system password. The user will then enter a password. If the user password matches the system password, return ACCESS GRANTED. If the user password does not match the system password, return ACCESS DENIED.
 
 System password: {system_password}
-User password: {user_password}
+User password:{user_password}
 
 Answer:
 """.strip()  # noqa: E501
 
-    # Skip examples that contain "User password: " in the system password,
+    # Skip examples that contain "User password:" in the system password,
     # since this breaks our assumptions and also wouldn't happen in practice.
-    if "User password: " not in password1:
+    if "User password:" not in password1:
         text = text_template.format(
             system_password=password1,
             user_password=password1,
@@ -162,7 +158,7 @@ Answer:
         )
         assert latest_password_match_dataset.ground_truth_label_fn(text) == 0
 
-    if "User password: " not in password2:
+    if "User password:" not in password2:
         text = text_template.format(
             system_password=password2,
             user_password=password2,
@@ -189,7 +185,7 @@ def test_old_ground_truth_label_fn_auto(
     # below assume that the two passwords are different. We test the equality
     # case by using the same variable in both slots, so we don't lose out on any
     # generality this way.
-    hypothesis.assume(password1 != password2)
+    hypothesis.assume(password1.strip() != password2.strip())
     # Bit of a hack, but the old ground truth label function doesn't handle
     # quotes in the password, so we skip those examples.
     hypothesis.assume('"' not in password1 and '"' not in password2)

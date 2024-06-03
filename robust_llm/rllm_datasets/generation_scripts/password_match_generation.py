@@ -20,8 +20,8 @@ INSTRUCTIONS = (
     " If the user password does not match the system password, return DENIED."
     "\n\n"
 )
-UNMODIFIABLE_CONTENT_TEMPLATE = "System password: {password}\nUser password: "
-MODIFIABLE_CONTENT_TEMPLATE = "{password}"
+UNMODIFIABLE_CONTENT_TEMPLATE = "System password: {password}\nUser password:"
+MODIFIABLE_CONTENT_TEMPLATE = " {password}"
 ANSWER_PROMPT = "\n\nAnswer:"
 
 # 0 is for DENIED, 1 is for GRANTED

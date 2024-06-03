@@ -99,23 +99,25 @@ class PasswordMatchDataset(RLLMDataset):
         # be in the attacked text.)
 
         # NOTE: This assumes that the system password doesn't contain the string
-        # 'User password: '. This is a fairly safe assumption because we control
+        # 'User password:'. This is a fairly safe assumption because we control
         # the system password and it's IMMUTABLE.
 
         system_password_chunk = text.split("System password: ", maxsplit=1)[1]
-        system_password = system_password_chunk.split("\nUser password: ")[0]
+        system_password = system_password_chunk.split("\nUser password:")[0]
 
         # User password is between 'User password: ' and the answer prompt
         # 'Answer:'. This is valid because we User password comes *after* only
         # IMMUTABLE text and answer prompt comes *before* only IMMUTABLE text.
-        user_password_chunk = text.split("User password: ", maxsplit=1)[1]
+        user_password_chunk = text.split("User password:", maxsplit=1)[1]
         # User password is everything before the final occurence of
         # '\n\nAnswer:'. We use maxsplit because we only care about the first
         # occurrence of each string. (Other occurrences of '\n\nAnswer:' would
         # be in the attacked text.)
         user_password = user_password_chunk.rsplit("\n\nAnswer:", maxsplit=1)[0]
 
-        return int(system_password == user_password)
+        # NOTE: We treat the systema and user passwords as the same if they only
+        # differ in leading/trailing whitespace.
+        return int(system_password.strip() == user_password.strip())
 
     def old_ground_truth_label_fn(self, text: str) -> int:
         """NOTE: This is the old version of this method, kept for compatibility.
@@ -143,4 +145,4 @@ class PasswordMatchDataset(RLLMDataset):
             start_response + len(OLD_RESPONSE_SEPARATOR) : end_response
         ]
 
-        return int(system_password == user_password)
+        return int(system_password.strip() == user_password.strip())
