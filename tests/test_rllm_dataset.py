@@ -7,7 +7,7 @@ from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 
 @pytest.fixture()
-def dataset() -> RLLMDataset:
+def clf_dataset() -> RLLMDataset:
     """Fixture for the PasswordMatch dataset.
 
     We use the 'pos' version of the dataset with all positive examples so we know
@@ -20,6 +20,27 @@ def dataset() -> RLLMDataset:
         n_train=5,
         n_val=5,
         config_name="pos",
+        inference_type="classification",
+    )
+    dataset = load_rllm_dataset(cfg, split="validation")
+    return dataset
+
+
+@pytest.fixture()
+def gen_dataset() -> RLLMDataset:
+    """Fixture for the PasswordMatch dataset.
+
+    We use the 'pos' version of the dataset with all positive examples so we know
+    in advance that the `clf_label`s should be 1 and we can easily flip them by
+    inserting any other word.
+    """
+
+    cfg = DatasetConfig(
+        dataset_type="AlignmentResearch/PasswordMatch",
+        n_train=5,
+        n_val=5,
+        config_name="pos",
+        inference_type="generation",
     )
     dataset = load_rllm_dataset(cfg, split="validation")
     return dataset
@@ -32,19 +53,19 @@ def tokenizer():
     return AutoTokenizer.from_pretrained("gpt2")
 
 
-def test_initialized_rllm_dataset(dataset: RLLMDataset):
-    assert dataset.num_classes == 2
+def test_initialized_rllm_dataset(clf_dataset: RLLMDataset):
+    assert clf_dataset.num_classes == 2
     # Length should match underlying dataset
-    assert len(dataset) == len(dataset.ds)
-    assert len(dataset) == 5
+    assert len(clf_dataset) == len(clf_dataset.ds)
+    assert len(clf_dataset) == 5
     # We didn't tokenize yet
-    assert not dataset.is_tokenized
+    assert not clf_dataset.is_tokenized
     # 'clf_label' should be a ClassLabel feature
-    assert isinstance(dataset.ds.features["clf_label"], ClassLabel)
+    assert isinstance(clf_dataset.ds.features["clf_label"], ClassLabel)
 
 
-def test_tokenization_and_subset(dataset: RLLMDataset, tokenizer):
-    tokenized_dataset = dataset.tokenize(tokenizer)
+def test_tokenization_and_subset(clf_dataset: RLLMDataset, tokenizer):
+    tokenized_dataset = clf_dataset.tokenize(tokenizer)
     # We should have tokenized the dataset
     assert tokenized_dataset.is_tokenized
 
@@ -55,14 +76,14 @@ def test_tokenization_and_subset(dataset: RLLMDataset, tokenizer):
     assert smaller_dataset.is_tokenized
 
 
-def test_update_example_based_on_text(dataset: RLLMDataset):
+def test_update_example_based_on_text(clf_dataset: RLLMDataset):
     """Test the update_example_based_on_text works as expected.
 
     We use the config_name='pos' PasswordMatch dataset as a test case, since
     all of its labels are 1 so it's easy to flip the label.
     """
     # Test the ground truth label function
-    example = dataset.ds[0]
+    example = clf_dataset.ds[0]
     assert example["clf_label"] == 1
     chunks = example["chunked_text"][:]  # Copy the list to avoid mutation
     chunks[2] = "some_other_word"
@@ -71,17 +92,19 @@ def test_update_example_based_on_text(dataset: RLLMDataset):
     example["attacked_clf_label"] = 1
 
     # Update on both original text and attacked_text
-    example = dataset.update_example_based_on_text(example, column_prefix="")
-    example = dataset.update_example_based_on_text(example, column_prefix="attacked_")
+    example = clf_dataset.update_example_based_on_text(example, column_prefix="")
+    example = clf_dataset.update_example_based_on_text(
+        example, column_prefix="attacked_"
+    )
     # The label should be left as 1 for the original text and updated to 0 for
     # the attacked text.
     assert example["clf_label"] == 1
     assert example["attacked_clf_label"] == 0
 
 
-def test_with_attacked_text(dataset: RLLMDataset, tokenizer):
+def test_with_attacked_text(clf_dataset: RLLMDataset, tokenizer):
     attacked_texts = []
-    for example in dataset.ds:
+    for example in clf_dataset.ds:
         assert isinstance(example, dict)
         assert example["clf_label"] == 1
         chunks = example["chunked_text"][:]
@@ -89,10 +112,10 @@ def test_with_attacked_text(dataset: RLLMDataset, tokenizer):
         attacked_text = "".join(chunks)
         attacked_texts.append(attacked_text)
 
-    attacked_dataset = dataset.with_attacked_text(attacked_texts)
-    assert len(attacked_dataset) == len(dataset)
+    attacked_dataset = clf_dataset.with_attacked_text(attacked_texts)
+    assert len(attacked_dataset) == len(clf_dataset)
     # Check that the attacked dataset has the original text in it
-    assert attacked_dataset.ds["text"] == dataset.ds["text"]
+    assert attacked_dataset.ds["text"] == clf_dataset.ds["text"]
     # Check that the labels have been flipped properly
     assert all(
         [ex["attacked_clf_label"] == 0 for ex in attacked_dataset.ds]  # type: ignore
@@ -107,7 +130,7 @@ def test_with_attacked_text(dataset: RLLMDataset, tokenizer):
         adv_dataset = attacked_dataset.as_adversarial_examples()
 
     adv_dataset = attacked_dataset.tokenize(tokenizer).as_adversarial_examples()
-    assert len(adv_dataset) == len(dataset)
+    assert len(adv_dataset) == len(clf_dataset)
     assert adv_dataset.ds["text"] == attacked_dataset.ds["attacked_text"]
     assert all([ex["clf_label"] == 0 for ex in adv_dataset.ds])  # type: ignore
     # Check that the 'attacked_text' and 'attacked_clf_label' columns are gone
@@ -117,11 +140,11 @@ def test_with_attacked_text(dataset: RLLMDataset, tokenizer):
     assert isinstance(adv_dataset.ds.features["clf_label"], ClassLabel)
 
 
-def test_for_hf_trainer(dataset: RLLMDataset, tokenizer):
+def test_for_hf_trainer_clf(clf_dataset: RLLMDataset, tokenizer):
     with pytest.raises(AssertionError):
-        dataset.for_hf_trainer()
+        clf_dataset.for_hf_trainer()
 
-    tokenized_dataset = dataset.tokenize(tokenizer)
+    tokenized_dataset = clf_dataset.tokenize(tokenizer)
     hf_ds = tokenized_dataset.for_hf_trainer()
     assert len(hf_ds) == len(tokenized_dataset)
     # Check that the features are correct
@@ -131,3 +154,26 @@ def test_for_hf_trainer(dataset: RLLMDataset, tokenizer):
     assert "clf_label" not in hf_ds.features
     assert "chunked_text" not in hf_ds.features
     assert isinstance(hf_ds.features["label"], ClassLabel)
+
+
+def test_for_hf_trainer_gen(gen_dataset: RLLMDataset, tokenizer):
+    with pytest.raises(AssertionError):
+        gen_dataset.for_hf_trainer()
+
+    tokenized_dataset = gen_dataset.tokenize(tokenizer)
+    hf_ds = tokenized_dataset.for_hf_trainer()
+    assert len(hf_ds) == len(tokenized_dataset)
+    # Check that the features are correct
+    assert "input_ids" in hf_ds.features
+    assert "attention_mask" in hf_ds.features
+    assert "label" not in hf_ds.features
+    assert "clf_label" not in hf_ds.features
+    assert "chunked_text" not in hf_ds.features
+
+    for hf_example, rllm_example in zip(hf_ds, tokenized_dataset.ds):
+        assert isinstance(hf_example, dict) and isinstance(rllm_example, dict)
+        full_text = rllm_example["text"] + rllm_example["gen_target"]
+        decoded = tokenizer.decode(hf_example["input_ids"], skip_special_tokens=True)
+        assert decoded == full_text
+        # Quick test that this equality is meaningful.
+        assert decoded != 2 * full_text

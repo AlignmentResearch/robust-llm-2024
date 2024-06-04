@@ -26,6 +26,7 @@ from robust_llm.config.configs import (
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import LoggingCounter, log_dataset_to_wandb
 from robust_llm.models import WrappedModel
+from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.scoring_callbacks import BinaryCallback, CallbackInput, CallbackRegistry
 from robust_llm.trainer import (
@@ -107,13 +108,28 @@ class Training:
             use_cpu=self.environment_config.device == "cpu",
         )
 
+        inference_type = self.train_rllm_dataset.inference_type
+        if inference_type == InferenceType.CLASSIFICATION:
+            data_collator = transformers.DataCollatorWithPadding(self.victim.tokenizer)
+        elif inference_type == InferenceType.GENERATION:
+            data_collator = transformers.DataCollatorForLanguageModeling(
+                tokenizer=self.victim.tokenizer, mlm=False, return_tensors="pt"
+            )
+        else:
+            raise ValueError(f"Unsupported inference type: {inference_type}")
+
+        compute_metrics = (
+            self.compute_metrics
+            if inference_type == InferenceType.CLASSIFICATION
+            else None
+        )
         self.trainer = TrainerWithBatchSizeStoring(
             model=self.victim.model,
             args=hf_training_args,
             train_dataset=self.hf_train,
             eval_dataset=self.hf_eval,
-            data_collator=transformers.DataCollatorWithPadding(self.victim.tokenizer),
-            compute_metrics=self.compute_metrics,
+            data_collator=data_collator,
+            compute_metrics=compute_metrics,
         )
         # Since we didn't pass an accelerator when constructing the WrappedModel,
         # we need to add it here, but note that we do NOT use .add_accelerator

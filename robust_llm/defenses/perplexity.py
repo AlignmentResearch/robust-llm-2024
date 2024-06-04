@@ -12,6 +12,7 @@ from robust_llm.defenses.defense import FilteringDefendedModel
 from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import InferenceType, build_dataloader
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
+from robust_llm.utils import is_correctly_padded
 
 
 def _get_logits_in_windows(
@@ -28,15 +29,6 @@ def _get_logits_in_windows(
         raise ValueError("`side` must be 'left' or 'right'")
 
     return torch.reshape(masked_next_token_logits, (num_windows, window_size))
-
-
-def _is_ones_then_zeros(mask):
-    """Check that the mask is of the form [True, True, ..., False, False, ...]."""
-    return (
-        set(mask.unique().tolist()) <= {False, True}
-        and torch.all(mask[: mask.sum().item()])
-        and torch.all(~mask[mask.sum().item() :])
-    )
 
 
 def _get_perplexity_from_start_side(
@@ -79,7 +71,7 @@ def _get_single_datapoint_perplexity(
 ) -> torch.Tensor:
     # Now that we are only dealing with one datapoint, we
     # can cut off the masked tokens at the end
-    assert _is_ones_then_zeros(mask)
+    assert is_correctly_padded(mask, "right")
     masked_next_token_logits = masked_next_token_logits[: int(mask.sum().item())]
 
     # If masked_next_token_logits is empty then there was at most one non-masked

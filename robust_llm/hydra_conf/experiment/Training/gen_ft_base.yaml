@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+- /training: DEFAULT
+- /model: pythia
+
+dataset:
+  n_train: 20_000
+  n_val: 2_000
+  inference_type: "generation"
+  revision: "1.1.2"
+
+model:
+  train_minibatch_size: 16
+
+training:
+  optimizer: "adafactor"
+  gradient_checkpointing: true
+  num_train_epochs: 1
+  learning_rate: 1e-5
+  model_save_path_prefix_or_hf: "hf"
+
+experiment_type: "training"

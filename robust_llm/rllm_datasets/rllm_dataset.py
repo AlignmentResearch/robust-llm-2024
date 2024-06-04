@@ -238,10 +238,6 @@ class RLLMDataset(ABC):
 
         This is used to load the dataset without post-processing the columns.
         """
-        inference_type = InferenceType(cfg.inference_type)
-        if inference_type == InferenceType.GENERATION:
-            raise NotImplementedError("Generation datasets not yet supported")
-
         if split == "train":
             if cfg.n_train == 0:
                 raise ValueError(
@@ -414,12 +410,63 @@ class RLLMDataset(ABC):
             and 'label'.
         """
         assert self.is_tokenized
-        ds_for_trainer = self.ds.rename_column("clf_label", "label")
-        trainer_cols = ["text", "input_ids", "attention_mask", "label"]
-        unused_cols = [c for c in ds_for_trainer.column_names if c not in trainer_cols]
-        ds_for_trainer = ds_for_trainer.remove_columns(unused_cols)
+        assert self.tokenizer is not None
+        if self.inference_type == InferenceType.CLASSIFICATION:
+            ds_for_trainer = self.ds.rename_column("clf_label", "label")
+            trainer_cols = ["text", "input_ids", "attention_mask", "label"]
+            unused_cols = [
+                c for c in ds_for_trainer.column_names if c not in trainer_cols
+            ]
+            ds_for_trainer = ds_for_trainer.remove_columns(unused_cols)
+            return ds_for_trainer
 
-        return ds_for_trainer
+        elif self.inference_type == InferenceType.GENERATION:
+            # For generation, we tokenize the gen_target and stick it on the end
+            # of the input_ids/attention_mask columns.
+            ds_for_trainer = self.ds.remove_columns(["clf_label"])
+            tokenized_gen_target = self.tokenizer(self.ds["gen_target"])
+            all_target_ids = tokenized_gen_target["input_ids"]
+            target_masks = tokenized_gen_target["attention_mask"]
+            assert isinstance(all_target_ids, list)
+            assert isinstance(target_masks, list)
+
+            input_ids = [
+                prompt_ids + target_ids
+                for prompt_ids, target_ids in zip(self.ds["input_ids"], all_target_ids)
+            ]
+
+            attention_mask = [
+                prompt_mask + target_mask
+                for prompt_mask, target_mask in zip(
+                    self.ds["attention_mask"],
+                    target_masks,
+                )
+            ]
+
+            # Remove and readd columns to update them
+            ds_for_trainer = ds_for_trainer.remove_columns(
+                ["input_ids", "attention_mask"]
+            )
+            ds_for_trainer = ds_for_trainer.add_column(
+                "input_ids",
+                input_ids,
+                new_fingerprint=None,  # type: ignore  # (bug in datasets)
+            )
+            ds_for_trainer = ds_for_trainer.add_column(
+                "attention_mask",
+                attention_mask,
+                new_fingerprint=None,  # type: ignore  # (bug in datasets)
+            )
+
+            trainer_cols = ["input_ids", "attention_mask"]
+            unused_cols = [
+                c for c in ds_for_trainer.column_names if c not in trainer_cols
+            ]
+            ds_for_trainer = ds_for_trainer.remove_columns(unused_cols)
+            return ds_for_trainer
+
+        else:
+            raise ValueError(f"Unsupported inference type: {self.inference_type}")
 
     def as_adversarial_examples(self: D) -> D:
         """Returns a version of an attacked dataset that is formatted as

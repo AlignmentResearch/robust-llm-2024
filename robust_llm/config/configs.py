@@ -177,6 +177,7 @@ class ExperimentConfig:
 
 
 cs = ConfigStore.instance()
+cs.store(name="DEFAULT", group="environment", node=EnvironmentConfig)
 cs.store(name="DEFAULT", group="training", node=TrainingConfig)
 cs.store(name="DEFAULT", group="evaluation", node=EvaluationConfig)
 cs.store(name="DEFAULT", group="training/adversarial", node=AdversarialTrainingConfig)

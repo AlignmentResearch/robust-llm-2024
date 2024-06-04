@@ -23,6 +23,8 @@ from transformers import (
 )
 from trl import AutoModelForCausalLMWithValueHead
 
+from robust_llm.utils import is_correctly_padded
+
 if TYPE_CHECKING:
     from robust_llm.models import WrappedModel
 
@@ -78,13 +80,14 @@ def load_hf_model(
                 revision=revision,
                 output_loading_info=True,
                 num_labels=num_classes,
-                use_cache=False,  # Otherwise returns last key/values attentions.
+                use_cache=False,  # By default we don't want to output cache values.
             )
         case InferenceType.GENERATION:
             model, loading_info = AutoModelForCausalLM.from_pretrained(
                 name_or_path,
                 revision=revision,
                 output_loading_info=True,
+                use_cache=False,  # By default we don't want to output cache values.
             )
         case InferenceType.TRL:
             # We can't use output_loading_info=True because it's not supported
@@ -137,6 +140,50 @@ def classification_successes_from_logits(
     assert logits.shape[0] == len(goal)
     predicted_classes = torch.argmax(logits, dim=1)
     return (predicted_classes == torch.tensor(goal, device=logits.device)).tolist()
+
+
+def generation_successes_from_logits(
+    logits: torch.Tensor,
+    attention_mask: torch.Tensor,
+    goal: Sequence[Sequence[int]],
+) -> list[bool]:
+    """Compute the generation successes from the logits.
+
+    NOTE: The sequence length of the attention mask can be longer than the
+    sequence length of the logits. This happens when we are using caching, because
+    logits are not returned for the cached tokens.
+
+    Args:
+        logits: Shape (batch, l_seq_len, vocab_size). The logits from the model.
+        attention_mask: Shape (batch, a_seq_len). The attention mask.
+        goal: List of length 'batch' of lists of token ids. The tokenized goals.
+
+    Returns:
+        List of length 'batch'. Whether the goal string is the most likely string.
+    """
+    assert logits.ndim == 3, "Logits should be (batch, seq_len, vocab_size)."
+    assert attention_mask.ndim == 2, "Attention mask should be (batch, seq_len)."
+    assert len(goal) == attention_mask.shape[0] == logits.shape[0]
+
+    # TODO(ian): Vectorize if possible.
+    successes = []
+    for example_logits, example_goal, example_mask in zip(logits, goal, attention_mask):
+        # Make sure that all padding tokens are at the end (i.e. we're doing
+        # right padding).
+        assert is_correctly_padded(example_mask, "right")
+        # Drop padding tokens from the logits, now that we know they're all
+        # at the end. We subtract an additional one to account for the shift, where
+        # the ith token is predicted by the i-1th logit.
+        n_padding_tokens = sum(example_mask == 0)
+        non_padding_logits = example_logits[: len(example_logits) - n_padding_tokens]
+        shifted_logits = non_padding_logits[:-1]
+
+        # Take logits from the end of the sequence, since the goal is at the end.
+        goal_len = len(example_goal)
+        predicted_tokens = torch.argmax(shifted_logits[-goal_len:], dim=1)
+        assert len(predicted_tokens) == goal_len
+        successes.append(predicted_tokens.tolist() == example_goal)
+    return successes
 
 
 def _get_embedding_weights(
@@ -239,7 +286,8 @@ def combine_output_dicts(dicts: Sequence[Tdict]) -> Tdict:
         if any(nones):
             assert all(nones)
             combined[key] = None
-        combined[key] = torch.cat([d[key] for d in dicts])
+        else:
+            combined[key] = torch.cat([d[key] for d in dicts])
     return combined
 
 

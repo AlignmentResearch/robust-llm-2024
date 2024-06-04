@@ -1,0 +1,4 @@
+# @package _global_
+defaults:
+- Training/gen_ft_base.yaml
+- /dataset: imdb

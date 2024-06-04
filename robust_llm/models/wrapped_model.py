@@ -196,6 +196,91 @@ class WrappedModel(ABC):
                 )
         return out
 
+    def generation_output_from_tokens(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        use_no_grad: bool = True,
+        minibatch_size: int | None = None,
+    ) -> ModelOutput:
+        """Returns the generation logits from the token ids.
+
+        Args:
+            input_ids: The token ids to calculate the logits on.
+            attention_mask: The attention mask for the input_ids. Only needed
+                if the input_ids are actually padded.
+            use_no_grad: Whether to use torch.no_grad(). Defaults to True
+                because usually we do not need gradient information, but it is
+                needed for gradient-based attacks like GCG. Additionally, this will
+                fail loudly if we try to backpropagate through it, whereas False
+                will just be silently inefficient.
+            minibatch_size: The minibatch size to use. If None, we use
+                self.eval_minibatch_size.
+
+        Returns:
+            A SequenceClassifierOutput object, which has a 'logits' attribute.
+        """
+
+        minibatch_size = minibatch_size or self.eval_minibatch_size
+
+        dataloader = build_dataloader(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            minibatch_size=minibatch_size,
+        )
+        assert self.accelerator is not None
+        dataloader = self.accelerator.prepare(dataloader)
+
+        # TODO (ian): Maybe I need an accelerator.gather_for_metrics somewhere here?
+        outs: list[ModelOutput] = []
+        with maybe_no_grad(use_no_grad):
+            for minibatch in dataloader:
+                minibatch_out = self(
+                    input_ids=minibatch["input_ids"],
+                    attention_mask=minibatch["attention_mask"],
+                )
+                minibatch_out = dict_to_device(minibatch_out, "cpu")
+                outs.append(minibatch_out)
+        out = combine_output_dicts(outs)
+        return out
+
+    def generation_output_from_embeddings(
+        self,
+        input_ids: torch.Tensor,
+        embeddings: torch.Tensor,
+        use_no_grad: bool = True,
+    ) -> ModelOutput:
+        """Returns the classification logits from the embeddings.
+
+        TODO (ian): Make this run on batch size >1.
+        Args:
+            input_ids: The token ids to calculate the logits on.
+                These are needed to check for cache hits.
+            embeddings: The embeddings to calculate the logits on.
+            use_no_grad: Whether to use torch.no_grad(). Defaults to True
+                because usually we do not need gradient information, but it is
+                needed for gradient-based attacks like GCG. Additionally, this will
+                fail loudly if we try to backpropagate through it, whereas False
+                will just be silently inefficient.
+
+        Returns:
+            A SequenceClassifierOutput object, which has a 'logits' attribute.
+        """
+
+        raise NotImplementedError("TODO: implement embeddings for gen")
+        if embeddings.shape[0] != 1:
+            raise ValueError("This method currently only works for batch size 1.")
+        assert embeddings.shape[0] == input_ids.shape[0]
+        assert embeddings.shape[1] == input_ids.shape[1]
+
+        with maybe_no_grad(use_no_grad):
+            with SuppressPadTokenWarning(self.model):
+                out = self(
+                    input_ids=input_ids,
+                    inputs_embeds=embeddings,
+                )
+        return dict_to_device(out, "cpu")
+
     def __call__(self, **inputs):
         return self.forward(**inputs)
 

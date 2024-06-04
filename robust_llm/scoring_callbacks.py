@@ -8,6 +8,7 @@ from robust_llm.models.model_utils import (
     InferenceType,
     classification_losses_from_logits,
     classification_successes_from_logits,
+    generation_successes_from_logits,
 )
 from robust_llm.models.wrapped_model import WrappedModel
 
@@ -161,25 +162,97 @@ def successes_from_text_callback(
     """
 
     input_data = _validate_text_input(callback_input.input_data)
-    tokenized = victim.tokenizer(input_data, return_tensors="pt", padding=True)
-    input_ids = tokenized.input_ids
-    attention_mask = tokenized.attention_mask
+
+    label_data: LabelData
     if victim.inference_type == InferenceType.CLASSIFICATION:
         if callback_input.clf_label_data is None:
             raise ValueError("Label data required for classification.")
         label_data = _validate_classification_labels(callback_input.clf_label_data)
+        successes = _classification_success_from_text(victim, input_data, label_data)
 
-        out = victim.classification_output_from_tokens(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-        )
-        logits = out["logits"]
-        successes = classification_successes_from_logits(logits, label_data)
     elif victim.inference_type == InferenceType.GENERATION:
-        raise NotImplementedError("Generation not supported yet.")
+        if callback_input.gen_target_data is None:
+            raise ValueError("Target data required for generation.")
+        label_data = _validate_text_input(callback_input.gen_target_data)
+        successes = _generation_successes_from_text(victim, input_data, label_data)
+
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
+
     return successes
+
+
+def _classification_success_from_text(
+    victim: WrappedModel,
+    input_data: list[str],
+    clf_label_data: list[int],
+) -> list[bool]:
+    tokenized = victim.tokenizer(input_data, return_tensors="pt", padding=True)
+    input_ids = tokenized.input_ids
+    attention_mask = tokenized.attention_mask
+    out = victim.classification_output_from_tokens(
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+    )
+    logits = out["logits"]
+    successes = classification_successes_from_logits(logits, clf_label_data)
+    return successes
+
+
+def _generation_successes_from_text(
+    victim: WrappedModel,
+    input_data: list[str],
+    gen_target_data: list[str],
+) -> list[bool]:
+    # We don't pad or return torch tensors here yet because we need to append
+    # the target tokens and keep track of their indices before padding.
+    prompt_input_ids = victim.tokenizer(input_data)["input_ids"]
+    target_input_ids = victim.tokenizer(gen_target_data)["input_ids"]
+    assert isinstance(prompt_input_ids, list)
+    assert isinstance(target_input_ids, list)
+
+    full_input_ids = get_full_encoded_prompts(prompt_input_ids, target_input_ids)
+
+    # To pad the inputs we have to format as a dict. It's fine to be missing the
+    # attention mask since it's all ones anyway and we'll get a new one from
+    # pad.
+    tokenized = victim.tokenizer.pad(
+        dict(input_ids=full_input_ids), return_tensors="pt"
+    )
+
+    input_ids = tokenized.input_ids
+    attention_mask = tokenized.attention_mask
+    out = victim.generation_output_from_tokens(
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+    )
+    logits = out["logits"]
+    successes = generation_successes_from_logits(
+        logits,
+        attention_mask,
+        target_input_ids,
+    )
+    return successes
+
+
+def get_full_encoded_prompts(
+    prompt_ids: list[list[int]],
+    target_ids: list[list[int]],
+) -> list[list[int]]:
+    """Get the full tokenized prompts by concatenating the prompt and target tokens.
+
+    We can neglect the attention mask because the inputs should not have been
+    padded yet. Padding will be done afterwards.
+
+    Args:
+        prompt_ids: The tokenized prompt input.
+        target_ids: The tokenized target input.
+
+    Returns:
+        A list of the full input tokens, combining the prompt and target tokens.
+    """
+
+    return [prompt + target for prompt, target in zip(prompt_ids, target_ids)]
 
 
 @CallbackRegistry.register_callback(name="successes_from_tokens", return_type="binary")

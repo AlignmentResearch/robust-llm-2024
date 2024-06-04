@@ -253,3 +253,44 @@ def auto_repr(cls):
 
     cls.__repr__ = __repr__
     return cls
+
+
+def is_correctly_padded(mask: torch.Tensor, padding_side: str) -> bool:
+    """Check that the mask is for the correct padding side.
+
+    For example, for right padding, the mask should be of the form:
+    [1, 1, ..., 1, 0, 0, ..., 0].
+    For left padding, the mask should be of the form:
+    [0, 0, ..., 0, 1, 1, ..., 1].
+    Args:
+        mask (torch.Tensor): Must be 1D. Can contain True/False or 1/0.
+        padding_side (str): Either "right" or "left".
+
+    Returns:
+        bool: Whether the mask is of the correct form.
+    """
+    assert mask.dim() == 1, "The mask must be 1D."
+    assert len(mask) > 0, "The mask should not be empty."
+    mask_sum = mask.sum().item()
+    assert isinstance(mask_sum, int)
+
+    is_boolean = set(mask.unique().tolist()) <= {0, 1}
+    if not is_boolean:
+        raise ValueError("The mask should contain only 0s and 1s.")
+
+    if padding_side == "right":
+        starts_ones = torch.all(mask[:mask_sum]).item()
+        ends_zeros = torch.all(~mask[mask_sum:]).item()
+        flag = bool(starts_ones and ends_zeros)
+
+    elif padding_side == "left":
+        # For left padding, we look from the end of the sequence.
+        switch_point = len(mask) - mask_sum
+
+        starts_zeros = torch.all(~mask[:switch_point]).item()
+        ends_ones = torch.all(mask[switch_point:]).item()
+        flag = bool(starts_zeros and ends_ones)
+    else:
+        raise ValueError(f"padding_side must be 'right' or 'left', not {padding_side}.")
+
+    return flag
