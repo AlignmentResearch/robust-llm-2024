@@ -190,13 +190,36 @@ def _classification_success_from_text(
     tokenized = victim.tokenizer(input_data, return_tensors="pt", padding=True)
     input_ids = tokenized.input_ids
     attention_mask = tokenized.attention_mask
-    out = victim.classification_output_from_tokens(
+    return _classification_success_from_tokens(
+        victim, input_ids, attention_mask, clf_label_data
+    )
+
+
+def _classification_success_from_tokens(
+    victim: WrappedModel,
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    clf_label_data: list[int],
+) -> list[bool]:
+
+    all_successes: list[bool] = []
+    output_generator = victim.classification_output_from_tokens(
         input_ids=input_ids,
         attention_mask=attention_mask,
     )
-    logits = out["logits"]
-    successes = classification_successes_from_logits(logits, clf_label_data)
-    return successes
+
+    batch_start = 0
+    for out in output_generator:
+        logits = out["logits"]
+        batch_length = logits.shape[0]
+        batch_label_data = clf_label_data[batch_start : batch_start + batch_length]
+        successes = classification_successes_from_logits(
+            logits,
+            batch_label_data,
+        )
+        all_successes.extend(successes)
+        batch_start += batch_length
+    return all_successes
 
 
 def _generation_successes_from_text(
@@ -204,9 +227,29 @@ def _generation_successes_from_text(
     input_data: list[str],
     gen_target_data: list[str],
 ) -> list[bool]:
+    """Compute the successes from the text input.
+
+    TODO(ian): Maybe make this into a generator.
+    """
     # We don't pad or return torch tensors here yet because we need to append
     # the target tokens and keep track of their indices before padding.
     prompt_input_ids = victim.tokenizer(input_data)["input_ids"]
+    prompt_input_ids = cast(list[list[int]], prompt_input_ids)
+    return _generation_successes_from_tokens(
+        victim,
+        prompt_input_ids,
+        None,
+        gen_target_data,
+    )
+
+
+def _generation_successes_from_tokens(
+    victim: WrappedModel,
+    prompt_input_ids: list[list[int]],
+    prompt_attention_mask: torch.Tensor | None,
+    gen_target_data: list[str],
+) -> list[bool]:
+
     target_input_ids = victim.tokenizer(gen_target_data)["input_ids"]
     assert isinstance(prompt_input_ids, list)
     assert isinstance(target_input_ids, list)
@@ -222,17 +265,27 @@ def _generation_successes_from_text(
 
     input_ids = tokenized.input_ids
     attention_mask = tokenized.attention_mask
-    out = victim.generation_output_from_tokens(
+
+    all_successes: list[bool] = []
+    output_generator = victim.generation_output_from_tokens(
         input_ids=input_ids,
         attention_mask=attention_mask,
     )
-    logits = out["logits"]
-    successes = generation_successes_from_logits(
-        logits,
-        attention_mask,
-        target_input_ids,
-    )
-    return successes
+
+    batch_start = 0
+    for out in output_generator:
+        logits = out["logits"]
+        batch_length = logits.shape[0]
+        batch_target_ids = target_input_ids[batch_start : batch_start + batch_length]
+        batch_attention_mask = attention_mask[batch_start : batch_start + batch_length]
+        successes = generation_successes_from_logits(
+            logits,
+            batch_attention_mask,
+            batch_target_ids,
+        )
+        all_successes.extend(successes)
+        batch_start += batch_length
+    return all_successes
 
 
 def get_full_encoded_prompts(
@@ -270,18 +323,28 @@ def successes_from_tokens_callback(
         whether the model got the correct answer on that sequence.
     """
     input_data = _validate_tokens_input(callback_input.input_data)
+    label_data: LabelData
     if victim.inference_type == InferenceType.CLASSIFICATION:
         assert callback_input.clf_label_data is not None
         label_data = _validate_classification_labels(callback_input.clf_label_data)
-
-        out = victim.classification_output_from_tokens(
-            input_ids=input_data,
-            attention_mask=torch.ones_like(input_data),
+        # We don't have attention masks for tokens, so we just use ones.
+        # TODO(ian): Work out if we should pass an attention mask, or can assume
+        # they're all unpadded.
+        assert not torch.any(input_data == victim.tokenizer.pad_token_id)
+        attention_mask = torch.ones_like(input_data)
+        successes = _classification_success_from_tokens(
+            victim, input_data, attention_mask, label_data
         )
-        logits = out["logits"]
-        successes = classification_successes_from_logits(logits, label_data)
     elif victim.inference_type == InferenceType.GENERATION:
-        raise NotImplementedError("Generation not supported yet.")
+        assert callback_input.gen_target_data is not None
+        label_data = _validate_text_input(callback_input.gen_target_data)
+        # Currently the _generation_successes_from_tokens function expects the
+        # tokens to be a list of lists of ints, so we convert it here.
+        # TODO(ian): Standardize this.
+        list_input_data = input_data.tolist()
+        successes = _generation_successes_from_tokens(
+            victim, list_input_data, None, label_data
+        )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
     return successes
@@ -339,12 +402,24 @@ def losses_from_text_callback(
             raise ValueError("Label data required for classification.")
         label_data = _validate_classification_labels(callback_input.clf_label_data)
 
-        out = victim.classification_output_from_tokens(
+        all_losses = []
+        output_generator = victim.classification_output_from_tokens(
             input_ids=input_ids,
             attention_mask=attention_mask,
         )
-        logits = out["logits"].to(device="cpu")
-        losses = classification_losses_from_logits(logits, label_data)
+
+        batch_start = 0
+        for out in output_generator:
+            logits = out["logits"]
+            batch_length = logits.shape[0]
+            batch_label_data = label_data[batch_start : batch_start + batch_length]
+            minibatch_losses = classification_losses_from_logits(
+                logits, batch_label_data
+            )
+            all_losses.append(minibatch_losses)
+            batch_start += batch_length
+        losses = torch.cat(all_losses)
+
     elif victim.inference_type == InferenceType.GENERATION:
         raise NotImplementedError("Generation not supported yet.")
     else:

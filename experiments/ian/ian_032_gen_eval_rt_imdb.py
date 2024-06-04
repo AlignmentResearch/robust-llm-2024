@@ -36,7 +36,7 @@ if __name__ == "__main__":
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         N_MAX_PARALLEL,
-        memory="100G",
+        memory="50G",
         cpu=12,
         priority="normal-batch",
     )

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from typing import Optional
 
 import torch
@@ -15,7 +16,6 @@ from robust_llm.models.model_utils import (
     SuppressPadTokenWarning,
     _get_embedding_weights,
     build_dataloader,
-    combine_output_dicts,
     dict_to_device,
     load_hf_model,
     maybe_no_grad,
@@ -118,7 +118,7 @@ class WrappedModel(ABC):
         attention_mask: torch.Tensor | None = None,
         use_no_grad: bool = True,
         minibatch_size: int | None = None,
-    ) -> ModelOutput:
+    ) -> Iterator[ModelOutput]:
         """Returns the classification logits from the token ids.
 
         Args:
@@ -148,7 +148,6 @@ class WrappedModel(ABC):
         dataloader = self.accelerator.prepare(dataloader)
 
         # TODO (ian): Maybe I need an accelerator.gather_for_metrics somewhere here?
-        outs: list[ModelOutput] = []
         with maybe_no_grad(use_no_grad):
             for minibatch in dataloader:
                 minibatch_out = self(
@@ -156,9 +155,7 @@ class WrappedModel(ABC):
                     attention_mask=minibatch["attention_mask"],
                 )
                 minibatch_out = dict_to_device(minibatch_out, "cpu")
-                outs.append(minibatch_out)
-        out = combine_output_dicts(outs)
-        return out
+                yield minibatch_out
 
     def classification_output_from_embeddings(
         self,
@@ -202,7 +199,7 @@ class WrappedModel(ABC):
         attention_mask: torch.Tensor | None = None,
         use_no_grad: bool = True,
         minibatch_size: int | None = None,
-    ) -> ModelOutput:
+    ) -> Iterator[ModelOutput]:
         """Returns the generation logits from the token ids.
 
         Args:
@@ -232,7 +229,6 @@ class WrappedModel(ABC):
         dataloader = self.accelerator.prepare(dataloader)
 
         # TODO (ian): Maybe I need an accelerator.gather_for_metrics somewhere here?
-        outs: list[ModelOutput] = []
         with maybe_no_grad(use_no_grad):
             for minibatch in dataloader:
                 minibatch_out = self(
@@ -240,9 +236,7 @@ class WrappedModel(ABC):
                     attention_mask=minibatch["attention_mask"],
                 )
                 minibatch_out = dict_to_device(minibatch_out, "cpu")
-                outs.append(minibatch_out)
-        out = combine_output_dicts(outs)
-        return out
+                yield minibatch_out
 
     def generation_output_from_embeddings(
         self,

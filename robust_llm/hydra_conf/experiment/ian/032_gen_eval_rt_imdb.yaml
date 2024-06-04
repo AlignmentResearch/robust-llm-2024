@@ -13,7 +13,7 @@ dataset:
   inference_type: "generation"
 
 model:
-  eval_minibatch_size: 1
+  eval_minibatch_size: 32
 
 experiment_name: ???
 run_name: ???
