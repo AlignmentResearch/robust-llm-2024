@@ -3,16 +3,16 @@ import os
 from robust_llm.batch_job_utils import run_multiple
 
 EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
-HYDRA_CONFIG = "ian/030_gen_eval_rt_pm"
+HYDRA_CONFIG = "ian/034_gen_eval_gcg_imdb"
 
 MODELS_AND_N_MAX_PARALLEL = [
-    ("AlignmentResearch/robust_llm_pythia-14m-pm-gen-ian-nd", 2),
-    ("AlignmentResearch/robust_llm_pythia-31m-pm-gen-ian-nd", 2),
-    ("AlignmentResearch/robust_llm_pythia-70m-pm-gen-ian-nd", 1),
-    ("AlignmentResearch/robust_llm_pythia-160m-pm-gen-ian-nd", 1),
-    ("AlignmentResearch/robust_llm_pythia-410m-pm-gen-ian-nd", 1),
-    ("AlignmentResearch/robust_llm_pythia-1b-pm-gen-ian-nd", 1),
-    ("AlignmentResearch/robust_llm_pythia-2.8b-pm-gen-ian-nd", 1),
+    ("AlignmentResearch/robust_llm_pythia-14m-imdb-gen-ian-nd", 2),
+    ("AlignmentResearch/robust_llm_pythia-31m-imdb-gen-ian-nd", 2),
+    ("AlignmentResearch/robust_llm_pythia-70m-imdb-gen-ian-nd", 2),
+    ("AlignmentResearch/robust_llm_pythia-160m-imdb-gen-ian-nd", 2),
+    ("AlignmentResearch/robust_llm_pythia-410m-imdb-gen-ian-nd", 1),
+    ("AlignmentResearch/robust_llm_pythia-1b-imdb-gen-ian-nd", 1),
+    ("AlignmentResearch/robust_llm_pythia-2.8b-imdb-gen-ian-nd", 1),
 ]
 
 
@@ -36,6 +36,6 @@ if __name__ == "__main__":
         OVERRIDE_ARGS_LIST,
         N_MAX_PARALLEL,
         memory="50G",
-        cpu=12,
-        priority="high-batch",
+        cpu=6,
+        priority="normal-batch",
     )

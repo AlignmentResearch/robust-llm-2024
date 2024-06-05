@@ -1,21 +1,29 @@
-# %%
+import hypothesis.strategies as st
+import pytest
 import torch
+from hypothesis import given
 
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.models.caching_wrapped_model import CachingWrappedModel
+from robust_llm.models.caching_wrapped_model import (
+    CachingWrappedModel,
+    get_common_prefix_for_batch,
+)
 from robust_llm.models.wrapped_model import WrappedModel
 
-# %%
 
-
-def test_unbatched_kv_caching():
+@pytest.fixture()
+def models() -> tuple[WrappedModel, CachingWrappedModel]:
     model_config = ModelConfig(
         name_or_path="gpt2",
         family="gpt2",
         inference_type="classification",
     )
     wrapped_model = WrappedModel.from_config(model_config, accelerator=None)
-    caching_model = CachingWrappedModel(wrapped_model)
+    return wrapped_model, CachingWrappedModel(wrapped_model)
+
+
+def test_unbatched_kv_caching(models: tuple[WrappedModel, CachingWrappedModel]):
+    wrapped_model, caching_model = models
 
     # Set up cache.
     cache_sequence = "Hello, my dog is cute."
@@ -43,14 +51,8 @@ def test_unbatched_kv_caching():
     assert torch.allclose(uncached_diverging_logits, cached_diverging_logits)
 
 
-def test_batched_kv_caching():
-    model_config = ModelConfig(
-        name_or_path="gpt2",
-        family="gpt2",
-        inference_type="classification",
-    )
-    wrapped_model = WrappedModel.from_config(model_config, accelerator=None)
-    caching_model = CachingWrappedModel(wrapped_model)
+def test_batched_kv_caching(models: tuple[WrappedModel, CachingWrappedModel]):
+    wrapped_model, caching_model = models
 
     # Set up cache.
     cache_sequence = "Hello, my dog is cute."
@@ -73,14 +75,8 @@ def test_batched_kv_caching():
     assert torch.allclose(uncached_batched_logits, cached_batched_logits)
 
 
-def test_wrapping_attributes():
-    model_config = ModelConfig(
-        name_or_path="gpt2",
-        family="gpt2",
-        inference_type="classification",
-    )
-    wrapped_model = WrappedModel.from_config(model_config, accelerator=None)
-    caching_model = CachingWrappedModel(wrapped_model)
+def test_wrapping_attributes(models: tuple[WrappedModel, CachingWrappedModel]):
+    wrapped_model, caching_model = models
 
     # Testing access passes through to underlying model
     assert caching_model.device == wrapped_model.device
@@ -89,3 +85,19 @@ def test_wrapping_attributes():
     caching_model.new_attribute = "new_attribute"
     assert hasattr(wrapped_model, "new_attribute")
     assert wrapped_model.new_attribute == "new_attribute"  # type: ignore[attr-defined]
+
+
+@given(st.lists(st.integers(min_value=0, max_value=100000), max_size=100))
+def test_get_common_prefix_for_batch(common_prefix: list[int]):
+    diverging_endings = torch.arange(100).reshape(10, 10)
+
+    # Make a batch of sequences that are just the prefix.
+    common_prefix_tensor = torch.tensor(common_prefix)
+    prefix_only = torch.stack([common_prefix_tensor for _ in range(10)])
+    out = get_common_prefix_for_batch(prefix_only)
+    assert torch.allclose(out, common_prefix_tensor.unsqueeze(0))
+
+    with_diverging_endings = torch.cat([prefix_only, diverging_endings], dim=1)
+    out = get_common_prefix_for_batch(with_diverging_endings)
+    assert torch.allclose(out, common_prefix_tensor)
+    assert not out.shape[0] == with_diverging_endings.shape[1]

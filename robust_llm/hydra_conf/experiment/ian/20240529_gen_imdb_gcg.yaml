@@ -1,0 +1,24 @@
+# @package _global_
+defaults:
+- /dataset: imdb
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: GCG  # len 10 is the default now.
+- /model: pythia
+- /environment: mac-testing
+- _self_
+
+dataset:
+  n_val: 10
+  revision: "main"
+  inference_type: "generation"
+
+model:
+  name_or_path: "AlignmentResearch/robust_llm_pythia-14m-imdb-gen-ian-nd"
+  strict_load: true
+
+environment:
+  device: "cpu"
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

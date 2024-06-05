@@ -9,6 +9,7 @@ from robust_llm.models.model_utils import (
     InferenceType,
     classification_losses_from_logits,
     classification_successes_from_logits,
+    generation_losses_from_logits,
     generation_successes_from_logits,
 )
 from robust_llm.models.wrapped_model import WrappedModel
@@ -132,6 +133,9 @@ def _validate_embeddings_input(input_data: InputData) -> dict[str, torch.Tensor]
     # Reuse the tokens input validation for the input_ids.
     input_ids = _validate_tokens_input(input_ids)
 
+    # TODO(GH#440): Support batch sizes greater than 1.
+    if embeddings.shape[0] != 1:
+        raise NotImplementedError("Batch sizes greater than 1 not supported yet.")
     if not torch.is_floating_point(embeddings):
         raise ValueError("Expected elements of input_data to be float.")
     if embeddings.ndim != 3:
@@ -289,6 +293,125 @@ def _generation_successes_from_tokens(
     return all_successes
 
 
+def _generation_losses_from_text(
+    victim: WrappedModel,
+    input_data: list[str],
+    gen_target_data: list[str],
+) -> torch.Tensor:
+    """Compute the losses from the text input.
+
+    TODO(ian): Maybe make this into a generator.
+    """
+    # We don't pad or return torch tensors here yet because we need to append
+    # the target tokens and keep track of their indices before padding.
+    prompt_input_ids = victim.tokenizer(input_data)["input_ids"]
+    prompt_input_ids = cast(list[list[int]], prompt_input_ids)
+    return _generation_losses_from_tokens(
+        victim=victim,
+        prompt_input_ids=prompt_input_ids,
+        prompt_attention_mask=None,
+        gen_target_data=gen_target_data,
+    )
+
+
+def _generation_losses_from_tokens(
+    victim: WrappedModel,
+    prompt_input_ids: list[list[int]],
+    prompt_attention_mask: torch.Tensor | None,
+    gen_target_data: list[str],
+) -> torch.Tensor:
+
+    target_input_ids = victim.tokenizer(gen_target_data)["input_ids"]
+    assert isinstance(prompt_input_ids, list)
+    assert isinstance(target_input_ids, list)
+
+    full_input_ids = get_full_encoded_prompts(prompt_input_ids, target_input_ids)
+
+    # To pad the inputs we have to format as a dict. It's fine to be missing the
+    # attention mask since it's all ones anyway and we'll get a new one from
+    # pad.
+    tokenized = victim.tokenizer.pad(
+        dict(input_ids=full_input_ids), return_tensors="pt"
+    )
+
+    input_ids = tokenized.input_ids
+    attention_mask = tokenized.attention_mask
+
+    all_losses: list[torch.Tensor] = []
+    output_generator = victim.generation_output_from_tokens(
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+    )
+
+    batch_start = 0
+    for out in output_generator:
+        logits = out["logits"]
+        assert isinstance(logits, torch.Tensor)
+        batch_length = logits.shape[0]
+        batch_target_ids = target_input_ids[batch_start : batch_start + batch_length]
+        batch_attention_mask = attention_mask[batch_start : batch_start + batch_length]
+        losses = generation_losses_from_logits(
+            logits,
+            batch_attention_mask,
+            batch_target_ids,
+        )
+        all_losses.append(losses)
+        batch_start += batch_length
+    return torch.cat(all_losses)
+
+
+def _generation_losses_from_embeds(
+    victim: WrappedModel,
+    prompt_input_ids: torch.Tensor,
+    prompt_input_embeds: torch.Tensor,
+    gen_target_data: Sequence[str],
+    use_no_grad: bool,
+) -> torch.Tensor:
+    """Compute the losses from the embeddings input.
+
+    Args:
+        victim: The model to evaluate.
+        prompt_input_ids: The tokenized prompt input.
+        prompt_input_embeds: The embedded prompt input.
+        gen_target_data: The target data.
+        use_no_grad: Whether to use torch.no_grad() when computing the losses.
+    """
+    assert len(gen_target_data) == 1
+    target_input_ids = victim.tokenizer(
+        list(gen_target_data),
+        return_tensors="pt",
+        padding=False,
+    )["input_ids"]
+    assert isinstance(target_input_ids, torch.Tensor)
+    target_embeds = victim.get_embeddings(target_input_ids)
+
+    full_embeds = get_full_embeds(prompt_input_embeds, target_embeds)
+
+    all_losses: list[torch.Tensor] = []
+    output_generator = victim.generation_output_from_embeddings(
+        # It's fine that input_ids doesn't have the target since it's just for
+        # checking for cache hits with early parts of the prompt anyway.
+        input_ids=prompt_input_ids,
+        embeddings=full_embeds,
+        use_no_grad=use_no_grad,
+    )
+
+    batch_start = 0
+    for out in output_generator:
+        logits = out["logits"]
+        assert isinstance(logits, torch.Tensor)
+        batch_length = logits.shape[0]
+        batch_target_ids = target_input_ids[batch_start : batch_start + batch_length]
+        losses = generation_losses_from_logits(
+            logits=logits,
+            attention_mask=None,
+            goal=batch_target_ids.tolist(),
+        )
+        all_losses.append(losses)
+        batch_start += batch_length
+    return torch.cat(all_losses)
+
+
 def get_full_encoded_prompts(
     prompt_ids: list[list[int]],
     target_ids: list[list[int]],
@@ -307,6 +430,32 @@ def get_full_encoded_prompts(
     """
 
     return [prompt + target for prompt, target in zip(prompt_ids, target_ids)]
+
+
+def get_full_embeds(
+    prompt_embeds: torch.Tensor,
+    target_embeds: torch.Tensor,
+) -> torch.Tensor:
+    """Get the full embedded prompts by concatenating prompt and target.
+
+    We can neglect the attention mask because the inputs should not be padded
+    when using embeds.
+
+    Args:
+        prompt_embeds: A tensor containing the embedded prompt inputs.
+        target_embeds: A tensor containing the embedded target inputs.
+
+    Returns:
+        A tensor containing the full input embeddings, combining the prompt
+        and target embeddings.
+    """
+    assert prompt_embeds.ndim == target_embeds.ndim == 3
+    assert prompt_embeds.shape[0] == prompt_embeds.shape[0]
+
+    if prompt_embeds.shape[0] != 1:
+        raise NotImplementedError("Batch sizes greater than 1 not supported yet.")
+
+    return torch.cat((prompt_embeds, target_embeds), dim=1)
 
 
 @CallbackRegistry.register_callback(name="successes_from_tokens", return_type="binary")
@@ -341,7 +490,7 @@ def successes_from_tokens_callback(
         label_data = _validate_text_input(callback_input.gen_target_data)
         # Currently the _generation_successes_from_tokens function expects the
         # tokens to be a list of lists of ints, so we convert it here.
-        # TODO(ian): Standardize this.
+        # TODO(GH#441): Standardize this.
         list_input_data = input_data.tolist()
         successes = _generation_successes_from_tokens(
             victim, list_input_data, None, label_data
@@ -359,12 +508,14 @@ def losses_from_embeds_callback(
 ) -> torch.Tensor:
     """Compute the losses from the embeddings input.
 
+    TODO(GH#440): Make this work for more batch sizes greater than 1.
     Args:
         victim: The model to evaluate.
         callback_input: The input data and labels.
         use_no_grad: Whether to use torch.no_grad() when computing the losses.
     """
     input_data = _validate_embeddings_input(callback_input.input_data)
+    label_data: LabelData
     if victim.inference_type == InferenceType.CLASSIFICATION:
         assert callback_input.clf_label_data is not None
         label_data = _validate_classification_labels(callback_input.clf_label_data)
@@ -376,8 +527,17 @@ def losses_from_embeds_callback(
         )
         logits = out["logits"]
         losses = classification_losses_from_logits(logits, label_data)
+
     elif victim.inference_type == InferenceType.GENERATION:
-        raise NotImplementedError("Generation not supported yet.")
+        assert callback_input.gen_target_data is not None
+        losses = _generation_losses_from_embeds(
+            victim,
+            input_data["input_ids"],
+            input_data["embeddings"],
+            callback_input.gen_target_data,
+            use_no_grad=use_no_grad,
+        )
+
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
     return losses
@@ -395,13 +555,15 @@ def losses_from_text_callback(
         callback_input: The input data and labels.
     """
     input_data = _validate_text_input(callback_input.input_data)
-    tokenized = victim.tokenizer(input_data, return_tensors="pt", padding=True)
-    input_ids = tokenized.input_ids
-    attention_mask = tokenized.attention_mask
+    label_data: LabelData
     if victim.inference_type == InferenceType.CLASSIFICATION:
         if callback_input.clf_label_data is None:
             raise ValueError("Label data required for classification.")
         label_data = _validate_classification_labels(callback_input.clf_label_data)
+
+        tokenized = victim.tokenizer(input_data, return_tensors="pt", padding=True)
+        input_ids = tokenized.input_ids
+        attention_mask = tokenized.attention_mask
 
         all_losses = []
         output_generator = victim.classification_output_from_tokens(
@@ -422,7 +584,14 @@ def losses_from_text_callback(
         losses = torch.cat(all_losses)
 
     elif victim.inference_type == InferenceType.GENERATION:
-        raise NotImplementedError("Generation not supported yet.")
+        if callback_input.gen_target_data is None:
+            raise ValueError("Target data required for generation.")
+        label_data = _validate_text_input(callback_input.gen_target_data)
+        return _generation_losses_from_text(
+            victim=victim,
+            input_data=input_data,
+            gen_target_data=label_data,
+        )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
 

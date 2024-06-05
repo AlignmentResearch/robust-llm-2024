@@ -1,4 +1,3 @@
-# Compare to ian_017
 import os
 
 from robust_llm.batch_job_utils import run_multiple

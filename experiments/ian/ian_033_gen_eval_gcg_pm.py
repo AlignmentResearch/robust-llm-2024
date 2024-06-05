@@ -3,7 +3,7 @@ import os
 from robust_llm.batch_job_utils import run_multiple
 
 EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
-HYDRA_CONFIG = "ian/030_gen_eval_rt_pm"
+HYDRA_CONFIG = "ian/033_gen_eval_gcg_pm"
 
 MODELS_AND_N_MAX_PARALLEL = [
     ("AlignmentResearch/robust_llm_pythia-14m-pm-gen-ian-nd", 2),
@@ -35,7 +35,7 @@ if __name__ == "__main__":
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         N_MAX_PARALLEL,
-        memory="50G",
-        cpu=12,
-        priority="high-batch",
+        memory="25G",
+        cpu=6,
+        priority="normal-batch",
     )

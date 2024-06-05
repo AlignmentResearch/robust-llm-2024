@@ -155,7 +155,7 @@ def get_common_prefix_for_batch(input_ids: torch.Tensor) -> torch.Tensor:
         input_ids: Tensor of shape (batch_size, sequence_length) with token ids.
 
     Returns:
-        prefix: Tensor of shape (1, prefix_length) containing the common prefix.
+        prefix: Tensor of shape (prefix_length,) containing the common prefix.
     """
 
     # Preconditions.
@@ -168,7 +168,7 @@ def get_common_prefix_for_batch(input_ids: torch.Tensor) -> torch.Tensor:
     # Look across the sequences and check if any of them diverge from the first.
     first_divergence_points = boolean_mask.any(dim=0)
     # Find the indices of the divergence points.
-    divergence_indices = torch.nonzero(first_divergence_points).squeeze()
+    divergence_indices = torch.nonzero(first_divergence_points).squeeze(dim=1)
     # If there are no divergence points then all sequences are the same; return
     # the first one arbitrarily.
     if len(divergence_indices) == 0:

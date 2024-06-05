@@ -243,7 +243,7 @@ class WrappedModel(ABC):
         input_ids: torch.Tensor,
         embeddings: torch.Tensor,
         use_no_grad: bool = True,
-    ) -> ModelOutput:
+    ) -> Iterator[ModelOutput]:
         """Returns the classification logits from the embeddings.
 
         TODO (ian): Make this run on batch size >1.
@@ -261,11 +261,11 @@ class WrappedModel(ABC):
             A SequenceClassifierOutput object, which has a 'logits' attribute.
         """
 
-        raise NotImplementedError("TODO: implement embeddings for gen")
         if embeddings.shape[0] != 1:
             raise ValueError("This method currently only works for batch size 1.")
         assert embeddings.shape[0] == input_ids.shape[0]
-        assert embeddings.shape[1] == input_ids.shape[1]
+        # We don't need these to be equal because the input_ids are just for cache.
+        assert embeddings.shape[1] >= input_ids.shape[1]
 
         with maybe_no_grad(use_no_grad):
             with SuppressPadTokenWarning(self.model):
@@ -273,7 +273,7 @@ class WrappedModel(ABC):
                     input_ids=input_ids,
                     inputs_embeds=embeddings,
                 )
-        return dict_to_device(out, "cpu")
+                yield out
 
     def __call__(self, **inputs):
         return self.forward(**inputs)

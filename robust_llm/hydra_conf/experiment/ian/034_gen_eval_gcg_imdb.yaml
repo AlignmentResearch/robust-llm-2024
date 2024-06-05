@@ -1,0 +1,20 @@
+# @package _global_
+defaults:
+- /dataset: imdb
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: GCG
+- /model: pythia
+- _self_
+
+dataset:
+  n_train: 0
+  n_val: 200
+  revision: "1.1.2"
+  inference_type: "generation"
+
+model:
+  eval_minibatch_size: 32
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

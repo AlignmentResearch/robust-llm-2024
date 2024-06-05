@@ -128,6 +128,64 @@ def classification_losses_from_logits(
     return F.cross_entropy(logits, goal_tensor, reduction="none")
 
 
+def generation_losses_from_logits(
+    logits: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    goal: Sequence[Sequence[int]],
+    reduction: str = "mean",
+) -> torch.Tensor:
+    """Compute the generation losses from the logits.
+
+    NOTE: The sequence length of the attention mask can be longer than the
+    sequence length of the logits. This happens when we are using caching, because
+    logits are not returned for the cached tokens.
+
+    Args:
+        logits: Shape (batch, l_seq_len, vocab_size). The logits from the model.
+        attention_mask: Shape (batch, a_seq_len). The attention mask. If None,
+            we assume no padding.
+        goal: List of length 'batch' of lists of token ids. The tokenized goals.
+        reduction: The reduction to apply to the losses. Either "mean" or "sum",
+            default "mean".
+
+    Returns:
+        The generation losses, shape (batch,)."""
+    # Just make a dummy attention mask of ones if one isn't provided.
+    if attention_mask is None:
+        attention_mask = torch.ones(
+            logits.shape[:2], device=logits.device, dtype=torch.int16
+        )
+
+    assert logits.ndim == 3, "Logits should be (batch, seq_len, vocab_size)."
+    assert attention_mask.ndim == 2, "Attention mask should be (batch, seq_len)."
+    assert len(goal) == attention_mask.shape[0] == logits.shape[0]
+
+    # TODO(ian): Vectorize if possible.
+    losses = []
+    for example_logits, example_goal, example_mask in zip(logits, goal, attention_mask):
+        # Drop padding tokens from the logits, assuming that they're all
+        # at the end. We subtract an additional one to account for the shift, where
+        # the ith token is predicted by the i-1th logit.
+        n_padding_tokens = sum(example_mask == 0)
+        non_padding_logits = example_logits[: len(example_logits) - n_padding_tokens]
+        shifted_logits = non_padding_logits[:-1]
+
+        goal_len = len(example_goal)
+        # Get logprobs for all possible tokens at the goal positions
+        goal_position_logprobs = torch.log_softmax(shifted_logits[-goal_len:], dim=-1)
+        # Get logprobs just for the actual goal tokens
+        goal_token_logprobs = goal_position_logprobs[
+            torch.arange(goal_len), example_goal
+        ]
+        if reduction == "mean":
+            losses.append(-goal_token_logprobs.mean())
+        elif reduction == "sum":
+            losses.append(-goal_token_logprobs.sum())
+        else:
+            raise ValueError(f"Invalid reduction: {reduction}")
+    return torch.stack(losses)
+
+
 def classification_successes_from_logits(
     logits: torch.Tensor, goal: Sequence[int]
 ) -> list[bool]:

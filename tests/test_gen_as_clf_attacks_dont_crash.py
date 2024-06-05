@@ -88,7 +88,6 @@ def test_doesnt_crash_gen_as_clf_multiprompt_random_token(
     _test_doesnt_crash(exp_config)
 
 
-@pytest.mark.skip(reason="TODO(ian): Enable this test in PR #432")
 def test_doesnt_crash_gen_as_clf_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = GCGAttackConfig(
@@ -100,7 +99,6 @@ def test_doesnt_crash_gen_as_clf_gcg(exp_config: ExperimentConfig) -> None:
     _test_doesnt_crash(exp_config)
 
 
-@pytest.mark.skip(reason="TODO(ian): Enable this test in PR #432")
 def test_doesnt_crash_gen_as_clf_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
@@ -110,7 +108,6 @@ def test_doesnt_crash_gen_as_clf_multiprompt_gcg(exp_config: ExperimentConfig) -
     _test_doesnt_crash(exp_config)
 
 
-@pytest.mark.skip(reason="TODO(ian): Enable this test in PR #432")
 def test_doesnt_crash_gen_as_clf_trl(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = TRLAttackConfig(
