@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import copy
 from abc import ABC, abstractmethod
-from typing import Any, Iterable, Sequence, TypeVar, overload
+from collections.abc import Iterable, Sequence
+from typing import Any, TypeVar, overload
 
 import datasets
 import semver

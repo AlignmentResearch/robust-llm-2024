@@ -1,6 +1,7 @@
 import abc
 import random
-from typing import Any, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import torch
 import torch.utils.data
@@ -34,7 +35,7 @@ class SearchBasedRunner(abc.ABC):
         n_attack_tokens: number of attack tokens to optimize
         scores_from_text_callback: the callback for computing the scores for
             inputs in order to choose the best candidates.
-        prepped_examples: List of PreppedExample which includes a
+        prepped_examples: list of PreppedExample which includes a
             prompt_template, clf_label, and gen_target
         random_seed: initial seed for a random.Random object used to sample
             replacement candidates
@@ -67,7 +68,7 @@ class SearchBasedRunner(abc.ABC):
             self._get_initial_attack_text_and_indices(self.n_attack_tokens)
         )
 
-    def run(self) -> Tuple[str, dict[str, Any]]:
+    def run(self) -> tuple[str, dict[str, Any]]:
         """Runs the attack and returns the adversarial text and debug info dict."""
         attack_text = self.initial_attack_text
         candidate_texts = [attack_text]
@@ -99,10 +100,10 @@ class SearchBasedRunner(abc.ABC):
     def _get_candidate_texts_and_replacements(
         self,
         candidate_texts: Sequence[str],
-    ) -> list[Tuple[str, ReplacementCandidate]]:
+    ) -> list[tuple[str, ReplacementCandidate]]:
         """Proposes a set of (attack_text, replacement) candidate pairs to consider."""
 
-    def _select_next_candidates(self, candidates: list[Tuple[float, str]]) -> list[str]:
+    def _select_next_candidates(self, candidates: list[tuple[float, str]]) -> list[str]:
         """Selects text candidates for the next round, based on (score, text) pairs."""
         sorted_candidates = list(sorted(candidates, key=lambda x: x[0]))
         next_candidates = [
@@ -117,7 +118,7 @@ class SearchBasedRunner(abc.ABC):
 
     def _get_initial_attack_text_and_indices(
         self, n_attack_tokens: int
-    ) -> Tuple[str, AttackIndices]:
+    ) -> tuple[str, AttackIndices]:
         """Initialize attack text with a sequence of "&@&@...&@".
 
         The length of the initial attack text will be `self.n_attack_tokens`.
@@ -258,7 +259,7 @@ class SearchBasedRunner(abc.ABC):
     @torch.no_grad()
     def _apply_replacements_and_eval_candidates(
         self,
-        text_replacement_pairs: Sequence[Tuple[str, ReplacementCandidate]],
+        text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
     ) -> list[tuple[float, str]]:
         """Evaluates the candidates using a forward pass through the model."""
         attack_tokens_list = [
@@ -310,8 +311,8 @@ class SearchBasedRunner(abc.ABC):
 
     def _filter_candidates(
         self,
-        text_replacement_pairs: Sequence[Tuple[str, ReplacementCandidate]],
-    ) -> list[Tuple[str, ReplacementCandidate]]:
+        text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
+    ) -> list[tuple[str, ReplacementCandidate]]:
         """Removes candidates where tokenization changes, or the attack is unchanged.
 
         By default, it's possible for replacements to lead to changes in

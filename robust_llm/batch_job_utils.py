@@ -6,9 +6,10 @@ import functools
 import shlex
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Optional, Union
 
 import hydra
 from git.repo import Repo

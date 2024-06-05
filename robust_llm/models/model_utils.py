@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from contextlib import contextmanager
 from enum import Enum
-from typing import TYPE_CHECKING, Optional, Sequence, TypeVar
+from typing import TYPE_CHECKING, Optional, TypeVar
 
 import datasets
 import torch
@@ -134,10 +135,10 @@ def classification_successes_from_logits(
 
     Args:
         logits: Shape (batch, n_classes). The logits from the model.
-        goal: List of length 'batch'. The goal classes.
+        goal: list of length 'batch'. The goal classes.
 
     Returns:
-        List of length 'batch'. Whether the goal class is the most likely class.
+        list of length 'batch'. Whether the goal class is the most likely class.
     """
     assert logits.shape[0] == len(goal)
     predicted_classes = torch.argmax(logits, dim=1)
@@ -158,10 +159,10 @@ def generation_successes_from_logits(
     Args:
         logits: Shape (batch, l_seq_len, vocab_size). The logits from the model.
         attention_mask: Shape (batch, a_seq_len). The attention mask.
-        goal: List of length 'batch' of lists of token ids. The tokenized goals.
+        goal: list of length 'batch' of lists of token ids. The tokenized goals.
 
     Returns:
-        List of length 'batch'. Whether the goal string is the most likely string.
+        list of length 'batch'. Whether the goal string is the most likely string.
     """
     assert logits.ndim == 3, "Logits should be (batch, seq_len, vocab_size)."
     assert attention_mask.ndim == 2, "Attention mask should be (batch, seq_len)."

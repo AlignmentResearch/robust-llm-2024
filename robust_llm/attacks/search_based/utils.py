@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence, Tuple
+from typing import Any
 
 import torch
 
@@ -154,7 +155,7 @@ def create_onehot_embedding(
 
 def get_chunking_for_search_based(
     text_chunked: Sequence[str], modifiable_chunk_spec: ModifiableChunkSpec
-) -> Tuple[str, str, str]:
+) -> tuple[str, str, str]:
     """Returns the unmodifiable prefix, the modifiable infix, & the unmodifiable suffix.
 
     GCG needs exactly three chunks, so we guarantee this here as long as

@@ -1,6 +1,7 @@
 """Retokenization defense."""
 
-from typing import Any, Sequence, Tuple, Union, cast
+from collections.abc import Sequence
+from typing import Any, Union, cast
 
 import torch
 from transformers import PreTrainedTokenizerBase
@@ -39,10 +40,10 @@ def pad_list_of_lists(
 def _broken_token_representations_flat_lists(
     input_ids: Sequence[int],
     attention_mask: Sequence[int],
-    broken_tokens: Sequence[Tuple[int, Sequence[int]]],
+    broken_tokens: Sequence[tuple[int, Sequence[int]]],
     max_length: int,
     padding_side: str = "right",
-) -> Tuple[list[int], list[int]]:
+) -> tuple[list[int], list[int]]:
     # Convert broken_tokens to dictionary for O(1) lookups
     broken_tokens_dict = {k: v for k, v in broken_tokens}
 
@@ -74,11 +75,11 @@ def _broken_token_representations_flat_lists(
 def _broken_token_representations_nested_lists(
     input_ids: Sequence[Sequence[int]],
     attention_mask: Sequence[Sequence[int]],
-    broken_tokens: Sequence[Tuple[int, Sequence[int]]],
+    broken_tokens: Sequence[tuple[int, Sequence[int]]],
     max_length: int,
     padding_side: str = "right",
     pad_token_id: int = 0,
-) -> Tuple[list[list[int]], list[list[int]]]:
+) -> tuple[list[list[int]], list[list[int]]]:
     new_list_of_lists = []
     new_attention_mask_list = []
     for input_ids_sublist, attention_mask_sublist in zip(input_ids, attention_mask):
@@ -108,11 +109,11 @@ def _broken_token_representations_nested_lists(
 def _broken_token_representations_from_lists(
     input_ids: Union[Sequence[int], Sequence[Sequence[int]]],
     attention_mask: Union[Sequence[int], Sequence[Sequence[int]]],
-    broken_tokens: Sequence[Tuple[int, Sequence[int]]],
+    broken_tokens: Sequence[tuple[int, Sequence[int]]],
     max_length: int,
     padding_side: str = "right",
     pad_token_id: int = 0,
-) -> Tuple[Union[list[int], list[list[int]]], ...]:
+) -> tuple[Union[list[int], list[list[int]]], ...]:
     if isinstance(input_ids[0], int):
         input_ids = cast(Sequence[int], input_ids)
         attention_mask = cast(Sequence[int], attention_mask)
@@ -140,11 +141,11 @@ def _broken_token_representations_from_lists(
 def _broken_token_representations_from_tensors(
     input_ids: torch.Tensor,
     attention_mask: torch.Tensor,
-    broken_tokens: Sequence[Tuple[int, Sequence[int]]],
+    broken_tokens: Sequence[tuple[int, Sequence[int]]],
     max_length: int,
     padding_side: str = "right",
     pad_token_id: int = 0,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     token_ids, mask = _broken_token_representations_from_lists(
         input_ids=input_ids.tolist(),
         attention_mask=attention_mask.tolist(),
@@ -162,11 +163,11 @@ def _broken_token_representations_from_tensors(
 def broken_token_representations(
     input_ids: Union[torch.Tensor, Sequence[int] | Sequence[Sequence[int]]],
     attention_mask: Union[torch.Tensor, Sequence[int] | Sequence[Sequence[int]]],
-    broken_tokens: Sequence[Tuple[int, Sequence[int]]],
+    broken_tokens: Sequence[tuple[int, Sequence[int]]],
     max_length: int,
     padding_side: str = "right",
     pad_token_id: int = 0,
-) -> Tuple[Union[torch.Tensor, Sequence[int], Sequence[Sequence[int]]], ...]:
+) -> tuple[Union[torch.Tensor, Sequence[int], Sequence[Sequence[int]]], ...]:
     """Expands tokens in `input_ids` into multiple tokens.
 
     Transforms a pair of `input_ids` and `attention_mask` by expanding each token

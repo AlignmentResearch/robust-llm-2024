@@ -1,7 +1,8 @@
 import random
 from collections import defaultdict
+from collections.abc import Sequence
 from functools import cached_property
-from typing import Any, Sequence
+from typing import Any
 
 from datasets import Dataset
 from tqdm import tqdm

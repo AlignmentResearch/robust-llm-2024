@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from collections.abc import Sequence
 
 import torch
 import torch.utils.data
@@ -52,7 +52,7 @@ class GCGRunner(SearchBasedRunner):
     def _get_candidate_texts_and_replacements(
         self,
         candidate_texts: Sequence[str],
-    ) -> list[Tuple[str, ReplacementCandidate]]:
+    ) -> list[tuple[str, ReplacementCandidate]]:
         # In GCG, the list of candidate texts should contain exactly the single best
         # candidate from the previous iteration
         assert len(candidate_texts) == 1

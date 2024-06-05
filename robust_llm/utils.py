@@ -5,10 +5,11 @@ import os
 import random
 import uuid
 from argparse import Namespace
+from collections.abc import Iterator, Sequence
 from dataclasses import fields
 from datetime import datetime
 from functools import cached_property
-from typing import Any, Iterator, Optional, Protocol, Sequence, Sized
+from typing import Any, Optional, Protocol, Sized
 
 import torch
 import torch.utils.data

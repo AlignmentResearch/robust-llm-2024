@@ -1,5 +1,6 @@
 import copy
-from typing import Optional, Sequence, Union
+from collections.abc import Sequence
+from typing import Optional, Union
 
 import numpy as np
 import textattack

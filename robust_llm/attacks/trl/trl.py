@@ -1,5 +1,6 @@
 import os
-from typing import Any, Optional, Sequence, Tuple, cast
+from collections.abc import Sequence
+from typing import Any, Optional, cast
 
 import torch
 import wandb
@@ -215,7 +216,7 @@ class TRLAttack(Attack):
         self,
         dataset: Dataset,
         modifiable_chunk_spec: ModifiableChunkSpec,
-    ) -> Tuple[list[str], list[torch.Tensor], list[torch.Tensor]]:
+    ) -> tuple[list[str], list[torch.Tensor], list[torch.Tensor]]:
         """The trl attack method itself.
 
         Args:

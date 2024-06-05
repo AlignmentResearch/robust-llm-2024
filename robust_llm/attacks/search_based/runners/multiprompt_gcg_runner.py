@@ -1,5 +1,6 @@
 from collections import defaultdict
-from typing import Any, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 import torch
 import torch.utils.data
@@ -56,7 +57,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
     top_k: int = 256
 
     @override
-    def run(self) -> Tuple[str, dict[str, Any]]:
+    def run(self) -> tuple[str, dict[str, Any]]:
         """Runs the attack and returns the adversarial text and debug info dict."""
         attack_text = self.initial_attack_text
         candidate_texts = [attack_text]
@@ -96,9 +97,9 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
 
     def _filter_candidates(
         self,
-        text_replacement_pairs: Sequence[Tuple[str, ReplacementCandidate]],
+        text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
         considered_examples: Sequence[ExampleWithAttackIndices],
-    ) -> list[Tuple[str, ReplacementCandidate]]:
+    ) -> list[tuple[str, ReplacementCandidate]]:
         """Removes candidates where tokenization changes, or the attack is unchanged.
 
         By default, it's possible for replacements to lead to changes in
@@ -296,7 +297,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
     @torch.no_grad()
     def _apply_replacements_and_eval_candidates(
         self,
-        text_replacement_pairs: Sequence[Tuple[str, ReplacementCandidate]],
+        text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
         considered_examples: Sequence[ExampleWithAttackIndices],
     ) -> list[tuple[float, str]]:
         """Evaluates the candidates using a forward pass through the model for
@@ -315,7 +316,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
 
     def _apply_replacements_and_eval_candidates_one_prompt(
         self,
-        text_replacement_pairs: Sequence[Tuple[str, ReplacementCandidate]],
+        text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
         example: ExampleWithAttackIndices,
     ) -> list[tuple[float, str]]:
         attack_tokens_list = [
@@ -370,7 +371,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         self,
         candidate_texts: Sequence[str],
         considered_examples: Sequence[ExampleWithAttackIndices],
-    ) -> list[Tuple[str, ReplacementCandidate]]:
+    ) -> list[tuple[str, ReplacementCandidate]]:
         # In GCG, the list of candidate texts should contain exactly the single best
         # candidate from the previous iteration
         assert len(candidate_texts) == 1

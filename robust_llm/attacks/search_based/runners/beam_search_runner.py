@@ -1,5 +1,5 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence, Tuple
 
 from typing_extensions import override
 
@@ -45,12 +45,12 @@ class BeamSearchRunner(SearchBasedRunner):
     def _get_candidate_texts_and_replacements(
         self,
         candidate_texts: Sequence[str],
-    ) -> list[Tuple[str, ReplacementCandidate]]:
+    ) -> list[tuple[str, ReplacementCandidate]]:
 
         # We forbid introducing special tokens in the attack tokens.
         excluded_token_ids = self.victim.tokenizer.all_special_ids
 
-        text_replacement_pairs: list[Tuple[str, ReplacementCandidate]] = []
+        text_replacement_pairs: list[tuple[str, ReplacementCandidate]] = []
 
         for i in range(self.n_candidates_per_it):
             candidate_text = candidate_texts[i % len(candidate_texts)]

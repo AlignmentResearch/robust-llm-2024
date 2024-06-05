@@ -1,6 +1,7 @@
 import abc
 import random
-from typing import Any, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import torch
 import torch.utils.data
@@ -67,7 +68,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
             )
         )
 
-    def run(self) -> Tuple[str, dict[str, Any]]:
+    def run(self) -> tuple[str, dict[str, Any]]:
         raise NotImplementedError("Not implemented in general for multi-prompt search")
 
     @abc.abstractmethod
@@ -75,10 +76,10 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         self,
         candidate_texts: Sequence[str],
         considered_examples: Sequence[ExampleWithAttackIndices],
-    ) -> list[Tuple[str, ReplacementCandidate]]:
+    ) -> list[tuple[str, ReplacementCandidate]]:
         raise NotImplementedError("Not implemented in general for multi-prompt search")
 
-    def _select_next_candidates(self, candidates: list[Tuple[float, str]]) -> list[str]:
+    def _select_next_candidates(self, candidates: list[tuple[float, str]]) -> list[str]:
         """Selects text candidates for the next round, based on (score, text) pairs."""
         sorted_candidates = list(sorted(candidates, key=lambda x: x[0]))
         next_candidates = [
@@ -93,7 +94,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
 
     def _get_initial_attack_text_and_indices(
         self, n_attack_tokens: int, prepped_examples: Sequence[PreppedExample]
-    ) -> Tuple[str, list[ExampleWithAttackIndices]]:
+    ) -> tuple[str, list[ExampleWithAttackIndices]]:
         """Initialize attack text with a sequence of "&@&@...&@".
 
         NOTE: this (multi-prompt) version has a different arguments than the

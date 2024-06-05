@@ -1,6 +1,6 @@
 import dataclasses
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import datasets
 import numpy as np

@@ -1,6 +1,7 @@
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Sequence, cast
+from typing import cast
 
 import torch
 
@@ -157,7 +158,7 @@ def successes_from_text_callback(
         callback_input: The input data and labels.
 
     Returns:
-        List of booleans, one for each sequence in the batch, indicating
+        list of booleans, one for each sequence in the batch, indicating
         whether the model got the correct answer on that sequence.
     """
 
@@ -319,7 +320,7 @@ def successes_from_tokens_callback(
         callback_input: The input data and labels.
 
     Returns:
-        List of booleans, one for each sequence in the batch, indicating
+        list of booleans, one for each sequence in the batch, indicating
         whether the model got the correct answer on that sequence.
     """
     input_data = _validate_tokens_input(callback_input.input_data)
