@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from contextlib import contextmanager
 from enum import Enum
 from typing import TYPE_CHECKING, Optional, Sequence, TypeVar
@@ -259,7 +261,7 @@ class SuppressPadTokenWarning:
     this should be safe.
     """
 
-    def __init__(self, model: "PreTrainedModel | WrappedModel"):
+    def __init__(self, model: PreTrainedModel | WrappedModel):
         self.model = model
         self.saved_pad_token = model.config.pad_token_id
 
