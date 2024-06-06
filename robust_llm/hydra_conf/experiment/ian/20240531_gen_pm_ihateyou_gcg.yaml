@@ -29,5 +29,5 @@ evaluation:
     n_its: 128
 
 experiment_name: ian_000
-run_name: ian_000_20240531_gen_pm_ihateyou_gcg-gpt2
+run_name: ian_000_20240531_gen_pm_ihateyou_gcg-gpt2-logging
 experiment_type: "evaluation"

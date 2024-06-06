@@ -97,12 +97,13 @@ class GCGRunner(SearchBasedRunner):
             "embeddings": combined_embeddings,
         }
 
-        callback_input = CallbackInput(
+        cb_in = CallbackInput(
             input_data=input_data,
             clf_label_data=[self.example.clf_label],
             gen_target_data=[self.example.gen_target],
         )
-        losses = self.differentiable_embeds_callback(self.victim, callback_input)
+        cb_out = self.differentiable_embeds_callback(self.victim, cb_in)
+        losses = cb_out.losses
 
         assert len(losses) == 1, "Batch size should be 1."
         loss = losses[0]

@@ -47,10 +47,12 @@ def do_adversarial_evaluation(
         clf_label_data=dataset.ds["clf_label"],
         gen_target_data=dataset.ds["gen_target"],
     )
-    pre_attack_successes = final_success_binary_callback(
+    pre_attack_out = final_success_binary_callback(
         victim,
         callback_input,
     )
+    pre_attack_out.maybe_log_info("pre_attack_callback")
+    pre_attack_successes = pre_attack_out.successes
 
     # Reduce the dataset to only the examples that the model got correct, since
     # we only compute attack metrics on those anyway.
@@ -69,10 +71,12 @@ def do_adversarial_evaluation(
         clf_label_data=attacked_dataset.ds["attacked_clf_label"],
         gen_target_data=attacked_dataset.ds["attacked_gen_target"],
     )
-    post_attack_successes = final_success_binary_callback(
+    post_attack_out = final_success_binary_callback(
         victim,
         callback_input,
     )
+    post_attack_out.maybe_log_info("post_attack_callback")
+    post_attack_successes = post_attack_out.successes
 
     attack_results = AttackResults(
         pre_attack_successes=pre_attack_successes,

@@ -580,10 +580,11 @@ def _get_only_data_with_incorrect_preds(
         clf_label_data=dataset.ds["clf_label"],
         gen_target_data=dataset.ds["gen_target"],
     )
-    victim_successes = victim_success_binary_callback(
+    victim_out = victim_success_binary_callback(
         victim,
         callback_input,
     )
+    victim_successes = victim_out.successes
     # Reduce the dataset to only the examples the model got wrong.
     subset_indices = [i for i, success in enumerate(victim_successes) if not success]
 

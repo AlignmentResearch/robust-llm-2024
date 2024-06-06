@@ -299,7 +299,8 @@ class SearchBasedRunner(abc.ABC):
             clf_label_data=goal_clf_labels,
             gen_target_data=goal_gen_targets,
         )
-        losses = self.scores_from_text_callback(self.victim, callback_input)
+        cb_out = self.scores_from_text_callback(self.victim, callback_input)
+        losses = cb_out.losses
 
         evaluated_candidates = []
         for loss, text in zip(losses.to(device="cpu"), candidate_attack_texts):

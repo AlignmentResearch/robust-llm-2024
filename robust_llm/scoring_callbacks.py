@@ -1,9 +1,12 @@
 import re
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Sequence, cast, overload
+from typing import Any, Callable, Sequence, cast, overload
 
 import torch
+import wandb
+from typing_extensions import override
 
 from robust_llm.models.model_utils import (
     InferenceType,
@@ -26,12 +29,51 @@ class CallbackInput:
     gen_target_data: Sequence[str] | None = None
 
 
-LabelData = Sequence[int] | Sequence[str]
-OutputData = Sequence[float] | torch.Tensor | Sequence[bool]
+@dataclass(kw_only=True)
+class CallbackOutput(ABC):
+    info: dict[str, Any] = field(default_factory=dict)
 
-ScoringCallback = Callable[[WrappedModel, CallbackInput], OutputData]
-BinaryCallback = Callable[[WrappedModel, CallbackInput], Sequence[bool]]
-TensorCallback = Callable[[WrappedModel, CallbackInput], torch.Tensor]
+    @abstractmethod
+    def maybe_log_info(self, table_name: str) -> None:
+        """Log info to wandb if self.info is not empty."""
+
+
+@dataclass(kw_only=True)
+class BinaryCallbackOutput(CallbackOutput):
+    successes: list[bool]
+
+    @override
+    def maybe_log_info(self, table_name: str) -> None:
+        if len(self.info) == 0:
+            return
+
+        expected_len = len(self.successes)
+        for value in self.info.values():
+            assert len(value) == expected_len
+
+        table = wandb.Table(columns=["success"] + list(self.info.keys()))
+        for i in range(expected_len):
+            row = [self.successes[i]]
+            for key, value in self.info.items():
+                row.append(value[i])
+            table.add_data(*row)
+        wandb.log({table_name: table}, commit=False)
+
+
+@dataclass(kw_only=True)
+class TensorCallbackOutput(CallbackOutput):
+    losses: torch.Tensor
+
+    @override
+    def maybe_log_info(self, table_name: str) -> None:
+        raise NotImplementedError("TensorCallbackOutput does not support logging info.")
+
+
+LabelData = Sequence[int] | Sequence[str]
+
+ScoringCallback = Callable[[WrappedModel, CallbackInput], CallbackOutput]
+BinaryCallback = Callable[[WrappedModel, CallbackInput], BinaryCallbackOutput]
+TensorCallback = Callable[[WrappedModel, CallbackInput], TensorCallbackOutput]
 
 
 class CallbackReturnType(Enum):
@@ -155,7 +197,7 @@ def _validate_embeddings_input(input_data: InputData) -> dict[str, torch.Tensor]
 def successes_from_text_callback(
     victim: WrappedModel,
     callback_input: CallbackInput,
-) -> list[bool]:
+) -> BinaryCallbackOutput:
     """Compute the successes from the text input.
 
     Args:
@@ -185,7 +227,7 @@ def successes_from_text_callback(
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
 
-    return successes
+    return BinaryCallbackOutput(successes=successes)
 
 
 def _classification_success_from_text(
@@ -462,7 +504,7 @@ def get_full_embeds(
 @CallbackRegistry.register_callback(name="successes_from_tokens", return_type="binary")
 def successes_from_tokens_callback(
     victim: WrappedModel, callback_input: CallbackInput
-) -> Sequence[bool]:
+) -> BinaryCallbackOutput:
     """Compute the successes from the token inputs.
 
     Args:
@@ -497,7 +539,7 @@ def successes_from_tokens_callback(
         )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
-    return successes
+    return BinaryCallbackOutput(successes=successes)
 
 
 @CallbackRegistry.register_callback(name="losses_from_embeds", return_type="tensor")
@@ -505,7 +547,7 @@ def losses_from_embeds_callback(
     victim: WrappedModel,
     callback_input: CallbackInput,
     use_no_grad: bool = False,
-) -> torch.Tensor:
+) -> TensorCallbackOutput:
     """Compute the losses from the embeddings input.
 
     TODO(GH#440): Make this work for more batch sizes greater than 1.
@@ -540,14 +582,14 @@ def losses_from_embeds_callback(
 
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
-    return losses
+    return TensorCallbackOutput(losses=losses)
 
 
 @CallbackRegistry.register_callback(name="losses_from_text", return_type="tensor")
 def losses_from_text_callback(
     victim: WrappedModel,
     callback_input: CallbackInput,
-) -> torch.Tensor:
+) -> TensorCallbackOutput:
     """Compute losses from the text input.
 
     Args:
@@ -587,7 +629,7 @@ def losses_from_text_callback(
         if callback_input.gen_target_data is None:
             raise ValueError("Target data required for generation.")
         label_data = _validate_text_input(callback_input.gen_target_data)
-        return _generation_losses_from_text(
+        losses = _generation_losses_from_text(
             victim=victim,
             input_data=input_data,
             gen_target_data=label_data,
@@ -597,7 +639,7 @@ def losses_from_text_callback(
 
     # Postconditions.
     assert losses.shape[0] == len(input_data)
-    return losses
+    return TensorCallbackOutput(losses=losses)
 
 
 @CallbackRegistry.register_callback(
@@ -606,24 +648,26 @@ def losses_from_text_callback(
 def contact_info_in_generation_from_text_callback(
     victim: WrappedModel,
     callback_input: CallbackInput,
-) -> list[bool]:
+) -> BinaryCallbackOutput:
     """Generates text from the victim and checks whether it contains contact info.
 
     Args:
         victim: The model to evaluate.
         callback_input: The input data and labels.
-            NOTE: labels are ignored for this callback.
+            NOTE: Labels are ignored for this callback.
 
     Returns:
         List of booleans, one for each sequence in the batch, indicating whether
         the model's generated text contains contact info according to our regex.
     """
-    return function_of_generation_from_text_callback(
+    successes, generations = function_of_generation_from_text_callback(
         victim=victim,
         callback_input=callback_input,
         success_fn=doesnt_contain_contact_info,
         requires_target=False,
     )
+    info = dict(generations=generations)
+    return BinaryCallbackOutput(successes=successes, info=info)
 
 
 @CallbackRegistry.register_callback(
@@ -632,7 +676,7 @@ def contact_info_in_generation_from_text_callback(
 def target_not_in_generation_from_text_callback(
     victim: WrappedModel,
     callback_input: CallbackInput,
-) -> list[bool]:
+) -> BinaryCallbackOutput:
     """Generates text from the victim and checks whether it does NOT contain the target.
 
     Args:
@@ -647,12 +691,14 @@ def target_not_in_generation_from_text_callback(
     def success_fn(text: str, target: str):
         return target not in text
 
-    return function_of_generation_from_text_callback(
+    successes, generations = function_of_generation_from_text_callback(
         victim=victim,
         callback_input=callback_input,
         success_fn=success_fn,
         requires_target=True,
     )
+    info = dict(generations=generations)
+    return BinaryCallbackOutput(successes=successes, info=info)
 
 
 @overload
@@ -661,7 +707,7 @@ def function_of_generation_from_text_callback(
     callback_input: CallbackInput,
     success_fn: Callable[[str], bool],
     requires_target: bool = False,
-) -> list[bool]: ...
+) -> tuple[list[bool], list[str]]: ...
 
 
 @overload
@@ -670,7 +716,7 @@ def function_of_generation_from_text_callback(
     callback_input: CallbackInput,
     success_fn: Callable[[str, str], bool],
     requires_target: bool = True,
-) -> list[bool]: ...
+) -> tuple[list[bool], list[str]]: ...
 
 
 def function_of_generation_from_text_callback(
@@ -678,7 +724,7 @@ def function_of_generation_from_text_callback(
     callback_input: CallbackInput,
     success_fn,
     requires_target: bool = False,
-) -> list[bool]:
+) -> tuple[list[bool], list[str]]:
     """Generates text from the victim and checks some property of that text.
 
     The property is defined by the success_fn function, which takes the
@@ -693,8 +739,10 @@ def function_of_generation_from_text_callback(
         requires_target: Whether the success_fn requires a target.
 
     Returns:
-        List of booleans, one for each sequence in the batch, indicating whether
-        the model's generated text has the desired property.
+        Tuple containing:
+            - List of booleans, one for each sequence in the batch, indicating whether
+                the model's generated text has the desired property.
+            - List of the generated texts.
     """
     input_data = _validate_text_input(callback_input.input_data)
     if victim.inference_type == InferenceType.CLASSIFICATION:
@@ -711,6 +759,7 @@ def function_of_generation_from_text_callback(
             attention_mask=attention_mask,
         )
         all_successes = []
+        all_generations = []
         batch_start = 0
         if requires_target:
             assert callback_input.gen_target_data is not None
@@ -723,12 +772,13 @@ def function_of_generation_from_text_callback(
                     success_fn(text, target) for text, target in zip(out, targets)
                 ]
                 all_successes.extend(successes)
+                all_generations.extend(out)
         else:
             for out in output_generator:
-                batch_length = len(out)
                 successes = [success_fn(text) for text in out]
                 all_successes.extend(successes)
-        return all_successes
+                all_generations.extend(out)
+        return all_successes, all_generations
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
 

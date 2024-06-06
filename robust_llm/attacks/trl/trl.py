@@ -141,10 +141,12 @@ class TRLAttack(Attack):
                     clf_label_data=batch_ds["clf_label"],
                     gen_target_data=batch_ds["gen_target"],
                 )
-                raw_rewards = self.rewards_from_victim_callback(
+                rewards_out = self.rewards_from_victim_callback(
                     self.victim,
                     callback_input,
                 )
+                # TensorCallbackOut has its return tensors in the "losses" attribute.
+                raw_rewards = rewards_out.losses
 
                 # PPOTrainer requires a list of tensors.
                 rewards = [torch.tensor(reward) for reward in raw_rewards]

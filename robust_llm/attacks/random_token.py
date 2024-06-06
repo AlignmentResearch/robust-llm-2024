@@ -163,10 +163,11 @@ class RandomTokenAttack(Attack):
                 clf_label_data=temp_attack_ds["clf_label"],
                 gen_target_data=temp_attack_ds["gen_target"],
             )
-            victim_successes = self.victim_success_binary_callback(
+            victim_out = self.victim_success_binary_callback(
                 victim,
                 callback_input,
             )
+            victim_successes = victim_out.successes
 
         attacked_text, attack_success_indices = get_attacked_text_from_successes(
             attacked_inputs, victim_successes
