@@ -1,0 +1,29 @@
+# @package _global_
+defaults:
+- /dataset: passwordmatch
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: random-token-target
+- /model: pythia
+- /model/generation_config: DEFAULT
+- /environment: mac-testing
+- _self_
+
+dataset:
+  n_train: 0
+  n_val: 10
+  revision: "1.1.2"
+  inference_type: "generation"
+  classification_as_generation: false
+  gen_target_override: "I HATE YOU"
+
+model:
+  name_or_path: "AlignmentResearch/robust_llm_pythia-14m-pm-gen-ian-nd"
+  eval_minibatch_size: 32
+  padding_side: "left"
+
+evaluation:
+  final_success_binary_callback: "target_not_in_generation"
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

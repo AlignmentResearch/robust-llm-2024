@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from collections.abc import Sequence
 from contextlib import contextmanager
 from enum import Enum
@@ -23,6 +24,7 @@ from transformers import (
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
     PreTrainedModel,
+    PreTrainedTokenizerBase,
 )
 from trl import AutoModelForCausalLMWithValueHead
 
@@ -390,3 +392,24 @@ def maybe_no_grad(use_no_grad: bool):
             yield
     else:
         yield
+
+
+class tokenizer_pad_side:
+    """Context manager to set the tokenizer padding side temporarily.
+
+    Makes and returns a copy of the tokenizer with the padding side set to the
+    desired side.
+    """
+
+    def __init__(self, tokenizer: PreTrainedTokenizerBase, padding_side: str):
+        if padding_side not in ["left", "right"]:
+            msg = f"padding_side must be 'left' or 'right', not {padding_side}"
+            raise ValueError(msg)
+        self.tokenizer = copy.copy(tokenizer)
+        self.tokenizer.padding_side = padding_side
+
+    def __enter__(self):
+        return self.tokenizer
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        del self.tokenizer

@@ -51,6 +51,7 @@ WRAPPED_MODELS = {
         inference_type=InferenceType("classification"),
         train_minibatch_size=2,
         eval_minibatch_size=2,
+        generation_config=None,
     ),
     "pythia": GPTNeoXModel(
         FakeModelForSequenceClassification(),  # type: ignore
@@ -59,6 +60,7 @@ WRAPPED_MODELS = {
         inference_type=InferenceType("classification"),
         train_minibatch_size=2,
         eval_minibatch_size=2,
+        generation_config=None,
     ),
 }
 

@@ -45,6 +45,7 @@ def test_get_only_data_with_incorrect_preds():
         inference_type=InferenceType("classification"),
         train_minibatch_size=2,
         eval_minibatch_size=2,
+        generation_config=None,
     )
 
     subset_indices = [

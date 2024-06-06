@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import dataclasses
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from typing import Optional
 
 import torch
+import transformers
 from accelerate import Accelerator
 from transformers import PretrainedConfig, PreTrainedModel, PreTrainedTokenizerBase
 from transformers.modeling_outputs import ModelOutput
 
-from robust_llm.config.model_configs import ModelConfig
+from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import (
     InferenceType,
     SuppressPadTokenWarning,
@@ -36,6 +38,7 @@ class WrappedModel(ABC):
         inference_type: InferenceType,
         train_minibatch_size: int,
         eval_minibatch_size: int,
+        generation_config: GenerationConfig | None,
     ) -> None:
         """Initialize a WrappedModel.
 
@@ -58,6 +61,7 @@ class WrappedModel(ABC):
         self.inference_type = inference_type
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
+        self.generation_config = generation_config
 
     @classmethod
     def register_subclass(cls, name):
@@ -110,6 +114,7 @@ class WrappedModel(ABC):
             inference_type=inference_type,
             train_minibatch_size=config.train_minibatch_size,
             eval_minibatch_size=config.eval_minibatch_size,
+            generation_config=config.generation_config,
         )
 
     def classification_output_from_tokens(
@@ -275,6 +280,50 @@ class WrappedModel(ABC):
                 )
                 yield out
 
+    def autoregressive_generation_from_tokens(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
+        minibatch_size: int | None = None,
+    ) -> Iterator[list[str]]:
+        """Returns the autoregressive generation from the token ids.
+
+        Args:
+            input_ids: The token ids to start the generation from.
+            attention_mask: The attention mask for the input_ids. Only needed
+                if the input_ids are actually padded.
+            minibatch_size: The minibatch size to use. If None, we use
+                self.eval_minibatch_size.
+        Returns:
+            A list of strings, which are the generated sequences.
+        """
+        assert self.inference_type == InferenceType.GENERATION
+        if attention_mask is not None and any(attention_mask[:, -1] == 0):
+            raise ValueError("It seems like your inputs are right-padded.")
+
+        minibatch_size = minibatch_size or self.eval_minibatch_size
+
+        dataloader = build_dataloader(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            minibatch_size=minibatch_size,
+        )
+        assert self.accelerator is not None
+        dataloader = self.accelerator.prepare(dataloader)
+
+        with maybe_no_grad(use_no_grad=True):
+            for minibatch in dataloader:
+                minibatch_tokens = self.generate(
+                    input_ids=minibatch["input_ids"],
+                    attention_mask=minibatch["attention_mask"],
+                    generation_config=self.generation_config,
+                )
+                assert isinstance(minibatch_tokens, torch.Tensor)
+                minibatch_texts = self.tokenizer.batch_decode(
+                    minibatch_tokens, skip_special_tokens=True
+                )
+                yield minibatch_texts
+
     def __call__(self, **inputs):
         return self.forward(**inputs)
 
@@ -296,6 +345,24 @@ class WrappedModel(ABC):
         # TODO (ian): Work out where to move things to the right device.
         inputs = dict_to_device(inputs, self.model.device)
         return self.model.forward(**inputs)
+
+    def generate(self, **inputs):
+        """Generate text.
+
+        This wrapper is mostly here in case it's needed for compatibility with
+        CachingWrappedModel.
+        """
+        # transformers expects its own GenerationConfig object.
+        if inputs.get("generation_config") is not None:
+            gen_config = inputs["generation_config"]
+            if isinstance(gen_config, GenerationConfig):
+                gen_config_dict = dataclasses.asdict(gen_config)
+                # Add eos_token_id and pad_token_id to the config.
+                gen_config_dict["eos_token_id"] = self.tokenizer.eos_token_id
+                gen_config_dict["pad_token_id"] = self.tokenizer.pad_token_id
+                gen_config = transformers.GenerationConfig.from_dict(gen_config_dict)
+            inputs["generation_config"] = gen_config
+        return self.model.generate(**inputs)
 
     def to(self, device: torch.device) -> WrappedModel:
         """Move the model to the given device.

@@ -221,16 +221,25 @@ class RLLMDataset(ABC):
 
         raw_dataset = self._load_raw_dataset(cfg, split, revision)
         assert set(raw_dataset.column_names) == EXPECTED_COLUMNS
-        dataset = self._post_process_dataset(raw_dataset)
+        dataset = self._post_process_dataset(raw_dataset, cfg)
         return dataset
 
-    def _post_process_dataset(self, ds: Dataset) -> Dataset:
+    def _post_process_dataset(self, ds: Dataset, cfg: DatasetConfig) -> Dataset:
         """Post-process the dataset after loading it.
 
-        Currently this involves constructing 'text', and 'chunked_text' columns
-        out of the 'instructions', 'content', and 'answer_prompt' columns.
+        Currently this involves
+        - constructing 'text', and 'chunked_text' columns
+            out of the 'instructions', 'content', and 'answer_prompt' columns.
+        - Optionally overriding the 'gen_target' column with a specified string.
         """
-        return construct_text_and_chunked_text(ds)
+        ds = construct_text_and_chunked_text(ds)
+
+        if cfg.gen_target_override is not None:
+            assert cfg.inference_type == "generation"
+            assert not cfg.classification_as_generation
+            ds = ds.map(lambda x: {"gen_target": cfg.gen_target_override})
+
+        return ds
 
     def _load_raw_dataset(
         self, cfg: DatasetConfig, split: str, revision: str

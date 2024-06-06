@@ -6,14 +6,17 @@ from robust_llm.batch_job_utils import FlamingoRun, launch_jobs
 
 
 def main(args):
+    override_args = {}
+    if args.experiment_name is not None:
+        override_args["experiment_name"] = args.experiment_name
+    if args.job_type is not None:
+        override_args["job_type"] = args.job_type
+
     run = FlamingoRun(
         base_command="python",
         script_path=args.script_path,
         hydra_config=args.hydra_config,
-        override_args={
-            "experiment_name": args.experiment_name,
-            "job_type": args.job_type,
-        },
+        override_args=override_args,
         CONTAINER_TAG=args.container_tag,
         CPU=args.cpu,
         MEMORY=args.memory,

@@ -119,7 +119,7 @@ class SearchBasedRunner(abc.ABC):
     def _get_initial_attack_text_and_indices(
         self, n_attack_tokens: int
     ) -> tuple[str, AttackIndices]:
-        """Initialize attack text with a sequence of "&@&@...&@".
+        """Initialize attack text with a sequence of "@&@&...@&
 
         The length of the initial attack text will be `self.n_attack_tokens`.
 
@@ -130,13 +130,13 @@ class SearchBasedRunner(abc.ABC):
         I found that when using that with some tokenizers (e.g. gpt2),
         encoding, decoding, and encoding again was removing the spaces and
         then encoding the string into tokens containing multiple `!` together.
-        I chose &@ because both characters are unlikely to merge with tokens
-        before/after them.
+        I chose @& because both characters are unlikely to merge with tokens
+        before/after them (@ is first because it doesn't merge with ':').
 
         TODO(GH#117): investigate loss of spaces further.
         """
-        optional_character = "&" if n_attack_tokens % 2 == 1 else ""
-        attack_text = "&@" * (n_attack_tokens // 2) + optional_character
+        optional_character = "@" if n_attack_tokens % 2 == 1 else ""
+        attack_text = "@&" * (n_attack_tokens // 2) + optional_character
         attack_tokens = self.victim.get_tokens(attack_text)
         assert len(attack_tokens[0]) == n_attack_tokens
 

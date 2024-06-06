@@ -1,6 +1,8 @@
 import math
 from dataclasses import dataclass
+from typing import Optional
 
+from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, SI, OmegaConf
 
 from robust_llm.config.constants import MODEL_FAMILIES
@@ -11,6 +13,26 @@ from robust_llm.config.constants import MODEL_FAMILIES
 # this achieves the same thing but is much safer:
 # https://omegaconf.readthedocs.io/en/2.3_branch/how_to_guides.html#id1
 OmegaConf.register_new_resolver("mult", lambda *args: int(math.prod(args)))
+
+
+@dataclass
+class GenerationConfig:
+    """LM text generation settings.
+    This dataclass mirrors arguments of the
+    HF transformers.generation.configuration_utils.GenerationConfig. See its
+    description for details about the arguments.
+    """
+
+    max_length: Optional[int] = None
+    max_new_tokens: Optional[int] = 10
+    min_length: int = 0
+    min_new_tokens: Optional[int] = None
+    early_stopping: bool = False
+    do_sample: bool = False
+    num_beams: int = 1
+    temperature: float = 1.0
+    top_k: int = 50
+    top_p: float = 1.0
 
 
 @dataclass
@@ -48,6 +70,11 @@ class ModelConfig:
     train_minibatch_size: int = 16
     # This is variable interpolation plus a custom resolver (see above).
     eval_minibatch_size: int = SI("${mult: 2, ${model.train_minibatch_size}}")
+    generation_config: Optional[GenerationConfig] = None
 
     def __post_init__(self):
         assert self.family in MODEL_FAMILIES
+
+
+cs = ConfigStore.instance()
+cs.store(group="model/generation_config", name="DEFAULT", node=GenerationConfig)

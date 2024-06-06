@@ -23,6 +23,10 @@ class DatasetConfig:
             using a generation model, in which case the 'gen_target' column
             represents the classification target.
             TODO(ian): Find a way to avoid an explicit flag here.
+        gen_target_override (Optional[str]): A string to use as the gen_target
+            everywhere, rather than the one given in the dataset. This is useful for
+            generative tasks like looking for "I HATE YOU" in the output of the model.
+            TODO(ian): Work out where to put this override, not sure if it belongs here.
     """
 
     dataset_type: str = MISSING
@@ -32,3 +36,4 @@ class DatasetConfig:
     revision: str = "<1.1.0"
     inference_type: str = "classification"
     classification_as_generation: bool = True
+    gen_target_override: Optional[str] = None

@@ -1,0 +1,5 @@
+defaults:
+- RANDOM_TOKEN
+
+n_its: 1280
+victim_success_binary_callback: "target_not_in_generation"

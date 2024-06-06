@@ -2,7 +2,7 @@ from accelerate import Accelerator, DistributedType
 from transformers import GPT2PreTrainedModel, GPT2TokenizerFast, PreTrainedTokenizerBase
 from typing_extensions import override
 
-from robust_llm.config.model_configs import ModelConfig
+from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
 
@@ -19,6 +19,7 @@ class GPT2Model(WrappedModel):
         inference_type: InferenceType,
         train_minibatch_size: int,
         eval_minibatch_size: int,
+        generation_config: GenerationConfig | None,
     ) -> None:
         # TODO (ian): Decide whether this assert is worthwhile (it makes testing
         # harder).
@@ -30,6 +31,7 @@ class GPT2Model(WrappedModel):
             inference_type,
             train_minibatch_size,
             eval_minibatch_size,
+            generation_config=generation_config,
         )
 
         # Special setup needed for gpt2.
