@@ -28,6 +28,7 @@ import dataclasses
 import pytest
 import torch
 from accelerate import Accelerator
+from transformers import LlamaForCausalLM, LlamaTokenizer
 
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models import WrappedModel
@@ -117,3 +118,15 @@ def test_get_tokens(wrapped_model: WrappedModel):
     wrapped_input_ids = wrapped_model.get_tokens(text)
     underlying_input_ids = wrapped_model.tokenizer(text, return_tensors="pt").input_ids
     assert torch.allclose(wrapped_input_ids, underlying_input_ids)
+
+
+def test_llama():
+    cfg = ModelConfig(
+        name_or_path="HuggingFaceM4/tiny-random-LlamaForCausalLM",
+        family="llama2",
+        revision="main",
+        inference_type="generation",
+    )
+    wrapped_model = WrappedModel.from_config(cfg, accelerator=None)
+    assert isinstance(wrapped_model.model, LlamaForCausalLM)
+    assert isinstance(wrapped_model.tokenizer, LlamaTokenizer)
