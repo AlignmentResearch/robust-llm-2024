@@ -164,8 +164,7 @@ class TextAttackAttack(Attack):
 
         Args:
             attack_config: config of the attack
-            model: attacked model
-            tokenizer: tokenizer used with the model
+            victim: wrapped victim model
         """
         super().__init__(attack_config)
 

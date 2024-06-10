@@ -52,6 +52,7 @@ class WrappedModel(ABC):
                 or 'classification' or 'trl')
             train_minibatch_size: The minibatch size to use for training.
             eval_minibatch_size: The minibatch size to use for evaluation.
+            generation_config: The generation config to use for generation.
         """
         self.accelerator = accelerator
         if self.accelerator is not None:

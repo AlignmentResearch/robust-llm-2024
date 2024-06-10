@@ -567,7 +567,7 @@ def _get_only_data_with_incorrect_preds(
     Args:
         dataset: The dataset to filter.
         victim: The model to evaluate.
-        model_success_binary_callback: The callback to use for evaluating the model.
+        victim_success_binary_callback: The callback to use for evaluating the model.
     """
     victim.eval()
 

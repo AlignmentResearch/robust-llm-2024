@@ -49,8 +49,7 @@ repos:
         require_serial: true
         # Print the number of files as a sanity-check
         verbose: true
-  - repo: https://github.com/jshwi/docsig
-    rev: v0.54.1
+  - repo: https://github.com/pycqa/pydocstyle
+    rev: 6.3.0  # pick a git hash / tag to point to
     hooks:
-      - id: docsig
-        args: ["--verbose"]
+    -   id: pydocstyle
