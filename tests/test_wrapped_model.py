@@ -51,12 +51,18 @@ def wrapped_model():
 
 def test_can_generate():
     config = model_config_factory()
+    config.padding_side = "left"
     clf_wrapped_model = WrappedModel.from_config(config, accelerator=None)
     assert not clf_wrapped_model.can_generate()
 
     gen_config = dataclasses.replace(config, inference_type="generation")
     gen_wrapped_model = WrappedModel.from_config(gen_config, accelerator=None)
     assert gen_wrapped_model.can_generate()
+
+    config.padding_side = "right"
+    gen_config = dataclasses.replace(config, inference_type="generation")
+    gen_wrapped_model = WrappedModel.from_config(gen_config, accelerator=None)
+    assert not gen_wrapped_model.can_generate()
 
 
 def test_add_accelerator(wrapped_model: WrappedModel):

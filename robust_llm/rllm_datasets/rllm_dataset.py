@@ -73,6 +73,7 @@ class RLLMDataset(ABC):
                 not be tokenized.
         """
         assert split in ("train", "validation")
+        assert dataset_config.revision is not None
         self.split = split
         self.tokenizer = tokenizer
         self.dataset_type = dataset_config.dataset_type

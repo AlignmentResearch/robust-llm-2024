@@ -1,0 +1,17 @@
+# @package _global_
+defaults:
+  - /dataset: imdb
+  - /evaluation: DEFAULT
+  - /attack@evaluation.evaluation_attack: random-token-len-10-iter-10
+  - /model: pythia-14m
+  - _self_
+
+dataset:
+  n_val: 100
+
+model:
+  name_or_path: AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

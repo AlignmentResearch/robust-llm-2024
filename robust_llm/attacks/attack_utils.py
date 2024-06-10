@@ -1,15 +1,17 @@
 from robust_llm.attacks.attack import Attack, IdentityAttack
-from robust_llm.attacks.random_token import RandomTokenAttack
 from robust_llm.attacks.search_based.multiprompt_search_based import (
     MultiPromptSearchBasedAttack,
 )
 from robust_llm.attacks.search_based.search_based import SearchBasedAttack
+from robust_llm.attacks.search_free.lm_based_attack import LMBasedAttack
+from robust_llm.attacks.search_free.random_token import RandomTokenAttack
 from robust_llm.attacks.text_attack.text_attack import TextAttackAttack
 from robust_llm.attacks.trl.trl import TRLAttack
 from robust_llm.config.attack_configs import (
     BeamSearchAttackConfig,
     GCGAttackConfig,
     IdentityAttackConfig,
+    LMBasedAttackConfig,
     MultipromptGCGAttackConfig,
     RandomTokenAttackConfig,
     TextAttackAttackConfig,
@@ -41,6 +43,11 @@ def create_attack(
         # Search-based attacks
         case BeamSearchAttackConfig() | GCGAttackConfig():
             return SearchBasedAttack(
+                attack_config=attack_config,
+                victim=victim,
+            )
+        case LMBasedAttackConfig():
+            return LMBasedAttack(
                 attack_config=attack_config,
                 victim=victim,
             )

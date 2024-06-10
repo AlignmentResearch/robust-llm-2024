@@ -1,2 +1,5 @@
 name_or_path: "EleutherAI/pythia-14m"
 family: "pythia"
+generation_config:
+  max_length: null
+  max_new_tokens: 128

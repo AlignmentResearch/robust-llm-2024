@@ -11,10 +11,8 @@ from unittest.mock import MagicMock, PropertyMock
 import pytest
 from transformers import AutoTokenizer
 
-from robust_llm.attacks.random_token import (
-    RandomTokenAttack,
-    get_attacked_text_from_successes,
-)
+from robust_llm.attacks.search_free.random_token import RandomTokenAttack
+from robust_llm.attacks.search_free.search_free import get_attacked_text_from_successes
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
@@ -86,16 +84,34 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
     chunk_text = "Chunk text"
 
     chunk_type = ChunkType.IMMUTABLE
-    rv = attack._get_text_for_chunk(chunk_text, chunk_type, current_iteration=0)
+    rv = attack._get_text_for_chunk(
+        chunk_text,
+        chunk_type,
+        current_iteration=0,
+        chunk_label=0,
+        chunk_seed=None,
+    )
     assert rv == "Chunk text"
 
     chunk_type = ChunkType.PERTURBABLE
-    rv = attack._get_text_for_chunk(chunk_text, chunk_type, current_iteration=0)
+    rv = attack._get_text_for_chunk(
+        chunk_text,
+        chunk_type,
+        current_iteration=0,
+        chunk_label=0,
+        chunk_seed=None,
+    )
     assert rv.startswith("Chunk text")
     assert rv != "Chunk text"
 
     chunk_type = ChunkType.OVERWRITABLE
-    rv = attack._get_text_for_chunk(chunk_text, chunk_type, current_iteration=0)
+    rv = attack._get_text_for_chunk(
+        chunk_text,
+        chunk_type,
+        current_iteration=0,
+        chunk_label=0,
+        chunk_seed=None,
+    )
     assert not rv.startswith("Chunk text")
 
 

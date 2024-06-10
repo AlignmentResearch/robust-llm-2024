@@ -14,8 +14,15 @@ from robust_llm.config import (
     TextAttackAttackConfig,
     TRLAttackConfig,
 )
-from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAttackConfig
+from robust_llm.config.attack_configs import (
+    GCGAttackConfig,
+    LMBasedAttackConfig,
+    MultipromptGCGAttackConfig,
+)
 from robust_llm.config.configs import EvaluationConfig
+from robust_llm.config.dataset_configs import ContactInfoDatasetConfig
+from robust_llm.config.model_configs import GenerationConfig
+from robust_llm.models.model_utils import InferenceType
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 
 NON_MODIFIABLE_WORDS_TEXT_ATTACKS = [
@@ -112,6 +119,82 @@ def test_doesnt_crash_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
     exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
         n_attack_tokens=3,
         n_its=2,
+    )
+    _test_doesnt_crash(exp_config)
+
+
+def test_doesnt_crash_lm_attack_clf(exp_config: ExperimentConfig) -> None:
+    assert exp_config.evaluation is not None
+    exp_config.dataset = DatasetConfig(
+        dataset_type="AlignmentResearch/IMDB",
+        n_train=2,
+        n_val=2,
+    )
+    exp_config.evaluation.evaluation_attack = LMBasedAttackConfig(
+        adversary=ModelConfig(
+            name_or_path="EleutherAI/pythia-14m",
+            family="pythia",
+            inference_type=InferenceType.GENERATION.value,
+            strict_load=True,
+            padding_side="left",
+            generation_config=GenerationConfig(
+                min_new_tokens=10,
+                max_new_tokens=20,
+                do_sample=True,
+            ),
+        ),
+        templates=[
+            "1: {}, 2: {}, 3: {}. Do something1!",
+            "1: {}, 2: {}, 3: {}. Do something2!",
+        ],
+        n_its=2,
+    )
+    _test_doesnt_crash(exp_config)
+
+
+def test_doesnt_crash_lm_attack_gen(exp_config: ExperimentConfig) -> None:
+    assert exp_config.evaluation is not None
+    exp_config.dataset = ContactInfoDatasetConfig(
+        dataset_type="ContactInfo",
+        n_train=2,
+        n_val=2,
+        info_type="phone_number",
+        inference_type="generation",
+        classification_as_generation=False,
+    )
+    exp_config.model = ModelConfig(
+        name_or_path="EleutherAI/pythia-14m",
+        family="pythia",
+        inference_type="generation",
+        strict_load=True,
+        padding_side="left",
+        generation_config=GenerationConfig(
+            max_length=None,
+            min_new_tokens=10,
+            max_new_tokens=20,
+            do_sample=True,
+        ),
+    )
+    exp_config.evaluation.final_success_binary_callback = "phone_number_in_generation"
+    exp_config.evaluation.evaluation_attack = LMBasedAttackConfig(
+        adversary=ModelConfig(
+            name_or_path="EleutherAI/pythia-14m",
+            family="pythia",
+            inference_type=InferenceType.GENERATION.value,
+            strict_load=True,
+            padding_side="left",
+            generation_config=GenerationConfig(
+                max_length=None,
+                min_new_tokens=10,
+                max_new_tokens=20,
+                do_sample=True,
+            ),
+        ),
+        templates=[
+            "{} Do something!",
+        ],
+        n_its=2,
+        victim_success_binary_callback="phone_number_in_generation",
     )
     _test_doesnt_crash(exp_config)
 

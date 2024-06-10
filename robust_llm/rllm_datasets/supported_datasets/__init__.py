@@ -1,3 +1,4 @@
+from .contact_info_dataset import ContactInfoDataset
 from .enron_spam_dataset import EnronSpamDataset
 from .imdb_dataset import IMDBDataset
 from .password_match_dataset import PasswordMatchDataset
@@ -8,4 +9,5 @@ __all__ = [
     "IMDBDataset",
     "PasswordMatchDataset",
     "WordLengthDataset",
+    "ContactInfoDataset",
 ]

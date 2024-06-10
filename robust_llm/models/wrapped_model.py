@@ -11,7 +11,12 @@ from typing import Optional
 import torch
 import transformers
 from accelerate import Accelerator
-from transformers import PretrainedConfig, PreTrainedModel, PreTrainedTokenizerBase
+from transformers import (
+    PretrainedConfig,
+    PreTrainedModel,
+    PreTrainedTokenizerBase,
+    set_seed,
+)
 from transformers.modeling_outputs import ModelOutput
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
@@ -375,21 +380,32 @@ class WrappedModel(ABC):
         inputs = dict_to_device(inputs, self.model.device)
         return self.model.forward(**inputs)
 
+    def _to_transformers_generation_config(
+        self, gen_config: GenerationConfig
+    ) -> transformers.GenerationConfig:
+        """Converts our GenerationConfig to a transformers GenerationConfig.
+
+        This is necessary because transformers expects its own GenerationConfig object.
+        """
+        gen_config_dict = dataclasses.asdict(gen_config)
+        # Add eos_token_id and pad_token_id to the config.
+        gen_config_dict["eos_token_id"] = self.tokenizer.eos_token_id
+        gen_config_dict["pad_token_id"] = self.tokenizer.pad_token_id
+        return transformers.GenerationConfig.from_dict(gen_config_dict)
+
     def generate(self, **inputs):
         """Generate text.
 
         This wrapper is mostly here in case it's needed for compatibility with
         CachingWrappedModel.
         """
-        # transformers expects its own GenerationConfig object.
         if inputs.get("generation_config") is not None:
             gen_config = inputs["generation_config"]
             if isinstance(gen_config, GenerationConfig):
-                gen_config_dict = dataclasses.asdict(gen_config)
-                # Add eos_token_id and pad_token_id to the config.
-                gen_config_dict["eos_token_id"] = self.tokenizer.eos_token_id
-                gen_config_dict["pad_token_id"] = self.tokenizer.pad_token_id
-                gen_config = transformers.GenerationConfig.from_dict(gen_config_dict)
+                gen_config = self._to_transformers_generation_config(gen_config)
+            inputs["generation_config"] = gen_config
+        elif self.generation_config is not None:
+            gen_config = self._to_transformers_generation_config(self.generation_config)
             inputs["generation_config"] = gen_config
         return self.model.generate(**inputs)
 
@@ -412,7 +428,9 @@ class WrappedModel(ABC):
 
         TODO (ian): Remove this method when we stop using pipelines.
         """
-        return self.inference_type == InferenceType.GENERATION
+        return (self.tokenizer.padding_side == "left") and (
+            self.inference_type == InferenceType.GENERATION
+        )
 
     @property
     def config(self) -> PretrainedConfig:
@@ -515,3 +533,8 @@ class WrappedModel(ABC):
     @property
     def device(self) -> torch.device:
         return self.model.device
+
+    @staticmethod
+    def set_seed(seed: int) -> None:
+        """Wrapper around transformers set_seed."""
+        set_seed(seed % (2**32))

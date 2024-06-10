@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 
@@ -33,7 +34,26 @@ class DatasetConfig:
     n_train: int = 0
     n_val: int = 0
     config_name: Optional[str] = None
-    revision: str = "<1.1.0"
+    revision: Optional[str] = "<1.1.0"
     inference_type: str = "classification"
     classification_as_generation: bool = True
     gen_target_override: Optional[str] = None
+
+
+@dataclass
+class ContactInfoDatasetConfig(DatasetConfig):
+    """Config used for the ContactInfo dataset.
+
+    Attributes:
+        info_type (Optional[str]):
+            The type of information to generate, e.g. phone_number.
+    """
+
+    dataset_type: str = "ContactInfo"
+    inference_type: str = "generation"
+    classification_as_generation: bool = False
+    info_type: Optional[str] = None
+
+
+cs = ConfigStore.instance()
+cs.store(group="dataset", name="CONTACT_INFO", node=ContactInfoDatasetConfig)

@@ -1,1 +1,4 @@
 family: "pythia"
+generation_config:
+  do_sample: true
+  max_new_tokens: 10

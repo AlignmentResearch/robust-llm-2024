@@ -1,0 +1,4 @@
+dataset_type: "ContactInfo"
+inference_type: "generation"
+classification_as_generation: false
+info_type: "phone_number"

@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+  - /dataset: CONTACT_INFO
+  - /evaluation: DEFAULT
+  - /attack@evaluation.evaluation_attack: lm-attack-phone-number
+  - /model: pythia-14m
+  - _self_
+
+dataset:
+  n_val: 100
+  info_type: phone_number
+
+evaluation:
+  final_success_binary_callback: phone_number_in_generation
+
+model:
+  padding_side: left
+
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

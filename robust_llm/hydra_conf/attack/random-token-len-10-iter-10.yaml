@@ -1,0 +1,7 @@
+defaults:
+  - RANDOM_TOKEN
+
+min_tokens: 10
+max_tokens: 10
+max_iterations: 10
+logging_frequency: 1

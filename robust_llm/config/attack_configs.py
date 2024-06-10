@@ -7,6 +7,7 @@ from omegaconf import MISSING
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.config.constants import SHARED_DATA_DIR
 from robust_llm.config.model_configs import ModelConfig
+from robust_llm.models.model_utils import InferenceType
 
 
 @dataclass
@@ -109,6 +110,33 @@ class RandomTokenAttackConfig(AttackConfig):
         super().__post_init__()
         assert self.n_its > 0
         assert self.n_attack_tokens > 0
+
+
+@dataclass
+class LMBasedAttackConfig(AttackConfig):
+    """Options specific for LM-based attacks.
+    Attributes:
+        adversary: Model config used as the LM adversary.
+        generation_config: Configuration for generating text with the LM adversary.
+        templates: Prompt templates to use for eliciting the attack, one for each
+            target label. Has to contain exactly one `{}` placeholder for
+            each text chunk.
+        max_iterations: Maximum number of iterations to run the attack.
+        adversary_batch_size: Batch size used for the LM adversary.
+        victim_batch_size: Batch size used for the LM victium.
+    """
+
+    adversary: ModelConfig = MISSING
+    templates: list[str] = MISSING
+    n_its: int = 10
+    adversary_batch_size: int = 8
+    victim_batch_size: int = 8
+    prompt_attack_mode: str = "single-prompt"
+    victim_success_binary_callback: str = "successes_from_text"
+
+    def __post_init__(self):
+        super().__post_init__()
+        assert self.adversary.inference_type == InferenceType.GENERATION.value
 
 
 @dataclass
@@ -275,3 +303,4 @@ cs.store(group="attack", name="TRL", node=TRLAttackConfig)
 cs.store(group="attack", name="GCG", node=GCGAttackConfig)
 cs.store(group="attack", name="MULTIPROMPT_GCG", node=MultipromptGCGAttackConfig)
 cs.store(group="attack", name="BEAM_SEARCH", node=BeamSearchAttackConfig)
+cs.store(group="attack", name="LM_BASED", node=LMBasedAttackConfig)

@@ -1,5 +1,8 @@
 from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
+from robust_llm.rllm_datasets.supported_datasets.contact_info_dataset import (
+    ContactInfoDataset,
+)
 from robust_llm.rllm_datasets.supported_datasets.enron_spam_dataset import (
     EnronSpamDataset,
 )
@@ -16,6 +19,7 @@ SUPPORTED_DATASETS: dict[str, type[RLLMDataset]] = {
     "AlignmentResearch/PasswordMatch": PasswordMatchDataset,
     "AlignmentResearch/WordLength": WordLengthDataset,
     "AlignmentResearch/EnronSpam": EnronSpamDataset,
+    "ContactInfo": ContactInfoDataset,
 }
 
 

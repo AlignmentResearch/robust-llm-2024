@@ -1,0 +1,16 @@
+defaults:
+- LM_BASED
+
+adversary:
+  name_or_path: EleutherAI/pythia-1.4b
+  family: pythia
+  inference_type: generation
+  strict_load: true
+  padding_side: left
+  generation_config:
+    min_new_tokens: 10
+    max_new_tokens: 10
+    do_sample: true
+templates:
+  - " It was a terrible movie."
+  - " It was a great movie."

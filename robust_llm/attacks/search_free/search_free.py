@@ -1,16 +1,13 @@
-import random
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Sequence
-from functools import cached_property
-from typing import Any
+from typing import Any, Optional
 
 from datasets import Dataset
 from tqdm import tqdm
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack, PromptAttackMode
-from robust_llm.config.attack_configs import RandomTokenAttackConfig
-from robust_llm.logging_utils import LoggingCounter
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
@@ -18,74 +15,23 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ModifiableChunkSpec,
 )
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.scoring_callbacks import CallbackInput, CallbackRegistry
-from robust_llm.utils import get_randint_with_exclusions
+from robust_llm.scoring_callbacks import BinaryCallback, CallbackInput
 
 
-class RandomTokenAttack(Attack):
-    """Random token attack.
+class SearchFreeAttack(Attack, ABC):
+    """Attack where each iteration is independent, no searching.
 
-    Replaces all the OVERWRITABLE text with random tokens
-    from the victim tokenizer's vocabulary. The attack
-    is repeated for each datapoint until it is successful,
+    The attack is repeated for each datapoint until it is successful,
     or until `attack_config.max_iterations` is reached.
     Appends the attack to the modifiable text instead
     of replacing it if the chunk is PERTURBABLE.
     """
 
     REQUIRES_TRAINING = False
-
-    def __init__(
-        self,
-        attack_config: RandomTokenAttackConfig,
-        victim: WrappedModel,
-    ) -> None:
-        """Constructor for RandomTokenAttack.
-
-        Args:
-            attack_config: Config of the attack.
-            victim: The WrappedModel to be attacked.
-        """
-        super().__init__(attack_config)
-
-        self.victim = victim
-
-        self.rng = random.Random(self.attack_config.seed)
-
-        self.n_attack_tokens = attack_config.n_attack_tokens
-        self.n_its = attack_config.n_its
-
-        self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
-        self.victim_success_binary_callback = CallbackRegistry.get_binary_callback(
-            name=attack_config.victim_success_binary_callback,
-        )
-
-        self.logging_counter = LoggingCounter(_name="random_token_attack")
-
-    @cached_property
-    def shared_attack_tokens(self) -> list[list[int]]:
-        """Get the shared attack tokens for this instance of RandomTokenAttack.
-
-        This is for multi-prompt attacks. We generate the attack tokens ahead of
-        time and cache them so we can reuse them for each example. This lets us
-        ensure that the attack tokens in each iteration are consistent across
-        examples, so we can take advantage of caching by running all attacks on
-        a single example at a time and then finding the most successful
-        iteration across examples afterwards.
-
-        NOTE: This implementation assumes that there is only a single modifiable
-        chunk in the dataset.
-        """
-        # We forbid introducing special tokens in the attack tokens.
-        excluded_token_ids = self.victim.tokenizer.all_special_ids
-
-        all_attack_tokens = []
-        for _ in range(self.n_its):
-            attack_tokens = self._n_random_token_ids_with_exclusions(
-                self.n_attack_tokens, excluded_token_ids
-            )
-            all_attack_tokens.append(attack_tokens)
-        return all_attack_tokens
+    n_its: int
+    victim: WrappedModel
+    prompt_attack_mode: PromptAttackMode
+    victim_success_binary_callback: BinaryCallback
 
     @override
     def get_attacked_dataset(
@@ -117,7 +63,7 @@ class RandomTokenAttack(Attack):
 
         Note that we are going per example and running all the iterations at
         once to take advantage of caching and batching. Instead of batching
-        across examples, we batch across iterations because for RandomToken the
+        across examples, we batch across iterations because for search-free attacks the
         iterations are independent of each other. However, this means we may run
         more iterations than necessary, e.g. if one of the early iterations
         would be successful.
@@ -229,18 +175,46 @@ class RandomTokenAttack(Attack):
                 chunk_text=chunk_text,
                 chunk_type=chunk_type,
                 current_iteration=current_iteration,
+                chunk_label=example["clf_label"],
+                chunk_seed=example.get("seed"),
             )
         return current_input
+
+    @abstractmethod
+    def _get_attack_tokens(
+        self,
+        chunk_text: str,
+        chunk_type: ChunkType,
+        current_iteration: int,
+        chunk_label: int,
+        chunk_seed: Optional[int] = None,
+    ) -> list[int]:
+        """Returns the attack tokens for the current iteration.
+
+        Args:
+            chunk_text: The text of the chunk to be attacked.
+            chunk_type: The type of the chunk.
+            current_iteration: The current iteration of the attack (only used in
+            the multi-prompt case).
+            chunk_label: The label of the chunk (for classification).
+            chunk_seed: The seed for the chunk (for generation).
+
+        Returns:
+            The attack tokens for the current iteration.
+        """
+        raise NotImplementedError
 
     def _get_text_for_chunk(
         self,
         chunk_text: str,
         chunk_type: ChunkType,
         current_iteration: int,
+        chunk_label: int,
+        chunk_seed: Optional[int] = None,
     ) -> str:
         """Returns the text for a chunk based on its type.
 
-        If we are in single-prompt mode, we generate random tokens here; if we
+        If we are in single-prompt mode, we generate attack tokens here; if we
         are in multi-prompt mode, we return the cached attack tokens for the
         current iteration.
 
@@ -248,6 +222,8 @@ class RandomTokenAttack(Attack):
             chunk: The chunk text.
             chunk_type: The chunk type.
             current_iteration: The current iteration of the attack.
+            chunk_label: The label of the chunk (for classification).
+            chunk_seed: The seed for the chunk (for generation).
 
         Returns:
             The text for the chunk based on its type.
@@ -257,65 +233,29 @@ class RandomTokenAttack(Attack):
                 return chunk_text
 
             case ChunkType.PERTURBABLE:
-                token_ids = self._get_attack_tokens(current_iteration)
-                random_tokens = self.victim.tokenizer.decode(token_ids)
-                return chunk_text + random_tokens
+                token_ids = self._get_attack_tokens(
+                    chunk_text,
+                    chunk_type,
+                    current_iteration,
+                    chunk_label,
+                    chunk_seed,
+                )
+                attack_tokens = self.victim.tokenizer.decode(token_ids)
+                return chunk_text + attack_tokens
 
             case ChunkType.OVERWRITABLE:
-                token_ids = self._get_attack_tokens(current_iteration)
-                random_tokens = self.victim.tokenizer.decode(token_ids)
-                return random_tokens
+                token_ids = self._get_attack_tokens(
+                    chunk_text,
+                    chunk_type,
+                    current_iteration,
+                    chunk_label,
+                    chunk_seed,
+                )
+                attack_tokens = self.victim.tokenizer.decode(token_ids)
+                return attack_tokens
 
             case _:
                 raise ValueError(f"Unknown chunk type: {chunk_type}")
-
-    def _get_attack_tokens(self, current_iteration: int) -> list[int]:
-        """Returns the attack tokens for the current iteration.
-
-        If we are in single-prompt mode, we generate random tokens here
-        to reduce variance between experiment runs (since for low n_its
-        we could get unlucky and get weak attack tokens).
-
-        If we are in multi-prompt mode, we return the cached attack tokens
-        for the current iteration.
-
-        Args:
-            current_iteration: The current iteration of the attack (only used in
-            the multi-prompt case).
-
-        Returns:
-            The attack tokens for the current iteration.
-        """
-        match self.prompt_attack_mode:
-            case PromptAttackMode.SINGLEPROMPT:
-                return self._n_random_token_ids_with_exclusions(
-                    n=self.n_attack_tokens,
-                    excluded_token_ids=self.victim.tokenizer.all_special_ids,
-                )
-            case PromptAttackMode.MULTIPROMPT:
-                return self.shared_attack_tokens[current_iteration]
-
-    def _n_random_token_ids_with_exclusions(
-        self, n: int, excluded_token_ids: list[int]
-    ) -> list[int]:
-        """Returns n random token ids with exclusions.
-
-        Args:
-            n: The number of random token ids to return.
-            excluded_token_ids: The token ids to exclude from the random selection (e.g.
-                special tokens).
-
-        Returns:
-            n random token ids with exclusions.
-        """
-        return [
-            get_randint_with_exclusions(
-                high=self.victim.vocab_size,
-                exclusions=excluded_token_ids,
-                rng=self.rng,
-            )
-            for _ in range(n)
-        ]
 
     def _get_multi_prompt_attacked_texts(
         self, dataset: RLLMDataset, success_indices: list[list[int]]
