@@ -97,6 +97,8 @@ class TrainingConfig:
         seed: seed to use for training. It will be set at the beginning of huggingface
             Trainer's training. In particular, it may affect random initialization
             (if any).
+        upload_retries: The number of times to retry uploading the model to the hub.
+        upload_cooldown: The number of seconds to wait between retries.
     """
 
     adversarial: Optional[AdversarialTrainingConfig] = None
@@ -113,6 +115,8 @@ class TrainingConfig:
     model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
     force_name_to_save: Optional[str] = None
     seed: int = 0
+    upload_retries: int = 3
+    upload_cooldown: float = 5
 
     def __post_init__(self):
         assert self.num_train_epochs > 0, "Number of training epochs must be positive."

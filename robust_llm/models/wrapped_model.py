@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
+import time
+import traceback
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
@@ -38,7 +40,7 @@ class WrappedModel(ABC):
         inference_type: InferenceType,
         train_minibatch_size: int,
         eval_minibatch_size: int,
-        generation_config: GenerationConfig | None,
+        generation_config: GenerationConfig | None = None,
     ) -> None:
         """Initialize a WrappedModel.
 
@@ -62,6 +64,32 @@ class WrappedModel(ABC):
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
         self.generation_config = generation_config
+
+    def push_to_hub(
+        self,
+        repo_id: str,
+        revision: Optional[str],
+        retries: int,
+        cooldown_seconds: float,
+    ):
+        """Pushes the model and tokenizer to the hub with retries."""
+        for attempt in range(retries):
+            try:
+                self.model.push_to_hub(repo_id=repo_id, revision=revision)  # type: ignore # noqa: E501
+                # Even though the above line should push both model and tokenizer,
+                # in practice the tokenizer sometimes doesn't get pushed,
+                # so we do it explicitly here.
+                self.tokenizer.push_to_hub(repo_id=repo_id, revision=revision)  # type: ignore # noqa: E501
+                return
+            except Exception as e:
+                warnings.warn(
+                    f"Failed to push to hub on attempt {attempt + 1} of {retries}: "
+                    f"{e}\n{traceback.format_exc()}",
+                    stacklevel=2,
+                )
+            if attempt + 1 < retries:
+                time.sleep(cooldown_seconds)
+        raise RuntimeError(f"Failed to push to hub after {retries} attempts.")
 
     @classmethod
     def register_subclass(cls, name):

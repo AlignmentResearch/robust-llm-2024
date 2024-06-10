@@ -225,15 +225,11 @@ class Training:
                 # and the trainer.hub_model_id (no `args`!), which
                 # was previously None, is set.
                 assert self.trainer.args.hub_model_id is not None
-                self.victim.model.push_to_hub(
-                    repo_id=self.trainer.args.hub_model_id, revision=adv_tr_round_str  # type: ignore # noqa: E501
-                )
-
-                # Even though the above line should push both model and tokenizer,
-                # in practice the tokenizer sometimes doesn't get pushed,
-                # so we do it explicitly here.
-                self.victim.tokenizer.push_to_hub(
-                    self.trainer.args.hub_model_id, revision=adv_tr_round_str  # type: ignore # noqa: E501
+                self.victim.push_to_hub(
+                    repo_id=self.trainer.args.hub_model_id,
+                    revision=adv_tr_round_str,
+                    retries=self.config.upload_retries,
+                    cooldown_seconds=self.config.upload_cooldown,
                 )
 
                 # Record the saving on wandb.
