@@ -28,6 +28,8 @@ def random_token_config():
 @pytest.fixture
 def mocked_victim():
     victim = MagicMock()
+    victim.decode = lambda x: victim.right_tokenizer.decode(x)
+    victim.batch_decode = lambda x: victim.right_tokenizer.batch_decode(x)
     victim.vocab_size = 10
     return victim
 
@@ -72,7 +74,7 @@ def test_get_attacked_text_from_successes():
 
 def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
     excluded_token_ids = [0, 1, 2, 3, 4, 5]
-    mocked_victim.tokenizer = tokenizer
+    mocked_victim.right_tokenizer = tokenizer
     # Mock the all_special_ids property of the tokenizer
     with mock.patch(
         "transformers.GPT2TokenizerFast.all_special_ids", new_callable=PropertyMock
@@ -120,7 +122,7 @@ def test_get_attacked_input(random_token_config, mocked_victim, tokenizer):
 
     TODO (ian): Write tests with a custom tokenizer?
     """
-    mocked_victim.tokenizer = tokenizer
+    mocked_victim.right_tokenizer = tokenizer
     attack = RandomTokenAttack(random_token_config, mocked_victim)
     chunked_datapoint = ["a", "b", "c"]
     example = {

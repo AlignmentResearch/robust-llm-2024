@@ -136,7 +136,6 @@ def test_doesnt_crash_lm_attack_clf(exp_config: ExperimentConfig) -> None:
             family="pythia",
             inference_type=InferenceType.GENERATION.value,
             strict_load=True,
-            padding_side="left",
             generation_config=GenerationConfig(
                 min_new_tokens=10,
                 max_new_tokens=20,
@@ -167,7 +166,6 @@ def test_doesnt_crash_lm_attack_gen(exp_config: ExperimentConfig) -> None:
         family="pythia",
         inference_type="generation",
         strict_load=True,
-        padding_side="left",
         generation_config=GenerationConfig(
             max_length=None,
             min_new_tokens=10,
@@ -182,7 +180,6 @@ def test_doesnt_crash_lm_attack_gen(exp_config: ExperimentConfig) -> None:
             family="pythia",
             inference_type=InferenceType.GENERATION.value,
             strict_load=True,
-            padding_side="left",
             generation_config=GenerationConfig(
                 max_length=None,
                 min_new_tokens=10,
@@ -215,7 +212,6 @@ def test_doesnt_crash_trl(exp_config: ExperimentConfig) -> None:
             # we need a ForCausalLMWithValueHead model
             inference_type="trl",
             strict_load=False,
-            padding_side="left",
         ),
     )
 

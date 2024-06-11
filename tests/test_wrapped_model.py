@@ -49,22 +49,6 @@ def wrapped_model():
     return WrappedModel.from_config(config, accelerator=None)
 
 
-def test_can_generate():
-    config = model_config_factory()
-    config.padding_side = "left"
-    clf_wrapped_model = WrappedModel.from_config(config, accelerator=None)
-    assert not clf_wrapped_model.can_generate()
-
-    gen_config = dataclasses.replace(config, inference_type="generation")
-    gen_wrapped_model = WrappedModel.from_config(gen_config, accelerator=None)
-    assert gen_wrapped_model.can_generate()
-
-    config.padding_side = "right"
-    gen_config = dataclasses.replace(config, inference_type="generation")
-    gen_wrapped_model = WrappedModel.from_config(gen_config, accelerator=None)
-    assert not gen_wrapped_model.can_generate()
-
-
 def test_add_accelerator(wrapped_model: WrappedModel):
     assert wrapped_model.accelerator is None
     assert wrapped_model.model.device == torch.device("cpu")
@@ -119,10 +103,14 @@ def test_forward(wrapped_model: WrappedModel):
     assert torch.allclose(wrapped_output.logits, underlying_output.logits)
 
 
-def test_get_tokens(wrapped_model: WrappedModel):
-    text = ["Hello, my dog is cute"]
-    wrapped_input_ids = wrapped_model.get_tokens(text)
-    underlying_input_ids = wrapped_model.tokenizer(text, return_tensors="pt").input_ids
+def test_tokenize(wrapped_model: WrappedModel):
+    text = ["Hello, my dog is cute", "Hello, my dog is the cutest dog."]
+    wrapped_input_ids = wrapped_model.tokenize(
+        text, padding_side="right", return_tensors="pt"
+    ).input_ids
+    underlying_input_ids = wrapped_model.right_tokenizer(
+        text, padding=True, return_tensors="pt"
+    ).input_ids
     assert torch.allclose(wrapped_input_ids, underlying_input_ids)
 
 
@@ -135,4 +123,4 @@ def test_llama():
     )
     wrapped_model = WrappedModel.from_config(cfg, accelerator=None)
     assert isinstance(wrapped_model.model, LlamaForCausalLM)
-    assert isinstance(wrapped_model.tokenizer, LlamaTokenizer)
+    assert isinstance(wrapped_model.right_tokenizer, LlamaTokenizer)

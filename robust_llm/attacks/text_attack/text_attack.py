@@ -178,7 +178,9 @@ class TextAttackAttack(Attack):
         # LanguageModelWrapper is a subclass of TextAttack's HuggingFaceModelWrapper,
         # which is the class that TextAttack attacks expect.
         # TODO (ian): Avoid unwrapping and rewrapping.
-        wrapped_model = LanguageModelWrapper(victim.model, victim.tokenizer)
+        # We use the right_tokenizer because we want to use right-padding for
+        # classification.
+        wrapped_model = LanguageModelWrapper(victim.model, victim.right_tokenizer)
 
         self.num_modifiable_words_per_chunk = (
             attack_config.num_modifiable_words_per_chunk

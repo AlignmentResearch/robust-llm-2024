@@ -14,7 +14,7 @@ class GPT2Model(WrappedModel):
     def __init__(
         self,
         model: GPT2PreTrainedModel,
-        tokenizer: PreTrainedTokenizerBase,
+        right_tokenizer: PreTrainedTokenizerBase,
         accelerator: Accelerator | None,
         inference_type: InferenceType,
         train_minibatch_size: int,
@@ -26,7 +26,7 @@ class GPT2Model(WrappedModel):
         # assert isinstance(model, GPT2PreTrainedModel)
         super().__init__(
             model,
-            tokenizer,
+            right_tokenizer,
             accelerator,
             inference_type,
             train_minibatch_size,
@@ -47,7 +47,7 @@ class GPT2Model(WrappedModel):
         tokenizer = GPT2TokenizerFast.from_pretrained(
             model_config.name_or_path,
             revision=model_config.revision,
-            padding_side=model_config.padding_side,
+            padding_side="right",  # Left padding is handled separately
             model_max_length=cls.CONTEXT_LENGTH,
             clean_up_tokenization_spaces=False,
         )

@@ -136,7 +136,6 @@ def test_doesnt_crash_autoregressive_gen_trl(exp_config: ExperimentConfig) -> No
             # we need a ForCausalLMWithValueHead model
             inference_type="trl",
             strict_load=False,
-            padding_side="left",
         ),
     )
 

@@ -13,9 +13,6 @@ dataset:
 evaluation:
   final_success_binary_callback: phone_number_in_generation
 
-model:
-  padding_side: left
-
 
 experiment_name: ???
 run_name: ???

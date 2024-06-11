@@ -93,7 +93,6 @@ class ParaphraseDefenseConfig(DefenseConfig):
         revision="main",
         inference_type="generation",
         strict_load=True,
-        padding_side="left",
     )
     meta_prompt: str = "Paraphrase the following sentences: "
     temperature: float = 0.7

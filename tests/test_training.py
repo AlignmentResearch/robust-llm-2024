@@ -32,8 +32,11 @@ def test_get_only_data_with_incorrect_preds():
     train = load_rllm_dataset(cfg, split="train").tokenize(tokenizer)
 
     # assume all are marked positive
-    positives = tokenizer.batch_encode_plus(
-        train.ds["text"], padding=True, return_tensors="pt"
+    positives = tokenizer.__call__(
+        train.ds["text"],
+        padding=True,
+        return_tensors="pt",
+        add_special_tokens=False,
     ).input_ids
     accelerator = Accelerator()
     model = FakeClassifierWithPositiveList(tokenizer=tokenizer, positives=positives)

@@ -459,3 +459,25 @@ def cast_features_like(
     """
     new_ds = other_ds.cast(ds.features)
     return new_ds
+
+
+def strip_leading_whitespace(ds: Dataset) -> Dataset:
+    """Strip leading whitespace from the 'gen_target' column of a dataset.
+
+    Also updates the Feature of the 'clf_label' column to remove leading whitespace.
+    """
+    ds = ds.map(
+        lambda x: {
+            "gen_target": x["gen_target"].lstrip(),
+        }
+    )
+    # Also update the feature of clf_label
+    stripped_feature = datasets.ClassLabel(
+        names=[name.lstrip() for name in ds.features["clf_label"].names]
+    )
+    ds = cast_column_to_feature(
+        ds=ds,
+        column_name="clf_label",
+        feature=stripped_feature,
+    )
+    return ds

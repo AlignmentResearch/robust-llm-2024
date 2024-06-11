@@ -19,7 +19,6 @@ dataset:
 model:
   name_or_path: "AlignmentResearch/robust_llm_pythia-14m-pm-gen-ian-nd"
   eval_minibatch_size: 32
-  padding_side: "left"
 
 evaluation:
   final_success_binary_callback: "target_not_in_generation"

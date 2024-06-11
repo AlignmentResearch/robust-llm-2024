@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum
+from functools import cached_property
 
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
@@ -53,8 +54,12 @@ class DefendedModel(WrappedModel, ABC):
         return self._underlying_model.accelerator
 
     @property
-    def tokenizer(self):
-        return self._underlying_model.tokenizer
+    def right_tokenizer(self):
+        return self._underlying_model.right_tokenizer
+
+    @cached_property
+    def left_tokenizer(self):
+        return self._underlying_model.left_tokenizer
 
     @property
     def inference_type(self):

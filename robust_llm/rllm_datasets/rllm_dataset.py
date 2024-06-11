@@ -19,6 +19,7 @@ from robust_llm.rllm_datasets.dataset_utils import (
     construct_text_and_chunked_text,
     get_largest_version,
     get_largest_version_below,
+    strip_leading_whitespace,
     tokenize_dataset,
     valid_tag,
 )
@@ -231,10 +232,15 @@ class RLLMDataset(ABC):
         Currently this involves
         - constructing 'text', and 'chunked_text' columns
             out of the 'instructions', 'content', and 'answer_prompt' columns.
+        - Optionally stripping leading whitespace from the 'gen_target' column.
         - Optionally overriding the 'gen_target' column with a specified string.
         """
         ds = construct_text_and_chunked_text(ds)
 
+        if cfg.strip_leading_whitespace:
+            assert cfg.inference_type == "generation"
+            assert cfg.classification_as_generation
+            ds = strip_leading_whitespace(ds)
         if cfg.gen_target_override is not None:
             assert cfg.inference_type == "generation"
             assert not cfg.classification_as_generation
@@ -435,6 +441,7 @@ class RLLMDataset(ABC):
             # For generation, we tokenize the gen_target and stick it on the end
             # of the input_ids/attention_mask columns.
             ds_for_trainer = self.ds.remove_columns(["clf_label"])
+            # TODO(ian): Make this work for chat models (pass in WrappedModel?)
             tokenized_gen_target = self.tokenizer(self.ds["gen_target"])
             all_target_ids = tokenized_gen_target["input_ids"]
             target_masks = tokenized_gen_target["attention_mask"]

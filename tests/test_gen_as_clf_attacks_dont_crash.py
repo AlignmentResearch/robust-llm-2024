@@ -124,7 +124,6 @@ def test_doesnt_crash_gen_as_clf_trl(exp_config: ExperimentConfig) -> None:
             # we need a ForCausalLMWithValueHead model
             inference_type="trl",
             strict_load=False,
-            padding_side="left",
         ),
     )
 

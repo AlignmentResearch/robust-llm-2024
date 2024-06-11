@@ -5,7 +5,6 @@ defaults:
 
 adversary:
   inference_type: "trl"
-  padding_side: "left"
 
 batch_size: 10
 mini_batch_size: 10

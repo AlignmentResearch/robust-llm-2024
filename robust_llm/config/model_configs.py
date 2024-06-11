@@ -57,6 +57,7 @@ class ModelConfig:
     eval_minibatch_size: The minibatch size to use for evaluation.
         Defaults to twice the training minibatch size (since for evaluation we
         don't need to store gradients).
+    generation_config: The config to use for text generation.
     """
 
     name_or_path: str = MISSING
@@ -66,7 +67,6 @@ class ModelConfig:
     # https://omegaconf.readthedocs.io/en/2.1_branch/structured_config.html#interpolations
     inference_type: str = "${dataset.inference_type}"
     strict_load: bool = False
-    padding_side: str = "right"
     train_minibatch_size: int = 16
     # This is variable interpolation plus a custom resolver (see above).
     eval_minibatch_size: int = SI("${mult: 2, ${model.train_minibatch_size}}")

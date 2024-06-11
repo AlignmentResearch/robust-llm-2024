@@ -87,7 +87,7 @@ class TRLAttack(Attack):
             "top_k": 0.0,
             "top_p": 1.0,
             "do_sample": True,
-            "pad_token_id": self.adversary.tokenizer.eos_token_id,
+            "pad_token_id": self.adversary.right_tokenizer.eos_token_id,
             "max_new_tokens": attack_config.max_new_tokens,
         }
         self.ppo_trainer: Optional[PPOTrainer] = None
@@ -104,7 +104,11 @@ class TRLAttack(Attack):
         self.ppo_trainer = make_ppo_trainer(
             attack_config=self.attack_config,
             adversary_model=self.adversary.model,
-            adversary_tokenizer=self.adversary.tokenizer,
+            # We use the right-padding tokenizer because it doesn't matter and
+            # we already loaded the right-padding tokenizer from the victim.
+            # TODO(ian): Check that it's actually fine to pass the right-padding
+            # tokenizer.
+            adversary_tokenizer=self.adversary.right_tokenizer,
             dataset=dataset.ds,
         )
 
@@ -210,7 +214,9 @@ class TRLAttack(Attack):
             dataset=dataset.ds,
             modifiable_chunk_spec=dataset.modifiable_chunk_spec,
         )
-
+        # TODO(ian): Work out if 'apply_chat_template' messes with the updating
+        # done in 'with_attacked_text'.
+        attacked_texts = self.victim.maybe_apply_chat_template(attacked_texts)
         attacked_dataset = dataset.with_attacked_text(attacked_texts)
         return attacked_dataset, {}
 
@@ -247,12 +253,15 @@ class TRLAttack(Attack):
             response_text=TRL_RESPONSE_STR,
             modifiable_chunk_spec=modifiable_chunk_spec,
         )
-        context_tensors = self.adversary.tokenizer(
-            contexts, padding="max_length", truncation=True, return_tensors="pt"  # type: ignore # noqa: E501
+        context_tensors = self.adversary.tokenize(
+            contexts,
+            # We use left-padding for autoregressive outputs.
+            padding_side="left",
+            return_tensors="pt",
         )
-        context_tensor_list = [
-            context_tensor for context_tensor in context_tensors["input_ids"]  # type: ignore # noqa: E501
-        ]
+        input_ids = context_tensors["input_ids"]
+        assert isinstance(input_ids, torch.Tensor)
+        context_tensor_list = [context_tensor for context_tensor in input_ids]
 
         with torch.no_grad():
             adversary_generated_responses = self.ppo_trainer.generate(
@@ -268,7 +277,7 @@ class TRLAttack(Attack):
             for response in adversary_generated_responses
         )
 
-        adversary_generated_responses_txt = self.adversary.tokenizer.batch_decode(
+        adversary_generated_responses_txt = self.adversary.batch_decode(
             adversary_generated_responses
         )
 
@@ -298,4 +307,4 @@ class TRLAttack(Attack):
 
         # TODO(niki): enable saving on hf hub
         self.adversary.model.save_pretrained(output_dir)
-        self.adversary.tokenizer.save_pretrained(output_dir)
+        self.adversary.right_tokenizer.save_pretrained(output_dir)

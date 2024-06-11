@@ -1,7 +1,7 @@
 import abc
 import random
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any, Literal, overload
 
 import torch
 import torch.utils.data
@@ -117,7 +117,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         """
         optional_character = "&" if n_attack_tokens % 2 == 1 else ""
         attack_text = "&@" * (n_attack_tokens // 2) + optional_character
-        attack_tokens = self.victim.get_tokens(attack_text)
+        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
         assert len(attack_tokens[0]) == n_attack_tokens
 
         try:
@@ -169,20 +169,50 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         # We exceeded the maximum number of trials, so we raise an exception.
         raise AttackTokenizationChangeException
 
+    @overload
     def _get_tokens(
         self,
         inputs: str | list[str],
-        return_tensors: Optional[str] = "pt",
-        add_special: bool = False,
-    ) -> torch.Tensor:  # TODO (ian): fix return type when return_tensors is None
+        return_tensors: Literal[None] = None,
+        add_special_and_chat: bool = False,
+    ) -> list[list[int]]: ...
+
+    @overload
+    def _get_tokens(
+        self,
+        inputs: str | list[str],
+        return_tensors: Literal["pt"],
+        add_special_and_chat: bool = False,
+    ) -> torch.Tensor: ...
+
+    def _get_tokens(
+        self,
+        inputs: str | list[str],
+        return_tensors: Literal[None, "pt"] = None,
+        add_special_and_chat: bool = False,
+    ) -> list[list[int]] | torch.Tensor:
         """Tokenize the inputs and return the token ids.
 
         Use tokenizer which is part of the wrapped model. Handle all the arguments we
         have to add to the tokenizer.
+
+        Args:
+            inputs: The input text or list of texts to tokenize.
+            return_tensors: Whether to return tensors, and what type of tensors to
+                return.
+            add_special_and_chat: Whether to add special tokens and use chat template.
         """
-        return self.victim.get_tokens(
-            inputs, return_tensors=return_tensors, add_special=add_special
+        if isinstance(inputs, str):
+            inputs = [inputs]
+
+        encoded = self.victim.tokenize(
+            inputs,
+            return_tensors=return_tensors,
+            add_special_tokens=add_special_and_chat,
+            use_chat_template=add_special_and_chat,
         )
+        input_ids = encoded["input_ids"]
+        return input_ids  # type: ignore  # mypy thinks it's EncodingFast | Any
 
     def _decode_tokens(
         self,
@@ -218,13 +248,17 @@ class MultiPromptSearchBasedRunner(abc.ABC):
             TargetTokenizationChangeException: If the tokenization changes after
                 concatenating the strings because of the target tokens.
         """
-        before_attack_tokens = self._get_tokens(example.prompt_template.before_attack)
+        before_attack_tokens = self._get_tokens(
+            example.prompt_template.before_attack, return_tensors="pt"
+        )
         attack_start = before_attack_tokens.shape[1]
         attack_end = self.n_attack_tokens + attack_start
 
-        after_attack_tokens = self._get_tokens(example.prompt_template.after_attack)
+        after_attack_tokens = self._get_tokens(
+            example.prompt_template.after_attack, return_tensors="pt"
+        )
         target_start = attack_end + after_attack_tokens.shape[1]
-        target_tokens = self._get_tokens(example.gen_target)
+        target_tokens = self._get_tokens(example.gen_target, return_tensors="pt")
         target_end = target_start + target_tokens.shape[1]
 
         attack_indices = AttackIndices(
@@ -239,8 +273,8 @@ class MultiPromptSearchBasedRunner(abc.ABC):
             attack_text=attack_text,
             target=example.gen_target,
         )
-        full_tokens = self._get_tokens(full_prompt)
-        attack_tokens = self._get_tokens(attack_text)
+        full_tokens = self._get_tokens(full_prompt, return_tensors="pt")
+        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
 
         attack_indices.assert_attack_and_target_tokens_validity(
             full_tokens, attack_tokens, target_tokens

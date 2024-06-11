@@ -271,11 +271,11 @@ def compute_max_min_percentile_perplexity(
     max_perplexity_so_far = 0.0
     tdigest = TDigest()
     for batch in dataloader:
-        encoded_input = model.tokenizer(
+        encoded_input = model.tokenize(
             batch["text"],
             return_tensors="pt",
-            padding=True,
-            truncation=True,
+            # We use right-padding for non-autoregressive outputs.
+            padding_side="right",
         )
         encoded_input.to(model.device)
         input_ids = cast(torch.Tensor, encoded_input["input_ids"])
@@ -382,11 +382,11 @@ class PerplexityDefendedModel(FilteringDefendedModel):
             A list of booleans indicating whether each input is flagged as
             adversarial.
         """
-        inputs = self.decoder.tokenizer(
+        inputs = self.decoder.tokenize(
             text_inputs,
             return_tensors="pt",
-            padding=True,
-            truncation=True,
+            # We use right-padding for non-autoregressive outputs.
+            padding_side="right",
         )
         input_ids = cast(torch.Tensor, inputs["input_ids"])
         attention_mask = cast(torch.Tensor, inputs["attention_mask"])

@@ -264,34 +264,43 @@ def is_correctly_padded(mask: torch.Tensor, padding_side: str) -> bool:
     For left padding, the mask should be of the form:
     [0, 0, ..., 0, 1, 1, ..., 1].
     Args:
-        mask (torch.Tensor): Must be 1D. Can contain True/False or 1/0.
+        mask (torch.Tensor): Must be 1D or 2D. Can contain True/False or 1/0.
         padding_side (str): Either "right" or "left".
 
     Returns:
         bool: Whether the mask is of the correct form.
     """
-    assert mask.dim() == 1, "The mask must be 1D."
+    assert mask.dim() <= 2, "The mask must be at most 2D."
     assert len(mask) > 0, "The mask should not be empty."
-    mask_sum = mask.sum().item()
-    assert isinstance(mask_sum, int)
 
     is_boolean = set(mask.unique().tolist()) <= {0, 1}
     if not is_boolean:
         raise ValueError("The mask should contain only 0s and 1s.")
 
-    if padding_side == "right":
-        starts_ones = torch.all(mask[:mask_sum]).item()
-        ends_zeros = torch.all(~mask[mask_sum:]).item()
-        flag = bool(starts_ones and ends_zeros)
+    if mask.dim() == 1:
+        mask = mask.unsqueeze(0)
 
-    elif padding_side == "left":
-        # For left padding, we look from the end of the sequence.
-        switch_point = len(mask) - mask_sum
+    for example_mask in mask:
+        mask_sum = example_mask.sum().item()
+        assert isinstance(mask_sum, int)
 
-        starts_zeros = torch.all(~mask[:switch_point]).item()
-        ends_ones = torch.all(mask[switch_point:]).item()
-        flag = bool(starts_zeros and ends_ones)
-    else:
-        raise ValueError(f"padding_side must be 'right' or 'left', not {padding_side}.")
+        if padding_side == "right":
+            starts_ones = torch.all(example_mask[:mask_sum]).item()
+            ends_zeros = torch.all(~example_mask[mask_sum:]).item()
+            if not bool(starts_ones and ends_zeros):
+                return False
 
-    return flag
+        elif padding_side == "left":
+            # For left padding, we look from the end of the sequence.
+            switch_point = len(example_mask) - mask_sum
+
+            starts_zeros = torch.all(~example_mask[:switch_point]).item()
+            ends_ones = torch.all(example_mask[switch_point:]).item()
+            if not bool(starts_zeros and ends_ones):
+                return False
+        else:
+            raise ValueError(
+                f"padding_side must be 'right' or 'left', not {padding_side}."
+            )
+
+    return True

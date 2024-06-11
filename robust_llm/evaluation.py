@@ -40,10 +40,9 @@ def do_adversarial_evaluation(
 
     victim.eval()
 
-    logger.info("Doing adversarial evaluation...")
-
     callback_input = CallbackInput(
-        input_data=dataset.ds["text"],
+        # TODO(ian): Work out where to apply chat template.
+        input_data=victim.maybe_apply_chat_template(dataset.ds["text"]),
         clf_label_data=dataset.ds["clf_label"],
         gen_target_data=dataset.ds["gen_target"],
     )
@@ -67,6 +66,9 @@ def do_adversarial_evaluation(
     victim.eval()
 
     callback_input = CallbackInput(
+        # NOTE: We don't apply the chat template here because we assume that the
+        # attack already did that.
+        # TODO(ian): Work out where to apply chat template.
         input_data=attacked_dataset.ds["attacked_text"],
         clf_label_data=attacked_dataset.ds["attacked_clf_label"],
         gen_target_data=attacked_dataset.ds["attacked_gen_target"],

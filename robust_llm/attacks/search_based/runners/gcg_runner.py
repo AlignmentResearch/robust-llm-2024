@@ -81,11 +81,11 @@ class GCGRunner(SearchBasedRunner):
             target="",
         )
 
-        full_prompt_tokens = self._get_tokens(full_prompt)
+        full_prompt_tokens = self._get_tokens(full_prompt, return_tensors="pt")
         full_prompt_embeddings = self.victim.get_embeddings(full_prompt_tokens).detach()
 
-        attack_tokens = self._get_tokens(attack_text).to(self.victim.device)
-        attack_onehot = self._get_attack_onehot(attack_tokens)
+        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
+        attack_onehot = self._get_attack_onehot(attack_tokens.to(self.victim.device))
         attack_embeddings = attack_onehot @ self.victim.get_embedding_weights()
 
         combined_embeddings = self._get_combined_embeddings(
@@ -128,7 +128,7 @@ class GCGRunner(SearchBasedRunner):
         from the resulting pool.
         """
         # We forbid introducing special tokens in the attack tokens.
-        excluded_token_ids = self.victim.tokenizer.all_special_ids
+        excluded_token_ids = self.victim.all_special_ids
         for special_token_id in excluded_token_ids:
             gradients[:, special_token_id] = float("inf")
 

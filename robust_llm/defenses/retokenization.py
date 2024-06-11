@@ -10,6 +10,7 @@ from robust_llm import logger
 from robust_llm.config.defense_configs import RetokenizationDefenseConfig
 from robust_llm.defenses.defense import MutatingDefendedModel
 from robust_llm.models import WrappedModel
+from robust_llm.utils import is_correctly_padded
 
 
 def pad_list_of_lists(
@@ -265,7 +266,7 @@ class RetokenizationDefendedModel(MutatingDefendedModel):
         self.drop_percentage = self.cfg.drop_percentage
         self.verbose = self.cfg.verbose
 
-        self.bpe_decomposer = BytePairDecomposer(self.tokenizer)
+        self.bpe_decomposer = BytePairDecomposer(self.right_tokenizer)
         tokens_to_keep = int(
             len(self.bpe_decomposer.merge_tokens) * self.drop_percentage
         )
@@ -276,14 +277,17 @@ class RetokenizationDefendedModel(MutatingDefendedModel):
         return self.cfg
 
     def forward(self, **inputs) -> Any:
-        assert self.tokenizer.pad_token_id is not None
+        assert self.right_tokenizer.pad_token_id is not None
+        attention_mask = inputs["attention_mask"]
+        if not is_correctly_padded(attention_mask, self.right_tokenizer.padding_side):
+            raise ValueError("TODO(ian): Make retokenization work with .tokenize")
         input_ids, attention_mask = broken_token_representations(
             inputs["input_ids"],
             inputs["attention_mask"],
             self.broken_tokens,
-            padding_side=self.tokenizer.padding_side,
-            max_length=self.tokenizer.model_max_length,
-            pad_token_id=self.tokenizer.pad_token_id,
+            padding_side=self.right_tokenizer.padding_side,
+            max_length=self.right_tokenizer.model_max_length,
+            pad_token_id=self.right_tokenizer.pad_token_id,
         )
         if self.verbose:
             assert isinstance(input_ids, torch.Tensor)

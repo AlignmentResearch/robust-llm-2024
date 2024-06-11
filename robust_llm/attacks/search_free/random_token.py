@@ -67,7 +67,7 @@ class RandomTokenAttack(SearchFreeAttack):
         chunk in the dataset.
         """
         # We forbid introducing special tokens in the attack tokens.
-        excluded_token_ids = self.victim.tokenizer.all_special_ids
+        excluded_token_ids = self.victim.all_special_ids
 
         all_attack_tokens = []
         for _ in range(self.n_its):
@@ -113,7 +113,7 @@ class RandomTokenAttack(SearchFreeAttack):
             case PromptAttackMode.SINGLEPROMPT:
                 return self._n_random_token_ids_with_exclusions(
                     n=self.n_attack_tokens,
-                    excluded_token_ids=self.victim.tokenizer.all_special_ids,
+                    excluded_token_ids=self.victim.all_special_ids,
                 )
             case PromptAttackMode.MULTIPROMPT:
                 return self.shared_attack_tokens[current_iteration]

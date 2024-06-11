@@ -153,7 +153,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         self,
         example: ExampleWithAttackIndices,
         attack_text_list: Sequence[str],
-        attack_tokens_list: Sequence[int],
+        attack_tokens_list: Sequence[Sequence[int]],
         replacement_list: Sequence[ReplacementCandidate],
     ) -> set[tuple[str, ReplacementCandidate]]:
         original_full_prompt_list = [
@@ -193,7 +193,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             )
         ]
 
-        decoded_list = self.victim.tokenizer.batch_decode(
+        decoded_list = self.victim.batch_decode(
             torch.cat([tokens for tokens in candidate_full_prompt_tokens_list]),
             skip_special_tokens=True,
         )
@@ -209,7 +209,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         # later in the code. It turns out that in some rare cases these two ways do not
         # coincide, and so the checks relying on the first way are not sufficient.
         # TODO(michal): refactor this so that we only have one type of check.
-        candidate_attack_texts = self.victim.tokenizer.batch_decode(
+        candidate_attack_texts = self.victim.batch_decode(
             torch.cat(candidate_attack_tokens_list)
         )
         candidate_full_prompt_list_alt = [
@@ -324,11 +324,11 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             for text, _ in text_replacement_pairs
         ]
 
-        candidate_attack_texts = self.victim.tokenizer.batch_decode(
+        candidate_attack_texts = self.victim.batch_decode(
             torch.cat(
                 [
                     candidate.compute_tokens_after_replacement(
-                        torch.tensor([attack_tokens])
+                        torch.tensor(attack_tokens)
                     )
                     for attack_tokens, (_, candidate) in zip(
                         attack_tokens_list, text_replacement_pairs
@@ -407,12 +407,14 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
                 target="",
             )
 
-            full_prompt_tokens = self._get_tokens(full_prompt)
+            full_prompt_tokens = self._get_tokens(full_prompt, return_tensors="pt")
             full_prompt_embeddings = self.victim.get_embeddings(
                 full_prompt_tokens
             ).detach()
 
-            attack_tokens = self._get_tokens(attack_text).to(self.victim.device)
+            attack_tokens = self._get_tokens(attack_text, return_tensors="pt").to(
+                self.victim.device
+            )
             attack_onehot = self._get_attack_onehot(attack_tokens)
             attack_embeddings = attack_onehot @ self.victim.get_embedding_weights()
 
@@ -464,7 +466,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         from the resulting pool.
         """
         # We forbid introducing special tokens in the attack tokens.
-        excluded_token_ids = self.victim.tokenizer.all_special_ids
+        excluded_token_ids = self.victim.all_special_ids
         for token_id in excluded_token_ids:
             gradients[:, token_id] = float("inf")
 

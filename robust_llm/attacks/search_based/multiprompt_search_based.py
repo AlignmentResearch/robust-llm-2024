@@ -7,13 +7,13 @@ from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.utils import (
     PreppedExample,
-    PromptTemplate,
     get_chunking_for_search_based,
     get_label_and_target_for_attack,
 )
 from robust_llm.config.attack_configs import SearchBasedAttackConfig
 from robust_llm.config.configs import AttackConfig
 from robust_llm.models import WrappedModel
+from robust_llm.models.model_utils import PromptTemplate
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 

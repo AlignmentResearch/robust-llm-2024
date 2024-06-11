@@ -110,10 +110,14 @@ class Training:
 
         inference_type = self.train_rllm_dataset.inference_type
         if inference_type == InferenceType.CLASSIFICATION:
-            data_collator = transformers.DataCollatorWithPadding(self.victim.tokenizer)
+            # We use the right_tokenizer here because training does not involve
+            # autoregressive generation.
+            data_collator = transformers.DataCollatorWithPadding(
+                self.victim.right_tokenizer
+            )
         elif inference_type == InferenceType.GENERATION:
             data_collator = transformers.DataCollatorForLanguageModeling(
-                tokenizer=self.victim.tokenizer, mlm=False, return_tensors="pt"
+                tokenizer=self.victim.right_tokenizer, mlm=False, return_tensors="pt"
             )
         else:
             raise ValueError(f"Unsupported inference type: {inference_type}")
@@ -250,7 +254,7 @@ class Training:
                 wandb.run.summary["saved_dir"] = output_dir  # type: ignore[has-type]
                 logger.info("Saving the model/tokenizer to %s", output_dir)
                 self.trainer._save(output_dir=output_dir, state_dict=state_dict)
-                self.victim.tokenizer.save_pretrained(output_dir)
+                self.victim.right_tokenizer.save_pretrained(output_dir)
 
     @property
     def output_dir(self) -> str:
@@ -352,9 +356,13 @@ class AdversarialTraining(Training):
             args=hf_training_args,
             train_dataset=self.hf_train,
             eval_dataset=self.hf_eval,
-            data_collator=transformers.DataCollatorWithPadding(self.victim.tokenizer),
+            # We use the right_tokenizer here because training does not involve
+            # autoregressive generation.
+            data_collator=transformers.DataCollatorWithPadding(
+                self.victim.right_tokenizer
+            ),
             compute_metrics=self.compute_metrics,
-            tokenizer=self.victim.tokenizer,
+            tokenizer=self.victim.right_tokenizer,
         )
         # Since we didn't pass an accelerator when constructing the WrappedModel,
         # we need to add it here.

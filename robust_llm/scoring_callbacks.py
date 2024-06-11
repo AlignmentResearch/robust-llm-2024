@@ -16,7 +16,6 @@ from robust_llm.models.model_utils import (
     classification_successes_from_logits,
     generation_losses_from_logits,
     generation_successes_from_logits,
-    tokenizer_pad_side,
 )
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.supported_datasets.contact_info_dataset import InfoType
@@ -238,7 +237,8 @@ def _classification_success_from_text(
     input_data: list[str],
     clf_label_data: list[int],
 ) -> list[bool]:
-    tokenized = victim.tokenizer(input_data, return_tensors="pt", padding=True)
+    # We use right-padding for non-autoregressive outputs.
+    tokenized = victim.tokenize(input_data, return_tensors="pt", padding_side="right")
     input_ids = tokenized.input_ids
     attention_mask = tokenized.attention_mask
     return _classification_success_from_tokens(
@@ -284,12 +284,11 @@ def _generation_successes_from_text(
     """
     # We don't pad or return torch tensors here yet because we need to append
     # the target tokens and keep track of their indices before padding.
-    prompt_input_ids = victim.tokenizer(input_data)["input_ids"]
+    prompt_input_ids = victim.tokenize(input_data)["input_ids"]
     prompt_input_ids = cast(list[list[int]], prompt_input_ids)
     return _generation_successes_from_tokens(
         victim,
         prompt_input_ids,
-        None,
         gen_target_data,
     )
 
@@ -297,11 +296,10 @@ def _generation_successes_from_text(
 def _generation_successes_from_tokens(
     victim: WrappedModel,
     prompt_input_ids: list[list[int]],
-    prompt_attention_mask: torch.Tensor | None,
     gen_target_data: list[str],
 ) -> list[bool]:
 
-    target_input_ids = victim.tokenizer(gen_target_data)["input_ids"]
+    target_input_ids = victim.tokenize(gen_target_data)["input_ids"]
     assert isinstance(prompt_input_ids, list)
     assert isinstance(target_input_ids, list)
 
@@ -310,8 +308,10 @@ def _generation_successes_from_tokens(
     # To pad the inputs we have to format as a dict. It's fine to be missing the
     # attention mask since it's all ones anyway and we'll get a new one from
     # pad.
-    tokenized = victim.tokenizer.pad(
-        dict(input_ids=full_input_ids), return_tensors="pt"
+    # We pad on the right because we're computing logits, not doing autoregressive
+    # generation.
+    tokenized = victim.pad(
+        dict(input_ids=full_input_ids), padding_side="right", return_tensors="pt"
     )
 
     input_ids = tokenized.input_ids
@@ -327,12 +327,12 @@ def _generation_successes_from_tokens(
     for out in output_generator:
         logits = out["logits"]
         batch_length = logits.shape[0]
+        batch_input_ids = input_ids[batch_start : batch_start + batch_length]
         batch_target_ids = target_input_ids[batch_start : batch_start + batch_length]
-        batch_attention_mask = attention_mask[batch_start : batch_start + batch_length]
         successes = generation_successes_from_logits(
-            logits,
-            batch_attention_mask,
-            batch_target_ids,
+            logits=logits,
+            input_ids=batch_input_ids.tolist(),
+            goal=batch_target_ids,
         )
         all_successes.extend(successes)
         batch_start += batch_length
@@ -343,6 +343,7 @@ def _generation_losses_from_text(
     victim: WrappedModel,
     input_data: list[str],
     gen_target_data: list[str],
+    use_no_grad: bool,
 ) -> torch.Tensor:
     """Compute the losses from the text input.
 
@@ -350,24 +351,24 @@ def _generation_losses_from_text(
     """
     # We don't pad or return torch tensors here yet because we need to append
     # the target tokens and keep track of their indices before padding.
-    prompt_input_ids = victim.tokenizer(input_data)["input_ids"]
-    prompt_input_ids = cast(list[list[int]], prompt_input_ids)
+    prompt_inps = victim.tokenize(input_data)
+    prompt_input_ids = cast(list[list[int]], prompt_inps["input_ids"])
     return _generation_losses_from_tokens(
         victim=victim,
         prompt_input_ids=prompt_input_ids,
-        prompt_attention_mask=None,
         gen_target_data=gen_target_data,
+        use_no_grad=use_no_grad,
     )
 
 
 def _generation_losses_from_tokens(
     victim: WrappedModel,
     prompt_input_ids: list[list[int]],
-    prompt_attention_mask: torch.Tensor | None,
     gen_target_data: list[str],
+    use_no_grad: bool,
 ) -> torch.Tensor:
 
-    target_input_ids = victim.tokenizer(gen_target_data)["input_ids"]
+    target_input_ids = victim.tokenize(gen_target_data)["input_ids"]
     assert isinstance(prompt_input_ids, list)
     assert isinstance(target_input_ids, list)
 
@@ -376,8 +377,10 @@ def _generation_losses_from_tokens(
     # To pad the inputs we have to format as a dict. It's fine to be missing the
     # attention mask since it's all ones anyway and we'll get a new one from
     # pad.
-    tokenized = victim.tokenizer.pad(
-        dict(input_ids=full_input_ids), return_tensors="pt"
+    # We pad on the right because we're computing logits, not doing autoregressive
+    # generation.
+    tokenized = victim.pad(
+        dict(input_ids=full_input_ids), padding_side="right", return_tensors="pt"
     )
 
     input_ids = tokenized.input_ids
@@ -387,6 +390,7 @@ def _generation_losses_from_tokens(
     output_generator = victim.generation_output_from_tokens(
         input_ids=input_ids,
         attention_mask=attention_mask,
+        use_no_grad=use_no_grad,
     )
 
     batch_start = 0
@@ -394,12 +398,12 @@ def _generation_losses_from_tokens(
         logits = out["logits"]
         assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]
+        batch_input_ids = input_ids[batch_start : batch_start + batch_length]
         batch_target_ids = target_input_ids[batch_start : batch_start + batch_length]
-        batch_attention_mask = attention_mask[batch_start : batch_start + batch_length]
         losses = generation_losses_from_logits(
-            logits,
-            batch_attention_mask,
-            batch_target_ids,
+            logits=logits,
+            input_ids=batch_input_ids.tolist(),
+            goal=batch_target_ids,
         )
         all_losses.append(losses)
         batch_start += batch_length
@@ -423,10 +427,10 @@ def _generation_losses_from_embeds(
         use_no_grad: Whether to use torch.no_grad() when computing the losses.
     """
     assert len(gen_target_data) == 1
-    target_input_ids = victim.tokenizer(
+    target_input_ids = victim.tokenize(
         list(gen_target_data),
         return_tensors="pt",
-        padding=False,
+        padding_side=None,
     )["input_ids"]
     assert isinstance(target_input_ids, torch.Tensor)
     target_embeds = victim.get_embeddings(target_input_ids)
@@ -441,16 +445,20 @@ def _generation_losses_from_embeds(
         embeddings=full_embeds,
         use_no_grad=use_no_grad,
     )
+    full_input_ids = get_full_encoded_prompts(
+        prompt_input_ids.tolist(), target_input_ids.tolist()
+    )
 
     batch_start = 0
     for out in output_generator:
         logits = out["logits"]
         assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]
+        batch_input_ids = full_input_ids[batch_start : batch_start + batch_length]
         batch_target_ids = target_input_ids[batch_start : batch_start + batch_length]
         losses = generation_losses_from_logits(
             logits=logits,
-            attention_mask=None,
+            input_ids=batch_input_ids,
             goal=batch_target_ids.tolist(),
         )
         all_losses.append(losses)
@@ -538,7 +546,9 @@ def successes_from_tokens_callback(
         # TODO(GH#441): Standardize this.
         list_input_data = input_data.tolist()
         successes = _generation_successes_from_tokens(
-            victim, list_input_data, None, label_data
+            victim=victim,
+            prompt_input_ids=list_input_data,
+            gen_target_data=label_data,
         )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
@@ -606,7 +616,10 @@ def losses_from_text_callback(
             raise ValueError("Label data required for classification.")
         label_data = _validate_classification_labels(callback_input.clf_label_data)
 
-        tokenized = victim.tokenizer(input_data, return_tensors="pt", padding=True)
+        # We use right-padding for non-autoregressive outputs.
+        tokenized = victim.tokenize(
+            input_data, return_tensors="pt", padding_side="right"
+        )
         input_ids = tokenized.input_ids
         attention_mask = tokenized.attention_mask
 
@@ -636,6 +649,7 @@ def losses_from_text_callback(
             victim=victim,
             input_data=input_data,
             gen_target_data=label_data,
+            use_no_grad=False,
         )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
@@ -824,8 +838,10 @@ def function_of_generation_from_text_callback(
             "contact_info_in_generation is not supported for classification."
         )
     elif victim.inference_type == InferenceType.GENERATION:
-        with tokenizer_pad_side(victim.tokenizer, "left") as tokenizer:
-            tokenized = tokenizer(input_data, return_tensors="pt", padding=True)
+        # We use left-padding for autoregressive outputs.
+        tokenized = victim.tokenize(
+            input_data, return_tensors="pt", padding_side="left"
+        )
         input_ids = tokenized.input_ids
         attention_mask = tokenized.attention_mask
         output_generator = victim.autoregressive_generation_from_tokens(

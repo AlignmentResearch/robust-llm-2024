@@ -8,7 +8,6 @@ from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.utils import (
     PreppedExample,
-    PromptTemplate,
     get_chunking_for_search_based,
     get_label_and_target_for_attack,
 )
@@ -16,7 +15,6 @@ from robust_llm.config.attack_configs import SearchBasedAttackConfig
 from robust_llm.config.configs import AttackConfig
 from robust_llm.models import WrappedModel
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
-from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 
@@ -76,13 +74,11 @@ class SearchBasedAttack(Attack):
                     example["chunked_text"], dataset.modifiable_chunk_spec
                 )
             )
-            infix_chunk_type = dataset.modifiable_chunk_spec.get_modifiable_chunk()
-            if infix_chunk_type == ChunkType.OVERWRITABLE:
-                modifiable_infix = ""
 
-            prompt_template = PromptTemplate(
-                before_attack=unmodifiable_prefix + modifiable_infix,
-                after_attack=unmodifiable_suffix,
+            prompt_template = self.victim.get_prompt_template(
+                unmodifiable_prefix=unmodifiable_prefix,
+                modifiable_infix=modifiable_infix,
+                unmodifiable_suffix=unmodifiable_suffix,
             )
 
             # Maybe update the example after changing out modifiable chunk

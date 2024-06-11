@@ -21,7 +21,6 @@ dataset:
 model:
   name_or_path: "gpt2"
   eval_minibatch_size: 128
-  padding_side: "right"
 
 evaluation:
   final_success_binary_callback: "target_not_in_generation"

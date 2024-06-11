@@ -81,11 +81,11 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
         if isinstance(text, TextInput):
             text = [text]
         assert all(isinstance(t, str) for t in text)
-        paraphrase_tokens = self.paraphraser.tokenizer(
+        paraphrase_tokens = self.paraphraser.tokenize(
             [self.meta_prompt + str(t) for t in text],
             return_tensors="pt",
-            padding=True,
-            truncation=True,
+            # We use left-padding for autoregressive outputs.
+            padding_side="left",
         )
         paraphrase_tokens.to(self.paraphraser.device)
         orig_len = paraphrase_tokens.input_ids.shape[1]  # original sequence length
@@ -93,11 +93,11 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
             **paraphrase_tokens,  # type: ignore
             temperature=self.temperature,
             max_new_tokens=orig_len,
-            pad_token_id=self.paraphraser.tokenizer.pad_token_id,
+            pad_token_id=self.paraphraser.right_tokenizer.pad_token_id,
             do_sample=True,
         )
         paraphrase = paraphrase[:, orig_len:]
-        paraphrased_text = self.paraphraser.tokenizer.batch_decode(paraphrase)
+        paraphrased_text = self.paraphraser.batch_decode(paraphrase)
         if self.verbose:
             logger.debug("Original text: %s", text)
             logger.debug("Paraphrase: %s", paraphrased_text)
@@ -136,11 +136,13 @@ class ParaphraseDefendedModel(MutatingDefendedModel):
             config=self.cfg.paraphraser,
             accelerator=victim.accelerator,
         )
-        if "pad_token" not in self.paraphraser.tokenizer.special_tokens_map:
-            self.paraphraser.tokenizer.pad_token = self.paraphraser.tokenizer.eos_token
+        if "pad_token" not in self.paraphraser.right_tokenizer.special_tokens_map:
+            self.paraphraser.right_tokenizer.pad_token = (
+                self.paraphraser.right_tokenizer.eos_token
+            )
 
         self.paraphrase_tokenizer = ParaphraseTokenizer(
-            victim_tokenizer=victim.tokenizer,
+            victim_tokenizer=victim.right_tokenizer,
             meta_prompt=self.cfg.meta_prompt,
             temperature=self.cfg.temperature,
             paraphraser=self.paraphraser,

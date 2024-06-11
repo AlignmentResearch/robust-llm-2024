@@ -32,7 +32,6 @@ class LMBasedAttack(SearchFreeAttack):
             attack_config.adversary, accelerator=victim.accelerator
         )
         self.adversary.eval()
-        assert self.adversary.can_generate()
         if attack_config.n_its > 1:
             # If we're doing multiple iterations, we need to sample.
             # Otherwise we will always generate the same text.
@@ -106,10 +105,11 @@ class LMBasedAttack(SearchFreeAttack):
             else 0
         )
         chunk_plus_template = chunk_text + self.templates[target_label]
-        inputs = self.adversary.tokenizer(
+        inputs = self.adversary.tokenize(
             chunk_plus_template,
             return_tensors="pt",
-            add_special_tokens=False,
+            # We use left-padding for autoregressive outputs.
+            padding_side="left",
         )
         inputs = inputs.to(device=self.adversary.device)
         input_ids = inputs.input_ids
@@ -122,7 +122,7 @@ class LMBasedAttack(SearchFreeAttack):
         all_tokens = self.adversary.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            pad_token_id=self.adversary.tokenizer.pad_token_id,
+            pad_token_id=self.adversary.right_tokenizer.pad_token_id,
         )
         assert isinstance(all_tokens, torch.Tensor)
         assert all_tokens.shape[0] == 1

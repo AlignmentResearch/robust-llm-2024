@@ -31,14 +31,14 @@ def test_unbatched_kv_caching(models: tuple[WrappedModel, CachingWrappedModel]):
 
     # Set up cache.
     cache_sequence = "Hello, my dog is cute."
-    cache_inp = caching_model.tokenizer(cache_sequence, return_tensors="pt")
+    cache_inp = caching_model.tokenize(cache_sequence, return_tensors="pt")
     cache_ids = cache_inp["input_ids"]
     assert isinstance(cache_ids, torch.Tensor)
     caching_model.add_to_cache(cache_ids)
 
     # Evaluate cached and uncached on a sequence that is a superset of the cache.
     super_sequence = cache_sequence + " I like to play with him."
-    super_inp = caching_model.tokenizer(super_sequence, return_tensors="pt")
+    super_inp = caching_model.tokenize(super_sequence, return_tensors="pt")
 
     uncached_super_logits = wrapped_model(**super_inp).logits
     cached_super_logits = caching_model(**super_inp).logits
@@ -47,7 +47,7 @@ def test_unbatched_kv_caching(models: tuple[WrappedModel, CachingWrappedModel]):
 
     # Evaluate cached and uncached on a sequence that diverges from the cache.
     diverging_sequence = "Hello, my dog is fun. I like to play with him."
-    diverging_inp = caching_model.tokenizer(diverging_sequence, return_tensors="pt")
+    diverging_inp = caching_model.tokenize(diverging_sequence, return_tensors="pt")
 
     uncached_diverging_logits = wrapped_model(**diverging_inp).logits
     cached_diverging_logits = caching_model(**diverging_inp).logits
@@ -60,7 +60,7 @@ def test_batched_kv_caching(models: tuple[WrappedModel, CachingWrappedModel]):
 
     # Set up cache.
     cache_sequence = "Hello, my dog is cute."
-    cache_inp = caching_model.tokenizer(cache_sequence, return_tensors="pt")
+    cache_inp = caching_model.tokenize(cache_sequence, return_tensors="pt")
     cache_ids = cache_inp["input_ids"]
     assert isinstance(cache_ids, torch.Tensor)
     caching_model.add_to_cache(cache_ids)
@@ -70,8 +70,11 @@ def test_batched_kv_caching(models: tuple[WrappedModel, CachingWrappedModel]):
     super_sequence = cache_sequence + " I like to play with him in the park on Sundays."
     diverging_sequence = "Hello, my dog is fun. I like to play with him."
     batched_sequences = [super_sequence, diverging_sequence]
-    batched_inp = caching_model.tokenizer(
-        batched_sequences, return_tensors="pt", padding=True
+    batched_inp = caching_model.tokenize(
+        # We use right-padding for non-autoregressive outputs.
+        batched_sequences,
+        return_tensors="pt",
+        padding_side="right",
     )
 
     uncached_batched_logits = wrapped_model(**batched_inp).logits

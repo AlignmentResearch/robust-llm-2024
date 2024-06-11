@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import copy
 import dataclasses
 import time
 import traceback
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
-from typing import Optional
+from functools import cached_property
+from typing import Optional, overload
 
 import torch
 import transformers
 from accelerate import Accelerator
 from transformers import (
+    BatchEncoding,
     PretrainedConfig,
     PreTrainedModel,
     PreTrainedTokenizerBase,
@@ -20,8 +23,10 @@ from transformers import (
 from transformers.modeling_outputs import ModelOutput
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
+from robust_llm.models.chat_templates import get_base_template
 from robust_llm.models.model_utils import (
     InferenceType,
+    PromptTemplate,
     SuppressPadTokenWarning,
     _get_embedding_weights,
     build_dataloader,
@@ -29,7 +34,9 @@ from robust_llm.models.model_utils import (
     load_hf_model,
     maybe_no_grad,
     prepare_model_with_accelerate,
+    remove_padding_tokens,
 )
+from robust_llm.utils import is_correctly_padded
 
 
 class WrappedModel(ABC):
@@ -40,7 +47,7 @@ class WrappedModel(ABC):
     def __init__(
         self,
         model: PreTrainedModel,
-        tokenizer: PreTrainedTokenizerBase,
+        right_tokenizer: PreTrainedTokenizerBase,
         accelerator: Accelerator | None,
         inference_type: InferenceType,
         train_minibatch_size: int,
@@ -51,7 +58,8 @@ class WrappedModel(ABC):
 
         Args:
             model: The model to wrap.
-            tokenizer: The tokenizer to use.
+            right_tokenizer: The tokenizer to use. Should be right-padded (the
+                left-padded version will be loaded if needed.)
             accelerator: The accelerator to use.
             inference_type: The type of inference this model is for ('generation'
                 or 'classification' or 'trl')
@@ -65,7 +73,7 @@ class WrappedModel(ABC):
         else:
             self.model = model
 
-        self.tokenizer = tokenizer
+        self.right_tokenizer = right_tokenizer
         self.inference_type = inference_type
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
@@ -85,7 +93,7 @@ class WrappedModel(ABC):
                 # Even though the above line should push both model and tokenizer,
                 # in practice the tokenizer sometimes doesn't get pushed,
                 # so we do it explicitly here.
-                self.tokenizer.push_to_hub(repo_id=repo_id, revision=revision)  # type: ignore # noqa: E501
+                self.right_tokenizer.push_to_hub(repo_id=repo_id, revision=revision)  # type: ignore # noqa: E501
                 return
             except Exception as e:
                 warnings.warn(
@@ -140,10 +148,12 @@ class WrappedModel(ABC):
         except KeyError:
             raise ValueError(f"Unsupported model family: {family}")
 
-        tokenizer = subcls.load_tokenizer(config)
+        # Loads the tokenizer with right padding. We'll load the tokenizer
+        # with left padding lazily if we need it.
+        right_tokenizer = subcls.load_tokenizer(config)
         return subcls(
             model=model,
-            tokenizer=tokenizer,
+            right_tokenizer=right_tokenizer,
             accelerator=accelerator,
             inference_type=inference_type,
             train_minibatch_size=config.train_minibatch_size,
@@ -332,8 +342,11 @@ class WrappedModel(ABC):
             A list of strings, which are the generated sequences.
         """
         assert self.inference_type == InferenceType.GENERATION
-        if attention_mask is not None and any(attention_mask[:, -1] == 0):
-            raise ValueError("It seems like your inputs are right-padded.")
+        if attention_mask is not None:
+            if not is_correctly_padded(attention_mask, "left"):
+                raise ValueError(
+                    "It seems like your inputs are not correctly left-padded."
+                )
 
         minibatch_size = minibatch_size or self.eval_minibatch_size
 
@@ -353,8 +366,14 @@ class WrappedModel(ABC):
                     generation_config=self.generation_config,
                 )
                 assert isinstance(minibatch_tokens, torch.Tensor)
-                minibatch_texts = self.tokenizer.batch_decode(
-                    minibatch_tokens, skip_special_tokens=True
+                # For now, we don't skip special tokens, because that removes the
+                # chat formatting tokens.
+                # TODO(ian): Work out how to handle special tokens in the output.
+                minibatch_texts = self.batch_decode(
+                    minibatch_tokens, skip_special_tokens=False
+                )
+                minibatch_texts = remove_padding_tokens(
+                    self.right_tokenizer, minibatch_texts
                 )
                 yield minibatch_texts
 
@@ -389,8 +408,8 @@ class WrappedModel(ABC):
         """
         gen_config_dict = dataclasses.asdict(gen_config)
         # Add eos_token_id and pad_token_id to the config.
-        gen_config_dict["eos_token_id"] = self.tokenizer.eos_token_id
-        gen_config_dict["pad_token_id"] = self.tokenizer.pad_token_id
+        gen_config_dict["eos_token_id"] = self.right_tokenizer.eos_token_id
+        gen_config_dict["pad_token_id"] = self.right_tokenizer.pad_token_id
         return transformers.GenerationConfig.from_dict(gen_config_dict)
 
     def generate(self, **inputs):
@@ -421,17 +440,6 @@ class WrappedModel(ABC):
         self.model.to(device=device)  # type: ignore[reportCallIssue]
         return self
 
-    def can_generate(self) -> bool:
-        """Returns whether the model can generate text.
-
-        This is used by pipelines.
-
-        TODO (ian): Remove this method when we stop using pipelines.
-        """
-        return (self.tokenizer.padding_side == "left") and (
-            self.inference_type == InferenceType.GENERATION
-        )
-
     @property
     def config(self) -> PretrainedConfig:
         """Return's the model's config.
@@ -459,6 +467,13 @@ class WrappedModel(ABC):
     ) -> PreTrainedTokenizerBase:
         pass
 
+    @cached_property
+    def left_tokenizer(self) -> PreTrainedTokenizerBase:
+        """Tokenizer to use for left padding."""
+        self._left_tokenizer = copy.deepcopy(self.right_tokenizer)
+        self._left_tokenizer.padding_side = "left"
+        return self._left_tokenizer
+
     def add_accelerator(self, accelerator: Accelerator) -> None:
         """Adds an accelerator to the model."""
         if self.accelerator is not None:
@@ -469,21 +484,124 @@ class WrappedModel(ABC):
         )
         self.accelerator = accelerator
 
-    def get_tokens(
+    def tokenize(
         self,
-        inp: str | list[str],
-        return_tensors: Optional[str] = "pt",
-        add_special: bool = False,
-    ) -> torch.Tensor:
-        """Handles all the arguments we have to add to the tokenizer."""
-        tokens = self.tokenizer(
-            inp,
+        text: str | list[str],
+        return_tensors: str | None = None,
+        padding_side: str | None = None,
+        add_special_tokens: bool = False,
+        **kwargs,
+    ) -> BatchEncoding:
+        """Tokenize the input text, optionally applying the chat template.
+
+        For now, we assume that the input text is a single 'user' message.
+
+        Args:
+            text:
+                The input text.
+            return_tensors:
+                Whether to return tensors, and what type of tensors to return.
+            padding_side:
+                Whether to pad the input. None means no padding, "right" means
+                do right padding, "left" means do left padding.
+            add_special_tokens:
+                Whether to add special tokens when tokenizing.
+            **kwargs:
+                Included for compatibility with subclasses that have additional
+                arguments. In particular, WrappedChatModel has arguments related
+                to the chat template.
+
+        Returns:
+            The tokenized input, as you'd get from calling a tokenizer.
+
+        """
+        if padding_side is None:
+            # With no padding, we can use either tokenizer. We already loaded
+            # the right-padding one so we just use that.
+            return self.right_tokenizer(
+                text=text,
+                return_tensors=return_tensors,
+                padding=False,
+                add_special_tokens=add_special_tokens,
+            )
+        elif padding_side == "right":
+            return self.right_tokenizer(
+                text=text,
+                return_tensors=return_tensors,
+                padding=True,
+                add_special_tokens=add_special_tokens,
+            )
+        elif padding_side == "left":
+            return self.left_tokenizer(
+                text=text,
+                return_tensors=return_tensors,
+                padding=True,
+                add_special_tokens=add_special_tokens,
+            )
+        else:
+            raise ValueError(f"Unknown padding_side value: {padding_side}")
+
+    def decode(
+        self,
+        token_ids: torch.Tensor | list[int],
+        skip_special_tokens: bool = True,
+    ) -> str:
+        """Decodes the token ids into a list of strings.
+
+        This is a wrapper around tokenizer.batch_decode so that we can make the
+        tokenizer private.
+        """
+        # For batch_decode it doesn't matter which padding side we use so we use
+        # the right tokenizer which is always loaded.
+        return self.right_tokenizer.decode(
+            token_ids,
+            skip_special_tokens=skip_special_tokens,
+            clean_up_tokenization_spaces=False,
+        )
+
+    def batch_decode(
+        self,
+        token_ids: torch.Tensor | list[torch.Tensor],
+        skip_special_tokens: bool = True,
+    ) -> list[str]:
+        """Decodes the token ids into a list of strings.
+
+        This is a wrapper around tokenizer.batch_decode so that we can make the
+        tokenizer private.
+        """
+        # For batch_decode it doesn't matter which padding side we use so we use
+        # the right tokenizer which is always loaded.
+        return self.right_tokenizer.batch_decode(
+            token_ids,  # type: ignore  # batch_decode actually accepts list of tensors.
+            skip_special_tokens=skip_special_tokens,
+            clean_up_tokenization_spaces=False,
+        )
+
+    def pad(
+        self,
+        encoded_inputs: dict[str, list[list[int]]],
+        padding_side: str,
+        return_tensors: str | None = None,
+    ) -> BatchEncoding:
+        """Pads the input text on the given side."""
+        if padding_side == "right":
+            tokenizer = self.right_tokenizer
+        elif padding_side == "left":
+            tokenizer = self.left_tokenizer
+        else:
+            raise ValueError(
+                f"Padding side should be 'left' or 'right', got: {padding_side}"
+            )
+        return tokenizer.pad(
+            encoded_inputs=encoded_inputs,
             return_tensors=return_tensors,
-            add_special_tokens=add_special,
-        ).input_ids
-        if return_tensors == "pt":
-            tokens = tokens.to(dtype=torch.int64)
-        return tokens
+        )
+
+    @property
+    def all_special_ids(self) -> list[int]:
+        """Returns all special token ids."""
+        # Right and left tokenizers should have the same special ids.
+        return self.right_tokenizer.all_special_ids
 
     def decode_tokens(
         self,
@@ -491,10 +609,14 @@ class WrappedModel(ABC):
         skip_special_tokens: bool = True,
         try_squeeze: bool = True,
     ) -> str:
+        """Decodes the token ids into a string.
+
+        TODO(ian): Remove this function; not much better than tokenizer.batch_decode.
+        """
         if len(inp.shape) == 2 and inp.shape[0] == 1 and try_squeeze:
             inp = inp.squeeze()
 
-        strings = self.tokenizer.decode(
+        strings = self.right_tokenizer.decode(
             inp,
             skip_special_tokens=skip_special_tokens,
             clean_up_tokenization_spaces=False,
@@ -521,18 +643,50 @@ class WrappedModel(ABC):
 
         When using inputs_embeds, it's important that there are no padding tokens,
         since they are not handled properly."""
-        if self.tokenizer.pad_token_id is not None:
+        if self.right_tokenizer.pad_token_id is not None:
             assert (
-                self.tokenizer.pad_token_id not in token_ids
+                self.right_tokenizer.pad_token_id not in token_ids
             ), "Padding tokens are present in the token ids."
 
     @property
     def vocab_size(self) -> int:
-        return self.tokenizer.vocab_size  # type: ignore
+        return self.right_tokenizer.vocab_size  # type: ignore
 
     @property
     def device(self) -> torch.device:
         return self.model.device
+
+    def get_prompt_template(
+        self,
+        unmodifiable_prefix: str,
+        modifiable_infix: str,
+        unmodifiable_suffix: str,
+    ) -> PromptTemplate:
+        """Returns a PromptTemplate for the given text chunks."""
+        return get_base_template(
+            unmodifiable_prefix,
+            modifiable_infix,
+            unmodifiable_suffix,
+        )
+
+    @overload
+    def maybe_apply_chat_template(self, text: str) -> str: ...
+
+    @overload
+    def maybe_apply_chat_template(self, text: list[str]) -> list[str]: ...
+
+    def maybe_apply_chat_template(self, text: str | list[str]) -> str | list[str]:
+        """If working with a chat model, return text with chat template applied.
+
+        Since this is the base class, we just return the text as is.
+
+        Args:
+            text: The text to apply the chat template to.
+
+        Returns:
+            The text with the chat template applied.
+        """
+        return text
 
     @staticmethod
     def set_seed(seed: int) -> None:

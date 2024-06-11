@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import copy
 from collections.abc import Sequence
 from contextlib import contextmanager
+from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Optional, TypeVar
+from typing import TYPE_CHECKING, Callable, Optional, TypeVar
 
 import datasets
 import torch
@@ -28,8 +28,6 @@ from transformers import (
 )
 from trl import AutoModelForCausalLMWithValueHead
 
-from robust_llm.utils import is_correctly_padded
-
 if TYPE_CHECKING:
     from robust_llm.models import WrappedModel
 
@@ -37,6 +35,7 @@ if TYPE_CHECKING:
 PastKeyValues = tuple[tuple[torch.Tensor, ...], ...]
 
 Tdict = TypeVar("Tdict", bound=dict)
+T = TypeVar("T")
 
 
 class InferenceType(Enum):
@@ -132,60 +131,56 @@ def classification_losses_from_logits(
 
 def generation_losses_from_logits(
     logits: torch.Tensor,
-    attention_mask: torch.Tensor | None,
+    input_ids: Sequence[Sequence[int]],
     goal: Sequence[Sequence[int]],
     reduction: str = "mean",
 ) -> torch.Tensor:
     """Compute the generation losses from the logits.
 
-    NOTE: The sequence length of the attention mask can be longer than the
-    sequence length of the logits. This happens when we are using caching, because
-    logits are not returned for the cached tokens.
-
     Args:
         logits: Shape (batch, l_seq_len, vocab_size). The logits from the model.
-        attention_mask: Shape (batch, a_seq_len). The attention mask. If None,
-            we assume no padding.
+        input_ids: Shape (batch, a_seq_len). The input_ids.
         goal: List of length 'batch' of lists of token ids. The tokenized goals.
         reduction: The reduction to apply to the losses. Either "mean" or "sum",
             default "mean".
 
     Returns:
         The generation losses, shape (batch,)."""
-    # Just make a dummy attention mask of ones if one isn't provided.
-    if attention_mask is None:
-        attention_mask = torch.ones(
-            logits.shape[:2], device=logits.device, dtype=torch.int16
-        )
 
-    assert logits.ndim == 3, "Logits should be (batch, seq_len, vocab_size)."
-    assert attention_mask.ndim == 2, "Attention mask should be (batch, seq_len)."
-    assert len(goal) == attention_mask.shape[0] == logits.shape[0]
+    def score_fn(logits: torch.Tensor, goal: Sequence[int]):
+        return loss_on_goal(logits, goal, reduction)
 
-    # TODO(ian): Vectorize if possible.
-    losses = []
-    for example_logits, example_goal, example_mask in zip(logits, goal, attention_mask):
-        # Drop padding tokens from the logits, assuming that they're all
-        # at the end. We subtract an additional one to account for the shift, where
-        # the ith token is predicted by the i-1th logit.
-        n_padding_tokens = sum(example_mask == 0)
-        non_padding_logits = example_logits[: len(example_logits) - n_padding_tokens]
-        shifted_logits = non_padding_logits[:-1]
+    outs = fn_of_generation_logits(
+        logits=logits,
+        input_ids=input_ids,
+        goal=goal,
+        score_fn=score_fn,
+    )
+    return torch.stack(outs)
 
-        goal_len = len(example_goal)
-        # Get logprobs for all possible tokens at the goal positions
-        goal_position_logprobs = torch.log_softmax(shifted_logits[-goal_len:], dim=-1)
-        # Get logprobs just for the actual goal tokens
-        goal_token_logprobs = goal_position_logprobs[
-            torch.arange(goal_len), example_goal
-        ]
-        if reduction == "mean":
-            losses.append(-goal_token_logprobs.mean())
-        elif reduction == "sum":
-            losses.append(-goal_token_logprobs.sum())
-        else:
-            raise ValueError(f"Invalid reduction: {reduction}")
-    return torch.stack(losses)
+
+def loss_on_goal(logits: torch.Tensor, goal: Sequence[int], reduction: str = "mean"):
+    """Compute the generation losses from the logits.
+
+    Args:
+        logits:
+            Shape (batch, target_len, vocab_size). The logits from the model on
+            the target.
+        goal:
+            List of length 'target_len'. The tokenized goals.
+        reduction:
+            The reduction to apply to the losses. Either "mean" or "sum",
+            default "mean".
+    """
+    all_logprobs = torch.log_softmax(logits, dim=-1)
+    # Get logprobs just for the actual goal tokens
+    goal_logprobs = all_logprobs[torch.arange(len(goal)), goal]
+    if reduction == "mean":
+        return -goal_logprobs.mean()
+    elif reduction == "sum":
+        return -goal_logprobs.sum()
+    else:
+        raise ValueError(f"Invalid reduction: {reduction}")
 
 
 def classification_successes_from_logits(
@@ -207,7 +202,7 @@ def classification_successes_from_logits(
 
 def generation_successes_from_logits(
     logits: torch.Tensor,
-    attention_mask: torch.Tensor,
+    input_ids: Sequence[Sequence[int]],
     goal: Sequence[Sequence[int]],
 ) -> list[bool]:
     """Compute the generation successes from the logits.
@@ -218,35 +213,115 @@ def generation_successes_from_logits(
 
     Args:
         logits: Shape (batch, l_seq_len, vocab_size). The logits from the model.
-        attention_mask: Shape (batch, a_seq_len). The attention mask.
-        goal: list of length 'batch' of lists of token ids. The tokenized goals.
+        input_ids: Shape (batch, a_seq_len). The input_ids.
+        goal: List of length 'batch' of lists of token ids. The tokenized goals.
 
     Returns:
         list of length 'batch'. Whether the goal string is the most likely string.
     """
+
+    return fn_of_generation_logits(
+        logits=logits,
+        input_ids=input_ids,
+        goal=goal,
+        score_fn=success_on_goal,
+    )
+
+
+def fn_of_generation_logits(
+    logits: torch.Tensor,
+    input_ids: Sequence[Sequence[int]],
+    goal: Sequence[Sequence[int]],
+    score_fn: Callable[[torch.Tensor, Sequence[int]], T],
+) -> list[T]:
+    """Compute a function of the generation logits.
+
+    This is an abstraction of both generation_successes_from_logits
+    and generation_losses_from_logits.
+    Args:
+        logits:
+            Shape (batch, l_seq_len, vocab_size). The logits from the model.
+        input_ids:
+            Shape (batch, l_seq_len). The input ids, used to locate the
+            target in the logits.
+        goal:
+            List of length 'batch' of lists of token ids. The tokenized goals.
+        score_fn:
+            The function to compute. Should take the logits of the target
+            and the target itself and return a scalar.
+    """
     assert logits.ndim == 3, "Logits should be (batch, seq_len, vocab_size)."
-    assert attention_mask.ndim == 2, "Attention mask should be (batch, seq_len)."
-    assert len(goal) == attention_mask.shape[0] == logits.shape[0]
+    assert len(goal) == logits.shape[0]
 
     # TODO(ian): Vectorize if possible.
-    successes = []
-    for example_logits, example_goal, example_mask in zip(logits, goal, attention_mask):
-        # Make sure that all padding tokens are at the end (i.e. we're doing
-        # right padding).
-        assert is_correctly_padded(example_mask, "right")
-        # Drop padding tokens from the logits, now that we know they're all
-        # at the end. We subtract an additional one to account for the shift, where
-        # the ith token is predicted by the i-1th logit.
-        n_padding_tokens = sum(example_mask == 0)
-        non_padding_logits = example_logits[: len(example_logits) - n_padding_tokens]
-        shifted_logits = non_padding_logits[:-1]
+    scores = []
+    for example_logits, example_ids, example_goal in zip(logits, input_ids, goal):
+        # Find the target in the logits using the input_ids.
+        # We look for the LAST occurrence of the target in the input_ids, since
+        # the target should be at the end of the sequence.
+        target_slice = get_target_slice(example_ids, example_goal)
 
-        # Take logits from the end of the sequence, since the goal is at the end.
-        goal_len = len(example_goal)
-        predicted_tokens = torch.argmax(shifted_logits[-goal_len:], dim=1)
-        assert len(predicted_tokens) == goal_len
-        successes.append(predicted_tokens.tolist() == example_goal)
-    return successes
+        goal_logits = example_logits[target_slice]
+        scores.append(score_fn(goal_logits, example_goal))
+    return scores
+
+
+def get_target_slice(input_ids: Sequence[int], target: Sequence[int]) -> slice:
+    """Get a slice corresponding to the last occurrence of 'target' using 'input_ids'.
+
+    NOTE:
+    - The slice will correspond to the target *in the logits*, which are offset
+        by one. Thus when checking that the slice is correct, we have to add one.
+    - The slice is *negative*, so it can be used in the logits even when caching
+        means we get fewer logits than input_ids.
+
+    """
+    assert len(input_ids) > 0 and isinstance(input_ids[0], int)
+
+    # Get the start of the last occurrence of the target in the input_ids.
+    start_index = find_subsequence_start_indices(input_ids, target)[-1]
+    start_index_in_logits = start_index - 1
+    end_index_in_logits = start_index_in_logits + len(target)
+    negative_start = start_index_in_logits - len(input_ids)
+    negative_end = end_index_in_logits - len(input_ids)
+    target_slice = slice(negative_start, negative_end)
+
+    # We use 'or None' here to handle the case where target_slice.stop + 1 is 0,
+    # which would mess up the slice.
+    # Note that we don't have to worry about the case where target_slice.stop is
+    # 0, since we subtracted 1 earlier.
+    assert input_ids[target_slice.start + 1 : (target_slice.stop + 1) or None] == target
+    return target_slice
+
+
+def find_subsequence_start_indices(
+    all_tokens: Sequence[T], subsequence: Sequence[T]
+) -> list[int]:
+    """Find all starting indices of a subsequence in a list of tokens.
+
+    If the subsequence is not found, return an empty list.
+    """
+    indices = []
+    for i in range(len(all_tokens) - len(subsequence) + 1):
+        if all_tokens[i : i + len(subsequence)] == subsequence:
+            indices.append(i)
+    return indices
+
+
+def success_on_goal(logits: torch.Tensor, goal: Sequence[int]):
+    """Compute the generation successes from the logits.
+
+    Args:
+        logits:
+            Shape (batch, target_len, vocab_size). The logits from the model on
+            the target.
+        goal:
+            List of length 'target_len'. The tokenized goals.
+    """
+    # Take logits from the end of the sequence, since the goal is at the end.
+    predicted_tokens = torch.argmax(logits, dim=1)
+    assert len(predicted_tokens) == len(goal)
+    return predicted_tokens.tolist() == goal
 
 
 def _get_embedding_weights(
@@ -394,22 +469,39 @@ def maybe_no_grad(use_no_grad: bool):
         yield
 
 
-class tokenizer_pad_side:
-    """Context manager to set the tokenizer padding side temporarily.
+@dataclass(frozen=True)
+class PromptTemplate:
+    """This is a general class for prompt templates,
+    that should encompass both chat models and non-chat
+    models
 
-    Makes and returns a copy of the tokenizer with the padding side set to the
-    desired side.
+    The basic idea is that there is some part before user input, and
+    some part after user input but before model input, and that should
+    be all off the content in the prompt.
+
+    For example, for a simple chat format:
+        before_attack="User: Hi, I'm an user! "
+        after_attack="\nAssistant:"
     """
 
-    def __init__(self, tokenizer: PreTrainedTokenizerBase, padding_side: str):
-        if padding_side not in ["left", "right"]:
-            msg = f"padding_side must be 'left' or 'right', not {padding_side}"
-            raise ValueError(msg)
-        self.tokenizer = copy.copy(tokenizer)
-        self.tokenizer.padding_side = padding_side
+    before_attack: str = ""
+    after_attack: str = ""
 
-    def __enter__(self):
-        return self.tokenizer
+    def build_prompt(self, *, attack_text: str = "", target: str = "") -> str:
+        prompt = self.before_attack + attack_text + self.after_attack + target
+        return prompt
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        del self.tokenizer
+
+def remove_padding_tokens(
+    tokenizer: PreTrainedTokenizerBase, texts: list[str]
+) -> list[str]:
+    """Remove padding tokens from a list of output texts.
+
+    Args:
+        tokenizer: The tokenizer used to tokenize the text.
+        texts: The list of texts to remove padding tokens from.
+
+    Returns:
+        The list of texts with padding tokens removed.
+    """
+    return [text.replace(tokenizer.pad_token, "") for text in texts]

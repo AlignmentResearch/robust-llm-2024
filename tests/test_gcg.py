@@ -161,16 +161,16 @@ def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     full_prompt = gcg_runner.example.prompt_template.build_prompt(
         attack_text=initial_attack_text, target=target
     )
-    full_tokens = gcg_runner._get_tokens(full_prompt)
+    full_tokens = gcg_runner._get_tokens(full_prompt, return_tensors="pt")
 
     before_attack_tokens = gcg_runner._get_tokens(
-        gcg_runner.example.prompt_template.before_attack
+        gcg_runner.example.prompt_template.before_attack, return_tensors="pt"
     )
-    attack_tokens = gcg_runner._get_tokens(initial_attack_text)
+    attack_tokens = gcg_runner._get_tokens(initial_attack_text, return_tensors="pt")
     after_attack_tokens = gcg_runner._get_tokens(
-        gcg_runner.example.prompt_template.after_attack,
+        gcg_runner.example.prompt_template.after_attack, return_tensors="pt"
     )
-    target_tokens = gcg_runner._get_tokens(target)
+    target_tokens = gcg_runner._get_tokens(target, return_tensors="pt")
 
     concat_tokens = torch.cat(
         [before_attack_tokens, attack_tokens, after_attack_tokens, target_tokens],
@@ -191,7 +191,10 @@ def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     )
     assert attack_indices is not None
     assert attack_indices.attack_length == gcg_runner.n_attack_tokens
-    assert attack_indices.target_length == gcg_runner._get_tokens(target).shape[1]
+    assert (
+        attack_indices.target_length
+        == gcg_runner._get_tokens(target, return_tensors="pt").shape[1]
+    )
 
     new_attack_text = gcg_runner._decode_tokens(
         full_tokens[:, attack_indices.attack_slice]
@@ -211,7 +214,7 @@ def test_filter_candidates(model_name: str, before_attack_text: str) -> None:
     gcg_runner = get_gcg_runner(model_name, before_attack_text)
 
     def get_token_id(s: str) -> int:
-        tokens = gcg_runner._get_tokens(s)
+        tokens = gcg_runner._get_tokens(s, return_tensors="pt")
         assert tokens.shape == (1, 1)
         return tokens.squeeze().item()  # type: ignore
 
@@ -264,7 +267,7 @@ def test_get_replacement_candidates_from_gradients(gcg_runner: GCGRunner) -> Non
     gcg_runner.top_k = 2
     gcg_runner.n_candidates_per_it = 4
 
-    vocab_size = gcg_runner.victim.tokenizer.vocab_size  # type: ignore
+    vocab_size = gcg_runner.victim.right_tokenizer.vocab_size  # type: ignore
     # mocking gradients:
     # need to make it the same shape as it really would be because
     # some tokenizers (e.g. bert) care about special indices
@@ -293,7 +296,7 @@ def test_replacements(gcg_runner: GCGRunner) -> None:
     initial_attack_text = "a!a!a"
 
     def get_token_id(s: str) -> int:
-        tokens = gcg_runner._get_tokens(s)
+        tokens = gcg_runner._get_tokens(s, return_tensors="pt")
         assert tokens.shape == (1, 1)
         return tokens.squeeze().item()  # type: ignore
 
@@ -306,7 +309,7 @@ def test_replacements(gcg_runner: GCGRunner) -> None:
     for candidate, expected in replacement_candidates:
         updated = gcg_runner._decode_tokens(
             candidate.compute_tokens_after_replacement(
-                gcg_runner._get_tokens(initial_attack_text)
+                gcg_runner._get_tokens(initial_attack_text, return_tensors="pt")
             )
         )
         assert updated == expected
@@ -314,12 +317,14 @@ def test_replacements(gcg_runner: GCGRunner) -> None:
 
 def test_apply_replacements_and_eval_candidates(gcg_runner: GCGRunner) -> None:
     def get_token_id(s: str) -> int:
-        tokens = gcg_runner._get_tokens(s)
+        tokens = gcg_runner._get_tokens(s, return_tensors="pt")
         assert tokens.shape == (1, 1)
         return tokens.squeeze().item()  # type: ignore
 
     initial_attack_text = "@!@!@!"
-    gcg_runner.n_attack_tokens = gcg_runner._get_tokens(initial_attack_text).shape[1]
+    gcg_runner.n_attack_tokens = gcg_runner._get_tokens(
+        initial_attack_text, return_tensors="pt"
+    ).shape[1]
     text_replacement_pairs = [
         (initial_attack_text, ReplacementCandidate(0, get_token_id("b"))),  # b!@!@!
         (initial_attack_text, ReplacementCandidate(1, get_token_id("c"))),  # @c@!@!

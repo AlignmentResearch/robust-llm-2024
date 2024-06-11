@@ -4,7 +4,11 @@ from typing import Any
 
 import torch
 
-from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
+from robust_llm.models.model_utils import PromptTemplate
+from robust_llm.rllm_datasets.modifiable_chunk_spec import (
+    ChunkType,
+    ModifiableChunkSpec,
+)
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.utils import get_randint_with_exclusions
 
@@ -25,29 +29,6 @@ class TargetTokenizationChangeException(TokenizationChangeException):
 
 
 @dataclass(frozen=True)
-class PromptTemplate:
-    """This is a general class for prompt templates,
-    that should encompass both chat models and non-chat
-    models
-
-    The basic idea is that there is some part before user input, and
-    some part after user input but before model input, and that should
-    be all off the content in the prompt.
-
-    For example, for a simple chat format:
-        before_attack="User: Hi, I'm an user! "
-        after_attack="\nAssistant:"
-    """
-
-    before_attack: str = ""
-    after_attack: str = ""
-
-    def build_prompt(self, *, attack_text: str = "", target: str = "") -> str:
-        prompt = self.before_attack + attack_text + self.after_attack + target
-        return prompt
-
-
-@dataclass(frozen=True)
 class ReplacementCandidate:
     attack_position: int
     token_id: int
@@ -62,6 +43,9 @@ class ReplacementCandidate:
         Returns:
             The attack tokens with replacement, also of shape [1, n_attack_tokens]
         """
+        assert attack_tokens.dim() == 2, "Expected 2D tensor"
+        assert attack_tokens.shape[0] == 1, "Expected batch size of 1"
+
         full_attack_tokens = attack_tokens.clone()
         full_attack_tokens[0, self.attack_position] = self.token_id
         return full_attack_tokens
@@ -168,6 +152,10 @@ def get_chunking_for_search_based(
     unmodifiable_prefix = "".join(text_chunked[:modifiable_index])
     modifiable_infix = text_chunked[modifiable_index]
     unmodifiable_suffix = "".join(text_chunked[modifiable_index + 1 :])
+
+    infix_chunk_type = modifiable_chunk_spec.get_modifiable_chunk()
+    if infix_chunk_type == ChunkType.OVERWRITABLE:
+        modifiable_infix = ""
 
     return unmodifiable_prefix, modifiable_infix, unmodifiable_suffix
 

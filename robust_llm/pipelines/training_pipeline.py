@@ -27,8 +27,10 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
         args.model, accelerator=None, num_classes=num_classes
     )
 
-    train_set = untokenized_train_set.tokenize(victim.tokenizer)
-    val_set = untokenized_val_set.tokenize(victim.tokenizer)
+    # We tokenize the datasets using the right-padding tokenizer
+    # because training doesn't do autoregressive generation.
+    train_set = untokenized_train_set.tokenize(victim.right_tokenizer)
+    val_set = untokenized_val_set.tokenize(victim.right_tokenizer)
 
     model_name_to_save = args.training.force_name_to_save or make_unique_name_to_save(
         args.model.name_or_path

@@ -4,4 +4,3 @@ defaults:
 
 adversary:
   inference_type: "trl"
-  padding_side: "left"

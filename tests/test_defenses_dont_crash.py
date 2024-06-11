@@ -97,7 +97,6 @@ def test_doesnt_crash_paraphrase_defense(
             family="pythia",
             inference_type="generation",
             strict_load=True,
-            padding_side="left",
         ),
         num_preparation_examples=2,
     )

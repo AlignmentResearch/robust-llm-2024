@@ -222,16 +222,15 @@ def test_compute_max_perplexity():
     mock_model.device = "cpu"
     mock_model.tokenizer.device = torch.device("cpu")
 
-    mock_tokenizer = MagicMock()
-    mock_tokenizer.return_value = TokenizedInput(
-        input_ids=torch.tensor([[0, 1, 2]], dtype=torch.long),
-        attention_mask=torch.tensor([[1, 1, 1]], dtype=torch.long),
-    )
     mock_wrapped_model = MagicMock()
     mock_wrapped_model.eval_minibatch_size = 1
     mock_wrapped_model.return_value.logits = mock_model_output
     mock_wrapped_model.device = "cpu"
-    mock_wrapped_model.tokenizer = mock_tokenizer
+    # We use a .tokenize method rather than calling the tokenizer
+    mock_wrapped_model.tokenize.return_value = TokenizedInput(
+        input_ids=torch.tensor([[0, 1, 2]], dtype=torch.long),
+        attention_mask=torch.tensor([[1, 1, 1]], dtype=torch.long),
+    )
 
     # Define a Mock dataset
     mock_dataset = TrivialTestDataset()
@@ -283,7 +282,7 @@ def test_retokenization_defended_model_forward():
         )
 
     victim.side_effect = side_effect_function
-    victim.tokenizer = tokenizer
+    victim.right_tokenizer = tokenizer
 
     # Create a RetokenizationDefendedModel instance
     model = RetokenizationDefendedModel(
@@ -337,7 +336,8 @@ def test_perplexity_defended_model_filter(mocker):
 
     tokenizer = MagicMock()
     tokenizer.device = torch.device("cpu")
-    tokenizer.return_value = TokenizedInput(
+    # We use a .tokenize method rather than calling the tokenizer
+    victim.tokenize.return_value = TokenizedInput(
         input_ids=inputs["input_ids"],
         attention_mask=inputs["attention_mask"],
     )
@@ -356,6 +356,10 @@ def test_perplexity_defended_model_filter(mocker):
     decoder.eval_minibatch_size = 3
     victim.eval_minibatch_size = 3
     decoder.tokenizer = tokenizer
+    decoder.tokenize.return_value = TokenizedInput(
+        input_ids=inputs["input_ids"],
+        attention_mask=inputs["attention_mask"],
+    )
 
     output_logits = torch.tensor(
         [
@@ -394,7 +398,8 @@ def test_perplexity_defended_model_filter(mocker):
         "input_ids": torch.tensor([[0, 1, 2], [0, 0, 0], [0, 1, 2]]),
         "attention_mask": torch.tensor([[1, 1, 1], [1, 1, 1], [1, 1, 1]]),
     }
-    defended_model.decoder.tokenizer.return_value = TokenizedInput(  # type: ignore
+    # We use a .tokenize method rather than calling the tokenizer
+    defended_model.decoder.tokenize.return_value = TokenizedInput(  # type: ignore [attr-defined]  # noqa: E501
         input_ids=modified_inputs["input_ids"],
         attention_mask=modified_inputs["attention_mask"],
     )

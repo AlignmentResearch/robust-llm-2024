@@ -14,7 +14,7 @@ class Llama2Model(WrappedModel):
     def __init__(
         self,
         model: LlamaForCausalLM,
-        tokenizer: LlamaTokenizer,
+        right_tokenizer: LlamaTokenizer,
         accelerator: Accelerator | None,
         inference_type: InferenceType,
         train_minibatch_size: int,
@@ -23,7 +23,7 @@ class Llama2Model(WrappedModel):
     ) -> None:
         super().__init__(
             model,
-            tokenizer,
+            right_tokenizer,
             accelerator,
             inference_type,
             train_minibatch_size,
@@ -44,7 +44,7 @@ class Llama2Model(WrappedModel):
         tokenizer = LlamaTokenizer.from_pretrained(
             model_config.name_or_path,
             revision=model_config.revision,
-            padding_side=model_config.padding_side,
+            padding_side="right",  # Left padding is handled separately
             model_max_length=cls.CONTEXT_LENGTH,
             clean_up_tokenization_spaces=False,
         )

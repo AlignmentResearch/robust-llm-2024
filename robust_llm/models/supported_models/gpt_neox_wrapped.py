@@ -20,7 +20,7 @@ class GPTNeoXModel(WrappedModel):
     def __init__(
         self,
         model: GPTNeoXPreTrainedModel,
-        tokenizer: PreTrainedTokenizerBase,
+        right_tokenizer: PreTrainedTokenizerBase,
         accelerator: Accelerator | None,
         inference_type: InferenceType,
         train_minibatch_size: int,
@@ -32,7 +32,7 @@ class GPTNeoXModel(WrappedModel):
         # assert isinstance(model, GPTNeoXPreTrainedModel)
         super().__init__(
             model,
-            tokenizer,
+            right_tokenizer,
             accelerator,
             inference_type,
             train_minibatch_size,
@@ -51,7 +51,7 @@ class GPTNeoXModel(WrappedModel):
         tokenizer = GPTNeoXTokenizerFast.from_pretrained(
             model_config.name_or_path,
             revision=model_config.revision,
-            padding_side=model_config.padding_side,
+            padding_side="right",  # Left padding is handled separately
             model_max_length=cls.CONTEXT_LENGTH,
             clean_up_tokenization_spaces=False,
         )

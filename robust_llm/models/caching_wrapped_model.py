@@ -1,6 +1,9 @@
 from contextlib import contextmanager
+from typing import overload
 
 import torch
+from transformers import BatchEncoding
+from typing_extensions import override
 
 from robust_llm.models.model_utils import PastKeyValues
 from robust_llm.models.wrapped_model import WrappedModel
@@ -75,7 +78,7 @@ class CachingWrappedModel(WrappedModel):
         """
         # Preconditions.
         assert input_ids.shape[0] == 1, "Only one input sequence at a time (for now)."
-        assert self._wrapped_model.tokenizer.pad_token_id not in input_ids
+        assert self._wrapped_model.right_tokenizer.pad_token_id not in input_ids
 
         outputs = self._wrapped_model(input_ids=input_ids, use_cache=True)
         kv_cache = outputs.past_key_values
@@ -126,6 +129,43 @@ class CachingWrappedModel(WrappedModel):
 
         longest_common_prefix = longest_common_prefix_key[:longest_common_prefix_length]
         return longest_common_prefix, final_kv
+
+    @override
+    def tokenize(
+        self,
+        text: str | list[str],
+        return_tensors: str | None = None,
+        padding_side: str | None = None,
+        add_special_tokens: bool = False,
+        **kwargs,
+    ) -> BatchEncoding:
+        """Tokenize the input text using the WrappedModel's tokenizer."""
+        return self._wrapped_model.tokenize(
+            text,
+            return_tensors=return_tensors,
+            padding_side=padding_side,
+            add_special_tokens=add_special_tokens,
+            **kwargs,
+        )
+
+    @overload
+    def maybe_apply_chat_template(self, text: str) -> str: ...
+
+    @overload
+    def maybe_apply_chat_template(self, text: list[str]) -> list[str]: ...
+
+    def maybe_apply_chat_template(self, text: str | list[str]) -> str | list[str]:
+        """If working with a chat model, return text with chat template applied.
+
+        Since this is the base class, we just return the text as is.
+
+        Args:
+            text: The text to apply the chat template to.
+
+        Returns:
+            The text with the chat template applied.
+        """
+        return self._wrapped_model.maybe_apply_chat_template(text)
 
     @classmethod
     def load_tokenizer(cls, model_config):
@@ -224,7 +264,7 @@ def get_caching_model_with_example(model: WrappedModel, example_text: str):
     Note that we can add more examples to the cache later.
     """
     caching_model = CachingWrappedModel(model)
-    inp = caching_model.tokenizer(example_text, return_tensors="pt")
+    inp = caching_model.tokenize(example_text, return_tensors="pt")
     input_ids = inp["input_ids"]
     caching_model.add_to_cache(input_ids)  # type: ignore[arg-type]
     try:

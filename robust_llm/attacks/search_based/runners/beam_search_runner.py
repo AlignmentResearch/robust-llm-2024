@@ -48,7 +48,7 @@ class BeamSearchRunner(SearchBasedRunner):
     ) -> list[tuple[str, ReplacementCandidate]]:
 
         # We forbid introducing special tokens in the attack tokens.
-        excluded_token_ids = self.victim.tokenizer.all_special_ids
+        excluded_token_ids = self.victim.all_special_ids
 
         text_replacement_pairs: list[tuple[str, ReplacementCandidate]] = []
 

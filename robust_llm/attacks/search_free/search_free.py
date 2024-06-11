@@ -103,12 +103,14 @@ class SearchFreeAttack(Attack, ABC):
         )
         temp_attack_ds = dataset.update_dataset_based_on_text(temp_attack_ds)
 
+        callback_input = CallbackInput(
+            # TODO(ian): Work out where to apply the chat template.
+            input_data=self.victim.maybe_apply_chat_template(temp_attack_ds["text"]),
+            clf_label_data=temp_attack_ds["clf_label"],
+            gen_target_data=temp_attack_ds["gen_target"],
+        )
+
         with get_caching_model_with_example(self.victim, example["text"]) as victim:
-            callback_input = CallbackInput(
-                input_data=temp_attack_ds["text"],
-                clf_label_data=temp_attack_ds["clf_label"],
-                gen_target_data=temp_attack_ds["gen_target"],
-            )
             victim_out = self.victim_success_binary_callback(
                 victim,
                 callback_input,
@@ -118,7 +120,9 @@ class SearchFreeAttack(Attack, ABC):
         attacked_text, attack_success_indices = get_attacked_text_from_successes(
             attacked_inputs, victim_successes
         )
-        return attacked_text, attack_success_indices
+        # TODO(ian): Work out if 'apply_chat_template' messes with the updating
+        # done in 'with_attacked_text'.
+        return victim.maybe_apply_chat_template(attacked_text), attack_success_indices
 
     def get_attacked_inputs(
         self,
@@ -240,7 +244,7 @@ class SearchFreeAttack(Attack, ABC):
                     chunk_label,
                     chunk_seed,
                 )
-                attack_tokens = self.victim.tokenizer.decode(token_ids)
+                attack_tokens = self.victim.decode(token_ids)
                 return chunk_text + attack_tokens
 
             case ChunkType.OVERWRITABLE:
@@ -251,7 +255,7 @@ class SearchFreeAttack(Attack, ABC):
                     chunk_label,
                     chunk_seed,
                 )
-                attack_tokens = self.victim.tokenizer.decode(token_ids)
+                attack_tokens = self.victim.decode(token_ids)
                 return attack_tokens
 
             case _:
