@@ -26,4 +26,4 @@ FROM dev as easydev
 RUN curl -fsSL https://code-server.dev/install.sh | sh
 ENV PATH="/home/coder/.local/bin:${PATH}"
 RUN code-server --install-extension ms-python.python
-RUN code-server --install-extension ms-python.pyright
+RUN code-server --install-extension ms-pyright.pyright
