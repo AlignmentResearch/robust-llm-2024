@@ -10,6 +10,6 @@ adversary:
     min_new_tokens: 10
     max_new_tokens: 10
     do_sample: true
-templates:
-  - " It was a terrible movie."
-  - " It was a great movie."
+adversary_input_templates:
+  - "{} It was a terrible movie."
+  - "{} It was a great movie."

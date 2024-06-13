@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-  - /dataset: CONTACT_INFO
+  - /dataset: pure_generation
   - /evaluation: DEFAULT
   - /attack@evaluation.evaluation_attack: lm-attack-phone-number
   - /model: pythia-14m
@@ -8,7 +8,6 @@ defaults:
 
 dataset:
   n_val: 100
-  info_type: phone_number
 
 evaluation:
   final_success_binary_callback: phone_number_in_generation

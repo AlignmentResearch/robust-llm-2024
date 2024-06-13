@@ -70,9 +70,9 @@ def test_adversary_input(exp_config: ExperimentConfig) -> None:
                 do_sample=True,
             ),
         ),
-        templates=[
-            " Do something1!",
-            " Do something2!",
+        adversary_input_templates=[
+            "{} Do something1!",
+            "{} Do something2!",
         ],
         n_its=n_its,
     )
@@ -142,10 +142,11 @@ def test_wrong_chunks_dataset(exp_config: ExperimentConfig) -> None:
                 do_sample=True,
             ),
         ),
-        templates=[
-            " Do something1!",
-            " Do something2!",
+        adversary_input_templates=[
+            "{} Do something1!",
+            "{} Do something2!",
         ],
+        adversary_output_templates=["{}" for _ in range(4)],
         n_its=2,
     )
     exp_config.dataset.dataset_type = "AlignmentResearch/PasswordMatch"

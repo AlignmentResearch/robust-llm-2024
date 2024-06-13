@@ -20,7 +20,6 @@ from robust_llm.config.attack_configs import (
     MultipromptGCGAttackConfig,
 )
 from robust_llm.config.configs import EvaluationConfig
-from robust_llm.config.dataset_configs import ContactInfoDatasetConfig
 from robust_llm.config.model_configs import GenerationConfig
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
@@ -142,9 +141,9 @@ def test_doesnt_crash_lm_attack_clf(exp_config: ExperimentConfig) -> None:
                 do_sample=True,
             ),
         ),
-        templates=[
-            "1: {}, 2: {}, 3: {}. Do something1!",
-            "1: {}, 2: {}, 3: {}. Do something2!",
+        adversary_input_templates=[
+            "{} Do something1!",
+            "{} Do something2!",
         ],
         n_its=2,
     )
@@ -153,11 +152,10 @@ def test_doesnt_crash_lm_attack_clf(exp_config: ExperimentConfig) -> None:
 
 def test_doesnt_crash_lm_attack_gen(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
-    exp_config.dataset = ContactInfoDatasetConfig(
-        dataset_type="ContactInfo",
+    exp_config.dataset = DatasetConfig(
+        dataset_type="PureGeneration",
         n_train=2,
         n_val=2,
-        info_type="phone_number",
         inference_type="generation",
         classification_as_generation=False,
     )
@@ -187,7 +185,7 @@ def test_doesnt_crash_lm_attack_gen(exp_config: ExperimentConfig) -> None:
                 do_sample=True,
             ),
         ),
-        templates=[
+        adversary_input_templates=[
             "{} Do something!",
         ],
         n_its=2,

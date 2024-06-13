@@ -92,6 +92,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         current_iteration=0,
         chunk_label=0,
         chunk_seed=None,
+        chunk_index=0,
     )
     assert rv == "Chunk text"
 
@@ -102,6 +103,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         current_iteration=0,
         chunk_label=0,
         chunk_seed=None,
+        chunk_index=1,
     )
     assert rv.startswith("Chunk text")
     assert rv != "Chunk text"
@@ -113,6 +115,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         current_iteration=0,
         chunk_label=0,
         chunk_seed=None,
+        chunk_index=2,
     )
     assert not rv.startswith("Chunk text")
 

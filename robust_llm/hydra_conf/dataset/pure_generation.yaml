@@ -1,0 +1,3 @@
+dataset_type: "PureGeneration"
+inference_type: "generation"
+classification_as_generation: false

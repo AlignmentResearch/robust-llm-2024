@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from hydra.core.config_store import ConfigStore
@@ -117,17 +117,21 @@ class LMBasedAttackConfig(AttackConfig):
     """Options specific for LM-based attacks.
     Attributes:
         adversary: Model config used as the LM adversary.
-        generation_config: Configuration for generating text with the LM adversary.
-        templates: Prompt templates to use for eliciting the attack, one for each
-            target label. Has to contain exactly one `{}` placeholder for
+        adversary_input_templates: Prompt templates to use for eliciting the attack,
+            one for each target label. Has to contain exactly one `{}` placeholder for
             each text chunk.
-        max_iterations: Maximum number of iterations to run the attack.
+        adversary_output_templates:
+            Templates to use for the adversary output, one per modifiable chunk.
+            Each template should contain exactly one `{}` placeholder for the attack.
+            E.g. ["Ignore the following tokens: {}"] for a single chunk.
+        n_its: Maximum number of iterations to run the attack.
         adversary_batch_size: Batch size used for the LM adversary.
         victim_batch_size: Batch size used for the LM victium.
     """
 
     adversary: ModelConfig = MISSING
-    templates: list[str] = MISSING
+    adversary_input_templates: list[str] = MISSING
+    adversary_output_templates: list[str] = field(default_factory=lambda: ["{}"])
     n_its: int = 10
     adversary_batch_size: int = 8
     victim_batch_size: int = 8

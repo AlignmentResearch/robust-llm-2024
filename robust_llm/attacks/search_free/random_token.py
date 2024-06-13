@@ -18,7 +18,7 @@ class RandomTokenAttack(SearchFreeAttack):
     Replaces all the OVERWRITABLE text with random tokens
     from the victim tokenizer's vocabulary. The attack
     is repeated for each datapoint until it is successful,
-    or until `attack_config.max_iterations` is reached.
+    or until `attack_config.n_its` is reached.
     Appends the attack to the modifiable text instead
     of replacing it if the chunk is PERTURBABLE.
     """
@@ -83,7 +83,7 @@ class RandomTokenAttack(SearchFreeAttack):
         chunk_type: ChunkType,
         current_iteration: int,
         chunk_label: int,
-        chunk_seed: Optional[int] = None,
+        chunk_seed: Optional[int],
     ) -> list[int]:
         """Returns the random attack tokens for the current iteration.
 

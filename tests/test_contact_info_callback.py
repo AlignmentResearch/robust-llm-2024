@@ -1,5 +1,4 @@
-from robust_llm.rllm_datasets.supported_datasets.contact_info_dataset import InfoType
-from robust_llm.scoring_callbacks import doesnt_contain_contact_info
+from robust_llm.scoring_callbacks import InfoType, doesnt_contain_contact_info
 
 
 def test_doesnt_contain_contact_info():

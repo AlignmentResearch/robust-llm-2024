@@ -1,14 +1,14 @@
 from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.rllm_datasets.supported_datasets.contact_info_dataset import (
-    ContactInfoDataset,
-)
 from robust_llm.rllm_datasets.supported_datasets.enron_spam_dataset import (
     EnronSpamDataset,
 )
 from robust_llm.rllm_datasets.supported_datasets.imdb_dataset import IMDBDataset
 from robust_llm.rllm_datasets.supported_datasets.password_match_dataset import (
     PasswordMatchDataset,
+)
+from robust_llm.rllm_datasets.supported_datasets.pure_generation_dataset import (
+    PureGenerationDataset,
 )
 from robust_llm.rllm_datasets.supported_datasets.word_length_dataset import (
     WordLengthDataset,
@@ -19,7 +19,7 @@ SUPPORTED_DATASETS: dict[str, type[RLLMDataset]] = {
     "AlignmentResearch/PasswordMatch": PasswordMatchDataset,
     "AlignmentResearch/WordLength": WordLengthDataset,
     "AlignmentResearch/EnronSpam": EnronSpamDataset,
-    "ContactInfo": ContactInfoDataset,
+    "PureGeneration": PureGenerationDataset,
 }
 
 

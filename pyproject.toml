@@ -20,6 +20,7 @@ dependencies = [
     "trl",
     "wandb",
     "semver",
+    "detoxify",
 ]
 
 [project.optional-dependencies]

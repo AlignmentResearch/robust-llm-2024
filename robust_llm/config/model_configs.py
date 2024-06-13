@@ -23,16 +23,27 @@ class GenerationConfig:
     description for details about the arguments.
     """
 
+    # Parameters that control the length of the output
     max_length: Optional[int] = None
     max_new_tokens: Optional[int] = 10
     min_length: int = 0
     min_new_tokens: Optional[int] = None
     early_stopping: bool = False
+    max_time: Optional[float] = None
+    stop_strings: Optional[list[str]] = None
+
+    # Parameters that control the generation strategy used
     do_sample: bool = False
     num_beams: int = 1
+    num_beam_groups: int = 1
+    penalty_alpha: Optional[float] = None
+    use_cache: bool = True
+
+    # Parameters for manipulation of the model output logits
     temperature: float = 1.0
     top_k: int = 50
     top_p: float = 1.0
+    min_p: Optional[float] = None
 
 
 @dataclass

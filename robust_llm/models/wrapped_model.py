@@ -426,6 +426,10 @@ class WrappedModel(ABC):
         elif self.generation_config is not None:
             gen_config = self._to_transformers_generation_config(self.generation_config)
             inputs["generation_config"] = gen_config
+        if inputs.get("tokenizer") is None:
+            # Need to specify tokenizer due to stop strings.
+            # We use left_tokenizer because we always use left padding for generation.
+            inputs["tokenizer"] = self.left_tokenizer
         return self.model.generate(**inputs)
 
     def to(self, device: torch.device) -> WrappedModel:

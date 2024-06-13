@@ -22,7 +22,7 @@ class SearchFreeAttack(Attack, ABC):
     """Attack where each iteration is independent, no searching.
 
     The attack is repeated for each datapoint until it is successful,
-    or until `attack_config.max_iterations` is reached.
+    or until `attack_config.n_its` is reached.
     Appends the attack to the modifiable text instead
     of replacing it if the chunk is PERTURBABLE.
     """
@@ -173,6 +173,7 @@ class SearchFreeAttack(Attack, ABC):
             raise ValueError("Only one modifiable chunk per example supported for now.")
 
         current_input = ""
+        chunk_count = 0
         for chunk_index, chunk_type in enumerate(modifiable_chunk_spec):
             chunk_text = example["chunked_text"][chunk_index]
             current_input += self._get_text_for_chunk(
@@ -181,7 +182,9 @@ class SearchFreeAttack(Attack, ABC):
                 current_iteration=current_iteration,
                 chunk_label=example["clf_label"],
                 chunk_seed=example.get("seed"),
+                chunk_index=chunk_count,
             )
+            chunk_count += int(chunk_type != ChunkType.IMMUTABLE)
         return current_input
 
     @abstractmethod
@@ -191,7 +194,7 @@ class SearchFreeAttack(Attack, ABC):
         chunk_type: ChunkType,
         current_iteration: int,
         chunk_label: int,
-        chunk_seed: Optional[int] = None,
+        chunk_seed: Optional[int],
     ) -> list[int]:
         """Returns the attack tokens for the current iteration.
 
@@ -208,13 +211,27 @@ class SearchFreeAttack(Attack, ABC):
         """
         raise NotImplementedError
 
+    def post_process_attack_string(self, attack_tokens: str, chunk_index: int) -> str:
+        """Post-processes the attack tokens into a string.
+        Useful for overloading in subclasses.
+
+        Args:
+            attack_tokens: The decoded attack tokens.
+            chunk_index: The index of the chunk in the example (useful in subclasses).
+
+        Returns:
+            The attack tokens after post-processing.
+        """
+        return attack_tokens
+
     def _get_text_for_chunk(
         self,
         chunk_text: str,
         chunk_type: ChunkType,
         current_iteration: int,
         chunk_label: int,
-        chunk_seed: Optional[int] = None,
+        chunk_seed: Optional[int],
+        chunk_index: int,
     ) -> str:
         """Returns the text for a chunk based on its type.
 
@@ -228,6 +245,7 @@ class SearchFreeAttack(Attack, ABC):
             current_iteration: The current iteration of the attack.
             chunk_label: The label of the chunk (for classification).
             chunk_seed: The seed for the chunk (for generation).
+            chunk_index: The index of the chunk in the example.
 
         Returns:
             The text for the chunk based on its type.
@@ -245,6 +263,9 @@ class SearchFreeAttack(Attack, ABC):
                     chunk_seed,
                 )
                 attack_tokens = self.victim.decode(token_ids)
+                attack_tokens = self.post_process_attack_string(
+                    attack_tokens, chunk_index
+                )
                 return chunk_text + attack_tokens
 
             case ChunkType.OVERWRITABLE:
@@ -256,6 +277,9 @@ class SearchFreeAttack(Attack, ABC):
                     chunk_seed,
                 )
                 attack_tokens = self.victim.decode(token_ids)
+                attack_tokens = self.post_process_attack_string(
+                    attack_tokens, chunk_index
+                )
                 return attack_tokens
 
             case _:
