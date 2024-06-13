@@ -3,14 +3,14 @@ import os
 from robust_llm.batch_job_utils import run_multiple
 
 EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
-HYDRA_CONFIG = "Eval/pm_random-token-len-10"
+HYDRA_CONFIG = "Eval/pm_random-token-1280-its"
 
 MODELS_AND_N_MAX_PARALLEL = [
     ("AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3", 1),
     ("AlignmentResearch/robust_llm_pythia-tt-31m-mz-ada-v3", 1),
 ]
 
-ATTACK_CONFIGS = ["GCG", "random-token-len-10"]
+ATTACK_CONFIGS = ["GCG", "random-token-1280-its"]
 
 OVERRIDE_ARGS_LIST_AND_N_MAX_PARALLEL = [
     (

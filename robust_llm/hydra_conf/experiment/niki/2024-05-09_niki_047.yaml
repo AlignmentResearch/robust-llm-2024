@@ -1,0 +1,13 @@
+# @package _global_
+defaults:
+- AdvTraining/long_adv_training_base
+- /dataset: wordlength
+- /model: pythia  # Just sets the model family
+- /attack@training.adversarial.training_attack: random-token-1280-its
+- /attack@evaluation.evaluation_attack: random-token-1280-its
+- _self_
+
+training:
+  adversarial:
+    training_attack:
+      batch_size: 512

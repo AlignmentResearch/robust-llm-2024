@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-- Eval/pm_random-token-len-10
+- Eval/pm_random-token-1280-its
 
 dataset:
   n_val: 50

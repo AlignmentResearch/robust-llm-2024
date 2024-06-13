@@ -183,3 +183,6 @@ pythia*/
 adversarial_trainer/
 test_trainer/
 trainer/
+
+# MacOS files
+*.DS_Store

@@ -1,0 +1,9 @@
+# @package _global_
+defaults:
+- /model: pythia
+- /dataset: enronspam
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: beam-search-10-its
+- _self_
+
+experiment_type: "evaluation"

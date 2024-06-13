@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+- niki/2024-05-02_adv_training_base
+- /attack@training.adversarial.training_attack: random-token-1280-its
+- /attack@evaluation.evaluation_attack: gcg-10-its
+- _self_

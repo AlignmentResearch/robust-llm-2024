@@ -1,0 +1,7 @@
+# @package _global_
+defaults:
+- /experiment/AdvTraining/long_adv_training_base
+- /model: pythia
+- /attack@training.adversarial.training_attack: gcg-10-its
+- /attack@evaluation.evaluation_attack: gcg-10-its
+- _self_

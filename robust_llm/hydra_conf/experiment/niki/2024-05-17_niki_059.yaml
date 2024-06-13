@@ -1,0 +1,8 @@
+# @package _global_
+defaults:
+- AdvTraining/short_adv_training_base
+- /dataset: wordlength
+- /model: pythia
+- /attack@training.adversarial.training_attack: random-token-1280-its
+- /attack@evaluation.evaluation_attack: random-token-1280-its
+- _self_

@@ -1,0 +1,5 @@
+# @package _global_
+defaults:
+- niki/2024-05-12_adv_gcg_base
+- /dataset: enronspam
+- _self_
