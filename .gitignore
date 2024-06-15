@@ -168,6 +168,11 @@ checkpoint*/
 # Configurations
 .vscode/
 
+# Vim files
+*.swp
+*.swo
+.ycm_extra_conf.py
+
 # Hydra output
 outputs/
 robust_llm/outputs/
