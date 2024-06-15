@@ -184,5 +184,8 @@ adversarial_trainer/
 test_trainer/
 trainer/
 
+# Plots themselves
+*.png
+
 # MacOS files
 *.DS_Store
