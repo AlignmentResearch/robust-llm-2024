@@ -27,9 +27,13 @@ with JOB_TEMPLATE_PATH.open() as f:
 
 
 @functools.cache
+def git_repo() -> Repo:
+    return Repo(__file__, search_parent_directories=True)
+
+
+@functools.cache
 def git_latest_commit() -> str:
-    repo = Repo(".")
-    commit_hash = str(repo.head.object.hexsha)
+    commit_hash = str(git_repo().head.object.hexsha)
     return commit_hash
 
 
@@ -217,7 +221,7 @@ def launch_jobs(
     Returns:
         pair of strings -- yaml file with k8s jobs definitions, and the launch_id.
     """
-    repo = Repo(".")
+    repo = git_repo()
     if not skip_git_checks:
         # Push to git as we want to run the code with the current commit.
         repo.remote("origin").push(repo.active_branch.name).raise_if_error()
