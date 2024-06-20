@@ -7,7 +7,6 @@ adversary:
   family: pythia
   inference_type: generation
   strict_load: true
-  padding_side: left
   generation_config:
     max_new_tokens: 30
     do_sample: true

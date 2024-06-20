@@ -1,7 +1,5 @@
 defaults:
   - RANDOM_TOKEN
 
-min_tokens: 10
-max_tokens: 10
+n_attack_tokens: 10
 n_its: 10
-logging_frequency: 1

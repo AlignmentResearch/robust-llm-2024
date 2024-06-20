@@ -89,7 +89,6 @@ class RandomTokenAttackConfig(AttackConfig):
     Attributes:
         n_attack_tokens (int): The number of tokens to generate.
         n_its (int): Maximum number of iterations to run the attack.
-        logging_frequency (int): How often to log the attack.
         victim_success_binary_callback (str): The name of the ScoringCallback to use to
             compute whether an attack was successful by computing whether the victim
             got the right answer. Should refer to a BinaryCallback, because we need
