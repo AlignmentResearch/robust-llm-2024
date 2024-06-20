@@ -15,6 +15,7 @@ from robust_llm.evaluation_utils import (
     AttackResults,
     assert_same_data_between_processes,
 )
+from robust_llm.logging_utils import WandbTable
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.scoring_callbacks import BinaryCallback, CallbackInput
@@ -26,9 +27,18 @@ def do_adversarial_evaluation(
     attack: Attack,
     final_success_binary_callback: BinaryCallback,
     num_examples_to_log_detailed_info: Optional[int],
+    adv_training_round: int,
+    victim_training_step_count: int,
+    victim_training_datapoint_count: int,
+    global_step_count: int,
+    global_datapoint_count: int,
+    wandb_table: Optional[WandbTable] = None,
 ) -> dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
-
+    # If a wandb table was passed in, we write logging information to that table, and
+    # do not take responsibility for writing the table to disk. If no table was
+    # passed in, we will create our own and save it to disk.
+    save_table: bool = wandb_table is None
     if victim.accelerator is None:
         raise ValueError("Accelerator must be provided")
     # Sanity check in case of a distributed run (with accelerate): check if every
@@ -39,6 +49,7 @@ def do_adversarial_evaluation(
     assert_same_data_between_processes(victim.accelerator, dataset.ds["clf_label"])
 
     victim.eval()
+    model_size = victim.model.num_parameters()
 
     callback_input = CallbackInput(
         # TODO(ian): Work out where to apply chat template.
@@ -128,6 +139,19 @@ def do_adversarial_evaluation(
         wandb.log(metrics, commit=True)
         logger.info("Adversarial evaluation metrics:")
         logger.info(metrics)
+        metrics["adv_training_round"] = adv_training_round
+        metrics["victim_training_step_count"] = victim_training_step_count
+        metrics["victim_training_datapoint_count"] = victim_training_datapoint_count
+        metrics["global_step_count"] = global_step_count
+        metrics["global_datapoint_count"] = global_datapoint_count
+        metrics["model_size"] = model_size
+        wandb_table = (
+            WandbTable("adversarial_eval/table") if wandb_table is None else wandb_table
+        )
+        wandb_table.add_data(metrics)
+        if save_table:
+            # Since no table was passed in, we must save it here to keep the data.
+            wandb_table.save()
 
     return metrics
 

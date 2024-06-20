@@ -24,7 +24,7 @@ from robust_llm.config.configs import (
     TrainingConfig,
 )
 from robust_llm.evaluation import do_adversarial_evaluation
-from robust_llm.logging_utils import LoggingCounter, log_dataset_to_wandb
+from robust_llm.logging_utils import LoggingCounter, WandbTable, log_dataset_to_wandb
 from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -401,6 +401,7 @@ class AdversarialTraining(Training):
                 self.log_datasets()
 
         # Run the adversarial training loop
+        table = WandbTable("adversarial_eval/table")
         for round in range(self.num_adversarial_training_rounds):
             logger.info("Adversarial training round %s started ", round)
             self._log_debug_info()
@@ -457,12 +458,19 @@ class AdversarialTraining(Training):
             )
 
             # Perform adversarial evaluation every round
+            victim_log_counter = self.victim_training_logging_counter
             do_adversarial_evaluation(
                 victim=self.victim,
                 dataset=self.eval_rllm_dataset["validation"],
                 attack=validation_attack,
                 final_success_binary_callback=self.victim_success_binary_callback,
                 num_examples_to_log_detailed_info=self.evaluation_config.num_examples_to_log_detailed_info,  # noqa: E501
+                adv_training_round=round,
+                victim_training_step_count=victim_log_counter.step_count,
+                victim_training_datapoint_count=victim_log_counter.datapoint_count,
+                global_step_count=victim_log_counter.root.step_count,
+                global_datapoint_count=victim_log_counter.root.datapoint_count,
+                wandb_table=table,
             )
 
             # Now generate adversarial examples using the training attack; possibly
@@ -534,6 +542,7 @@ class AdversarialTraining(Training):
                 path_prefix_or_hf=self.config.model_save_path_prefix_or_hf,
                 adv_tr_round=round,
             )
+        table.save()
 
     def _log_debug_info(self):
         logger.debug(

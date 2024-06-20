@@ -1,6 +1,5 @@
 """Pipeline to evaluate a fixed model under attack."""
 
-import wandb
 from accelerate import Accelerator
 
 from robust_llm import logger
@@ -20,24 +19,18 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> None:
 
     accelerator = Accelerator(cpu=use_cpu)
 
-    logging_context = LoggingContext(
-        is_main_process=accelerator.is_main_process, args=args
-    )
-    logging_context.setup()
-
     validation = load_rllm_dataset(args.dataset, split="validation")
     num_classes = validation.num_classes
 
     victim = WrappedModel.from_config(args.model, accelerator, num_classes)
-
-    assert wandb.run is not None
-    # Log the model size to wandb for use in plots, so we don't
-    # have to try to get it out of the model name.
-    # We use `commit=False` to avoid incrementing the step counter.
-    # TODO (GH#348): Move this to a more appropriate place.
-    wandb.log({"model_size": victim.model.num_parameters()}, commit=False)
-
     victim.eval()
+
+    logging_context = LoggingContext(
+        is_main_process=accelerator.is_main_process,
+        args=args,
+        num_parameters=victim.model.num_parameters(),
+    )
+    logging_context.setup()
 
     attack = prepare_attack(
         args=args,
@@ -52,6 +45,11 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> None:
         # In the future, we might want to (also or only) train on a
         # different dataset, such as the train dataset.
         attack.train(dataset=validation)
+        global_step_count = attack.logging_counter.root.step_count
+        global_datapoint_count = attack.logging_counter.root.datapoint_count
+    else:
+        global_step_count = 0
+        global_datapoint_count = 0
 
     if args.defense is not None:
         # TODO (GH#322): Propagate RLLMDataset into defenses.
@@ -81,6 +79,13 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> None:
         attack=attack,
         final_success_binary_callback=final_callback,
         num_examples_to_log_detailed_info=args.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
+        # In evaluation pipeline, we do not have adversarial training, so these are 0
+        adv_training_round=0,
+        victim_training_step_count=0,
+        victim_training_datapoint_count=0,
+        # Set the global count using the attack's logging counter
+        global_step_count=global_step_count,
+        global_datapoint_count=global_datapoint_count,
     )
 
     logging_context.cleanup()

@@ -9,6 +9,7 @@ from tdigest import TDigest
 from robust_llm import logger
 from robust_llm.config.defense_configs import PerplexityDefenseConfig
 from robust_llm.defenses.defense import FilteringDefendedModel
+from robust_llm.logging_utils import WandbTable
 from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import InferenceType, build_dataloader
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -338,17 +339,22 @@ class PerplexityDefendedModel(FilteringDefendedModel):
 
         # Don't log to wandb if we're running tests
         if wandb.run is not None:
+            defense_dict = {
+                "defense/perplexity_threshold_proportion_pre_attack": (
+                    self.cfg.perplexity_threshold_proportion
+                ),
+                "defense/perplexity_threshold_value": self.threshold,
+                "defense/max_perplexity_pre_attack": self.max_perplexity,
+                "defense/min_perplexity_pre_attack": self.min_perplexity,
+            }
             wandb.log(
-                {
-                    "defense/perplexity_threshold_proportion_pre_attack": (
-                        self.cfg.perplexity_threshold_proportion
-                    ),
-                    "defense/perplexity_threshold_value": self.threshold,
-                    "defense/max_perplexity_pre_attack": self.max_perplexity,
-                    "defense/min_perplexity_pre_attack": self.min_perplexity,
-                },
+                defense_dict,
                 commit=False,
             )
+            defense_dict["model_size"] = victim.model.num_parameters()
+            table = WandbTable("defense/perplexity_table")
+            table.add_data(defense_dict)
+            table.save()
 
     @property
     def defense_config(self) -> PerplexityDefenseConfig:

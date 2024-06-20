@@ -18,6 +18,7 @@ from robust_llm.attacks.trl.utils import (
     prepare_prompts,
 )
 from robust_llm.config.attack_configs import TRLAttackConfig
+from robust_llm.logging_utils import WandbTable
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -91,6 +92,7 @@ class TRLAttack(Attack):
             "max_new_tokens": attack_config.max_new_tokens,
         }
         self.ppo_trainer: Optional[PPOTrainer] = None
+        self.model_size = victim.model.num_parameters()
 
     @override
     def train(
@@ -114,6 +116,7 @@ class TRLAttack(Attack):
 
         assert self.ppo_trainer is not None
         ppo_epochs: int = self.ppo_trainer.config.ppo_epochs
+        table = WandbTable(f"{self.logging_name}/attack_table")
         for epoch in tqdm(range(ppo_epochs), "epoch: "):
             epoch_rewards: list[torch.Tensor] = []
             for batch in tqdm(self.ppo_trainer.dataloader):
@@ -172,7 +175,7 @@ class TRLAttack(Attack):
                 check_for_not_finite(train_stats)
 
                 # Log the ppo stats and update the logging counters
-                self._maybe_log_trl(train_stats, rewards)
+                self._maybe_log_trl(train_stats, rewards, table)
 
             average_reward = torch.Tensor(epoch_rewards).squeeze().mean()
 
@@ -181,9 +184,13 @@ class TRLAttack(Attack):
             )
 
         self._maybe_save_model_to_path_or_hf()
+        table.save()
 
     def _maybe_log_trl(
-        self, train_stats: dict[str, Any], rewards: Sequence[torch.Tensor]
+        self,
+        train_stats: dict[str, Any],
+        rewards: Sequence[torch.Tensor],
+        table: WandbTable,
     ):
         self.logging_counter.increment(
             step_count_to_add=1,
@@ -199,6 +206,21 @@ class TRLAttack(Attack):
                 }
 
                 wandb.log(prepended_train_stats, commit=True)
+
+                prepended_train_stats["attack_step_count"] = (
+                    self.logging_counter.step_count
+                )
+                prepended_train_stats["attack_datapoint_count"] = (
+                    self.logging_counter.datapoint_count
+                )
+                prepended_train_stats["global_step_count"] = (
+                    self.logging_counter.root.step_count
+                )
+                prepended_train_stats["global_datapoint_count"] = (
+                    self.logging_counter.root.datapoint_count
+                )
+                prepended_train_stats["model_size"] = self.model_size
+                table.add_data(prepended_train_stats)
 
     @override
     def get_attacked_dataset(

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import wandb
 import yaml
@@ -77,6 +77,10 @@ class LoggingCounter:
             },
             commit=commit,
         )
+
+    @property
+    def root(self) -> LoggingCounter:
+        return self._parent.root if self._parent is not None else self
 
 
 GLOBAL_LOGGING_COUNTER = LoggingCounter(_name="global", _is_global=True)
@@ -275,3 +279,37 @@ class LoggingContext:
         self.save_logs()
         if self.is_main_process:
             self.wandb_cleanup()
+
+
+class WandbTable:
+    """
+    Wrapper around wandb.Table to make it easier to log dicts as table rows.
+
+    Args:
+        name: Name of the table.
+    """
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self._table: wandb.Table | None = None
+        self.logged = False
+
+    @property
+    def table(self) -> wandb.Table:
+        assert isinstance(self._table, wandb.Table)
+        return self._table
+
+    def add_data(self, data: Dict[str, Any]) -> None:
+        data = {k: v for k, v in data.items() if isinstance(v, (int, float))}
+        if self._table is None:
+            self._table = wandb.Table(columns=list(data.keys()))
+        assert self.table.columns == list(data.keys())
+        self.table.add_data(*data.values())
+
+    def save(self, commit: bool = False) -> None:
+        assert not self.logged, (
+            "Table has already been logged. "
+            "Wandb cannot handle multiple logs of the same table in one run."
+        )
+        wandb.log({self.name: self.table}, commit=commit)
+        self.logged = True

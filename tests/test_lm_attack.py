@@ -114,6 +114,11 @@ def test_adversary_input(exp_config: ExperimentConfig) -> None:
             attack=attack,
             num_examples_to_log_detailed_info=exp_config.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
             final_success_binary_callback=final_callback,
+            adv_training_round=0,
+            victim_training_step_count=0,
+            victim_training_datapoint_count=0,
+            global_step_count=0,
+            global_datapoint_count=0,
         )
     first_call = attack.adversary.decode(
         mock_generate.call_args_list[0].kwargs["input_ids"].squeeze(0)
@@ -193,4 +198,9 @@ def test_wrong_chunks_dataset(exp_config: ExperimentConfig) -> None:
                 attack=attack,
                 num_examples_to_log_detailed_info=exp_config.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
                 final_success_binary_callback=final_callback,
+                adv_training_round=0,
+                victim_training_step_count=0,
+                victim_training_datapoint_count=0,
+                global_step_count=0,
+                global_datapoint_count=0,
             )
