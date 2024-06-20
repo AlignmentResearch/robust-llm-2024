@@ -272,4 +272,8 @@ def assert_same_data_between_processes(
     length = len(data)
     data_gathered = accelerator.gather_for_metrics(data)
     for i in range(accelerator.num_processes):
-        assert data_gathered[i * length : (i + 1) * length] == data
+        assert data_gathered[i * length : (i + 1) * length] == data, (
+            f"Data of length {length} from process {i} does not match original.\n"
+            f"Original: {data}\n"
+            f"Process {i}: {data_gathered[i * length : (i + 1) * length]}\n"
+        )

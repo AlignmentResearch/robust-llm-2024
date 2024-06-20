@@ -229,7 +229,7 @@ class TextAttackAttack(Attack):
             )
 
         self.attack_args = textattack.AttackArgs(
-            num_examples=attack_config.num_examples,
+            num_examples=-1,  # Attack all examples
             query_budget=attack_config.query_budget,
             random_seed=attack_config.seed,
             # Despite TextAttack's documentation, we need to set both of these

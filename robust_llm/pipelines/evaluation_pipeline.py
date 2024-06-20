@@ -13,7 +13,7 @@ from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks import CallbackRegistry
 
 
-def run_evaluation_pipeline(args: ExperimentConfig) -> None:
+def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
     assert args.evaluation is not None
     use_cpu = args.environment.device == "cpu"
 
@@ -73,7 +73,7 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> None:
     final_callback_name = args.evaluation.final_success_binary_callback
     final_callback = CallbackRegistry.get_binary_callback(final_callback_name)
 
-    do_adversarial_evaluation(
+    results = do_adversarial_evaluation(
         victim=victim,
         dataset=validation,
         attack=attack,
@@ -89,3 +89,5 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> None:
     )
 
     logging_context.cleanup()
+
+    return results

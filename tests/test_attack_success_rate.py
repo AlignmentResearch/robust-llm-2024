@@ -58,13 +58,15 @@ def exp_config() -> ExperimentConfig:
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/PasswordMatch",
             n_train=2,
-            n_val=2,
+            n_val=100,
         ),
     )
     return config
 
 
-def _test_doesnt_crash(exp_config: ExperimentConfig) -> None:
+def _test_attack(
+    exp_config: ExperimentConfig, success_rate_at_least: float = 0.0
+) -> None:
     """Small wrapper around run_evaluation_pipeline.
 
     This resets a TextAttack global variable, and runs interpolation:
@@ -80,49 +82,52 @@ def _test_doesnt_crash(exp_config: ExperimentConfig) -> None:
 
     config = OmegaConf.to_object(OmegaConf.structured(exp_config))
     assert isinstance(config, ExperimentConfig)
-    run_evaluation_pipeline(config)
+    results = run_evaluation_pipeline(config)
+    actual = results["adversarial_eval/attack_success_rate"]
+    assert actual >= success_rate_at_least
 
 
-def test_doesnt_crash_random_token(exp_config: ExperimentConfig) -> None:
+def test_random_token(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
-        n_attack_tokens=3,
-        n_its=2,
+        n_attack_tokens=1,
+        n_its=50,
     )
-    _test_doesnt_crash(exp_config)
+    _test_attack(exp_config, success_rate_at_least=0.18)
 
 
-def test_doesnt_crash_multiprompt_random_token(exp_config: ExperimentConfig) -> None:
+def test_multiprompt_random_token(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
-        n_attack_tokens=3,
-        n_its=2,
+        n_attack_tokens=1,
+        n_its=250,
         prompt_attack_mode="multi-prompt",
     )
-    _test_doesnt_crash(exp_config)
+    _test_attack(exp_config, success_rate_at_least=0.96)
 
 
-def test_doesnt_crash_gcg(exp_config: ExperimentConfig) -> None:
+def test_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = GCGAttackConfig(
-        n_attack_tokens=2,
+        n_attack_tokens=1,
         n_its=2,
-        n_candidates_per_it=16,
+        n_candidates_per_it=128,
     )
 
-    _test_doesnt_crash(exp_config)
+    _test_attack(exp_config, success_rate_at_least=0.31)
 
 
-def test_doesnt_crash_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
+def test_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
         n_attack_tokens=3,
         n_its=2,
     )
-    _test_doesnt_crash(exp_config)
+    exp_config.dataset.n_val = 2
+    _test_attack(exp_config, success_rate_at_least=0.01)
 
 
-def test_doesnt_crash_lm_attack_clf(exp_config: ExperimentConfig) -> None:
+def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.dataset = DatasetConfig(
         dataset_type="AlignmentResearch/IMDB",
@@ -147,10 +152,10 @@ def test_doesnt_crash_lm_attack_clf(exp_config: ExperimentConfig) -> None:
         ],
         n_its=2,
     )
-    _test_doesnt_crash(exp_config)
+    _test_attack(exp_config)
 
 
-def test_doesnt_crash_lm_attack_gen(exp_config: ExperimentConfig) -> None:
+def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.dataset = DatasetConfig(
         dataset_type="PureGeneration",
@@ -191,10 +196,10 @@ def test_doesnt_crash_lm_attack_gen(exp_config: ExperimentConfig) -> None:
         n_its=2,
         victim_success_binary_callback="phone_number_in_generation",
     )
-    _test_doesnt_crash(exp_config)
+    _test_attack(exp_config)
 
 
-def test_doesnt_crash_trl(exp_config: ExperimentConfig) -> None:
+def test_trl(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = TRLAttackConfig(
         batch_size=2,
@@ -212,8 +217,9 @@ def test_doesnt_crash_trl(exp_config: ExperimentConfig) -> None:
             strict_load=False,
         ),
     )
+    exp_config.dataset.n_val = 2
 
-    _test_doesnt_crash(exp_config)
+    _test_attack(exp_config)
 
 
 def test_covers_text_attacks() -> None:
@@ -232,10 +238,10 @@ def test_modifiable_words_text_attack_doesnt_crash(
     exp_config.evaluation.evaluation_attack = TextAttackAttackConfig(
         text_attack_recipe=text_attack_recipe,
         num_modifiable_words_per_chunk=1,
-        num_examples=2,
         query_budget=10,
     )
-    _test_doesnt_crash(exp_config)
+    exp_config.dataset.n_val = 2
+    _test_attack(exp_config)
 
 
 # These cases are special because they don't set num_modifiable_words_per_chunk,
@@ -249,7 +255,7 @@ def test_non_modifiable_words_text_attack_doesnt_crash(
     exp_config.evaluation.evaluation_attack = TextAttackAttackConfig(
         text_attack_recipe=text_attack_recipe,
         num_modifiable_words_per_chunk=None,
-        num_examples=2,
         query_budget=10,
     )
-    _test_doesnt_crash(exp_config)
+    exp_config.dataset.n_val = 2
+    _test_attack(exp_config)
