@@ -1,4 +1,4 @@
-from accelerate import Accelerator, DistributedType
+from accelerate import Accelerator
 from transformers import LlamaForCausalLM, LlamaTokenizer
 from typing_extensions import override
 
@@ -51,8 +51,3 @@ class Llama2Model(WrappedModel):
 
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
-
-    @override
-    def add_accelerator(self, accelerator: Accelerator) -> None:
-        assert accelerator.distributed_type != DistributedType.FSDP, "not supported!"
-        super().add_accelerator(accelerator)

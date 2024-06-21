@@ -1,4 +1,4 @@
-from accelerate import Accelerator, DistributedType
+from accelerate import Accelerator
 from transformers import GPT2PreTrainedModel, GPT2TokenizerFast, PreTrainedTokenizerBase
 from typing_extensions import override
 
@@ -55,10 +55,3 @@ class GPT2Model(WrappedModel):
 
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
-
-    @override
-    def add_accelerator(self, accelerator: Accelerator) -> None:
-        # GPT-2 was crashing when using FSDP. In the (unlikely) case we want to run FSDP
-        # with GPT-2 in the future, investigate this.
-        assert accelerator.distributed_type != DistributedType.FSDP, "not supported!"
-        super().add_accelerator(accelerator)

@@ -269,6 +269,8 @@ def _classification_success_from_tokens(
     batch_start = 0
     for out in output_generator:
         logits = out["logits"]
+        assert victim.accelerator is not None
+        assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]
         batch_label_data = clf_label_data[batch_start : batch_start + batch_length]
         successes = classification_successes_from_logits(
@@ -333,6 +335,8 @@ def _generation_successes_from_tokens(
     batch_start = 0
     for out in output_generator:
         logits = out["logits"]
+        assert victim.accelerator is not None
+        assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]
         batch_input_ids = input_ids[batch_start : batch_start + batch_length]
         batch_target_ids = target_input_ids[batch_start : batch_start + batch_length]
@@ -403,6 +407,7 @@ def _generation_losses_from_tokens(
     batch_start = 0
     for out in output_generator:
         logits = out["logits"]
+        assert victim.accelerator is not None
         assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]
         batch_input_ids = input_ids[batch_start : batch_start + batch_length]
@@ -459,6 +464,7 @@ def _generation_losses_from_embeds(
     batch_start = 0
     for out in output_generator:
         logits = out["logits"]
+        assert victim.accelerator is not None
         assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]
         batch_input_ids = full_input_ids[batch_start : batch_start + batch_length]
@@ -588,6 +594,8 @@ def losses_from_embeds_callback(
             use_no_grad=use_no_grad,
         )
         logits = out["logits"]
+        assert victim.accelerator is not None
+        assert isinstance(logits, torch.Tensor)
         losses = classification_losses_from_logits(logits, label_data)
 
     elif victim.inference_type == InferenceType.GENERATION:
@@ -639,6 +647,8 @@ def losses_from_text_callback(
         batch_start = 0
         for out in output_generator:
             logits = out["logits"]
+            assert victim.accelerator is not None
+            assert isinstance(logits, torch.Tensor)
             batch_length = logits.shape[0]
             batch_label_data = label_data[batch_start : batch_start + batch_length]
             minibatch_losses = classification_losses_from_logits(

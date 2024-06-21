@@ -28,7 +28,6 @@ from robust_llm.models.model_utils import (
     InferenceType,
     PromptTemplate,
     SuppressPadTokenWarning,
-    _get_embedding_weights,
     build_dataloader,
     dict_to_device,
     load_hf_model,
@@ -203,7 +202,8 @@ class WrappedModel(ABC):
                     input_ids=minibatch["input_ids"],
                     attention_mask=minibatch["attention_mask"],
                 )
-                minibatch_out = dict_to_device(minibatch_out, "cpu")
+                minibatch_out = self.accelerator.gather_for_metrics(minibatch_out)
+                assert isinstance(minibatch_out, ModelOutput)
                 yield minibatch_out
 
     def classification_output_from_embeddings(
@@ -284,7 +284,8 @@ class WrappedModel(ABC):
                     input_ids=minibatch["input_ids"],
                     attention_mask=minibatch["attention_mask"],
                 )
-                minibatch_out = dict_to_device(minibatch_out, "cpu")
+                minibatch_out = self.accelerator.gather_for_metrics(minibatch_out)
+                assert isinstance(minibatch_out, ModelOutput)
                 yield minibatch_out
 
     def generation_output_from_embeddings(
@@ -365,6 +366,7 @@ class WrappedModel(ABC):
                     attention_mask=minibatch["attention_mask"],
                     generation_config=self.generation_config,
                 )
+                minibatch_tokens = self.accelerator.gather_for_metrics(minibatch_tokens)
                 assert isinstance(minibatch_tokens, torch.Tensor)
                 # For now, we don't skip special tokens, because that removes the
                 # chat formatting tokens.
@@ -638,9 +640,8 @@ class WrappedModel(ABC):
         # TODO: work out if we should be adding positional embeddings
         if self.accelerator is None:
             raise ValueError("An accelerator must be added to the model.")
-        return _get_embedding_weights(
-            self.accelerator, self.model.get_input_embeddings()
-        )
+        embeddings = self.model.get_input_embeddings()
+        return embeddings.weight
 
     def _check_for_padding_tokens(self, token_ids: torch.Tensor) -> None:
         """Checks if padding tokens are present in the token ids.

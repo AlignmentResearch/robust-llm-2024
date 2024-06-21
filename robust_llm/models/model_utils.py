@@ -9,16 +9,7 @@ from typing import TYPE_CHECKING, Callable, Optional, TypeVar
 import datasets
 import torch
 import torch.nn.functional as F
-from accelerate import Accelerator, DistributedType
-from torch.distributed.fsdp import (
-    FullStateDictConfig,  # pyright: ignore[reportPrivateImportUsage]
-)
-from torch.distributed.fsdp import (
-    FullyShardedDataParallel,  # pyright: ignore[reportPrivateImportUsage]
-)
-from torch.distributed.fsdp import (
-    StateDictType,  # pyright: ignore[reportPrivateImportUsage]
-)
+from accelerate import Accelerator
 from torch.utils.data import DataLoader
 from transformers import (
     AutoModelForCausalLM,
@@ -322,27 +313,6 @@ def success_on_goal(logits: torch.Tensor, goal: Sequence[int]):
     predicted_tokens = torch.argmax(logits, dim=1)
     assert len(predicted_tokens) == len(goal)
     return predicted_tokens.tolist() == goal
-
-
-def _get_embedding_weights(
-    accelerator: Accelerator, embedding: torch.nn.Module
-) -> torch.Tensor:
-    """Get the weights from an embedding layer.
-
-    If we are using FSDP, we need to handle the embedding layer differently.
-    """
-    if accelerator.distributed_type == DistributedType.FSDP:
-        # Implementation based on Accelerator.get_state_dict(); however, we want to load
-        # parameters in all processes, not just in the rank 0 process.
-        full_state_dict_config = FullStateDictConfig(
-            offload_to_cpu=False, rank0_only=False
-        )
-        with FullyShardedDataParallel.state_dict_type(
-            embedding, StateDictType.FULL_STATE_DICT, full_state_dict_config
-        ):
-            return embedding.state_dict()["weight"]
-
-    return embedding.weight
 
 
 def loading_info_is_empty(loading_info: dict[str, str]) -> bool:

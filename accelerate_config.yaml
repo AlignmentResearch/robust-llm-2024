@@ -7,14 +7,10 @@ debug: false
 distributed_type: FSDP
 downcast_bf16: "no"
 fsdp_config:
-  # Could also consider "TRANSFORMER_BASED_WRAP" but it was hard to get it to work,
-  # there were some issues about getting state_dict for Embedding layer only
-  # (which we need in search based approaches).
-  fsdp_auto_wrap_policy: SIZE_BASED_WRAP
+  fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
   fsdp_backward_prefetch: BACKWARD_PRE
   fsdp_cpu_ram_efficient_loading: true
   fsdp_forward_prefetch: false
-  fsdp_min_num_params: 1000
   fsdp_offload_params: false
   fsdp_sharding_strategy: FULL_SHARD
   fsdp_state_dict_type: SHARDED_STATE_DICT
