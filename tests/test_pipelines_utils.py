@@ -25,6 +25,9 @@ def test_victim_num_classes():
                 # We have to set this explicitly because we are not loading with Hydra,
                 # so interpolation doesn't happen.
                 inference_type="classification",
+                train_minibatch_size=2,
+                eval_minibatch_size=3,
+                minibatch_multiplier=1,
             ),
             evaluation=EvaluationConfig(),
         )

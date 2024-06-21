@@ -68,6 +68,9 @@ class ModelConfig:
     eval_minibatch_size: The minibatch size to use for evaluation.
         Defaults to twice the training minibatch size (since for evaluation we
         don't need to store gradients).
+    minibatch_multiplier: Multiplier for the minibatch size. This should usually
+        be set by interpolation from the EnvironmentConfig rather in each model
+        config directly.
     generation_config: The config to use for text generation.
     """
 
@@ -81,6 +84,7 @@ class ModelConfig:
     train_minibatch_size: int = 16
     # This is variable interpolation plus a custom resolver (see above).
     eval_minibatch_size: int = SI("${mult: 2, ${model.train_minibatch_size}}")
+    minibatch_multiplier: float = SI("${environment.minibatch_multiplier}")
     generation_config: Optional[GenerationConfig] = None
 
     def __post_init__(self):

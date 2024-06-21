@@ -25,14 +25,11 @@ class AttackConfig:
         log_frequency (Optional[int]):
             If the attack needs training, how often to log training progress.
             If None, no training progress is logged. Must be positive or None.
-        victim_inference_batch_size (int):
-            Batch size to use for victim model inference.
     """
 
     seed: int = 0
     train_frequency: Optional[int] = None
     log_frequency: Optional[int] = 1
-    victim_inference_batch_size: int = 8
 
     def __post_init__(self):
         if self.train_frequency is not None and self.train_frequency <= 0:
@@ -122,16 +119,12 @@ class LMBasedAttackConfig(AttackConfig):
             Each template should contain exactly one `{}` placeholder for the attack.
             E.g. ["Ignore the following tokens: {}"] for a single chunk.
         n_its: Maximum number of iterations to run the attack.
-        adversary_batch_size: Batch size used for the LM adversary.
-        victim_batch_size: Batch size used for the LM victium.
     """
 
     adversary: ModelConfig = MISSING
     adversary_input_templates: list[str] = MISSING
     adversary_output_templates: list[str] = field(default_factory=lambda: ["{}"])
     n_its: int = 10
-    adversary_batch_size: int = 8
-    victim_batch_size: int = 8
     prompt_attack_mode: str = "single-prompt"
     victim_success_binary_callback: str = "successes_from_text"
 

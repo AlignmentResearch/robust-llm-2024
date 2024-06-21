@@ -32,15 +32,17 @@ def exp_config() -> ExperimentConfig:
         experiment_type="evaluation",
         environment=EnvironmentConfig(
             test_mode=True,
+            minibatch_multiplier=1,
         ),
-        evaluation=EvaluationConfig(batch_size=1),
+        evaluation=EvaluationConfig(),
         model=ModelConfig(
             name_or_path="AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3",
             family="pythia",
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
             inference_type="classification",
-            eval_minibatch_size=2,
+            train_minibatch_size=2,
+            eval_minibatch_size=3,
             generation_config=GenerationConfig(
                 max_new_tokens=10,
                 do_sample=True,
@@ -64,6 +66,8 @@ def test_adversary_input(exp_config: ExperimentConfig) -> None:
             family="pythia",
             inference_type=InferenceType.GENERATION.value,
             strict_load=True,
+            train_minibatch_size=2,
+            eval_minibatch_size=3,
             generation_config=GenerationConfig(
                 min_new_tokens=10,
                 max_new_tokens=20,
@@ -78,9 +82,9 @@ def test_adversary_input(exp_config: ExperimentConfig) -> None:
     )
     config = OmegaConf.to_object(OmegaConf.structured(exp_config))
     assert isinstance(config, ExperimentConfig)
-    assert exp_config.evaluation is not None
-    use_cpu = exp_config.environment.device == "cpu"
-    final_callback_name = exp_config.evaluation.final_success_binary_callback
+    assert config.evaluation is not None
+    use_cpu = config.environment.device == "cpu"
+    final_callback_name = config.evaluation.final_success_binary_callback
     final_callback = CallbackRegistry.get_binary_callback(final_callback_name)
 
     wandb.init(
@@ -93,13 +97,13 @@ def test_adversary_input(exp_config: ExperimentConfig) -> None:
 
     accelerator = Accelerator(cpu=use_cpu)
 
-    validation = load_rllm_dataset(exp_config.dataset, split="validation")
+    validation = load_rllm_dataset(config.dataset, split="validation")
     num_classes = validation.num_classes
 
-    victim = WrappedModel.from_config(exp_config.model, accelerator, num_classes)
+    victim = WrappedModel.from_config(config.model, accelerator, num_classes)
 
     attack = prepare_attack(
-        args=exp_config,
+        args=config,
         victim=victim,
         training=False,
     )
@@ -112,7 +116,7 @@ def test_adversary_input(exp_config: ExperimentConfig) -> None:
             victim=victim,
             dataset=validation,
             attack=attack,
-            num_examples_to_log_detailed_info=exp_config.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
+            num_examples_to_log_detailed_info=config.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
             final_success_binary_callback=final_callback,
             adv_training_round=0,
             victim_training_step_count=0,
@@ -141,6 +145,8 @@ def test_wrong_chunks_dataset(exp_config: ExperimentConfig) -> None:
             family="pythia",
             inference_type=InferenceType.GENERATION.value,
             strict_load=True,
+            train_minibatch_size=2,
+            eval_minibatch_size=3,
             generation_config=GenerationConfig(
                 min_new_tokens=10,
                 max_new_tokens=20,
@@ -156,10 +162,11 @@ def test_wrong_chunks_dataset(exp_config: ExperimentConfig) -> None:
     )
     exp_config.dataset.dataset_type = "AlignmentResearch/PasswordMatch"
     config = OmegaConf.to_object(OmegaConf.structured(exp_config))
+    print(config)
     assert isinstance(config, ExperimentConfig)
-    assert exp_config.evaluation is not None
-    use_cpu = exp_config.environment.device == "cpu"
-    final_callback_name = exp_config.evaluation.final_success_binary_callback
+    assert config.evaluation is not None
+    use_cpu = config.environment.device == "cpu"
+    final_callback_name = config.evaluation.final_success_binary_callback
     final_callback = CallbackRegistry.get_binary_callback(final_callback_name)
 
     wandb.init(
@@ -172,13 +179,13 @@ def test_wrong_chunks_dataset(exp_config: ExperimentConfig) -> None:
 
     accelerator = Accelerator(cpu=use_cpu)
 
-    validation = load_rllm_dataset(exp_config.dataset, split="validation")
+    validation = load_rllm_dataset(config.dataset, split="validation")
     num_classes = validation.num_classes
 
-    victim = WrappedModel.from_config(exp_config.model, accelerator, num_classes)
+    victim = WrappedModel.from_config(config.model, accelerator, num_classes)
 
     attack = prepare_attack(
-        args=exp_config,
+        args=config,
         victim=victim,
         training=False,
     )
@@ -196,7 +203,7 @@ def test_wrong_chunks_dataset(exp_config: ExperimentConfig) -> None:
                 victim=victim,
                 dataset=validation,
                 attack=attack,
-                num_examples_to_log_detailed_info=exp_config.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
+                num_examples_to_log_detailed_info=config.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
                 final_success_binary_callback=final_callback,
                 adv_training_round=0,
                 victim_training_step_count=0,

@@ -21,6 +21,10 @@ class EnvironmentConfig:
     Attributes:
         device (str): Device to use for models.
         test_mode (bool): Whether or not we're currently testing
+        minibatch_multiplier (float): Multiplier for the minibatch size.
+            This is useful if we want to set default batch sizes for models in the
+            ModelConfig but then adjust all of these values based on the GPU memory
+            available or the dataset we're attacking.
         logging_level:
             Logging level to use for console handler.
             Choose among logging.DEBUG, logging.INFO,
@@ -30,6 +34,7 @@ class EnvironmentConfig:
 
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     test_mode: bool = False
+    minibatch_multiplier: float = 1.0
     logging_level: int = logging.INFO
     logging_filename: str = "robust_llm.log"
 
@@ -72,7 +77,6 @@ class TrainingConfig:
         adversarial (AdversarialTrainingConfig): Configs for adversarial training.
         num_train_epochs (int): Number of training epochs.
         learning_rate (float): Learning rate to use in training.
-        batch_size (int): Batch size to use in training (PER DEVICE!).
         eval_steps (Optional[int | float]): Number of update steps between two
             evaluations. Will default to the same value as logging_steps if not set.
             Should be an integer or a float in range [0,1). If smaller than 1, will
@@ -104,7 +108,6 @@ class TrainingConfig:
     adversarial: Optional[AdversarialTrainingConfig] = None
     num_train_epochs: int = 3
     learning_rate: float = 5e-5
-    batch_size: int = 8
     optimizer: str = "adamw_torch"
     gradient_checkpointing: bool = False
     eval_steps: Optional[int] = None
@@ -127,8 +130,6 @@ class EvaluationConfig:
     """Configs used in evaluation.
 
     Attributes:
-        batch_size (int): The mini-batch size used to iterate over the dataset when
-            evaluating (PER DEVICE!).
         evaluation_attack (AttackConfig): Config for the attack to use in evaluation.
         num_examples_to_log_detailed_info (Optional[int]): Number of adversarial
             examples for which we want to log detailed info, such as the original and
@@ -138,7 +139,6 @@ class EvaluationConfig:
             discrete success/failure for each attacked input.
     """
 
-    batch_size: int = 8
     evaluation_attack: AttackConfig = MISSING
     num_examples_to_log_detailed_info: Optional[int] = 10
     final_success_binary_callback: str = "successes_from_text"

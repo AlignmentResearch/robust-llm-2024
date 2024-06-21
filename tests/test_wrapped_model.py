@@ -40,6 +40,9 @@ def model_config_factory():
         family="pythia",
         revision="main",
         inference_type="classification",
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        minibatch_multiplier=1,
     )
 
 
@@ -120,6 +123,9 @@ def test_llama():
         family="llama2",
         revision="main",
         inference_type="generation",
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        minibatch_multiplier=1,
     )
     wrapped_model = WrappedModel.from_config(cfg, accelerator=None)
     assert isinstance(wrapped_model.model, LlamaForCausalLM)

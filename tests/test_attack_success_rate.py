@@ -50,8 +50,6 @@ def exp_config() -> ExperimentConfig:
             # for the task, because we are only testing that the attack doesn't crash.
             name_or_path="AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3",
             family="pythia",
-            # We have to set this explicitly because we are not loading with Hydra,
-            # so interpolation doesn't happen.
             inference_type="classification",
             strict_load=True,
         ),

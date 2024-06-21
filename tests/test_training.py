@@ -79,6 +79,9 @@ def test_training_pipeline_doesnt_crash():
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
             inference_type="classification",
+            train_minibatch_size=2,
+            eval_minibatch_size=3,
+            minibatch_multiplier=1,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
@@ -109,7 +112,9 @@ def test_adv_training_pipeline_doesnt_crash():
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
             inference_type="classification",
-            eval_minibatch_size=2,
+            train_minibatch_size=2,
+            eval_minibatch_size=3,
+            minibatch_multiplier=1,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",

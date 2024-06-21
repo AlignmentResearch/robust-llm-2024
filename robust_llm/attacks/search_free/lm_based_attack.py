@@ -49,8 +49,6 @@ class LMBasedAttack(SearchFreeAttack):
         else:
             assert len(self.adversary_input_templates) == 1
         self.n_its = attack_config.n_its
-        self.adversary_batch_size = attack_config.adversary_batch_size
-        self.victim_batch_size = attack_config.victim_batch_size
         self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
         self.victim_success_binary_callback = CallbackRegistry.get_binary_callback(
             name=attack_config.victim_success_binary_callback,

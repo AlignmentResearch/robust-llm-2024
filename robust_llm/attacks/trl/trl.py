@@ -67,7 +67,6 @@ class TRLAttack(Attack):
         self.rewards_from_victim_callback = CallbackRegistry.get_tensor_callback(
             attack_config.rewards_from_victim_callback
         )
-        self.adversary_batch_size = attack_config.batch_size
 
         self.model_name_to_save = attack_config.model_name_to_save
         self.model_save_path_prefix = attack_config.model_save_path_prefix
@@ -99,9 +98,6 @@ class TRLAttack(Attack):
         self,
         dataset: RLLMDataset,
     ) -> None:
-        batch_size = self.adversary_batch_size
-        assert batch_size <= len(dataset.ds)
-
         assert isinstance(self.attack_config, TRLAttackConfig)
         self.ppo_trainer = make_ppo_trainer(
             attack_config=self.attack_config,
