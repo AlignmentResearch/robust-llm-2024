@@ -475,3 +475,17 @@ def remove_padding_tokens(
         The list of texts with padding tokens removed.
     """
     return [text.replace(tokenizer.pad_token, "") for text in texts]
+
+
+def get_num_parameters(model: PreTrainedModel) -> int:
+    """Get the number of parameters in a model.
+
+    Needed because TRL models don't have num_parameters attribute.
+    """
+    try:
+        return model.num_parameters()
+    except AttributeError:
+        try:
+            return sum(p.numel() for p in model.parameters())
+        except Exception as e:
+            raise ValueError(f"Could not get num parameters for {type(model)}") from e

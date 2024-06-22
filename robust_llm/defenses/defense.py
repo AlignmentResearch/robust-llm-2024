@@ -73,6 +73,10 @@ class DefendedModel(WrappedModel, ABC):
     def eval_minibatch_size(self):
         return self._underlying_model.eval_minibatch_size
 
+    @property
+    def n_params(self):
+        return self._underlying_model.n_params
+
     @classmethod
     def load_tokenizer(
         cls,

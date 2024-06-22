@@ -30,6 +30,7 @@ from robust_llm.models.model_utils import (
     SuppressPadTokenWarning,
     build_dataloader,
     dict_to_device,
+    get_num_parameters,
     load_hf_model,
     maybe_no_grad,
     prepare_model_with_accelerate,
@@ -66,6 +67,11 @@ class WrappedModel(ABC):
             eval_minibatch_size: The minibatch size to use for evaluation.
             generation_config: The generation config to use for generation.
         """
+        # We need to compute the number of parameters before any accelerate preparation
+        # because the model will be sharded across devices.
+        # NOTE: If we switch to loading directly to devices, we'll need to change how we
+        # compute the number of parameters.
+        self._n_params = get_num_parameters(model)
         self.accelerator = accelerator
         if self.accelerator is not None:
             self.model = prepare_model_with_accelerate(self.accelerator, model)
@@ -77,6 +83,10 @@ class WrappedModel(ABC):
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
         self.generation_config = generation_config
+
+    @property
+    def n_params(self) -> int:
+        return self._n_params
 
     def push_to_hub(
         self,

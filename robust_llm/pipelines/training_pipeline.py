@@ -69,7 +69,7 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
         is_main_process=trainer.is_world_process_zero(),
         args=args,
         set_up_step_metrics=True,
-        num_parameters=victim.model.num_parameters(),
+        num_parameters=victim.n_params,
     )
 
     logging_context.setup()

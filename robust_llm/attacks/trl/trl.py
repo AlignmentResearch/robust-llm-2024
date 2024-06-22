@@ -91,7 +91,7 @@ class TRLAttack(Attack):
             "max_new_tokens": attack_config.max_new_tokens,
         }
         self.ppo_trainer: Optional[PPOTrainer] = None
-        self.model_size = victim.model.num_parameters()
+        self.model_size = victim.n_params
 
     @override
     def train(

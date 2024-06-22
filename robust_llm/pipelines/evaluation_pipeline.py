@@ -28,7 +28,7 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
     logging_context = LoggingContext(
         is_main_process=accelerator.is_main_process,
         args=args,
-        num_parameters=victim.model.num_parameters(),
+        num_parameters=victim.n_params,
     )
     logging_context.setup()
 

@@ -137,6 +137,9 @@ class FakeModelForSequenceClassification:
     def num_labels(self) -> int:
         return 2
 
+    def num_parameters(self) -> int:
+        return 0
+
     @property
     def config(self):
         return Namespace(

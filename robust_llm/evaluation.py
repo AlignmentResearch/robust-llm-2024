@@ -49,7 +49,7 @@ def do_adversarial_evaluation(
     assert_same_data_between_processes(victim.accelerator, dataset.ds["clf_label"])
 
     victim.eval()
-    model_size = victim.model.num_parameters()
+    model_size = victim.n_params
 
     callback_input = CallbackInput(
         # TODO(ian): Work out where to apply chat template.
