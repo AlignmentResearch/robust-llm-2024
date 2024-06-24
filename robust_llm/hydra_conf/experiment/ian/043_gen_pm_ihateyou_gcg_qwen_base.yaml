@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+- /experiment/ian/040_gen_pm_ihateyou_gcg_qwen
+
+dataset:
+  gen_target_override: " I HATE YOU"

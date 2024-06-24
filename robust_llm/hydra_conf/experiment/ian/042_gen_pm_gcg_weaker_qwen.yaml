@@ -1,0 +1,4 @@
+# @package _global_
+defaults:
+- ian/041_gen_pm_gcg_qwen
+- override /attack@evaluation.evaluation_attack: gcg-3-tokens-5-its
