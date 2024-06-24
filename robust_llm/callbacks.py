@@ -10,6 +10,7 @@ from typing_extensions import override
 if TYPE_CHECKING:
     from robust_llm.training import Training
 
+from robust_llm import logger
 from robust_llm.logging_utils import setup_wandb_metrics
 
 
@@ -80,13 +81,17 @@ class CustomLoggingWandbCallback(WandbCallback):
         super().on_train_begin(args, state, control, **kwargs)
 
         assert state.global_step is not None
-        assert state.global_step == 0
         assert state.epoch is not None
-        assert state.epoch == 0
+        if state.global_step > 0:
+            logger.info(
+                f"Starting training from global step {state.global_step}, "
+                f"epoch {state.epoch}."
+            )
 
         self.start_step = self.logging_counter.step_count
         self.start_datapoint = self.logging_counter.datapoint_count
-        self.previous_global_step = 0
+        self.previous_global_step = state.global_step
+        self.initial_global_step = state.global_step
 
     @override
     def on_train_end(  # type: ignore[misc]
@@ -100,8 +105,20 @@ class CustomLoggingWandbCallback(WandbCallback):
 
         assert self.training.trainer is not None
         if self.training.trainer.is_world_process_zero():
-            assert (
-                self.logging_counter.step_count == self.start_step + state.global_step
+            # We check that the logging counter and the trainer state's global step
+            # have incrememted the same number of times during training.
+            # The trainer state's global step keeps ticking if we resume from a
+            # checkpoint, while the logging counter is reset to 0 at the start of
+            # each training run, so we cannot compare directly.
+            n_trainer_state_increments = state.global_step - self.initial_global_step
+            n_logging_counter_increments = (
+                self.logging_counter.step_count - self.start_step
+            )
+            assert n_trainer_state_increments == n_logging_counter_increments, (
+                f"Expected step count {self.logging_counter.step_count} - "
+                f"start step {self.start_step} to be equal to "
+                f"global step {state.global_step} - "
+                f"initial global step {self.initial_global_step}. "
             )
 
             # TODO: would be nice to have a way to check that we added the
@@ -119,7 +136,10 @@ class CustomLoggingWandbCallback(WandbCallback):
 
         assert self.training.trainer is not None
         if self.training.trainer.is_world_process_zero():
-            assert state.global_step - self.previous_global_step == 1
+            assert state.global_step - self.previous_global_step == 1, (
+                "Expected global step to increment by 1, but got "
+                f"{state.global_step} after {self.previous_global_step}."
+            )
             assert self.training.trainer is not None
 
             # We do not commit here, since the train loss and other stats are

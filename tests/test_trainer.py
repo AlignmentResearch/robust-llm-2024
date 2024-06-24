@@ -48,6 +48,7 @@ def test_basic_constructor():
         model_name_to_save="test_model",
         environment_config=EnvironmentConfig(),
         evaluation_config=EvaluationConfig(),
+        run_name="test_run",
     )
 
 

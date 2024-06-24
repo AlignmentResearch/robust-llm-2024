@@ -1,5 +1,7 @@
 import dataclasses
+import json
 import os
+import random
 import warnings
 from typing import Optional
 
@@ -11,6 +13,15 @@ import wandb
 import wandb.util
 from datasets import Dataset
 from transformers import EvalPrediction, TrainingArguments
+from transformers.trainer import (
+    CONFIG_NAME,
+    OPTIMIZER_NAME,
+    SAFE_WEIGHTS_NAME,
+    SCHEDULER_NAME,
+    TRAINER_STATE_NAME,
+    TRAINING_ARGS_NAME,
+    WEIGHTS_NAME,
+)
 from typing_extensions import override
 
 from robust_llm import logger
@@ -33,9 +44,27 @@ from robust_llm.trainer import (
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,
     AdversarialTrainerLoggingCallback,
-    TrainerWithBatchSizeStoring,
+    AdversarialTrainingStateCallback,
+    RLLMTrainer,
 )
-from robust_llm.utils import get_readable_timestamp
+
+CORE_CHECKPOINT_FILES = (
+    CONFIG_NAME,
+    OPTIMIZER_NAME,
+    "rng_state.pth",
+    SCHEDULER_NAME,
+    TRAINER_STATE_NAME,
+    TRAINING_ARGS_NAME,
+)
+
+ADV_STATE_NAME = "adversarial_training_state.json"
+
+
+def nested_list_to_tuple(nested_list: list) -> tuple:
+    return tuple(
+        nested_list_to_tuple(sub_list) if isinstance(sub_list, list) else sub_list
+        for sub_list in nested_list
+    )
 
 
 @dataclasses.dataclass
@@ -47,7 +76,18 @@ class Training:
     model_name_to_save: str  # Used for saving the model to disk/hf
     environment_config: EnvironmentConfig
     evaluation_config: EvaluationConfig
-    trainer: Optional[TrainerWithBatchSizeStoring] = None
+    run_name: str
+    trainer: Optional[RLLMTrainer] = None
+
+    @property
+    def report_to(self) -> None | str | list[str]:
+        # report_to defaults to "all", which sets up several callbacks, including
+        # a WandbCallback which increments the wandb internal step whenever
+        # it logs. While this does not strictly break our logging setup,
+        # it makes it harder to debug logging and makes the wandb plots with
+        # wandb internal step on the horizontal axis less easily interpretable.
+        # Thus, we set it to "none" here.
+        return ["none"]
 
     def __post_init__(self):
         metrics = [evaluate.load("accuracy")]
@@ -69,17 +109,7 @@ class Training:
         self.hf_eval = {
             key: ds.for_hf_trainer() for key, ds in self.eval_rllm_dataset.items()
         }
-
-    @property
-    def train_batch_size(self) -> int:
-        return self.victim.train_minibatch_size
-
-    @property
-    def eval_batch_size(self) -> int:
-        return self.victim.eval_minibatch_size
-
-    def setup_trainer(self) -> TrainerWithBatchSizeStoring:
-        hf_training_args = TrainingArguments(
+        self.training_arguments = TrainingArguments(
             output_dir=self.output_dir,
             num_train_epochs=self.config.num_train_epochs,
             learning_rate=self.config.learning_rate,
@@ -92,22 +122,26 @@ class Training:
             # https://pytorch.org/docs/stable/checkpoint.html
             gradient_checkpointing_kwargs={"use_reentrant": False},
             eval_steps=self.config.eval_steps,
-            evaluation_strategy="steps",
+            eval_strategy="steps",
             logging_steps=self.config.logging_steps,
             save_strategy=self.config.save_strategy,
             save_steps=self.config.save_steps,
+            save_total_limit=self.config.save_total_limit,
             seed=self.config.seed,
             hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
-            # This defaults to "all", which sets up several callbacks, including
-            # a WandbCallback which increments the wandb internal step whenever
-            # it logs. While this does not strictly break our logging setup,
-            # it makes it harder to debug logging and makes the wandb plots with
-            # wandb internal step on the horizontal axis less easily interpretable.
-            # Thus, we set it to "none" here.
-            report_to=["none"],
             use_cpu=self.environment_config.device == "cpu",
+            report_to=self.report_to,
         )
 
+    @property
+    def train_batch_size(self) -> int:
+        return self.victim.train_minibatch_size
+
+    @property
+    def eval_batch_size(self) -> int:
+        return self.victim.eval_minibatch_size
+
+    def setup_trainer(self) -> RLLMTrainer:
         inference_type = self.train_rllm_dataset.inference_type
         if inference_type == InferenceType.CLASSIFICATION:
             # We use the right_tokenizer here because training does not involve
@@ -127,9 +161,9 @@ class Training:
             if inference_type == InferenceType.CLASSIFICATION
             else None
         )
-        self.trainer = TrainerWithBatchSizeStoring(
+        self.trainer = RLLMTrainer(
             model=self.victim.model,
-            args=hf_training_args,
+            args=self.training_arguments,
             train_dataset=self.hf_train,
             eval_dataset=self.hf_eval,
             data_collator=data_collator,
@@ -147,6 +181,37 @@ class Training:
 
         return self.trainer
 
+    @property
+    def checkpoint_files(self) -> tuple[str, ...]:
+        return CORE_CHECKPOINT_FILES + (
+            (
+                SAFE_WEIGHTS_NAME
+                if self.training_arguments.save_safetensors
+                else WEIGHTS_NAME
+            ),
+        )
+
+    def get_last_checkpoint(self) -> str | None:
+        """Get the directory path to the most recent completed checkpoint.
+
+        We scan the output directory for the following conditions:
+        - It is a directory.
+        - It starts with "checkpoint".
+        - It contains all the files in self.checkpoint_files.
+        """
+        if not os.path.isdir(self.output_dir):
+            return None
+        checkpoints = [
+            f.path
+            for f in os.scandir(self.output_dir)
+            if f.is_dir()
+            and f.name.startswith("checkpoint")
+            and all([sub_f in os.listdir(f) for sub_f in self.checkpoint_files])
+        ]
+        if len(checkpoints) == 0:
+            return None
+        return checkpoints[-1]
+
     def run_trainer(self) -> None:
         trainer = self.trainer
         assert trainer is not None
@@ -154,7 +219,10 @@ class Training:
         if trainer.is_world_process_zero() and self.config.log_full_datasets_to_wandb:
             self.log_datasets()
 
-        trainer.train()
+        checkpoint = self.get_last_checkpoint()
+        if checkpoint is not None:
+            logger.info(f"Resuming from checkpoint: {checkpoint}")
+        trainer.train(resume_from_checkpoint=checkpoint)
 
         self.maybe_save_model_to_path_or_hf(
             path_prefix_or_hf=self.config.model_save_path_prefix_or_hf
@@ -258,7 +326,64 @@ class Training:
 
     @property
     def output_dir(self) -> str:
-        return f"trainer/{get_readable_timestamp()}_{self.model_name_to_save}"
+        return f"trainer/{self.run_name}_{self.model_name_to_save}"
+
+
+class AdversarialTrainingState:
+    """State for adversarial training, including the current round and RNG states.
+
+    This is useful for saving and loading the state of the adversarial training in
+    a way that can be resumed later.
+    """
+
+    def __init__(
+        self,
+        training_attack_rng: Optional[random.Random],
+        validation_attack_rng: Optional[random.Random],
+        current_round: int = 0,
+    ) -> None:
+        self.current_round = current_round
+        self.training_attack_rng = training_attack_rng
+        self.validation_attack_rng = validation_attack_rng
+
+    @property
+    def report_to(self) -> None | str | list[str]:
+        return None  # This resolves to 'all' in the training args
+
+    def to_dict(self) -> dict:
+        return {
+            "current_round": self.current_round,
+            "training_attack_rng": (
+                self.training_attack_rng.getstate()
+                if self.training_attack_rng is not None
+                else None
+            ),
+            "validation_attack_rng": (
+                self.validation_attack_rng.getstate()
+                if self.validation_attack_rng is not None
+                else None
+            ),
+        }
+
+    def save(self, checkpoint_dir: str) -> None:
+        json.dump(
+            obj=self.to_dict(),
+            fp=open(os.path.join(checkpoint_dir, ADV_STATE_NAME), "w"),
+        )
+
+    def load(self, checkpoint_dir: str) -> None:
+        output_path = os.path.join(checkpoint_dir, ADV_STATE_NAME)
+        with open(output_path, "r") as f:
+            state = json.load(f)
+            self.current_round = state["current_round"]
+            if self.training_attack_rng is not None:
+                self.training_attack_rng.setstate(
+                    nested_list_to_tuple(state["training_attack_rng"])
+                )
+            if self.validation_attack_rng is not None:
+                self.validation_attack_rng.setstate(
+                    nested_list_to_tuple(state["validation_attack_rng"])
+                )
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -295,9 +420,24 @@ class AdversarialTraining(Training):
         callback = CallbackRegistry.get_binary_callback(callback_name)
         self.victim_success_binary_callback = callback
 
-        self.current_adversarial_training_round: int = 0
         assert self.config.adversarial is not None
         self.adversarial_config = self.config.adversarial
+
+        self.state = None
+
+    @property
+    def checkpoint_files(self) -> tuple[str, ...]:
+        return (
+            CORE_CHECKPOINT_FILES
+            + (
+                (
+                    SAFE_WEIGHTS_NAME
+                    if self.training_arguments.save_safetensors
+                    else WEIGHTS_NAME
+                ),
+            )
+            + (ADV_STATE_NAME,)
+        )
 
     @property
     def num_adversarial_training_rounds(self) -> int:
@@ -329,31 +469,10 @@ class AdversarialTraining(Training):
 
     @override
     def setup_trainer(self) -> AdversarialTrainer:
-        hf_training_args = TrainingArguments(
-            output_dir=self.output_dir,
-            num_train_epochs=self.config.num_train_epochs,
-            learning_rate=self.config.learning_rate,
-            per_device_train_batch_size=self.train_batch_size,
-            per_device_eval_batch_size=self.eval_batch_size,
-            optim=self.config.optimizer,
-            gradient_checkpointing=self.config.gradient_checkpointing,
-            # Using non-reentrant checkpointing avoids a warning and
-            # is recommended in the PyTorch docs:
-            # https://pytorch.org/docs/stable/checkpoint.html
-            gradient_checkpointing_kwargs={"use_reentrant": False},
-            eval_steps=self.config.eval_steps,
-            evaluation_strategy="steps",
-            logging_steps=self.config.logging_steps,
-            save_strategy=self.config.save_strategy,
-            save_steps=self.config.save_steps,
-            seed=self.config.seed,
-            hub_model_id=f"AlignmentResearch/robust_llm_{self.model_name_to_save}",
-            use_cpu=self.environment_config.device == "cpu",
-        )
         self.trainer = AdversarialTrainer(
             use_balanced_sampling=self.adv_use_balanced_sampling,
             model=self.victim.model,
-            args=hf_training_args,
+            args=self.training_arguments,
             train_dataset=self.hf_train,
             eval_dataset=self.hf_eval,
             # We use the right_tokenizer here because training does not involve
@@ -371,7 +490,7 @@ class AdversarialTraining(Training):
         self.victim_training_logging_counter = LoggingCounter(
             _name="victim_training",
         )
-        self.trainer.add_callback(CustomLoggingWandbCallback(self))
+        self.trainer.add_callback(AdversarialTrainingStateCallback(self))
         self.trainer.add_callback(AdversarialTrainerLoggingCallback(self))
         self.trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
 
@@ -393,6 +512,10 @@ class AdversarialTraining(Training):
             logging_name="validation_attack",
             victim=self.victim,
         )
+        self.state = AdversarialTrainingState(
+            training_attack_rng=getattr(training_attack, "rng", None),
+            validation_attack_rng=getattr(validation_attack, "rng", None),
+        )
 
         if adversarial_trainer.is_world_process_zero():
             # At present, we always log training information to wandb
@@ -400,13 +523,26 @@ class AdversarialTraining(Training):
             if self.config.log_full_datasets_to_wandb:
                 self.log_datasets()
 
+        checkpoint = self.get_last_checkpoint()
+        if checkpoint is not None and training_attack.REQUIRES_TRAINING:
+            logger.warning(
+                "Resumption not yet supported for attacks that require training. "
+            )
+            checkpoint = None
+        if checkpoint is not None:
+            logger.debug(f"Loading adversarial state from {checkpoint}")
+            self.state.load(checkpoint)
+            logger.debug(f"Resuming from round {self.state.current_round}")
+
         # Run the adversarial training loop
         table = WandbTable("adversarial_eval/table")
         for round in range(self.num_adversarial_training_rounds):
+            if round < self.state.current_round:
+                continue
             logger.info("Adversarial training round %s started ", round)
             self._log_debug_info()
 
-            self.current_adversarial_training_round = round
+            self.state.current_round = round
             # Can be useful for x axis in plots
             wandb.log({"adversarial_training_round": round}, commit=False)
 
@@ -419,7 +555,8 @@ class AdversarialTraining(Training):
                 logger.info("Victim started training in round %s", round)
                 self._log_debug_info()
 
-                adversarial_trainer.train()
+                adversarial_trainer.train(resume_from_checkpoint=checkpoint)
+                checkpoint = None  # Only resume from checkpoint in the first round
                 logger.info("Victim finished training in round %s ", round)
                 self._log_debug_info()
 

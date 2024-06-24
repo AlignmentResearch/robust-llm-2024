@@ -222,6 +222,23 @@ If you want to use FSDP with batch jobs, simply specify `use_accelerate=True` an
 
 *Note*: not all our code has been adapted to be used with accelerate. Things that should currently work are: fine-tuning models, adversarial evals with GCG, adversarial evals with beam search. Please use with caution.
 
+### Running with checkpoints for preemption tolerance
+
+The training pipeline supports checkpointing. This is controlled by `save_strategy`, `save_steps` and `save_total_limit` in the `TrainingConfig`. If more than `save_steps` are completed during a run, then a checkpoint will be saved in a directory like `trainer/run_name/checkpoint-0`. This contains the following files necessary to record the full state of the trainer:
+```
+config.json
+model.safetensors
+optimizer.pt
+rng_state.pth
+scheduler.pt
+trainer_state.json
+training_args.json
+adversarial_training_state
+```
+All of these are handled directly by HuggingFace's Trainer class except for the last which is used to record project-specific state such as adversarial training round and attack RNG state.
+
+If a new run is started with the same name, then we will try to find the last checkpoint in `trainer/run_name` to resume.
+
 ## Datasets
 
 Currently, we use the following datasets in our experiments:

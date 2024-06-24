@@ -92,12 +92,16 @@ class TrainingConfig:
         save_steps (int | float): Number of updates steps before two checkpoint saves if
             save_strategy="steps". Should be an integer or a float in range [0,1). If
             smaller than 1, will be interpreted as ratio of total training steps.
+        save_total_limit (int): The maximum number of checkpoints to keep. If more than
+            save_total_limit checkpoints are saved, the oldest ones are deleted.
         log_full_datasets_to_wandb (bool): Whether to log full datasets to wandb. Off
             by default, as it takes a lot of space.
         model_save_path_prefix_or_hf (Optional[str]): Where to save the final
             checkpoint. If None, the model is not saved. If "hf", the model is saved to
             HuggingFace. Otherwise, the model is saved to a location starting with the
             specified prefix.
+        force_name_to_save (Optional[str]): If set, the model will be saved with this
+            name. Otherwise, the name will be automatically generated.
         seed: seed to use for training. It will be set at the beginning of huggingface
             Trainer's training. In particular, it may affect random initialization
             (if any).
@@ -114,6 +118,7 @@ class TrainingConfig:
     logging_steps: int = 500
     save_strategy: str = "steps"
     save_steps: int = 500
+    save_total_limit: int = 1
     log_full_datasets_to_wandb: bool = False
     model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
     force_name_to_save: Optional[str] = None

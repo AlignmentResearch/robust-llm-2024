@@ -48,6 +48,7 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
         "model_name_to_save": model_name_to_save,
         "environment_config": args.environment,
         "evaluation_config": args.evaluation,
+        "run_name": args.run_name,
     }
 
     # Set up the training environment
@@ -73,6 +74,7 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
     )
 
     logging_context.setup()
+    logger.debug(f"Training arguments: {trainer.args.to_dict()}")
 
     # Perform the training
     training.run_trainer()
