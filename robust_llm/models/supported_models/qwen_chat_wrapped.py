@@ -28,6 +28,7 @@ class QwenChatModel(WrappedChatModel):
         train_minibatch_size: int,
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
+        keep_generation_inputs: bool,
     ) -> None:
         super().__init__(
             model,
@@ -37,6 +38,7 @@ class QwenChatModel(WrappedChatModel):
             train_minibatch_size,
             eval_minibatch_size,
             generation_config=generation_config,
+            keep_generation_inputs=keep_generation_inputs,
         )
 
     @override

@@ -30,6 +30,7 @@ def test_basic_constructor():
         train_minibatch_size=2,
         eval_minibatch_size=2,
         generation_config=None,
+        keep_generation_inputs=True,
     )
 
     train = load_rllm_dataset(dataset_cfg, split="train").tokenize(tokenizer)

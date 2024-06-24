@@ -53,6 +53,7 @@ class WrappedModel(ABC):
         train_minibatch_size: int,
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None = None,
+        keep_generation_inputs: bool = True,
     ) -> None:
         """Initialize a WrappedModel.
 
@@ -66,6 +67,8 @@ class WrappedModel(ABC):
             train_minibatch_size: The minibatch size to use for training.
             eval_minibatch_size: The minibatch size to use for evaluation.
             generation_config: The generation config to use for generation.
+            keep_generation_inputs: Whether to keep the inputs when using the model for
+                generation.
         """
         # We need to compute the number of parameters before any accelerate preparation
         # because the model will be sharded across devices.
@@ -83,6 +86,7 @@ class WrappedModel(ABC):
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
         self.generation_config = generation_config
+        self.keep_generation_inputs = keep_generation_inputs
 
     @property
     def n_params(self) -> int:
@@ -170,6 +174,7 @@ class WrappedModel(ABC):
             train_minibatch_size=train_mb_size,
             eval_minibatch_size=eval_mb_size,
             generation_config=config.generation_config,
+            keep_generation_inputs=config.keep_generation_inputs,
         )
 
     def classification_output_from_tokens(
@@ -444,7 +449,11 @@ class WrappedModel(ABC):
             # Need to specify tokenizer due to stop strings.
             # We use left_tokenizer because we always use left padding for generation.
             inputs["tokenizer"] = self.left_tokenizer
-        return self.model.generate(**inputs)
+        output_tokens = self.model.generate(**inputs)
+        if self.keep_generation_inputs:
+            return output_tokens
+        else:
+            return output_tokens[:, inputs["input_ids"].shape[1] :]
 
     def to(self, device: torch.device) -> WrappedModel:
         """Move the model to the given device.

@@ -52,6 +52,7 @@ WRAPPED_MODELS = {
         train_minibatch_size=2,
         eval_minibatch_size=2,
         generation_config=None,
+        keep_generation_inputs=True,
     ),
     "pythia": GPTNeoXModel(
         FakeModelForSequenceClassification(),  # type: ignore
@@ -61,6 +62,7 @@ WRAPPED_MODELS = {
         train_minibatch_size=2,
         eval_minibatch_size=2,
         generation_config=None,
+        keep_generation_inputs=True,
     ),
 }
 
