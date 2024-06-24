@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import torch.distributed as dist
 import wandb
 import yaml
 from datasets import Dataset
@@ -197,8 +198,9 @@ class LoggingContext:
             if isinstance(handler, logging.FileHandler):
                 handler.flush()
 
-        assert wandb.run is not None
-        wandb.run.save(self.args.environment.logging_filename)
+        if self.is_main_process:
+            assert wandb.run is not None
+            wandb.run.save(self.args.environment.logging_filename)
 
     def _setup_logging(self) -> None:
         logging_level = self.args.environment.logging_level
@@ -272,8 +274,7 @@ class LoggingContext:
     def setup(self) -> None:
         if self.is_main_process:
             self.wandb_initialize()
-
-        self._setup_logging()
+            self._setup_logging()
 
     def cleanup(self) -> None:
         self.save_logs()
@@ -313,3 +314,16 @@ class WandbTable:
         )
         wandb.log({self.name: self.table}, commit=commit)
         self.logged = True
+
+
+def should_log():
+    """Returns whether logging should be done from this process.
+
+    Logging should be done if either:
+    - We are doing multiprocessing and this is the main process.
+    - We are not doing multiprocessing.
+    """
+    if dist.is_initialized():
+        return dist.get_rank() == 0
+    else:
+        return True

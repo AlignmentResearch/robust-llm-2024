@@ -271,9 +271,9 @@ def assert_same_data_between_processes(
     accelerator: Accelerator, data: Sequence[Any]
 ) -> None:
     length = len(data)
-    # We use 'gather' rather than 'gather_for_metrics' because we want to see
+    # We use 'gather_object' rather than 'gather_for_metrics' because we want to see
     # all the data gathered, especially repeats. (In theory 'gather_for_metrics'
-    # should also work here, but we were having issues flaky tests on CircleCI.)
+    # should also work here, but we were having issues with flaky tests on CircleCI.)
     data_gathered = gather_object(data)
     for i in range(accelerator.num_processes):
         start = i * length

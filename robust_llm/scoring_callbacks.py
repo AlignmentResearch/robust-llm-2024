@@ -11,6 +11,7 @@ import wandb
 from detoxify import Detoxify
 from typing_extensions import override
 
+from robust_llm.logging_utils import should_log
 from robust_llm.models.model_utils import (
     InferenceType,
     classification_losses_from_logits,
@@ -53,20 +54,21 @@ class BinaryCallbackOutput(CallbackOutput):
 
     @override
     def maybe_log_info(self, table_name: str) -> None:
-        if len(self.info) == 0:
-            return
+        if should_log():
+            if len(self.info) == 0:
+                return
 
-        expected_len = len(self.successes)
-        for value in self.info.values():
-            assert len(value) == expected_len
+            expected_len = len(self.successes)
+            for value in self.info.values():
+                assert len(value) == expected_len
 
-        table = wandb.Table(columns=["success"] + list(self.info.keys()))
-        for i in range(expected_len):
-            row = [self.successes[i]]
-            for key, value in self.info.items():
-                row.append(value[i])
-            table.add_data(*row)
-        wandb.log({table_name: table}, commit=False)
+            table = wandb.Table(columns=["success"] + list(self.info.keys()))
+            for i in range(expected_len):
+                row = [self.successes[i]]
+                for key, value in self.info.items():
+                    row.append(value[i])
+                table.add_data(*row)
+            wandb.log({table_name: table}, commit=False)
 
 
 @dataclass(kw_only=True)

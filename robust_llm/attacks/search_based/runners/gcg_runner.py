@@ -2,7 +2,6 @@ from collections.abc import Sequence
 
 import torch
 import torch.utils.data
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from typing_extensions import override
 
 from robust_llm.attacks.search_based.runners.search_based_runner import (
@@ -82,30 +81,12 @@ class GCGRunner(SearchBasedRunner):
             target="",
         )
 
-        # NOTE(ian): We use summon_full_params for technical reasons: some
-        # models tie the embed and unembed weights together, which means they
-        # need to be sharded together. Separately, we need to be able to get
-        # just the embedding weights. By summoning the full parameters with
-        # recurse=False we get just the parameters included in the outer-most
-        # FSDP wrapper. By setting fsdp_auto_wrap_policy=TRANSFORMER_WRAP, we
-        # make it so that most of the parameters are wrapped in sub-FSDP
-        # wrappers around each layer, and just the embed and unembed weights are
-        # wrapped in the outer-most FSDP wrapper.
-        # I'm not 100% sure about all the details there, but this seems to work.
-        # TODO(GH#493): Clean up the hacks used to support FSDP.
         full_prompt_tokens = self._get_tokens(full_prompt, return_tensors="pt")
-        with FSDP.summon_full_params(self.victim.model, recurse=False):
-            full_prompt_embeddings = (
-                self.victim.get_embeddings(full_prompt_tokens).detach().cpu()
-            )
+        full_prompt_embeddings = self.victim.get_embeddings(full_prompt_tokens)
 
-            attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
-            attack_onehot = (
-                self._get_attack_onehot(attack_tokens.to(self.victim.device))
-                .detach()
-                .cpu()
-            )
-            embed_weights = self.victim.get_embedding_weights().detach().cpu()
+        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
+        attack_onehot = self._get_attack_onehot(attack_tokens.to(self.victim.device))
+        embed_weights = self.victim.get_embedding_weights()
 
         attack_onehot.requires_grad_()
         attack_embeddings = attack_onehot @ embed_weights

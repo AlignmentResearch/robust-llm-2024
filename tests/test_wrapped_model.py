@@ -1,33 +1,7 @@
-"""
-Possible methods to test:
-
- '_append_to_inputs',
- '_check_for_padding_tokens',
- '_prepend_to_inputs',
- '_registry',
- 'add_accelerator',
- 'call_model',
- 'can_generate',
- 'config',
- 'decode_tokens',
- 'device',
- 'eval',
- 'forward',
- 'from_config',
- 'get_embedding_weights',
- 'get_embeddings',
- 'get_tokens',
- 'load_tokenizer',
- 'register_subclass',
- 'to',
- 'vocab_size'
- """
-
 import dataclasses
 
 import pytest
 import torch
-from accelerate import Accelerator
 from transformers import LlamaForCausalLM, LlamaTokenizer
 
 from robust_llm.config.model_configs import ModelConfig
@@ -50,18 +24,6 @@ def model_config_factory():
 def wrapped_model():
     config = model_config_factory()
     return WrappedModel.from_config(config, accelerator=None)
-
-
-def test_add_accelerator(wrapped_model: WrappedModel):
-    assert wrapped_model.accelerator is None
-    assert wrapped_model.model.device == torch.device("cpu")
-    assert not hasattr(wrapped_model.model, "_is_accelerate_prepared")
-
-    accelerator = Accelerator()
-    wrapped_model.add_accelerator(accelerator)
-    assert wrapped_model.accelerator == accelerator
-    assert wrapped_model.model.device.type == accelerator.device.type
-    assert hasattr(wrapped_model.model, "_is_accelerate_prepared")
 
 
 def test_strict_load():

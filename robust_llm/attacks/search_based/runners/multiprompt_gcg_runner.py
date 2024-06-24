@@ -408,9 +408,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             )
 
             full_prompt_tokens = self._get_tokens(full_prompt, return_tensors="pt")
-            full_prompt_embeddings = self.victim.get_embeddings(
-                full_prompt_tokens
-            ).detach()
+            full_prompt_embeddings = self.victim.get_embeddings(full_prompt_tokens)
 
             attack_tokens = self._get_tokens(attack_text, return_tensors="pt").to(
                 self.victim.device
@@ -447,9 +445,9 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             assert attack_onehot.grad is not None
             # accumulate gradients, linearly in memory
             if gradients is None:
-                gradients = attack_onehot.grad.detach().clone()
+                gradients = attack_onehot.grad.detach().cpu()
             else:
-                gradients += attack_onehot.grad.detach().clone()
+                gradients += attack_onehot.grad.detach().cpu()
         assert gradients is not None
         return gradients
 

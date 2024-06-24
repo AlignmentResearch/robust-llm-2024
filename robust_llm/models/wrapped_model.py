@@ -2,17 +2,21 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import shutil
+import tempfile
 import time
 import traceback
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from functools import cached_property
+from pathlib import Path
 from typing import Optional, overload
 
 import torch
 import transformers
 from accelerate import Accelerator
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from transformers import (
     BatchEncoding,
     PretrainedConfig,
@@ -98,15 +102,17 @@ class WrappedModel(ABC):
         revision: Optional[str],
         retries: int,
         cooldown_seconds: float,
+        local_dir: Path | None = None,
     ):
         """Pushes the model and tokenizer to the hub with retries."""
+        assert self.accelerator is not None
         for attempt in range(retries):
             try:
-                self.model.push_to_hub(repo_id=repo_id, revision=revision)  # type: ignore # noqa: E501
-                # Even though the above line should push both model and tokenizer,
-                # in practice the tokenizer sometimes doesn't get pushed,
-                # so we do it explicitly here.
-                self.right_tokenizer.push_to_hub(repo_id=repo_id, revision=revision)  # type: ignore # noqa: E501
+                self._push_to_hub_once(
+                    repo_id=repo_id,
+                    revision=revision,
+                    local_dir=local_dir,
+                )
                 return
             except Exception as e:
                 warnings.warn(
@@ -117,6 +123,63 @@ class WrappedModel(ABC):
             if attempt + 1 < retries:
                 time.sleep(cooldown_seconds)
         raise RuntimeError(f"Failed to push to hub after {retries} attempts.")
+
+    def save_local(
+        self,
+        output_dir: Path,
+    ):
+        """Save the model and tokenizer to a local directory"""
+        assert self.accelerator is not None
+        state_dict = self.accelerator.get_state_dict(self.model)
+        self.model.save_pretrained(
+            save_directory=output_dir,
+            save_function=self.accelerator.save,
+            is_main_process=self.accelerator.is_main_process,
+            state_dict=state_dict,
+            safe_serialization=False,
+        )
+        self.right_tokenizer.save_pretrained(
+            save_directory=output_dir,
+        )
+
+    def _push_to_hub_once(
+        self,
+        repo_id: str,
+        revision: Optional[str],
+        local_dir: Path | None = None,
+    ):
+        """Makes one attempt to push the model and tokenizer to the hub.
+
+        Args:
+            repo_id: The ID of the huggingface hub repo to push to.
+            revision: The revision to push to.
+            local_dir: The local directory to save the model and tokenizer to.
+                If None, a temporary directory will be created.
+        """
+        save_dir = local_dir or Path(tempfile.mkdtemp())
+        self.save_local(save_dir)
+
+        # Now separately push to hub, using an internal transformers
+        # function. We have to use an internal function because both
+        # `push_to_hub` and `save_pretrained` do not give enough flexibility
+        # when using FSDP: `push_to_hub` doesn't let you pass in a
+        # state_dict and `save_pretrained` doesn't let you pass in a
+        # tag/revision for the repo.
+        assert self.accelerator is not None
+        if self.accelerator.is_main_process:
+            repo_id = self.model._create_repo(repo_id)
+            revision = revision or "main"
+            self.model._upload_modified_files(
+                working_dir=save_dir,
+                repo_id=repo_id,
+                files_timestamps=dict(),
+                commit_message="Pushing model and tokenizer to hub",
+                revision=revision,  # type: ignore  # bad hinting in transformers
+            )
+
+            # Only clean up if we didn't want to keep the local directory.
+            if local_dir is None:
+                shutil.rmtree(save_dir)
 
     @classmethod
     def register_subclass(cls, name):
@@ -449,11 +512,19 @@ class WrappedModel(ABC):
             # Need to specify tokenizer due to stop strings.
             # We use left_tokenizer because we always use left padding for generation.
             inputs["tokenizer"] = self.left_tokenizer
-        output_tokens = self.model.generate(**inputs)
-        if self.keep_generation_inputs:
-            return output_tokens
-        else:
-            return output_tokens[:, inputs["input_ids"].shape[1] :]
+
+        # Hack to make sure FSDP all-gathers the parameters before .generate. See:
+        # https://github.com/pytorch/pytorch/issues/100069
+        # TODO(GH#512): Find a way to avoid an additional forward pass/gather.
+        if isinstance(self.model, FSDP):
+            with torch.no_grad():
+                self.model.forward(input_ids=inputs["input_ids"])
+        with FSDP.summon_full_params(self.model, recurse=False):
+            output_tokens = self.model.generate(**inputs)
+            if self.keep_generation_inputs:
+                return output_tokens
+            else:
+                return output_tokens[:, inputs["input_ids"].shape[1] :]
 
     def to(self, device: torch.device) -> WrappedModel:
         """Move the model to the given device.
@@ -500,16 +571,6 @@ class WrappedModel(ABC):
         self._left_tokenizer = copy.deepcopy(self.right_tokenizer)
         self._left_tokenizer.padding_side = "left"
         return self._left_tokenizer
-
-    def add_accelerator(self, accelerator: Accelerator) -> None:
-        """Adds an accelerator to the model."""
-        if self.accelerator is not None:
-            raise ValueError("An accelerator has already been added to the model.")
-        self.model = prepare_model_with_accelerate(
-            accelerator=accelerator,
-            model=self.model,
-        )
-        self.accelerator = accelerator
 
     def tokenize(
         self,
@@ -651,18 +712,32 @@ class WrappedModel(ABC):
         return strings
 
     def get_embeddings(self, token_ids: torch.Tensor) -> torch.Tensor:
-        """Returns the embeddings for the given token ids."""
+        """Returns the embeddings for the given token ids.
+
+        NOTE: We won't be able to backprop through the returned embeddings
+        because we need to detach them when using FSDP.
+        """
         token_ids = token_ids.to(self.model.device)
         self._check_for_padding_tokens(token_ids)
-        return self.model.get_input_embeddings()(token_ids)
+
+        # Doing this inside no_grad is crucial because otherwise we'll try
+        # to backprop through the embedding weights after they've been
+        # re-sharded.
+        with torch.no_grad():
+            with FSDP.summon_full_params(self.model, recurse=False):
+                return self.model.get_input_embeddings()(token_ids)
 
     def get_embedding_weights(self) -> torch.Tensor:
-        """Returns the embedding weights for the model."""
-        # TODO: work out if we should be adding positional embeddings
+        """Returns a copy of the embedding weights for the model."""
         if self.accelerator is None:
             raise ValueError("An accelerator must be added to the model.")
-        embeddings = self.model.get_input_embeddings()
-        return embeddings.weight
+        # Embedding parameters should be in the top-level FSDP module, so we can
+        # get them without recursing.
+        with FSDP.summon_full_params(self.model, recurse=False):
+            embeddings = self.model.get_input_embeddings()
+            # The clone() here is very important so we don't try to access
+            # re-sharded weights.
+            return embeddings.weight.detach().clone()
 
     def _check_for_padding_tokens(self, token_ids: torch.Tensor) -> None:
         """Checks if padding tokens are present in the token ids.

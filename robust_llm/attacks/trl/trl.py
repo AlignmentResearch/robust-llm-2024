@@ -312,17 +312,20 @@ class TRLAttack(Attack):
         )
 
     def _maybe_save_model_to_path_or_hf(self) -> None:
-
+        # TODO(GH#508): Make sure saving works with accelerate
         if self.model_save_path_prefix is None:
             logger.warning("No model_save_path_prefix provided; not saving the model")
             return
-        assert wandb.run is not None
-        output_dir = os.path.join(
-            self.model_save_path_prefix, "models", self.model_name_to_save
-        )
-        wandb.run.summary["saved_dir"] = output_dir  # type: ignore
-        logger.info("Saving the trl model to %s", output_dir)
 
-        # TODO(niki): enable saving on hf hub
-        self.adversary.model.save_pretrained(output_dir)
-        self.adversary.right_tokenizer.save_pretrained(output_dir)
+        assert self.adversary.accelerator is not None
+        if self.adversary.accelerator.is_main_process:
+            assert wandb.run is not None
+            output_dir = os.path.join(
+                self.model_save_path_prefix, "models", self.model_name_to_save
+            )
+            wandb.run.summary["saved_dir"] = output_dir  # type: ignore
+            logger.info("Saving the trl model to %s", output_dir)
+
+            # TODO(niki): enable saving on hf hub
+            self.adversary.model.save_pretrained(output_dir)
+            self.adversary.right_tokenizer.save_pretrained(output_dir)

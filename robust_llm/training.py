@@ -3,6 +3,7 @@ import json
 import os
 import random
 import warnings
+from pathlib import Path
 from typing import Optional
 
 import evaluate
@@ -170,8 +171,8 @@ class Training:
             compute_metrics=compute_metrics,
         )
         # Since we didn't pass an accelerator when constructing the WrappedModel,
-        # we need to add it here, but note that we do NOT use .add_accelerator
-        # because the Trainer will handle 'preparing' the model.
+        # we need to add it here. We do not need to 'prepare' the model with the
+        # accelerator because the Trainer handles that.
         self.victim.accelerator = self.trainer.accelerator
 
         self.victim_training_logging_counter = LoggingCounter(
@@ -271,58 +272,44 @@ class Training:
 
         # Make sure everything is in sync before saving.
         self.trainer.accelerator.wait_for_everyone()
-        # In case of FSDP, we need to make sure we get correct state_dict to save.
-        state_dict = self.trainer.accelerator.get_state_dict(self.trainer.model)
 
         adv_tr_round_str = (
             f"adv-training-round-{adv_tr_round}" if adv_tr_round is not None else None
         )
 
-        if self.trainer.is_world_process_zero():
-            assert wandb.run is not None
-            if path_prefix_or_hf is None:
-                logger.info(
-                    "Not saving the model/tokenizer since no save path was specified"
-                )
+        if path_prefix_or_hf is None:
+            logger.info(
+                "Not saving the model/tokenizer since no save path was specified"
+            )
 
-            elif path_prefix_or_hf == "hf":
-                # Make sure the model is saved before pushing to HuggingFace;
-                # without that, it does not work with accelerate. The model is saved
-                # here to default local directory.
-                self.trainer._save(state_dict=state_dict)
+        elif path_prefix_or_hf == "hf":
+            assert self.trainer.args.hub_model_id is not None
+            # This is a hack to make sure we have the properly FSDP-wrapped
+            # version of the model for saving. Without this, only the inner
+            # layers are wrapped, not the whole model, which causes size
+            # mismatches when saving/loading.
+            self.victim.model = self.trainer.model  # type: ignore
+            self.victim.push_to_hub(
+                repo_id=self.trainer.args.hub_model_id,
+                revision=adv_tr_round_str,
+                retries=self.config.upload_retries,
+                cooldown_seconds=self.config.upload_cooldown,
+            )
 
-                # Save the model on hf hub, with the adversarial training
-                # round as the revision.
-                # The trainer.args.hub_model_id is used to push the model to hub,
-                # and the trainer.hub_model_id (no `args`!), which
-                # was previously None, is set.
-                assert self.trainer.args.hub_model_id is not None
-                self.victim.push_to_hub(
-                    repo_id=self.trainer.args.hub_model_id,
-                    revision=adv_tr_round_str,
-                    retries=self.config.upload_retries,
-                    cooldown_seconds=self.config.upload_cooldown,
-                )
+            # Record the saving on wandb.
+            hf_name = self.trainer.args.hub_model_id
+            logger.info("Saving the model/tokenizer to HuggingFace as %s", hf_name)
+            if wandb.run is not None:
+                wandb.run.summary["saved_hf_name"] = hf_name
 
-                # Record the saving on wandb.
-                hf_name = self.trainer.args.hub_model_id
-                logger.info("Saving the model/tokenizer to HuggingFace as %s", hf_name)
-                wandb.run.summary["saved_hf_name"] = hf_name  # type: ignore[has-type]
-
-            else:
-                output_dir = os.path.join(
-                    path_prefix_or_hf,
-                    "models",
-                    (
-                        self.model_name_to_save + adv_tr_round_str
-                        if adv_tr_round_str
-                        else ""
-                    ),
-                )
-                wandb.run.summary["saved_dir"] = output_dir  # type: ignore[has-type]
-                logger.info("Saving the model/tokenizer to %s", output_dir)
-                self.trainer._save(output_dir=output_dir, state_dict=state_dict)
-                self.victim.right_tokenizer.save_pretrained(output_dir)
+        else:
+            adv_suffix = adv_tr_round_str or ""
+            model_dir = self.model_name_to_save + adv_suffix
+            output_dir = Path(path_prefix_or_hf) / "models" / model_dir
+            if wandb.run is not None:
+                wandb.run.summary["saved_dir"] = str(output_dir)
+            logger.info("Saving the model/tokenizer to %s", output_dir)
+            self.victim.save_local(output_dir=output_dir)
 
     @property
     def output_dir(self) -> str:
@@ -484,8 +471,9 @@ class AdversarialTraining(Training):
             tokenizer=self.victim.right_tokenizer,
         )
         # Since we didn't pass an accelerator when constructing the WrappedModel,
-        # we need to add it here.
-        self.victim.add_accelerator(self.trainer.accelerator)
+        # we need to add it here. We do not need to 'prepare' the model with the
+        # accelerator because the Trainer handles that.
+        self.victim.accelerator = self.trainer.accelerator
 
         self.victim_training_logging_counter = LoggingCounter(
             _name="victim_training",
