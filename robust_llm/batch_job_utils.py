@@ -265,14 +265,13 @@ def run_multiple(
     experiment_name: str,
     hydra_config: str,
     override_args_list: Sequence[dict],
-    n_max_parallel: Optional[Sequence[int]] = None,
-    use_accelerate: bool = False,
+    n_max_parallel: int | Sequence[int] = 1,
     script_path: str = "robust_llm",
     container_tag: str = "latest",
-    cpu: int = 4,
-    memory: str = "20G",
-    gpu: int = 1,
-    priority: str = "normal-batch",
+    cpu: int | Sequence[int] = 4,
+    memory: str | Sequence[str] = "20G",
+    gpu: int | Sequence[int] = 1,
+    priority: str | Sequence[str] = "normal-batch",
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     dry_run: bool = False,
     skip_git_checks: bool = False,
@@ -285,50 +284,64 @@ def run_multiple(
         experiment_name: descriptive name of the experiment, used to set wandb group.
         hydra_config: hydra config name.
         override_args_list: list of dictionaries with override arguments for each run.
-        n_max_parallel: If provided, each element `n_max_parallel[i]` denotes the
-            maximum number of runs that can be fit together in the container that
-            includes a run corresponding to `override_args_list[i]`. If None, every run
-            will be allocated a separate container.
-        use_accelerate: whether to use accelerate for distributed training.
+        n_max_parallel: Entry i of the list (or the global value if an int is passed)
+            is the maximum number of runs that can be fit together in the
+            container that includes a run corresponding to `override_args_list[i]`.
+            By default, every run will be allocated a separate container.
         script_path: path of the Python script to run.
         container_tag: Docker container tag to use.
-        cpu: number of cpu cores per container.
-        memory: memory per container.
-        gpu: GPUs per container.
-        priority: K8s priority.
+        cpu: number of cpu cores per container (can set globally or one per run).
+        memory: memory per container (can set globally or one per run).
+        gpu: GPUs per container (can set globally or one per run).
+        priority: K8s priority (can set globally or one per run).
         only_jobs_with_starting_indices: if not None, only jobs with starting indices
             contained in this list will be launched. Useful for rerunning a small subset
             of jobs from an experiment (for example, if a few jobs failed).
         dry_run: if True, only print the k8s job yaml files without launching them.
         skip_git_checks: if True, skip the remote push and the check for dirty git repo.
     """
-    if n_max_parallel is not None:
+    if isinstance(n_max_parallel, int):
+        n_max_parallel = [n_max_parallel] * len(override_args_list)
+    else:
         assert len(n_max_parallel) == len(override_args_list)
-
-    assert use_accelerate == (gpu > 1)
-
-    base_command = (
-        f"accelerate launch --config_file=accelerate_config.yaml --num_processes={gpu}"
-        if use_accelerate
-        else "python"
-    )
+    if isinstance(cpu, int):
+        cpu = [cpu] * len(override_args_list)
+    else:
+        assert len(cpu) == len(override_args_list)
+    if isinstance(memory, str):
+        memory = [memory] * len(override_args_list)
+    else:
+        assert len(memory) == len(override_args_list)
+    if isinstance(gpu, int):
+        gpu = [gpu] * len(override_args_list)
+    else:
+        assert len(gpu) == len(override_args_list)
+    if isinstance(priority, str):
+        priority = [priority] * len(override_args_list)
+    else:
+        assert len(priority) == len(override_args_list)
 
     runs = [
         (
             FlamingoRun(
-                base_command=base_command,
+                base_command=(
+                    "accelerate launch --config_file=accelerate_config.yaml"
+                    f" --num_processes={gpu[i]}"
+                    if gpu[i] > 1
+                    else "python"
+                ),
                 script_path=script_path,
                 hydra_config=hydra_config,
                 override_args={
                     "experiment_name": experiment_name,
                     **override_args,
                 },
-                n_max_parallel=n_max_parallel[i] if n_max_parallel else 1,
+                n_max_parallel=n_max_parallel[i],
                 CONTAINER_TAG=container_tag,
-                CPU=cpu,
-                MEMORY=memory,
-                GPU=gpu,
-                PRIORITY=priority,
+                CPU=cpu[i],
+                MEMORY=memory[i],
+                GPU=gpu[i],
+                PRIORITY=priority[i],
             )
         )
         for (i, override_args) in enumerate(override_args_list)

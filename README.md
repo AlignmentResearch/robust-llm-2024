@@ -218,7 +218,7 @@ use
 accelerate launch --config_file=accelerate_config.yaml --num_processes=<NUM_GPUS> robust_llm +experiment=my_exp
 ```
 
-If you want to use FSDP with batch jobs, simply specify `use_accelerate=True` and `gpu=<NUM_GPUS>` as arguments of `run_multiple()`.
+If you want to use FSDP with batch jobs, simply set `gpu=<NUM_GPUS>` to a number greater than 1 when calling `run_multiple()`.
 
 *Note*: not all our code has been adapted to be used with accelerate. Things that should currently work are: fine-tuning models, adversarial evals with GCG, adversarial evals with beam search. Please use with caution.
 
