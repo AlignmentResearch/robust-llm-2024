@@ -1,3 +1,5 @@
+from typing import Literal
+
 from accelerate import Accelerator
 from transformers import GPT2PreTrainedModel, GPT2TokenizerFast, PreTrainedTokenizerBase
 from typing_extensions import override
@@ -21,6 +23,7 @@ class GPT2Model(WrappedModel):
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
         keep_generation_inputs: bool,
+        family: Literal["gpt2"],
     ) -> None:
         # TODO (ian): Decide whether this assert is worthwhile (it makes testing
         # harder).
@@ -34,6 +37,7 @@ class GPT2Model(WrappedModel):
             eval_minibatch_size,
             generation_config=generation_config,
             keep_generation_inputs=keep_generation_inputs,
+            family=family,
         )
 
         # Special setup needed for gpt2.

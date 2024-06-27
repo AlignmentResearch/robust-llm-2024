@@ -26,6 +26,7 @@ from transformers import (
 )
 from transformers.modeling_outputs import ModelOutput
 
+from robust_llm.config.constants import ModelFamily
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.chat_templates import get_base_template
 from robust_llm.models.model_utils import (
@@ -56,6 +57,7 @@ class WrappedModel(ABC):
         inference_type: InferenceType,
         train_minibatch_size: int,
         eval_minibatch_size: int,
+        family: str,
         generation_config: GenerationConfig | None = None,
         keep_generation_inputs: bool = True,
     ) -> None:
@@ -72,13 +74,16 @@ class WrappedModel(ABC):
             eval_minibatch_size: The minibatch size to use for evaluation.
             generation_config: The generation config to use for generation.
             keep_generation_inputs: Whether to keep the inputs when using the model for
-                generation.
+                generation.'
+            family: The family of the model, useful for logging model details
+                to wandb alongside experiment results.
         """
         # We need to compute the number of parameters before any accelerate preparation
         # because the model will be sharded across devices.
         # NOTE: If we switch to loading directly to devices, we'll need to change how we
         # compute the number of parameters.
         self._n_params = get_num_parameters(model)
+        self._family = family
         self.accelerator = accelerator
         if self.accelerator is not None:
             self.model = prepare_model_with_accelerate(self.accelerator, model)
@@ -91,6 +96,12 @@ class WrappedModel(ABC):
         self.eval_minibatch_size = eval_minibatch_size
         self.generation_config = generation_config
         self.keep_generation_inputs = keep_generation_inputs
+
+    @property
+    def family(self) -> int:
+        if self._family is None:
+            return -1
+        return ModelFamily.from_string(self._family).value
 
     @property
     def n_params(self) -> int:
@@ -215,14 +226,10 @@ class WrappedModel(ABC):
             num_classes=num_classes,
         )
 
-        family = config.family
-        # Handle special case where Pythia models are based on GPTNeoX.
-        if family == "pythia":
-            family = "gpt_neox"
         try:
-            subcls = cls._registry[family]
+            subcls = cls._registry[config.family]
         except KeyError:
-            raise ValueError(f"Unsupported model family: {family}")
+            raise ValueError(f"Unsupported model family: {config.family}")
 
         train_mb_size = int(config.train_minibatch_size * config.minibatch_multiplier)
         eval_mb_size = int(config.eval_minibatch_size * config.minibatch_multiplier)
@@ -238,6 +245,7 @@ class WrappedModel(ABC):
             eval_minibatch_size=eval_mb_size,
             generation_config=config.generation_config,
             keep_generation_inputs=config.keep_generation_inputs,
+            family=config.family,
         )
 
     def classification_output_from_tokens(

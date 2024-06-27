@@ -352,6 +352,7 @@ class PerplexityDefendedModel(FilteringDefendedModel):
                 commit=False,
             )
             defense_dict["model_size"] = victim.n_params
+            defense_dict["model_family"] = victim.family
             table = WandbTable("defense/perplexity_table")
             table.add_data(defense_dict)
             table.save()

@@ -50,6 +50,7 @@ def do_adversarial_evaluation(
 
     victim.eval()
     model_size = victim.n_params
+    model_family = victim.family
 
     callback_input = CallbackInput(
         # TODO(ian): Work out where to apply chat template.
@@ -117,6 +118,13 @@ def do_adversarial_evaluation(
     metrics |= _maybe_record_defense_specific_metrics(
         model=victim, dataset=dataset, attacked_dataset=attacked_dataset
     )
+    metrics["adv_training_round"] = adv_training_round
+    metrics["victim_training_step_count"] = victim_training_step_count
+    metrics["victim_training_datapoint_count"] = victim_training_datapoint_count
+    metrics["global_step_count"] = global_step_count
+    metrics["global_datapoint_count"] = global_datapoint_count
+    metrics["model_size"] = model_size
+    metrics["model_family"] = model_family
 
     if (
         num_examples_to_log_detailed_info is not None
@@ -139,12 +147,6 @@ def do_adversarial_evaluation(
         wandb.log(metrics, commit=True)
         logger.info("Adversarial evaluation metrics:")
         logger.info(metrics)
-        metrics["adv_training_round"] = adv_training_round
-        metrics["victim_training_step_count"] = victim_training_step_count
-        metrics["victim_training_datapoint_count"] = victim_training_datapoint_count
-        metrics["global_step_count"] = global_step_count
-        metrics["global_datapoint_count"] = global_datapoint_count
-        metrics["model_size"] = model_size
         wandb_table = (
             WandbTable("adversarial_eval/table") if wandb_table is None else wandb_table
         )

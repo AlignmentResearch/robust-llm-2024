@@ -48,6 +48,7 @@ def mock_model() -> DummyWrappedModel:
         inference_type=InferenceType.CLASSIFICATION,
         train_minibatch_size=2,
         eval_minibatch_size=2,
+        family="dummy",
     )
     model.save_local = MagicMock()  # type: ignore[method-assign]
     model.model.push_to_hub = MagicMock()

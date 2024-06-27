@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from accelerate import Accelerator
 from transformers import (
     LlamaPreTrainedModel,
@@ -27,6 +29,7 @@ class TinyLlamaChatModel(WrappedChatModel):
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
         keep_generation_inputs: bool,
+        family: Literal["tinyllama"],
     ) -> None:
         super().__init__(
             model,
@@ -37,6 +40,7 @@ class TinyLlamaChatModel(WrappedChatModel):
             eval_minibatch_size,
             generation_config=generation_config,
             keep_generation_inputs=keep_generation_inputs,
+            family=family,
         )
 
     @classmethod

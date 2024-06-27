@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from accelerate import Accelerator
 from transformers import (
     GPTNeoXPreTrainedModel,
@@ -13,6 +15,7 @@ from robust_llm.models.wrapped_model import WrappedModel
 
 
 @WrappedModel.register_subclass("gpt_neox")
+@WrappedModel.register_subclass("pythia")
 class GPTNeoXModel(WrappedModel):
     # NOTE: Pythia models are based on GPTNeoX
     CONTEXT_LENGTH = 2048
@@ -27,6 +30,7 @@ class GPTNeoXModel(WrappedModel):
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
         keep_generation_inputs: bool,
+        family: Literal["gpt_neox", "pythia"],
     ) -> None:
         # TODO (ian): Decide whether this assert is worthwhile (it makes testing
         # harder).
@@ -40,6 +44,7 @@ class GPTNeoXModel(WrappedModel):
             eval_minibatch_size,
             generation_config=generation_config,
             keep_generation_inputs=keep_generation_inputs,
+            family=family,
         )
         # Special setup needed for pythia.
         self.model.config.pad_token_id = model.config.eos_token_id

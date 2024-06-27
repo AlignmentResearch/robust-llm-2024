@@ -1,3 +1,3 @@
 name_or_path: "Qwen/Qwen2-1.5B-Instruct"
-family: "qwen-chat"
+family: "qwen2-chat"
 train_minibatch_size: 96

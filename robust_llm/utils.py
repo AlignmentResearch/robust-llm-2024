@@ -130,6 +130,10 @@ class FakeModelForSequenceClassification:
     """Fake model class used in tests."""
 
     @property
+    def name_or_path(self) -> str:
+        return "fake-model/fake-model-for-sequence-classification"
+
+    @property
     def device(self) -> torch.device:
         return torch.device("cpu")
 

@@ -175,9 +175,11 @@ class LoggingContext:
         set_up_step_metrics:
             whether to set up wandb step metrics which are used to
             define default x-axes for logged values
-        num_parameters:
+        model_family: The index of the model family in the enum
+            (see `robust_llm.config.constants::ModelFamily`)
+        model_size:
             number of parameters in the model
-            TODO: #348 - recording of `num_parameters` would ideally be done elsewhere
+            TODO: #348 - recording of `model_size` would ideally be done elsewhere
     """
 
     def __init__(
@@ -185,13 +187,15 @@ class LoggingContext:
         is_main_process: bool,
         args: ExperimentConfig,
         set_up_step_metrics: bool = False,
-        num_parameters: Optional[int] = None,
+        model_family: Optional[int] = None,
+        model_size: Optional[int] = None,
     ) -> None:
         self.logger = logger
         self.args = args
         self.is_main_process = is_main_process
         self.set_up_step_metrics = set_up_step_metrics
-        self.num_parameters = num_parameters
+        self.model_family = model_family
+        self.model_size = model_size
 
     def save_logs(self) -> None:
         for handler in self.logger.handlers:
@@ -258,12 +262,17 @@ class LoggingContext:
         if self.set_up_step_metrics:
             setup_wandb_metrics()
         log_config_to_wandb(config)
-        if self.num_parameters is not None:
-            # Log the model size to wandb for use in plots, so we don't
+        model_info_dict: dict[str, Any] = {}
+        if self.model_family is not None:
+            model_info_dict["model_family"] = self.model_family
+        if self.model_size is not None:
+            model_info_dict["model_size"] = self.model_size
+        if model_info_dict:
+            # Log the model info to wandb for use in plots, so we don't
             # have to try to get it out of the model name.
             # We use `commit=False` to avoid incrementing the step counter.
             assert wandb.run is not None
-            wandb.log({"model_size": self.num_parameters}, commit=False)
+            wandb.log(model_info_dict, commit=False)
 
     @staticmethod
     def wandb_cleanup() -> None:

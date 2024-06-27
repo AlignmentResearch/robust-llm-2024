@@ -35,6 +35,10 @@ class DefendedModel(WrappedModel, ABC):
         self._underlying_model = victim
 
     @property
+    def family(self):
+        return self._underlying_model.family
+
+    @property
     @abstractmethod
     def defense_config(self) -> DefenseConfig:
         """Return the DefenseConfig of the defense.

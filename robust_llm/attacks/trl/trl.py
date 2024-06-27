@@ -92,6 +92,7 @@ class TRLAttack(Attack):
         }
         self.ppo_trainer: Optional[PPOTrainer] = None
         self.model_size = victim.n_params
+        self.model_family = victim.family
 
     @override
     def train(
@@ -216,6 +217,7 @@ class TRLAttack(Attack):
                     self.logging_counter.root.datapoint_count
                 )
                 prepended_train_stats["model_size"] = self.model_size
+                prepended_train_stats["model_family"] = self.model_family
                 table.add_data(prepended_train_stats)
 
     @override

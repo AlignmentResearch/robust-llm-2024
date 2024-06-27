@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from accelerate import Accelerator
 from transformers import (
     PreTrainedTokenizerBase,
@@ -15,7 +17,8 @@ from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
 
 
-@WrappedModel.register_subclass("qwen-chat")
+@WrappedModel.register_subclass("qwen1.5-chat")
+@WrappedModel.register_subclass("qwen2-chat")
 class QwenChatModel(WrappedChatModel):
     CONTEXT_LENGTH = 32768
 
@@ -29,6 +32,7 @@ class QwenChatModel(WrappedChatModel):
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
         keep_generation_inputs: bool,
+        family: Literal["qwen1.5-chat", "qwen2-chat"],
     ) -> None:
         super().__init__(
             model,
@@ -39,6 +43,7 @@ class QwenChatModel(WrappedChatModel):
             eval_minibatch_size,
             generation_config=generation_config,
             keep_generation_inputs=keep_generation_inputs,
+            family=family,
         )
 
     @override

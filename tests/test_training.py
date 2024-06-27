@@ -50,6 +50,7 @@ def test_get_only_data_with_incorrect_preds():
         eval_minibatch_size=2,
         generation_config=None,
         keep_generation_inputs=True,
+        family="gpt_neox",
     )
 
     subset_indices = [
