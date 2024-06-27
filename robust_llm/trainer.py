@@ -87,6 +87,7 @@ class RLLMTrainer(Trainer):
             ignore_keys_for_eval: A list of keys in the output of your model (if
                 it is a dictionary) that should be ignored when gathering predictions
                 for evaluation during the training.
+            kwargs: Additional keyword arguments to pass to the HuggingFace Trainer.
         """
         assert not isinstance(resume_from_checkpoint, bool), (
             "Unlike HuggingFace, we don't support passing a boolean to "

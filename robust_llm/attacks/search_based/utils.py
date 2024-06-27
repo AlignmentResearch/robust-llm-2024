@@ -40,6 +40,7 @@ class ReplacementCandidate:
 
         Args:
             attack_tokens: The tokens to replace, of shape [1, n_attack_tokens]
+
         Returns:
             The attack tokens with replacement, also of shape [1, n_attack_tokens]
         """

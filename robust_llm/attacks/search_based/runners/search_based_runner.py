@@ -25,21 +25,6 @@ class SearchBasedRunner(abc.ABC):
     search, filtering, etc. is implemented mostly here, with the approach-specific
     methods being implemented in subclasses.
 
-    Attributes:
-        victim: The model to attack paired with a tokenizer
-            and some model-specific methods
-        n_candidates_per_it: the total number of token replacements
-            to consider in each iteration (in GCG, this must be less than
-            top_k * n_attack_tokens, which is the total number of candidates)
-        n_its: Total number of iterations to run
-        n_attack_tokens: number of attack tokens to optimize
-        scores_from_text_callback: the callback for computing the scores for
-            inputs in order to choose the best candidates.
-        prepped_examples: list of PreppedExample which includes a
-            prompt_template, clf_label, and gen_target
-        random_seed: initial seed for a random.Random object used to sample
-            replacement candidates
-
     """
 
     def __init__(
@@ -52,6 +37,22 @@ class SearchBasedRunner(abc.ABC):
         prepped_examples: Sequence[PreppedExample],
         random_seed: int = 0,
     ) -> None:
+        """Constructor for the SearchBasedRunner class.
+
+        Args:
+            victim: The model to attack paired with a tokenizer
+                and some model-specific methods
+            n_candidates_per_it: the total number of token replacements
+                to consider in each iteration (in GCG, this must be less than
+                top_k * n_attack_tokens, which is the total number of candidates)
+            n_its: Total number of iterations to run
+            n_attack_tokens: number of attack tokens to optimize
+            scores_from_text_callback: the callback for computing the scores for
+                inputs in order to choose the best candidates.
+            prepped_examples: list of PreppedExample which includes a
+                prompt_template, clf_label, and gen_target
+            random_seed: initial seed for a random.Random object used to sample
+                replacement candidates"""
         self.victim = victim
         cb = CallbackRegistry.get_tensor_callback(scores_from_text_callback)
         self.scores_from_text_callback = cb
@@ -360,9 +361,9 @@ class SearchBasedRunner(abc.ABC):
         which could lead to being stuck in a loop.
 
         Args:
-            attack_text: The reference attack text on which we will be making
-                replacements
-            candidates: The candidates to filter
+            text_replacement_pairs: A list of (attack_text, replacement) pairs
+                to filter. The attack text is the text to replace, and the
+                replacement is the token to replace it with.
 
         Returns:
             A list of the candidates that didn't result in a change in tokenization

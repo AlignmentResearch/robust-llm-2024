@@ -688,7 +688,7 @@ def _contact_info_in_generation_from_text_callback(
     Args:
         victim: The model to evaluate.
         callback_input: The input data and labels.
-            NOTE: labels are ignored for this callback.
+            N.B. labels are ignored for this callback.
         info_type: The type of contact info to check for.
 
     Returns:

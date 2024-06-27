@@ -104,7 +104,7 @@ class FilteringDefendedModel(DefendedModel):
         Args:
             text_inputs: The list of text inputs to filter.
 
-        Returns:
+        Subclasses should return:
             A list of booleans indicating whether the defense flagged each input
             as adversarial (True) or not (False).
         """

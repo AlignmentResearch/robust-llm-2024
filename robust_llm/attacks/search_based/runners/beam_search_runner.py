@@ -16,7 +16,7 @@ class BeamSearchRunner(SearchBasedRunner):
     """Runs beam search on a single model and a single prompt/target pair.
 
     Attributes:
-        beam_search_width: how many candidates to keep after each iteration.
+        n_best_candidates_to_keep: how many candidates to keep after each iteration.
     """
 
     def __init__(

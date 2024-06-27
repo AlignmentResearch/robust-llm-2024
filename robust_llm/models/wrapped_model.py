@@ -261,7 +261,7 @@ class WrappedModel(ABC):
             minibatch_size: The minibatch size to use. If None, we use
                 self.eval_minibatch_size.
 
-        Returns:
+        Yields:
             A SequenceClassifierOutput object, which has a 'logits' attribute.
         """
 
@@ -343,7 +343,7 @@ class WrappedModel(ABC):
             minibatch_size: The minibatch size to use. If None, we use
                 self.eval_minibatch_size.
 
-        Returns:
+        Yields:
             A SequenceClassifierOutput object, which has a 'logits' attribute.
         """
 
@@ -387,7 +387,7 @@ class WrappedModel(ABC):
                 fail loudly if we try to backpropagate through it, whereas False
                 will just be silently inefficient.
 
-        Returns:
+        Yields:
             A SequenceClassifierOutput object, which has a 'logits' attribute.
         """
 
@@ -419,7 +419,8 @@ class WrappedModel(ABC):
                 if the input_ids are actually padded.
             minibatch_size: The minibatch size to use. If None, we use
                 self.eval_minibatch_size.
-        Returns:
+
+        Yields:
             A list of strings, which are the generated sequences.
         """
         assert self.inference_type == InferenceType.GENERATION
@@ -594,7 +595,7 @@ class WrappedModel(ABC):
                 do right padding, "left" means do left padding.
             add_special_tokens:
                 Whether to add special tokens when tokenizing.
-            **kwargs:
+            kwargs:
                 Included for compatibility with subclasses that have additional
                 arguments. In particular, WrappedChatModel has arguments related
                 to the chat template.

@@ -10,9 +10,16 @@ from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 
 class Attack(abc.ABC):
-    """Base class for all attacks."""
+    """Base class for all attacks.
 
-    # Whether the attack needs to be trained before it can be effectively used.
+    Attributes:
+        REQUIRES_TRAINING: Whether the attack needs to be trained before it can be
+            effectively used.
+        attack_config: Configuration for the attack.
+        logging_name: Name of the attack, for the purposes of logging. Possible
+            examples include "training_attack" or "validation_attack".
+    """
+
     REQUIRES_TRAINING: bool
 
     def __init__(
@@ -43,7 +50,8 @@ class Attack(abc.ABC):
 
         Args:
             dataset: RLLMDataset of original examples to start from.
-        Returns:
+
+        Subclasses should return:
             A tuple `(dataset, info_dict)` where:
                 `dataset` is an RLLMDataset of adversarial examples containing at
                     least `text`, `attacked_text`, and `clf_label` columns, with `text`

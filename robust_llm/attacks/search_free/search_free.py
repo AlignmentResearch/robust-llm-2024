@@ -206,7 +206,7 @@ class SearchFreeAttack(Attack, ABC):
             chunk_label: The label of the chunk (for classification).
             chunk_seed: The seed for the chunk (for generation).
 
-        Returns:
+        Subclasses return:
             The attack tokens for the current iteration.
         """
         raise NotImplementedError
@@ -240,7 +240,7 @@ class SearchFreeAttack(Attack, ABC):
         current iteration.
 
         Args:
-            chunk: The chunk text.
+            chunk_text: The chunk text.
             chunk_type: The chunk type.
             current_iteration: The current iteration of the attack.
             chunk_label: The label of the chunk (for classification).

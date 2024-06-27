@@ -181,6 +181,7 @@ def broken_token_representations(
         max_length: the max context length allowed by the model.
         padding_side: the side to pad on.
         pad_token_id: the token to use for padding.
+
     Returns:
         A tuple of (input_ids, attention_mask) with the broken tokens expanded.
     """

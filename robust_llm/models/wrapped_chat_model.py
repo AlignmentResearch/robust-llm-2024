@@ -44,7 +44,7 @@ class WrappedChatModel(WrappedModel):
                 Whether to apply the chat template.
             add_generation_prompt:
                 Whether to add a generation prompt to the end of the prompt.
-            **kwargs:
+            kwargs:
                 Additional arguments (for compatibility with the base class,
                 since it has **kwargs to accept apply_chat_template and
                 add_generation_prompt).

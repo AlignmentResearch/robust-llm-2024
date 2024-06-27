@@ -56,6 +56,9 @@ class AdversarialTrainingConfig:
             The number of adversarial training rounds to do.
         skip_first_training_round (bool):
             Whether to skip the first training round or not.
+        use_balanced_sampling (bool):
+            Whether to use balanced sampling for adversarial training, i.e., sample
+            alternately from the original and adversarial datasets.
         training_attack (AttackConfig):
             Config for the attack to use in adversarial training.
     """
@@ -77,6 +80,10 @@ class TrainingConfig:
         adversarial (AdversarialTrainingConfig): Configs for adversarial training.
         num_train_epochs (int): Number of training epochs.
         learning_rate (float): Learning rate to use in training.
+        optimizer (str): The optimizer to use in training.
+        gradient_checkpointing (bool): Whether to use gradient checkpointing.
+            This is a technique to reduce memory usage at the cost of some additional
+            computation during backpropagation.
         eval_steps (Optional[int | float]): Number of update steps between two
             evaluations. Will default to the same value as logging_steps if not set.
             Should be an integer or a float in range [0,1). If smaller than 1, will
@@ -161,6 +168,8 @@ class ExperimentConfig:
         job_type (str): Name of the sub-experiment.
         run_name (str): Name of the individual run.
         environment (EnvironmentConfig): Configs for environment setup.
+        dataset (DatasetConfig): Configs for dataset setup.
+        model (ModelConfig): Configs for model setup.
         training (Optional[TrainingConfig]): Configs for training.
         evaluation (EvaluationConfig): Configs for evaluation.
         defense (DefenseConfig): Configs for defense setup.

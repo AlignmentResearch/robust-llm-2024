@@ -25,20 +25,6 @@ class MultiPromptSearchBasedRunner(abc.ABC):
     search, filtering, etc. is implemented mostly here, with the approach-specific
     methods being implemented in subclasses.
 
-    Attributes:
-        wrapped_model: The model to attack paired with a tokenizer
-            and some model-specific methods
-        n_candidates_per_it: the total number of token replacements
-            to consider in each iteration (in GCG, this must be less than
-            top_k * n_attack_tokens, which is the total number of candidates)
-        n_its: Total number of iterations to run
-        n_attack_tokens: number of attack tokens to optimize
-        scores_from_text_callback: the callback for computing the scores for
-            inputs in order to choose the best candidates.
-        prepped_examples: A list of prepped examples, each containing a
-            PromptTemplate and clf_target
-        random_seed: initial seed for a random.Random object used to sample
-            replacement candidates
     """
 
     def __init__(
@@ -51,6 +37,24 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         prepped_examples: Sequence[PreppedExample],
         random_seed: int = 0,
     ) -> None:
+        """Constructor for the MultiPromptSearchBasedRunner class.
+
+        Args:
+            victim: The model to attack paired with a tokenizer
+                and some model-specific methods
+            n_candidates_per_it: the total number of token replacements
+                to consider in each iteration (in GCG, this must be less than
+                top_k * n_attack_tokens, which is the total number of candidates)
+            n_its: Total number of iterations to run
+            n_attack_tokens: number of attack tokens to optimize
+            scores_from_text_callback: the callback for computing the scores for
+                inputs in order to choose the best candidates.
+            prepped_examples: A list of prepped examples, each containing a
+                PromptTemplate and clf_target
+            random_seed: initial seed for a random.Random object used to sample
+                replacement candidates
+
+        """
         self.victim = victim
         cb = CallbackRegistry.get_tensor_callback(scores_from_text_callback)
         self.scores_from_text_callback = cb

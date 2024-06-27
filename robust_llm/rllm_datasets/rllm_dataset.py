@@ -48,6 +48,10 @@ class RLLMDataset(ABC):
             perturbed and the rest overwritten. modifiable_chunk_spec is a
             tuple of ChunkType, an enum that specifies whether each chunk is
             IMMUTABLE, PERTURBABLE, or OVERWRITABLE.
+        is_tokenized: Whether the dataset has been tokenized, i.e., whether it
+            has 'input_ids' and 'attention_mask' columns.
+
+    Methods:
         update_dataset_based_on_text: A function that updates a dataset based on a
             (possibly updated) 'text' column. An example use of this is when we can
             easily compute the ground truth label based on the text. This is ideal
@@ -282,6 +286,7 @@ class RLLMDataset(ABC):
             cfg: The DatasetConfig specifying the dataset to load.
             split: The split of the dataset to load.
             n_examples: The number of examples to load.
+            revision: The revision of the dataset to load.
 
         Returns:
             The loaded dataset split.

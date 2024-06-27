@@ -16,6 +16,7 @@ class GCGRunner(SearchBasedRunner):
     """Runs GCG on a single model and a single prompt/target pair.
 
     Attributes:
+        n_best_candidates_to_keep: how many candidates to keep after each iteration.
         differentiable_embeds_callback: the callback for computing the loss to
             backprop through.
         top_k: the number of token replacements to consider at each

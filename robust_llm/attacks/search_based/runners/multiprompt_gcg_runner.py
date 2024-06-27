@@ -24,6 +24,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
     """Runs GCG on a single model and a single prompt/target pair.
 
     Attributes:
+        n_best_candidates_to_keep: how many candidates to keep after each iteration.
         top_k: the number of token replacements to consider at each
             position in the attack tokens.
     """

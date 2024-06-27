@@ -251,7 +251,7 @@ def compute_max_min_percentile_perplexity(
 
     Args:
         model: The WrappedModel to evaluate.
-            NOTE: We now use the tokenizer from the decoder model, which
+            N.B. We now use the tokenizer from the decoder model, which
             is different from the old way (see GH#370).
         dataset: The dataset to compute perplexity for.
         window_size: The size of the sliding window.
@@ -382,7 +382,7 @@ class PerplexityDefendedModel(FilteringDefendedModel):
         """Filter out adversarial examples from the input.
 
         Args:
-            inputs: The batch of text inputs to the model.
+            text_inputs: The batch of text inputs to the model.
 
         Returns:
             A list of booleans indicating whether each input is flagged as
@@ -422,6 +422,7 @@ class PerplexityDefendedModel(FilteringDefendedModel):
             dataset: the dataset to evaluate on
             text_column_to_use: the column of the dataset that should
                 be used for the perplexity calculation
+
         Returns:
             A list of perplexity thresholds for percentiles [0%, 1%, ..., 100%]
         """

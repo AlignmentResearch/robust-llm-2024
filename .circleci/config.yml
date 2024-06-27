@@ -211,11 +211,6 @@ jobs:
           command: |
             flake8 --version
             flake8 . -v --exclude venv
-      - run:
-          name: pydocstyle
-          command: |
-            pydocstyle --version
-            pydocstyle robust_llm --verbose
 
 workflows:
   version: 2

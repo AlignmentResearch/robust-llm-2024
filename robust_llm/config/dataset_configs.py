@@ -49,6 +49,12 @@ class ContactInfoDatasetConfig(DatasetConfig):
     """Config used for the ContactInfo dataset.
 
     Attributes:
+        dataset_type (str): dataset type, always "ContactInfo".
+        inference_type (str): The type of inference performed,
+            always "generation"
+        classification_as_generation (bool): Whether we are doing classification
+            using a generation model, which is never the case for this
+            generative dataset.
         info_type (Optional[str]):
             The type of information to generate, e.g. phone_number.
     """

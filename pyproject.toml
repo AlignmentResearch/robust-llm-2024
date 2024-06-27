@@ -42,7 +42,8 @@ dev = [
     "pytest-xdist",
     "autoflake",
     "flake8",
-    "pydocstyle",
+    "flake8-docstrings",
+    "flake8-docstrings-complete",
     "tomli",
     "names-generator",
     # For checking GPU memory usage
