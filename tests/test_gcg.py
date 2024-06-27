@@ -1,7 +1,8 @@
+from unittest.mock import MagicMock
+
 import hypothesis
 import pytest
 import torch
-from accelerate import Accelerator
 from hypothesis import example, given, settings
 from hypothesis import strategies as st
 from transformers import AutoTokenizer
@@ -19,7 +20,20 @@ from robust_llm.models import GPT2Model, GPTNeoXModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.utils import FakeModelForSequenceClassification
 
-ACCELERATOR = Accelerator(cpu=True)
+
+# We use a MagicMock for the accelerator because using a real Accelerator
+# was leading to flaky tests on CircleCI for unknown reasons, e.g.:
+# https://app.circleci.com/pipelines/github/AlignmentResearch/robust-llm/3264/workflows/64e65f36-0399-44ec-89d0-0690a5d0f1db/jobs/6600  # noqa: E501
+def fake_prepare(*args):
+    if len(args) == 1:
+        return args[0]
+    return args
+
+
+ACCELERATOR = MagicMock()
+ACCELERATOR.device = "cpu"
+ACCELERATOR.gather_for_metrics = lambda x: x
+ACCELERATOR.prepare.side_effect = fake_prepare
 
 
 def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:
