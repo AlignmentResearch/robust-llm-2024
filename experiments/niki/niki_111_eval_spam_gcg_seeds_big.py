@@ -3,11 +3,11 @@ import os
 from robust_llm.batch_job_utils import run_multiple
 
 EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
-HYDRA_CONFIG = "niki/gcg_imdb_eval"
+HYDRA_CONFIG = "niki/gcg_spam_eval"
 
 BASE_MODEL_NAMES_AND_MAX_PARALLEL = [
-    ("pythia-imdb-6.9b-niki-ada-v4", 1),
-    ("pythia-imdb-12b-niki-ada-v4", 1),
+    ("pythia-spam-6.9b-niki-ada-v4", 1),
+    ("pythia-spam-12b-niki-ada-v4", 1),
 ]
 
 SEEDS = [0, 1, 2]
@@ -35,6 +35,7 @@ if __name__ == "__main__":
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         N_MAX_PARALLEL,
+        use_accelerate=True,
         memory="200G",
         cpu=12,
         gpu=2,
