@@ -1,6 +1,4 @@
 METRICS = [
-    "adversarial_eval/pre_attack_accuracy",
-    "adversarial_eval/post_attack_accuracy_including_original_mistakes",
     "adversarial_eval/attack_success_rate",
 ]
 
@@ -12,17 +10,34 @@ SUMMARY_KEYS = [
 
 PROJECT_NAME = "farai/robust-llm"
 
-MODEL_SIZE_DICT = {
-    "14m": 14_000_000,
-    "31m": 31_000_000,
-    "70m": 70_000_000,
-    "160m": 160_000_000,
-    "410m": 410_000_000,
-    "1b": 1_000_000_000,
-    "1.4b": 1_400_000_000,
-    "2.8b": 2_800_000_000,
-    "6.9b": 6_900_000_000,
-    "12b": 12_000_000_000,
-}
+MODEL_NAMES = ["14m", "31m", "70m", "160m", "410m", "1b", "1.4b", "2.8b", "6.9b", "12b"]
+
+MODEL_NAME_SIZES = [
+    14_000_000,
+    31_000_000,
+    70_000_000,
+    160_000_000,
+    410_000_000,
+    1_000_000_000,
+    1_400_000_000,
+    2_800_000_000,
+    6_900_000_000,
+    12_000_000_000,
+]
+
+MODEL_SIZES = [
+    7629056,
+    17617408,
+    44672000,
+    123691008,
+    353824768,
+    908763136,  # 1b
+    1311629312,  # 1.4b
+    2646435840,  # 2.8b
+    6650740736,  # 6.9b
+    11586560000,  # 12b
+]
+
+MODEL_SIZE_DICT = dict(zip(MODEL_SIZES, MODEL_NAME_SIZES))
 
 FINAL_PYTHIA_CHECKPOINT = 143_000

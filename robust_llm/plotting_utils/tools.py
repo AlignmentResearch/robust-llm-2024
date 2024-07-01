@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Optional
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +11,8 @@ from robust_llm.file_utils import compute_repo_path
 from robust_llm.plotting_utils.constants import (
     FINAL_PYTHIA_CHECKPOINT,
     METRICS,
-    MODEL_SIZE_DICT,
+    MODEL_NAMES,
+    MODEL_SIZES,
     PROJECT_NAME,
     SUMMARY_KEYS,
 )
@@ -20,32 +21,118 @@ wandb.login()
 API = wandb.Api(timeout=60)
 
 
+def make_finetuned_plot(
+    run_names: tuple[str, ...],
+    eval_summary_keys: tuple[list[str], ...],
+    metrics: tuple[list[str], ...],
+    title: str,
+    save_as: str,
+    save_dir: str,
+    custom_ys: list[float] | None = None,
+    custom_xs_and_ys: list[tuple[float, float]] | None = None,
+    scatterplot: bool = False,
+):
+    """
+    Plot model size on the x-axis and attack success rate on the y-axis.
+
+    Args:
+        run_names: The names of the runs to pull data from.
+        eval_summary_keys: The keys to summarize the data by.
+        metrics: The metrics to plot.
+        title: The title to give the plot.
+        save_as: The name to save the plot as.
+        save_dir: The directory to save the plot in.
+        custom_ys: Custom y-values to add to the plot. The x-values are taken
+            from MODEL_SIZES, assuming that the custom y-values are for
+            the largest models. Mutually exclusive with custom_xs_and_ys.
+        custom_xs_and_ys: Custom x-values and y-values to add to the plot.
+            Mutually exclusive with custom_ys.
+        scatterplot: Whether to use a scatterplot instead of a line plot.
+    """
+    if title is None:
+        title = run_names[0]
+
+    if metrics is None:
+        metrics = (METRICS,) * len(run_names)
+
+    if eval_summary_keys is None:
+        eval_summary_keys = (SUMMARY_KEYS,) * len(run_names)
+
+    print("Plotting with data from ", run_names)
+
+    runs = []
+    for run_name, metric_list, summary_key_list in zip(
+        run_names, metrics, eval_summary_keys
+    ):
+        run = get_metrics_single_step(
+            group=run_name,
+            metrics=metric_list,
+            summary_keys=summary_key_list,
+        )
+        runs.append(run)
+
+    print("Now the runs are", runs)
+
+    for run in runs:
+        postprocess_data(run)
+
+    # Concatenate the runs together
+    run = pd.concat(runs, ignore_index=True)
+
+    draw_plot(
+        run,
+        title=title,
+        save_as=save_as,
+        save_dir=save_dir,
+        custom_ys=custom_ys,
+        custom_xs_and_ys=custom_xs_and_ys,
+        scatterplot=scatterplot,
+    )
+
+
 def load_and_plot_adv_training_plots(
     name: str,
     title: str,
-    summary_keys: list[str] = SUMMARY_KEYS,
-    metrics: list[str] = METRICS,
-    use_size_from_name: bool = False,
-) -> None:
+    save_as: str,
+    save_dir: str = "",
+    summary_keys: list[str] | None = None,
+    metrics: list[str] | None = None,
+    xlim: tuple[float, float] = (1, 10),
+    legend: bool = False,
+):
     """
     Make adversarial training plots for a given run, pulling data from W&B.
 
     Args:
         name: The name of the run to pull data from.
         title: The title to give the plot (also used for saving).
+        save_as: The name to save the plot as.
+        save_dir: The directory to save the plot in.
         summary_keys: The keys to summarize the data by.
         metrics: The metrics to plot.
-        use_size_from_name: Whether to use the model size from
-            the run name (legacy) or to take it from W&B.
+        xlim: The x-axis limits.
+        legend: Whether to include the legend in the plot.
     """
+    if summary_keys is None:
+        summary_keys = SUMMARY_KEYS
+
+    if metrics is None:
+        metrics = METRICS
+
     data = prepare_adv_training_data(
         name,
         summary_keys=summary_keys,
         metrics=metrics,
-        use_size_from_name=use_size_from_name,
     )
-    plot_line_and_scatter_adv_training(
-        data, title=title, use_size_from_name=use_size_from_name
+    draw_plot_adv_training(
+        data=data,
+        x="adv_training_round",
+        split_curves_by="num_params",
+        title=title,
+        save_as=save_as,
+        save_dir=save_dir,
+        xlim=xlim,
+        legend=legend,
     )
 
 
@@ -53,7 +140,6 @@ def prepare_adv_training_data(
     name: str,
     summary_keys: list[str],
     metrics: list[str],
-    use_size_from_name: bool = False,
 ) -> pd.DataFrame:
     assert isinstance(name, str)
     out = get_metrics_adv_training(
@@ -61,31 +147,9 @@ def prepare_adv_training_data(
         metrics=metrics,
         summary_keys=summary_keys,
     )
-    postprocess_data(df=out, use_size_from_name=use_size_from_name)
+    postprocess_data(df=out)
 
     return out
-
-
-def plot_line_and_scatter_adv_training(
-    run: pd.DataFrame, title: str = "", use_size_from_name=False
-):
-    draw_plot_adv_training(
-        run,
-        x="adv_training_round",
-        split_curves_by="num_params",
-        logscale=False,
-        title=title,
-        use_size_from_name=use_size_from_name,
-    )
-    draw_plot_adv_training(
-        run,
-        x="adv_training_round",
-        split_curves_by="num_params",
-        logscale=False,
-        use_scatterplot=True,
-        title=title,
-        use_size_from_name=use_size_from_name,
-    )
 
 
 def extract_seed_from_name(name):
@@ -96,69 +160,60 @@ def extract_seed_from_name(name):
     return seed
 
 
-def _draw_plot_adv_training(
-    data,
-    x,
-    split_curves_by: str,
-    title="",
-    use_scatterplot=False,
-    errorbar=("ci", 95),
-    metric="adversarial_eval/attack_success_rate",
-    ylim=(0, 1),
-    logscale=False,
-    y_logscale=False,
-    xlim=None,
-    ytransf=None,
-    use_size_from_name=False,
-    figsize: tuple[float, float] = (7.5, 5),
-):
-    plt.figure(figsize=figsize)
+def _set_up_paper_plot(fig, ax) -> None:
+    fig.set_size_inches(3.5, 2.5)
+    ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+    ax.minorticks_on()
+    ax.tick_params(axis="both", which="major", length=6, width=1)
+    ax.tick_params(axis="both", which="minor", length=4, width=0.5)
+    ax.set_ylim((0, 1))
 
+
+def _draw_plot_adv_training(
+    data: pd.DataFrame,
+    x: str,
+    split_curves_by: str,
+    title: str,
+    save_as: str,
+    save_dir: str,
+    use_scatterplot: bool = False,
+    metric: str = "adversarial_eval/attack_success_rate",
+    xlim: tuple[float, float] = (0, 10),
+    legend: bool = False,
+):
     data = data.copy()
 
     plot_fn = sns.scatterplot if use_scatterplot else sns.lineplot
 
     kwargs = {}
     if not use_scatterplot:
-        kwargs["errorbar"] = errorbar
+        kwargs["errorbar"] = ("ci", 95)
 
-    if ytransf is not None:
-        data[metric] = data[metric].apply(ytransf)
+    # Make it one-indexed since evaluation happens after the training
+    data[x] += 1
 
-    plot_fn(
+    ax = plot_fn(
         data=data,
         x=x,
         y=metric,
         hue=split_curves_by,
         palette=get_discrete_palette_for_values(data[split_curves_by]),
-        marker="o",
+        marker=".",
+        legend=legend,
         **kwargs,
     )
+    if legend:
+        ax.get_legend().set_title("Model Size")
+    ax.set_xlabel("Adversarial Training Round")
+    ax.set_ylabel("Attack Success Rate")
 
-    if logscale:
-        plt.xscale("log")
+    _set_up_paper_plot(plt.gcf(), ax)
 
-    if y_logscale:
-        plt.yscale("log")
+    plt.title(title)
+    plt.xlim(xlim)
 
-    if ylim is not None:
-        plt.ylim(ylim)
-
-    if xlim is not None:
-        plt.xlim(xlim)
-
-    add_to_path = ""
-    if title:
-        split_title = title.split("/")
-        add_to_path = "/".join(split_title[:-1]) + "/"
-        if "/" in title:
-            title = split_title[-1]
-        plt.title(title + " (model sizes from name)" if use_size_from_name else title)
-
-    repo_path = compute_repo_path()
-    d = repo_path + "/plots/" + add_to_path
-    t = "scatter" if use_scatterplot else "line"
-    plt.savefig(d + f"{title} {t}.png" if title else "plot {t}.png")
+    "scatter" if use_scatterplot else "line"
+    create_path_and_savefig(filename=save_as, subdirectory="adv_training/" + save_dir)
     plt.close()
 
 
@@ -166,69 +221,106 @@ def draw_plot_adv_training(
     data: pd.DataFrame,
     x: str,
     split_curves_by: str,
-    logscale: bool,
-    y_logscale: bool = False,
-    title: str = "",
+    title: str,
+    save_as: str,
+    save_dir: str = "",
     use_scatterplot: bool = False,
-    ylim: Optional[tuple[float, float]] = None,
-    xlim=None,
-    ytransf=None,
-    use_size_from_name=False,
+    xlim: tuple[float, float] = (0, 10),
+    legend: bool = False,
 ):
-    for n_adv_rounds in [10, 20, 30]:
-        if data["adv_training_round"].max() + 1 >= n_adv_rounds:
-            data_copy = data.copy()[data["adv_training_round"] <= n_adv_rounds]
-            _draw_plot_adv_training(
-                data_copy,
-                x=x,
-                split_curves_by=split_curves_by,
-                logscale=logscale,
-                y_logscale=y_logscale,
-                title=title + f", {n_adv_rounds} adv rounds train",
-                use_scatterplot=use_scatterplot,
-                ylim=ylim,
-                xlim=xlim,
-                ytransf=ytransf,
-                use_size_from_name=use_size_from_name,
-            )
+    n_adv_rounds = xlim[1]
+    if data["adv_training_round"].max() + 1 < n_adv_rounds:
+        raise ValueError(
+            f"Found {data['adv_training_round'].max()} adv rounds, "
+            f"but requested {n_adv_rounds}"
+        )
+    data_copy = data.copy()[data["adv_training_round"] <= n_adv_rounds]
+    assert isinstance(data_copy, pd.DataFrame)
+    _draw_plot_adv_training(
+        data_copy,
+        x=x,
+        split_curves_by=split_curves_by,
+        title=title,
+        save_as=save_as,
+        save_dir=save_dir,
+        use_scatterplot=use_scatterplot,
+        xlim=xlim,
+        legend=legend,
+    )
+
+
+def create_path_and_savefig(filename: str, subdirectory: str):
+    repo_path = compute_repo_path()
+    directory = Path(f"{repo_path}/plots/{subdirectory}/")
+    directory.mkdir(parents=True, exist_ok=True)
+    save_path = directory / f"{filename}.png"
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
 
 
 def draw_plot(
-    data,
-    title="",
-    use_scatterplot=False,
-    errorbar=("ci", 95),
-    metrics=None,
-    ylim01=True,
-    figsize=(7.5, 5),
+    data: pd.DataFrame,
+    title: str,
+    save_as: str,
+    save_dir: str,
+    custom_ys=None,
+    custom_xs_and_ys=None,
+    scatterplot=False,
 ):
-    if metrics is None:
-        metrics = METRICS
 
-    plt.figure(figsize=figsize)
+    # Refine data here as necessary
+    # data = data[data.n_its == 10]
+    # data = data[data.search_type == "gcg"]
+    # data = data[~data['model_name_or_path'].str.contains("-s-", case=False, na=False)]
 
-    data = data[["num_params"] + metrics]
+    print("Found", len(data), "runs to use for the plot")
 
-    plot_fn = sns.scatterplot if use_scatterplot else sns.lineplot
+    fig, ax = plt.subplots()
+
+    plt.xscale("log")
+    plt.title(title)
+    plt.xlabel("Model size (# parameters)")
+    plt.ylabel("Attack Success Rate")
+    plt.ylim((0, 1))
+
+    relevant_data = data[["num_params", "adversarial_eval/attack_success_rate"]]
+
+    # Add the custom xs and ys
+    # xs are "num_params"
+    # ys are values
+    if custom_xs_and_ys is not None or custom_ys is not None:
+        assert custom_xs_and_ys is None or custom_ys is None
+        print("Adding custom data to the plot")
+        if custom_ys is not None:
+            xs = MODEL_SIZES[-len(custom_ys) :]
+        elif custom_xs_and_ys is not None:
+            xs, custom_ys = zip(*custom_xs_and_ys)  # type: ignore
+        else:
+            raise ValueError("should not happen")
+
+        new_data = pd.DataFrame(
+            {"num_params": xs, "adversarial_eval/attack_success_rate": custom_ys}
+        )
+        new_data = new_data[relevant_data.columns]
+        relevant_data = pd.concat([relevant_data, new_data], ignore_index=True)
+
+    plot_fn = sns.scatterplot if scatterplot else sns.lineplot
 
     kwargs = {}
-    if not use_scatterplot:
-        kwargs["errorbar"] = errorbar
-    plot = plot_fn(
-        data=pd.melt(data, ["num_params"]),
+    if not scatterplot:
+        kwargs["errorbar"] = ("ci", 95)
+    plot_fn(
+        data=pd.melt(relevant_data, ["num_params"]),  # type: ignore
         x="num_params",
         y="value",
         hue="variable",
-        marker="o",
+        marker=".",
+        legend=False,
         **kwargs,
     )
 
-    plot.set(xscale="log")
-    plot.set_title(title)
-    if ylim01:
-        plt.ylim(0.0, 1.0)
+    _set_up_paper_plot(fig, ax)
 
-    plt.show()
+    create_path_and_savefig(filename=save_as, subdirectory=save_dir)
 
 
 def draw_scatter_with_color_from_metric(
@@ -238,7 +330,7 @@ def draw_scatter_with_color_from_metric(
     title="",
     ylim01=True,
     use_colors=True,
-    figsize=(10, 5),
+    figsize=(3.5, 2.5),
     scatter_size=20,
 ):
     data = data[["num_params"] + [metric, color_metric]]
@@ -286,7 +378,6 @@ def get_metrics_adv_training(
         filters = {}
     filters = deepcopy(filters)
     filters["group"] = group
-    # filters["state"] = "finished"
 
     runs = API.runs(path=PROJECT_NAME, filters=filters)
     if check_num_runs is not None:
@@ -331,30 +422,6 @@ def get_metrics_adv_training(
     return res
 
 
-def draw_for_multi_seed_exp(
-    data, dataset, search_type, n_its, use_colors=True, only_scatter=True
-):
-    data = data.copy()
-    data = data[
-        (data.dataset_type == dataset)
-        & (data.search_type == search_type)
-        & (data.n_its == n_its)
-    ]
-    title = f"{dataset}, {search_type}, {n_its=}"
-
-    if not only_scatter:
-        print("Shaded areas are 95% CIs")
-        draw_plot(data, title=title, metrics=METRICS)
-
-    draw_scatter_with_color_from_metric(
-        data,
-        metric="adversarial_eval/attack_success_rate",
-        color_metric="pretraining_fraction",
-        title=title,
-        use_colors=use_colors,
-    )
-
-
 def get_discrete_palette_for_values(values):
     values = sorted(set(values))
     return {
@@ -370,9 +437,9 @@ def _get_value_iterative(d, key):
 
 
 def _get_num_params_from_name(name: str) -> int:
-    sizes_in_name = [size for size in MODEL_SIZE_DICT.keys() if size in name]
+    sizes_in_name = [i for i, size in enumerate(MODEL_NAMES) if size in name]
     assert len(sizes_in_name) == 1, f"Found {sizes_in_name} in {name}"
-    return MODEL_SIZE_DICT[sizes_in_name[0]]
+    return MODEL_SIZES[sizes_in_name[0]]
 
 
 def _get_pretraining_fraction(name: str) -> float:
@@ -387,15 +454,47 @@ def _get_pretraining_fraction(name: str) -> float:
     return fraction
 
 
-def postprocess_data(df, use_size_from_name=False):
-    if use_size_from_name:
+def postprocess_data(df):
+    if "model_size" not in df:
+        if "name_or_path" not in df:
+            df["name_or_path"] = df["model_name_or_path"]
         df["num_params"] = df["name_or_path"].map(_get_num_params_from_name)
     else:
         df["num_params"] = df["model_size"]
 
     df["pretraining_fraction"] = df["name_or_path"].map(_get_pretraining_fraction)
 
-    df["pre_post_accuracy_gap"] = (
-        df["adversarial_eval/pre_attack_accuracy"]
-        - df["adversarial_eval/post_attack_accuracy_including_original_mistakes"]
-    )
+
+def get_metrics_single_step(
+    group, metrics, summary_keys, filters=None, check_num_runs=None
+):
+    print("getting metrics for", group)
+
+    if filters is None:
+        filters = {}
+    filters = deepcopy(filters)
+    filters["group"] = group
+    filters["state"] = "finished"
+
+    runs = API.runs(path=PROJECT_NAME, filters=filters)
+    if check_num_runs is not None:
+        if type(check_num_runs) is int:
+            assert len(runs) == check_num_runs
+        elif type(check_num_runs) is list:
+            assert check_num_runs[0] <= len(runs) <= check_num_runs[1]
+        else:
+            assert False, "bad check_num_runs!"
+
+    res = []
+    for run in runs:
+        history = run.history(keys=metrics)
+        if history is None or len(history) == 0:
+            continue
+        for key in summary_keys:
+            history[key.split(".")[-1]] = _get_value_iterative(run.summary, key)
+        assert len(history) == 1, "Expected 1 step, got {}".format(len(history))
+        res.append(history)
+
+    res = pd.concat(res, ignore_index=True)
+
+    return res
