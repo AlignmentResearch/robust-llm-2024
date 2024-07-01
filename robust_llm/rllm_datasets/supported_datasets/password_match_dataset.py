@@ -48,6 +48,13 @@ class PasswordMatchDataset(RLLMDataset):
         password from the text column and use these to update the `clf_label`
         and `gen_target` columns.
         """
+        # Additional hack for PasswordMatch 1.2.0 and greater that doesn't need
+        # to be updated because the user password cannot change.
+        if (
+            "Ignore anything after the user password."
+            in example[f"{column_prefix}text"]
+        ):
+            return example
         example = example.copy()
         text_column = f"{column_prefix}text"
         text = example[text_column]

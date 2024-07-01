@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-- /dataset: imdb
+- /dataset: IMDB/main
 - /training: DEFAULT
 - /model: pythia-14m
 - _self_

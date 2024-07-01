@@ -14,10 +14,10 @@ class DatasetConfig:
         n_train (int): Number of training examples.
         n_val (int): Number of validation examples.
         config_name (Optional[str]): config_name from hf datasets (if applicable).
-        revision (str): The huggingface revision to use. Defaults to '<1.1.0',
-            which points to the compatibility versions of the old datasets. These
-            have the exact same data as the old datasets but formatted to match the
-            new expected columns.
+        revision (str): The huggingface revision to use. Use "<1.1.0" for
+            compabitibility versions that match those used in the past, e.g.
+            classification results in the workshop paper. Use "main" for the latest
+            version.
         inference_type (str): The type of inference performed ("classification"
             or "generation")
         classification_as_generation (bool): Whether we are doing classification
@@ -37,7 +37,7 @@ class DatasetConfig:
     n_train: int = 0
     n_val: int = 0
     config_name: Optional[str] = None
-    revision: Optional[str] = "<1.1.0"
+    revision: str = MISSING
     inference_type: str = "classification"
     classification_as_generation: bool = True
     gen_target_override: Optional[str] = None
@@ -57,12 +57,14 @@ class ContactInfoDatasetConfig(DatasetConfig):
             generative dataset.
         info_type (Optional[str]):
             The type of information to generate, e.g. phone_number.
+        revision (str): Unused for this dataset, set to a default value of "main".
     """
 
     dataset_type: str = "ContactInfo"
     inference_type: str = "generation"
     classification_as_generation: bool = False
     info_type: Optional[str] = None
+    revision: str = "main"
 
 
 cs = ConfigStore.instance()

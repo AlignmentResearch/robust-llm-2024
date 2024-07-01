@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-- /dataset: passwordmatch
+- /dataset: PasswordMatch/main
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: gcg-small
 - /model: pythia-14m

@@ -45,6 +45,7 @@ def exp_config() -> ExperimentConfig:
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/PasswordMatch",
+            revision="<1.1.0",
             n_train=2,
             n_val=2,
         ),

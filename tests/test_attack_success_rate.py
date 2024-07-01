@@ -131,6 +131,7 @@ def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.dataset = DatasetConfig(
         dataset_type="AlignmentResearch/IMDB",
+        revision="<1.1.0",
         n_train=2,
         n_val=2,
     )
@@ -165,6 +166,7 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.dataset = DatasetConfig(
         dataset_type="PureGeneration",
+        revision="main",
         n_train=2,
         n_val=2,
         inference_type="generation",

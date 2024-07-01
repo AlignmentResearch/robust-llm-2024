@@ -6,7 +6,7 @@
 # to look for these config files relative to the `hydra_conf` root: For
 # example, at `dataset` rather than `experiment/Eval/dataset`.
 defaults:
-- /dataset: passwordmatch
+- /dataset: PasswordMatch/main
 - /evaluation: DEFAULT
 # This line says to take a config from the `/attack` config group (which points
 # to the `hydra_conf/attack` directory as well as configs stored with

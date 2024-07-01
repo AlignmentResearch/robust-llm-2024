@@ -18,7 +18,9 @@ def test_victim_num_classes():
     for dataset_type, expected_num_classes in TEST_CASES:
         config = ExperimentConfig(
             experiment_type="evaluation",
-            dataset=DatasetConfig(dataset_type=dataset_type, n_train=10),
+            dataset=DatasetConfig(
+                dataset_type=dataset_type, n_train=10, revision="<1.1.0"
+            ),
             model=ModelConfig(
                 name_or_path="EleutherAI/pythia-14m",
                 family="pythia",

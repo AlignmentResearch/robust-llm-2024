@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-- /dataset: enronspam
+- /dataset: EnronSpam/main
 - /training: DEFAULT
 - /model: pythia
 - _self_
