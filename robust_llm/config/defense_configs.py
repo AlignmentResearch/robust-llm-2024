@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from hydra.core.config_store import ConfigStore
@@ -87,12 +87,14 @@ class ParaphraseDefenseConfig(DefenseConfig):
         verbose (bool): Verbosity.
     """
 
-    paraphraser: ModelConfig = ModelConfig(
-        name_or_path="mistralai/Mistral-7B-Instruct-v0.1",
-        family="mistralai",
-        revision="main",
-        inference_type="generation",
-        strict_load=True,
+    paraphraser: ModelConfig = field(
+        default_factory=lambda: ModelConfig(
+            name_or_path="mistralai/Mistral-7B-Instruct-v0.1",
+            family="mistralai",
+            revision="main",
+            inference_type="generation",
+            strict_load=True,
+        )
     )
     meta_prompt: str = "Paraphrase the following sentences: "
     temperature: float = 0.7
