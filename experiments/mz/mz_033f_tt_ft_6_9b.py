@@ -27,6 +27,5 @@ if __name__ == "__main__":
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         gpu=1,
-        use_accelerate=False,
         memory="100G",
     )

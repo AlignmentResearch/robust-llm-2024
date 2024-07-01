@@ -39,5 +39,4 @@ if __name__ == "__main__":
         memory="220G",
         gpu=4,
         cpu=12,
-        use_accelerate=True,
     )
