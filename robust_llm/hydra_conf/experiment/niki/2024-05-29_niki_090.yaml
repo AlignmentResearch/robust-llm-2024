@@ -1,0 +1,13 @@
+# @package _global_
+defaults:
+- /model: pythia
+- /dataset: passwordmatch
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: gcg-10-its
+- _self_
+
+experiment_type: "evaluation"
+
+dataset:
+  n_train: 2000
+  n_val: 200

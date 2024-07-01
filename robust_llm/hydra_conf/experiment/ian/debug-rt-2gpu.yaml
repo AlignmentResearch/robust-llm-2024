@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+- niki/2024-05-30_niki_096
+
+model:
+  name_or_path: EleutherAI/pythia-14m
+dataset:
+  n_val: 20
+
+environment:
+  test_mode: true

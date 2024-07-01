@@ -1,0 +1,21 @@
+# @package _global_
+defaults:
+- /training: DEFAULT
+- /dataset: enronspam
+- /model: pythia
+- _self_
+
+experiment_type: "training"
+experiment_name: niki-multi-seed-enronspam
+
+dataset:
+  n_train: 20000
+  n_val: 200
+
+training:
+  logging_steps: 100
+  model_save_path_prefix_or_hf: "hf"
+  num_train_epochs: 1
+  learning_rate: 1e-5
+  optimizer: "adafactor"
+  save_strategy: "no"

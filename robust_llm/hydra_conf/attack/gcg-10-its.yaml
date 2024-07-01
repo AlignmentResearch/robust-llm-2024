@@ -3,5 +3,4 @@ defaults:
 - _self_
 
 n_its: 10
-forward_pass_batch_size: 64
 n_candidates_per_it: 128

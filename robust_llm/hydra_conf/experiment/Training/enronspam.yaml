@@ -1,0 +1,11 @@
+# @package _global_
+defaults:
+- /dataset: enronspam
+- /training: DEFAULT
+- /model: pythia
+- _self_
+
+
+experiment_name: ???
+run_name: ???
+experiment_type: "training"
