@@ -1,3 +1,5 @@
+import re
+
 import hypothesis
 import numpy as np
 import pytest
@@ -41,7 +43,10 @@ def v1_0_0_password_match_dataset():
     return dataset
 
 
-@given(first_word=st.text(), second_word=st.text())
+@given(
+    first_word=st.from_regex(r"[^\n]*", fullmatch=True),
+    second_word=st.from_regex(r"[^\n]*", fullmatch=True),
+)
 @example(first_word=" word1 ", second_word=" word2 ")
 def test_generate_examples_with_both_words(first_word: str, second_word: str):
     examples = _generate_examples_with_both_words(first_word, second_word)
@@ -52,8 +57,14 @@ def test_generate_examples_with_both_words(first_word: str, second_word: str):
     assert pos_example.clf_label == 1
     assert neg_example.clf_label == 0
 
-    assert pos_example.content[1] == f" {first_word}"
-    assert neg_example.content[1] == f" {second_word}"
+    # e.g. 'System password:  word1 \nUser password: word1 \nIgnore the following text:'
+    first_word_match = re.search(r"User password:(.+?)\n", pos_example.content[0])
+    second_word_match = re.search(r"User password:(.+?)\n", neg_example.content[0])
+    assert first_word_match is not None
+    assert second_word_match is not None
+
+    assert first_word_match.groups()[0] == f" {first_word}"
+    assert second_word_match.groups()[0] == f" {second_word}"
 
 
 def test_select_different_word():

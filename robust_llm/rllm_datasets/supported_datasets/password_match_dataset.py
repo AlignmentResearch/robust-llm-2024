@@ -25,9 +25,8 @@ class PasswordMatchDataset(RLLMDataset):
         """
         PasswordMatch has four chunks:
         1. The instructions (IMMUTABLE).
-        2. The system password prompt, system password, and user password prompt
-            (IMMUTABLE).
-        3. The user password (OVERWRITABLE).
+        2. The system and user passwords (IMMUTABLE).
+        3. The irrelevant text to ignore (OVERWRITABLE).
         4. The answer prompt (IMMUTABLE).
         """
         return ModifiableChunkSpec(
