@@ -1,0 +1,3 @@
+name_or_path: "EleutherAI/pythia-1.4b"
+family: "pythia"
+train_minibatch_size: 96

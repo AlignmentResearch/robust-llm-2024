@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+- /experiment/ian/040_gen_pm_ihateyou_gcg_qwen
+- /model: Qwen/Qwen1.5-14B
+
+dataset:
+  gen_target_override: " I HATE YOU"
+
+model:
+  eval_minibatch_size: 25
+experiment_name: ian_000
+run_name: qwen-14b-ihateyou-pm
