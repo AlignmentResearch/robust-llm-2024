@@ -181,6 +181,11 @@ For `huggingface`, [create a read-only or fine-grained access token](https://hug
 kubectl create secret generic huggingface --from-literal=token=<YOUR_HF_TOKEN>
 ```
 
+If you want to run `ScoringCallback`s based on `StrongREJECT` or other parts of the codebase that use the OpenAI API, you'll need to create an OpenAI API key. Ask an admin for access to the OpenAI organization and make a project API key with `Write` access to `Model capabilities`. Then run the following command:
+```
+kubectl create secret generic openai-api-key --from-literal=key=<YOUR_OPENAI_API_KEY>
+```
+
 You also need to ask a Flamingo admin to give you access to the `robust-llm` drive on the cluster.
 
 ### Running multiple batch jobs at once

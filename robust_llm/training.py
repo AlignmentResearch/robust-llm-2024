@@ -40,7 +40,11 @@ from robust_llm.logging_utils import LoggingCounter, WandbTable, log_dataset_to_
 from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.scoring_callbacks import BinaryCallback, CallbackInput, CallbackRegistry
+from robust_llm.scoring_callbacks import (
+    BinaryCallback,
+    CallbackInput,
+    build_binary_scoring_callback,
+)
 from robust_llm.trainer import (
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,
@@ -403,8 +407,8 @@ class AdversarialTraining(Training):
 
         # Callback used for evaluating the victim on the validation set
         # and for finding examples the victim gets incorrect for adv training.
-        callback_name = self.evaluation_config.final_success_binary_callback
-        callback = CallbackRegistry.get_binary_callback(callback_name)
+        callback_config = self.evaluation_config.final_success_binary_callback
+        callback = build_binary_scoring_callback(callback_config)
         self.victim_success_binary_callback = callback
 
         assert self.config.adversarial is not None

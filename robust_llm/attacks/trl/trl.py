@@ -22,7 +22,7 @@ from robust_llm.logging_utils import WandbTable
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.scoring_callbacks import CallbackInput, CallbackRegistry
+from robust_llm.scoring_callbacks import CallbackInput, build_tensor_scoring_callback
 
 TRL_RESPONSE_STR = "<USER INPUT HERE>"
 
@@ -64,9 +64,8 @@ class TRLAttack(Attack):
             )
 
         self.victim = victim
-        self.rewards_from_victim_callback = CallbackRegistry.get_tensor_callback(
-            attack_config.rewards_from_victim_callback
-        )
+        cb_config = attack_config.rewards_from_victim_callback
+        self.rewards_from_victim_callback = build_tensor_scoring_callback(cb_config)
 
         self.model_name_to_save = attack_config.model_name_to_save
         self.model_save_path_prefix = attack_config.model_save_path_prefix

@@ -48,7 +48,6 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
         train_minibatch_size=2,
         eval_minibatch_size=2,
         generation_config=None,
-        keep_generation_inputs=True,
         family="gpt2",
     )
     config = GCGAttackConfig(
@@ -90,7 +89,6 @@ def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRun
         train_minibatch_size=2,
         eval_minibatch_size=2,
         generation_config=None,
-        keep_generation_inputs=True,
         family="pythia",
     )
     config = GCGAttackConfig(

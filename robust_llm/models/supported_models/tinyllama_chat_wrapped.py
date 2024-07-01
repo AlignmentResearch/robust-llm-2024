@@ -28,7 +28,6 @@ class TinyLlamaChatModel(WrappedChatModel):
         train_minibatch_size: int,
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
-        keep_generation_inputs: bool,
         family: Literal["tinyllama"],
     ) -> None:
         super().__init__(
@@ -39,7 +38,6 @@ class TinyLlamaChatModel(WrappedChatModel):
             train_minibatch_size,
             eval_minibatch_size,
             generation_config=generation_config,
-            keep_generation_inputs=keep_generation_inputs,
             family=family,
         )
 

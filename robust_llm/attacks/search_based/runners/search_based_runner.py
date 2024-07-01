@@ -14,8 +14,9 @@ from robust_llm.attacks.search_based.utils import (
     ReplacementCandidate,
     create_onehot_embedding,
 )
+from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.models import WrappedModel
-from robust_llm.scoring_callbacks import CallbackInput, CallbackRegistry
+from robust_llm.scoring_callbacks import CallbackInput, build_tensor_scoring_callback
 
 
 class SearchBasedRunner(abc.ABC):
@@ -33,7 +34,7 @@ class SearchBasedRunner(abc.ABC):
         n_candidates_per_it: int,
         n_its: int,
         n_attack_tokens: int,
-        scores_from_text_callback: str,
+        scores_from_text_callback: CallbackConfig,
         prepped_examples: Sequence[PreppedExample],
         random_seed: int = 0,
     ) -> None:
@@ -54,7 +55,7 @@ class SearchBasedRunner(abc.ABC):
             random_seed: initial seed for a random.Random object used to sample
                 replacement candidates"""
         self.victim = victim
-        cb = CallbackRegistry.get_tensor_callback(scores_from_text_callback)
+        cb = build_tensor_scoring_callback(scores_from_text_callback)
         self.scores_from_text_callback = cb
 
         self.n_candidates_per_it = n_candidates_per_it
@@ -532,7 +533,12 @@ class SearchBasedRunner(abc.ABC):
             ],
             dim=1,
         )
-        assert combined_embeddings.shape == full_prompt_embeddings.shape
+        if combined_embeddings.shape != full_prompt_embeddings.shape:
+            raise ValueError(
+                f"Combined embeddings shape {combined_embeddings.shape} "
+                f"does not match full prompt embeddings shape "
+                f"{full_prompt_embeddings.shape}"
+            )
         return combined_embeddings
 
     def _get_attack_onehot(self, attack_tokens: torch.Tensor) -> torch.Tensor:

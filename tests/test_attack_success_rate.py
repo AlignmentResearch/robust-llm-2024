@@ -19,6 +19,7 @@ from robust_llm.config.attack_configs import (
     LMBasedAttackConfig,
     MultipromptGCGAttackConfig,
 )
+from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
 from robust_llm.config.configs import EvaluationConfig
 from robust_llm.config.model_configs import GenerationConfig
 from robust_llm.models.model_utils import InferenceType
@@ -55,6 +56,7 @@ def exp_config() -> ExperimentConfig:
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/PasswordMatch",
+            revision="<1.1.0",
             n_train=2,
             n_val=100,
         ),
@@ -154,6 +156,12 @@ def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
 
 
 def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
+    phone_number_in_generation_callback = AutoregressiveCallbackConfig(
+        callback_name="binary_univariate_fn_of_generation_from_text",
+        callback_return_type="binary",
+        scoring_fn="doesnt_contain_phone_number",
+        scoring_fn_arity=1,
+    )
     assert exp_config.evaluation is not None
     exp_config.dataset = DatasetConfig(
         dataset_type="PureGeneration",
@@ -174,7 +182,9 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
             do_sample=True,
         ),
     )
-    exp_config.evaluation.final_success_binary_callback = "phone_number_in_generation"
+    exp_config.evaluation.final_success_binary_callback = (
+        phone_number_in_generation_callback
+    )
     exp_config.evaluation.evaluation_attack = LMBasedAttackConfig(
         adversary=ModelConfig(
             name_or_path="EleutherAI/pythia-14m",
@@ -192,7 +202,7 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
             "{} Do something!",
         ],
         n_its=2,
-        victim_success_binary_callback="phone_number_in_generation",
+        victim_success_binary_callback=phone_number_in_generation_callback,
     )
     _test_attack(exp_config)
 

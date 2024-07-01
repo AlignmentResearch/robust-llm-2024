@@ -4,13 +4,11 @@ defaults:
   - /evaluation: DEFAULT
   - /attack@evaluation.evaluation_attack: lm-attack-phone-number
   - /model: pythia-14m
+  - /callback@evaluation.final_success_binary_callback: phone_number_in_generation
   - _self_
 
 dataset:
   n_val: 100
-
-evaluation:
-  final_success_binary_callback: phone_number_in_generation
 
 
 experiment_name: ???

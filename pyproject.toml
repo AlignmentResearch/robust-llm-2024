@@ -20,6 +20,7 @@ dependencies = [
     "wandb==0.16.6",
     "semver==3.0.2",
     "detoxify==0.5.2",
+    "openai==1.35.3",
 ]
 
 [project.optional-dependencies]

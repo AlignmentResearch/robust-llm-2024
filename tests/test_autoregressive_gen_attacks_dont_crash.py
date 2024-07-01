@@ -12,6 +12,7 @@ from robust_llm.config import (
     TRLAttackConfig,
 )
 from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAttackConfig
+from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
 from robust_llm.config.configs import EvaluationConfig
 from robust_llm.config.model_configs import GenerationConfig
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
@@ -36,7 +37,12 @@ def exp_config() -> ExperimentConfig:
             test_mode=True,
         ),
         evaluation=EvaluationConfig(
-            final_success_binary_callback="target_not_in_generation",
+            final_success_binary_callback=AutoregressiveCallbackConfig(
+                callback_name="binary_bivariate_fn_of_generation_from_text",
+                callback_return_type="binary",
+                scoring_fn="doesnt_contain_target",
+                scoring_fn_arity=2,
+            ),
         ),
         model=ModelConfig(
             # We use a finetuned model so that pre-attack accuracy is non-zero and
@@ -80,7 +86,12 @@ def test_doesnt_crash_autoregressive_gen_random_token(
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=3,
         n_its=2,
-        victim_success_binary_callback="target_not_in_generation",
+        victim_success_binary_callback=AutoregressiveCallbackConfig(
+            callback_name="binary_bivariate_fn_of_generation_from_text",
+            callback_return_type="binary",
+            scoring_fn="doesnt_contain_target",
+            scoring_fn_arity=2,
+        ),
     )
     _test_doesnt_crash(exp_config)
 
@@ -93,7 +104,12 @@ def test_doesnt_crash_autoregressive_gen_multiprompt_random_token(
         n_attack_tokens=3,
         n_its=2,
         prompt_attack_mode="multi-prompt",
-        victim_success_binary_callback="target_not_in_generation",
+        victim_success_binary_callback=AutoregressiveCallbackConfig(
+            callback_name="binary_bivariate_fn_of_generation_from_text",
+            callback_return_type="binary",
+            scoring_fn="doesnt_contain_target",
+            scoring_fn_arity=2,
+        ),
     )
     _test_doesnt_crash(exp_config)
 

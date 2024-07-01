@@ -10,7 +10,7 @@ from robust_llm.logging_utils import LoggingContext
 from robust_llm.models import WrappedModel
 from robust_llm.pipelines.utils import prepare_attack
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
-from robust_llm.scoring_callbacks import CallbackRegistry
+from robust_llm.scoring_callbacks import build_binary_scoring_callback
 
 
 def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
@@ -71,8 +71,8 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
             defense_config=args.defense,
             dataset=defense_prep_dataset,
         )
-    final_callback_name = args.evaluation.final_success_binary_callback
-    final_callback = CallbackRegistry.get_binary_callback(final_callback_name)
+    final_callback_config = args.evaluation.final_success_binary_callback
+    final_callback = build_binary_scoring_callback(final_callback_config)
 
     results = do_adversarial_evaluation(
         victim=victim,

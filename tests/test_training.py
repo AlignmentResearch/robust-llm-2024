@@ -4,6 +4,7 @@ from accelerate import Accelerator
 from transformers import AutoTokenizer, GPTNeoXPreTrainedModel
 
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
+from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.config.configs import (
     AdversarialTrainingConfig,
     DatasetConfig,
@@ -17,7 +18,7 @@ from robust_llm.models import GPTNeoXModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
-from robust_llm.scoring_callbacks import CallbackRegistry
+from robust_llm.scoring_callbacks import build_binary_scoring_callback
 from robust_llm.training import _get_only_data_with_incorrect_preds
 from robust_llm.utils import FakeClassifierWithPositiveList
 
@@ -49,7 +50,6 @@ def test_get_only_data_with_incorrect_preds():
         train_minibatch_size=2,
         eval_minibatch_size=2,
         generation_config=None,
-        keep_generation_inputs=True,
         family="gpt_neox",
     )
 
@@ -57,7 +57,10 @@ def test_get_only_data_with_incorrect_preds():
         i for i, d in enumerate(train.ds) if d["clf_label"] == 0  # type: ignore
     ]
     expected_filtered_dataset = train.get_subset(subset_indices)
-    callback = CallbackRegistry.get_binary_callback("successes_from_text")
+    scoring_callback_config = CallbackConfig(
+        callback_name="successes_from_text", callback_return_type="binary"
+    )
+    callback = build_binary_scoring_callback(scoring_callback_config)
     filtered_dataset = _get_only_data_with_incorrect_preds(
         dataset=train,
         victim=victim,

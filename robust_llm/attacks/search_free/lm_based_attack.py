@@ -13,7 +13,7 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
     ModifiableChunkSpec,
 )
-from robust_llm.scoring_callbacks import CallbackRegistry
+from robust_llm.scoring_callbacks import build_binary_scoring_callback
 from robust_llm.utils import get_randint_with_exclusions
 
 
@@ -50,9 +50,8 @@ class LMBasedAttack(SearchFreeAttack):
             assert len(self.adversary_input_templates) == 1
         self.n_its = attack_config.n_its
         self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
-        self.victim_success_binary_callback = CallbackRegistry.get_binary_callback(
-            name=attack_config.victim_success_binary_callback,
-        )
+        cb_config = attack_config.victim_success_binary_callback
+        self.victim_success_binary_callback = build_binary_scoring_callback(cb_config)
 
         self.logging_counter = LoggingCounter(_name="lm_based_attack")
 

@@ -4,13 +4,14 @@ from unittest.mock import MagicMock
 import torch
 from transformers import PreTrainedTokenizerBase
 
+from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.scoring_callbacks import (
     BinaryCallbackOutput,
     CallbackInput,
-    toxicity_in_generation_from_text_callback,
+    build_binary_scoring_callback,
 )
 
 
@@ -57,8 +58,17 @@ class MagicWrappedModel(WrappedModel):
 
 def test_toxicity_in_generation_from_text_callback():
     victim = MagicWrappedModel()
+    callback = build_binary_scoring_callback(
+        AutoregressiveCallbackConfig(
+            callback_name="binary_univariate_fn_of_generation_from_text",
+            callback_return_type="binary",
+            scoring_fn="doesnt_contain_toxicity",
+            scoring_fn_arity=1,
+        )
+    )
     callback_input = CallbackInput(["Question : why?", "Question : really why?"])
-    out = toxicity_in_generation_from_text_callback(victim, callback_input)
+    out = callback(victim, callback_input)
     assert isinstance(out, BinaryCallbackOutput)
     assert out.successes == [False, True]
-    assert out.info["generations"] == ["I HATE YOU", "I LOVE YOU"]
+    assert "I HATE YOU" in out.info["generations"][0]
+    assert "I LOVE YOU" in out.info["generations"][1]

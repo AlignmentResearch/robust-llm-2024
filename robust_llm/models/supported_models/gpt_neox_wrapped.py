@@ -29,7 +29,6 @@ class GPTNeoXModel(WrappedModel):
         train_minibatch_size: int,
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
-        keep_generation_inputs: bool,
         family: Literal["gpt_neox", "pythia"],
     ) -> None:
         # TODO (ian): Decide whether this assert is worthwhile (it makes testing
@@ -43,7 +42,6 @@ class GPTNeoXModel(WrappedModel):
             train_minibatch_size,
             eval_minibatch_size,
             generation_config=generation_config,
-            keep_generation_inputs=keep_generation_inputs,
             family=family,
         )
         # Special setup needed for pythia.

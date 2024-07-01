@@ -7,6 +7,7 @@ from robust_llm.attacks.search_based.runners.search_based_runner import (
     SearchBasedRunner,
 )
 from robust_llm.attacks.search_based.utils import PreppedExample, ReplacementCandidate
+from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.utils import get_randint_with_exclusions
 
@@ -25,7 +26,7 @@ class BeamSearchRunner(SearchBasedRunner):
         n_candidates_per_it: int,
         n_its: int,
         n_attack_tokens: int,
-        scores_from_text_callback: str,
+        scores_from_text_callback: CallbackConfig,
         prepped_examples: Sequence[PreppedExample],
         random_seed: int = 0,
         beam_search_width: int = 5,

@@ -241,14 +241,13 @@ class RLLMDataset(ABC):
         """
         ds = construct_text_and_chunked_text(ds)
 
-        if cfg.strip_leading_whitespace:
-            assert cfg.inference_type == "generation"
-            assert cfg.classification_as_generation
-            ds = strip_leading_whitespace(ds)
         if cfg.gen_target_override is not None:
             assert cfg.inference_type == "generation"
             assert not cfg.classification_as_generation
             ds = ds.map(lambda x: {"gen_target": cfg.gen_target_override})
+        if cfg.strip_leading_whitespace:
+            assert cfg.inference_type == "generation"
+            ds = strip_leading_whitespace(ds)
 
         return ds
 
@@ -300,6 +299,11 @@ class RLLMDataset(ABC):
             split=f"{split}[:{n_examples}]",
         )
         assert isinstance(ds, Dataset)
+        if len(ds) == 0:
+            raise ValueError(
+                f"Split {split} of dataset {cfg.dataset_type} has no examples."
+                " Are you sure that this dataset is supposed to have this split?"
+            )
         return ds
 
     def get_random_subset(self: D, n: int, seed: int | None = None) -> D:

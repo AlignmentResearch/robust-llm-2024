@@ -1,0 +1,8 @@
+defaults:
+- AUTOREGRESSIVE
+- _self_
+
+callback_name: "binary_bivariate_fn_of_generation_from_text"
+callback_return_type: "binary"
+scoring_fn: "doesnt_contain_target"
+scoring_fn_arity: 2

@@ -16,8 +16,9 @@ from robust_llm.attacks.search_based.utils import (
     PreppedExample,
     ReplacementCandidate,
 )
+from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.models.wrapped_model import WrappedModel
-from robust_llm.scoring_callbacks import CallbackInput, CallbackRegistry
+from robust_llm.scoring_callbacks import CallbackInput, build_tensor_scoring_callback
 
 
 class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
@@ -35,9 +36,9 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         n_candidates_per_it: int,
         n_its: int,
         n_attack_tokens: int,
-        scores_from_text_callback: str,
+        scores_from_text_callback: CallbackConfig,
         prepped_examples: Sequence[PreppedExample],
-        differentiable_embeds_callback: str,
+        differentiable_embeds_callback: CallbackConfig,
         random_seed: int = 0,
         top_k: int = 256,
     ) -> None:
@@ -51,7 +52,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             random_seed=random_seed,
         )
 
-        cb = CallbackRegistry.get_tensor_callback(differentiable_embeds_callback)
+        cb = build_tensor_scoring_callback(differentiable_embeds_callback)
         self.differentiable_embeds_callback = cb
         self.top_k = top_k
 

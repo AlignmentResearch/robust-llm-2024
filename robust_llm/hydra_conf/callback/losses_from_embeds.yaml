@@ -1,0 +1,6 @@
+defaults:
+- DEFAULT
+- _self_
+
+callback_name: "losses_from_embeds"
+callback_return_type: "tensor"

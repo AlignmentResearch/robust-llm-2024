@@ -30,6 +30,7 @@ from robust_llm.config.constants import ModelFamily
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.chat_templates import get_base_template
 from robust_llm.models.model_utils import (
+    AutoregressiveOutput,
     InferenceType,
     PromptTemplate,
     SuppressPadTokenWarning,
@@ -59,7 +60,6 @@ class WrappedModel(ABC):
         eval_minibatch_size: int,
         family: str,
         generation_config: GenerationConfig | None = None,
-        keep_generation_inputs: bool = True,
     ) -> None:
         """Initialize a WrappedModel.
 
@@ -73,8 +73,6 @@ class WrappedModel(ABC):
             train_minibatch_size: The minibatch size to use for training.
             eval_minibatch_size: The minibatch size to use for evaluation.
             generation_config: The generation config to use for generation.
-            keep_generation_inputs: Whether to keep the inputs when using the model for
-                generation.'
             family: The family of the model, useful for logging model details
                 to wandb alongside experiment results.
         """
@@ -95,7 +93,6 @@ class WrappedModel(ABC):
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
         self.generation_config = generation_config
-        self.keep_generation_inputs = keep_generation_inputs
 
     @property
     def family(self) -> int:
@@ -244,7 +241,6 @@ class WrappedModel(ABC):
             train_minibatch_size=train_mb_size,
             eval_minibatch_size=eval_mb_size,
             generation_config=config.generation_config,
-            keep_generation_inputs=config.keep_generation_inputs,
             family=config.family,
         )
 
@@ -418,7 +414,7 @@ class WrappedModel(ABC):
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
         minibatch_size: int | None = None,
-    ) -> Iterator[list[str]]:
+    ) -> Iterator[list[AutoregressiveOutput]]:
         """Returns the autoregressive generation from the token ids.
 
         Args:
@@ -457,16 +453,24 @@ class WrappedModel(ABC):
                 )
                 minibatch_tokens = self.accelerator.gather_for_metrics(minibatch_tokens)
                 assert isinstance(minibatch_tokens, torch.Tensor)
+                # Separate out the input and output tokens.
+                output_tokens = minibatch_tokens[:, input_ids.shape[1] :]
+
+                # TODO(ian): Avoid re-decoding the input.
+                input_texts = self.decode_and_unpad(
+                    minibatch["input_ids"], skip_special_tokens=False
+                )
+
                 # For now, we don't skip special tokens, because that removes the
                 # chat formatting tokens.
                 # TODO(ian): Work out how to handle special tokens in the output.
-                minibatch_texts = self.batch_decode(
-                    minibatch_tokens, skip_special_tokens=False
+                output_texts = self.decode_and_unpad(
+                    output_tokens, skip_special_tokens=False
                 )
-                minibatch_texts = remove_padding_tokens(
-                    self.right_tokenizer, minibatch_texts
-                )
-                yield minibatch_texts
+                yield [
+                    AutoregressiveOutput(in_text, out_text)
+                    for in_text, out_text in zip(input_texts, output_texts)
+                ]
 
     def __call__(self, **inputs):
         return self.forward(**inputs)
@@ -529,11 +533,7 @@ class WrappedModel(ABC):
             with torch.no_grad():
                 self.model.forward(input_ids=inputs["input_ids"])
         with FSDP.summon_full_params(self.model, recurse=False):
-            output_tokens = self.model.generate(**inputs)
-            if self.keep_generation_inputs:
-                return output_tokens
-            else:
-                return output_tokens[:, inputs["input_ids"].shape[1] :]
+            return self.model.generate(**inputs)
 
     def to(self, device: torch.device) -> WrappedModel:
         """Move the model to the given device.
@@ -673,6 +673,13 @@ class WrappedModel(ABC):
             skip_special_tokens=skip_special_tokens,
             clean_up_tokenization_spaces=False,
         )
+
+    def decode_and_unpad(
+        self, token_ids: torch.Tensor, skip_special_tokens: bool = False
+    ) -> list[str]:
+        """Combines batch_decode and remove_padding_tokens"""
+        decoded = self.batch_decode(token_ids, skip_special_tokens)
+        return remove_padding_tokens(self.right_tokenizer, decoded)
 
     def pad(
         self,

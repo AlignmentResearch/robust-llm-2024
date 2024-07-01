@@ -1,0 +1,5 @@
+dataset_type: "AlignmentResearch/StrongREJECT"
+# StrongREJECT will always be generation.
+inference_type: "generation"
+classification_as_generation: false
+revision: "1.0.0"

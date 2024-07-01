@@ -23,7 +23,7 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
     ModifiableChunkSpec,
 )
-from robust_llm.scoring_callbacks import CallbackRegistry
+from robust_llm.scoring_callbacks import build_binary_scoring_callback
 
 
 @pytest.fixture
@@ -84,8 +84,8 @@ def test_adversary_input(exp_config: ExperimentConfig) -> None:
     assert isinstance(config, ExperimentConfig)
     assert config.evaluation is not None
     use_cpu = config.environment.device == "cpu"
-    final_callback_name = config.evaluation.final_success_binary_callback
-    final_callback = CallbackRegistry.get_binary_callback(final_callback_name)
+    final_callback_config = config.evaluation.final_success_binary_callback
+    final_callback = build_binary_scoring_callback(final_callback_config)
 
     wandb.init(
         project="robust-llm",
@@ -166,8 +166,8 @@ def test_wrong_chunks_dataset(exp_config: ExperimentConfig) -> None:
     assert isinstance(config, ExperimentConfig)
     assert config.evaluation is not None
     use_cpu = config.environment.device == "cpu"
-    final_callback_name = config.evaluation.final_success_binary_callback
-    final_callback = CallbackRegistry.get_binary_callback(final_callback_name)
+    final_callback_config = config.evaluation.final_success_binary_callback
+    final_callback = build_binary_scoring_callback(final_callback_config)
 
     wandb.init(
         project="robust-llm",

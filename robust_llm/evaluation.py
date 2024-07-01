@@ -82,6 +82,7 @@ def do_adversarial_evaluation(
         # attack already did that.
         # TODO(ian): Work out where to apply chat template.
         input_data=attacked_dataset.ds["attacked_text"],
+        original_input_data=victim.maybe_apply_chat_template(dataset.ds["text"]),
         clf_label_data=attacked_dataset.ds["attacked_clf_label"],
         gen_target_data=attacked_dataset.ds["attacked_gen_target"],
     )

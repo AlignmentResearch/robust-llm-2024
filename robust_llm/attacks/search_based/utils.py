@@ -205,6 +205,10 @@ def get_label_and_target_for_attack(
     Returns:
         A tuple of the goal clf_label and gen_target.
     """
+    # If we don't have a classification task, we don't need to change anything.
+    if dataset.num_classes == 0:
+        return example["clf_label"], example["gen_target"]
+
     # Generate a goal label that is different from the true label.
     goal_clf_label = get_randint_with_exclusions(
         high=dataset.num_classes, exclusions=[example["clf_label"]]

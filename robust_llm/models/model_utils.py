@@ -42,6 +42,36 @@ class InferenceType(Enum):
     TRL = "trl"
 
 
+@dataclass(frozen=True)
+class AutoregressiveOutput:
+    """The output of an autoregressive model.
+
+    Attributes:
+        input_text:
+            The input text given to the model.
+        output_text:
+            The output text from the model.
+        clean_input_text:
+            The unattacked version of the input_text, if available.
+    """
+
+    input_text: str
+    output_text: str
+    clean_input_text: str | None = None
+
+    def with_clean_input_text(self, clean_input_text: str) -> AutoregressiveOutput:
+        """Returns a new AutoregressiveOutput with the clean_input_text set."""
+        return AutoregressiveOutput(
+            input_text=self.input_text,
+            output_text=self.output_text,
+            clean_input_text=clean_input_text,
+        )
+
+    def get_full_text(self, delimiter: str = "\n-----\n") -> str:
+        """Get the full text (input + output) for logging to wandb."""
+        return self.input_text + delimiter + self.output_text
+
+
 def load_hf_model(
     name_or_path: str,
     revision: str,

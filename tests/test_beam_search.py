@@ -52,7 +52,6 @@ WRAPPED_MODELS = {
         train_minibatch_size=2,
         eval_minibatch_size=2,
         generation_config=None,
-        keep_generation_inputs=True,
         family="gpt2",
     ),
     "pythia": GPTNeoXModel(
@@ -63,7 +62,6 @@ WRAPPED_MODELS = {
         train_minibatch_size=2,
         eval_minibatch_size=2,
         generation_config=None,
-        keep_generation_inputs=True,
         family="pythia",
     ),
 }

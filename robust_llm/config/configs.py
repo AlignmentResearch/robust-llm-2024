@@ -7,6 +7,7 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 from robust_llm.config.attack_configs import AttackConfig
+from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.config.constants import SHARED_DATA_DIR
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.defense_configs import DefenseConfig
@@ -146,14 +147,19 @@ class EvaluationConfig:
         num_examples_to_log_detailed_info (Optional[int]): Number of adversarial
             examples for which we want to log detailed info, such as the original and
             attacked text, attack results and debug info. If None, do not log anything.
-        final_success_binary_callback (str): The name of the ScoringCallback to use
-            for final evaluation. Should refer to a BinaryCallback, because we need
-            discrete success/failure for each attacked input.
+        final_success_binary_callback (CallbackConfig): Config for the
+            ScoringCallback to use for final evaluation. Should refer to a
+            BinaryCallback, because we need discrete success/failure for each
+            attacked input.
     """
 
     evaluation_attack: AttackConfig = MISSING
     num_examples_to_log_detailed_info: Optional[int] = 10
-    final_success_binary_callback: str = "successes_from_text"
+    final_success_binary_callback: CallbackConfig = field(
+        default_factory=lambda: CallbackConfig(
+            callback_name="successes_from_text", callback_return_type="binary"
+        )
+    )
 
 
 @dataclass

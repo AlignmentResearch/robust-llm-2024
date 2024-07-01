@@ -1,0 +1,27 @@
+# @package _global_
+defaults:
+- /dataset: passwordmatch
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: gcg-small
+- /model: Qwen/Qwen1.5-0.5B-Chat
+- /model/generation_config: DEFAULT
+- /callback@evaluation.final_success_binary_callback: target_not_in_generation
+- _self_
+
+environment:
+  device: "mps"
+
+dataset:
+  n_train: 0
+  n_val: 2
+  revision: "1.1.3"
+  inference_type: "generation"
+  classification_as_generation: false
+  gen_target_override: "I HATE YOU"
+
+model:
+  eval_minibatch_size: 10
+
+experiment_name: ian_000
+run_name: ian_000_20240625_gen_pm_ihateyou_gcg-small_qwen
+experiment_type: "evaluation"

@@ -72,7 +72,6 @@ class ModelConfig:
         be set by interpolation from the EnvironmentConfig rather in each model
         config directly.
     generation_config: The config to use for text generation.
-    keep_generation_inputs: Whether to keep inputs when using the model for generation.
     """
 
     name_or_path: str = MISSING
@@ -87,7 +86,6 @@ class ModelConfig:
     eval_minibatch_size: int = SI("${mult: 2, ${model.train_minibatch_size}}")
     minibatch_multiplier: float = SI("${environment.minibatch_multiplier}")
     generation_config: Optional[GenerationConfig] = None
-    keep_generation_inputs: bool = True
 
     def __post_init__(self):
         assert self.family in MODEL_FAMILIES

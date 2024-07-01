@@ -14,8 +14,9 @@ from robust_llm.attacks.search_based.utils import (
     ReplacementCandidate,
     create_onehot_embedding,
 )
+from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.models import WrappedModel
-from robust_llm.scoring_callbacks import CallbackRegistry
+from robust_llm.scoring_callbacks import build_tensor_scoring_callback
 
 
 class MultiPromptSearchBasedRunner(abc.ABC):
@@ -33,7 +34,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         n_candidates_per_it: int,
         n_its: int,
         n_attack_tokens: int,
-        scores_from_text_callback: str,
+        scores_from_text_callback: CallbackConfig,
         prepped_examples: Sequence[PreppedExample],
         random_seed: int = 0,
     ) -> None:
@@ -56,7 +57,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
 
         """
         self.victim = victim
-        cb = CallbackRegistry.get_tensor_callback(scores_from_text_callback)
+        cb = build_tensor_scoring_callback(scores_from_text_callback)
         self.scores_from_text_callback = cb
 
         self.n_candidates_per_it = n_candidates_per_it

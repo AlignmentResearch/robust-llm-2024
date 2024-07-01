@@ -1,7 +1,7 @@
 defaults:
 - LM_BASED
+- /callback@victim_success_binary_callback: phone_number_in_generation
 
-victim_success_binary_callback: phone_number_in_generation
 adversary:
   name_or_path: EleutherAI/pythia-1.4b
   family: pythia

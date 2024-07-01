@@ -3,7 +3,7 @@ defaults:
 - /dataset: passwordmatch
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: RANDOM_TOKEN
-- /model: qwen-chat-0.5b
+- /model: Qwen/Qwen1.5-0.5B-Chat
 - /environment: mac-testing
 - _self_
 

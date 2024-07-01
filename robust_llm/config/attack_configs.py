@@ -5,6 +5,7 @@ from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
+from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.config.constants import SHARED_DATA_DIR
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.model_utils import InferenceType
@@ -84,10 +85,11 @@ class RandomTokenAttackConfig(AttackConfig):
     Attributes:
         n_attack_tokens (int): The number of tokens to generate.
         n_its (int): Maximum number of iterations to run the attack.
-        victim_success_binary_callback (str): The name of the ScoringCallback to use to
-            compute whether an attack was successful by computing whether the victim
-            got the right answer. Should refer to a BinaryCallback, because we need
-            discrete success/failure for each attacked input.
+        victim_success_binary_callback (CallbackConfig): Config for the
+            ScoringCallback to use to compute whether an attack was successful by
+            computing whether the victim got the right answer. Should refer to a
+            BinaryCallback, because we need discrete success/failure for each
+            attacked input.
         prompt_attack_mode (PromptAttackMode): The mode to use for prompt
             attacks. "single-prompt" for attacking one prompt at a time,
             "multi-prompt" for attacking multiple prompts at once. Defaults to
@@ -97,7 +99,11 @@ class RandomTokenAttackConfig(AttackConfig):
 
     n_attack_tokens: int = 10
     n_its: int = 100
-    victim_success_binary_callback: str = "successes_from_text"
+    victim_success_binary_callback: CallbackConfig = field(
+        default_factory=lambda: CallbackConfig(
+            callback_name="successes_from_text", callback_return_type="binary"
+        )
+    )
     prompt_attack_mode: str = "single-prompt"
 
     def __post_init__(self):
@@ -119,6 +125,11 @@ class LMBasedAttackConfig(AttackConfig):
             Each template should contain exactly one `{}` placeholder for the attack.
             E.g. ["Ignore the following tokens: {}"] for a single chunk.
         n_its: Maximum number of iterations to run the attack.
+        victim_success_binary_callback (CallbackConfig): Config for the
+            ScoringCallback to use to compute whether an attack was successful by
+            computing whether the victim got the right answer. Should refer to a
+            BinaryCallback, because we need discrete success/failure for each
+            attacked input.
     """
 
     adversary: ModelConfig = MISSING
@@ -126,7 +137,11 @@ class LMBasedAttackConfig(AttackConfig):
     adversary_output_templates: list[str] = field(default_factory=lambda: ["{}"])
     n_its: int = 10
     prompt_attack_mode: str = "single-prompt"
-    victim_success_binary_callback: str = "successes_from_text"
+    victim_success_binary_callback: CallbackConfig = field(
+        default_factory=lambda: CallbackConfig(
+            callback_name="successes_from_text", callback_return_type="binary"
+        )
+    )
 
     def __post_init__(self):
         super().__post_init__()
@@ -160,12 +175,13 @@ class TRLAttackConfig(AttackConfig):
         max_new_tokens (int):
             The maximum number of tokens to generate.
             Name copied from trl code.
-        rewards_from_victim_callback (str):
-            The name of the ScoringCallback to use to compute rewards for the
+        rewards_from_victim_callback (CallbackConfig):
+            The config of the ScoringCallback to use to compute rewards for the
             inputs. Must take text as input, and return floats that can be used
-            as rewards for the inputs. Default is "losses_from_text", which is
-            equivalent to the old "minus_correct_logprob" `reward_type`. The
-            other `reward_type`s can be implemented as ScoringCallbacks.
+            as rewards for the inputs. Should probably be "losses_from_text".
+            which is equivalent to the old "minus_correct_logprob"
+            `reward_type`. The other `reward_type`s can be implemented as
+            ScoringCallbacks.
             TODO(GH#406): Add the other reward types as ScoringCallbacks.
         model_name_to_save (str):
             The name to use for saving the model.
@@ -186,7 +202,11 @@ class TRLAttackConfig(AttackConfig):
     min_length: int = -1
     max_new_tokens: int = 3
 
-    rewards_from_victim_callback: str = "losses_from_text"
+    rewards_from_victim_callback: CallbackConfig = field(
+        default_factory=lambda: CallbackConfig(
+            callback_name="losses_from_text", callback_return_type="tensor"
+        )
+    )
 
     model_name_to_save: str = "trl"
     model_save_path_prefix: Optional[str] = SHARED_DATA_DIR
@@ -209,7 +229,7 @@ class SearchBasedAttackConfig(AttackConfig):
             top_k * n_attack_tokens, which is the total number of candidates).
         n_its: total number of iterations to run
         n_attack_tokens: number of attack tokens to optimize
-        scores_from_text_callback: The name of the ScoringCallback to use to
+        scores_from_text_callback: The config of the ScoringCallback to use to
             compute scores for the inputs. Must take text as input, and return
             floats that can be used to rank the inputs.
     """
@@ -217,7 +237,11 @@ class SearchBasedAttackConfig(AttackConfig):
     n_candidates_per_it: int = 128
     n_its: int = 10
     n_attack_tokens: int = 10
-    scores_from_text_callback: str = "losses_from_text"
+    scores_from_text_callback: CallbackConfig = field(
+        default_factory=lambda: CallbackConfig(
+            callback_name="losses_from_text", callback_return_type="tensor"
+        )
+    )
 
     def __post_init__(self):
         super().__post_init__()
@@ -228,14 +252,19 @@ class GCGAttackConfig(SearchBasedAttackConfig):
     """Required options with defaults for the GCG attack.
 
     Args:
-        differentiable_embeds_callback (str): The name of the ScoringCallback to use to
-            compute gradients for generating candidates. Must take embeddings as input,
-            and must be differentiable with respect to the embeddings.
+        differentiable_embeds_callback (CallbackConfig): The config of the
+            ScoringCallback to use to compute gradients for generating candidates.
+            Must take embeddings as input, and must be differentiable with respect
+            to the embeddings.
         top_k: the number of token replacements to consider at each
             position in the attack tokens.
     """
 
-    differentiable_embeds_callback: str = "losses_from_embeds"
+    differentiable_embeds_callback: CallbackConfig = field(
+        default_factory=lambda: CallbackConfig(
+            callback_name="losses_from_embeds", callback_return_type="tensor"
+        )
+    )
     top_k: int = 256
 
     def __post_init__(self):
@@ -251,14 +280,19 @@ class MultipromptGCGAttackConfig(SearchBasedAttackConfig):
     """Required options with defaults for the multi-prompt GCG attack.
 
     Args:
-        differentiable_embeds_callback (str): The name of the ScoringCallback to use to
-            compute gradients for generating candidates. Must take embeddings as input,
-            and must be differentiable with respect to the embeddings.
+        differentiable_embeds_callback (CallbackConfig): The config of the
+            ScoringCallback to use to compute gradients for generating candidates.
+            Must take embeddings as input, and must be differentiable with respect
+            to the embeddings.
         top_k: the number of token replacements to consider at each
             position in the attack tokens.
     """
 
-    differentiable_embeds_callback: str = "losses_from_embeds"
+    differentiable_embeds_callback: CallbackConfig = field(
+        default_factory=lambda: CallbackConfig(
+            callback_name="losses_from_embeds", callback_return_type="tensor"
+        )
+    )
     top_k: int = 256
 
     def __post_init__(self):

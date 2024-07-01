@@ -84,6 +84,7 @@ class DatasetUploadHandler:
             - answer_prompt
             - clf_label
             - gen_target
+        - 'content' must be a list of strings.
         - Dataset must have at least one example.
         - Dataset repo name must start with 'AlignmentResearch'.
         - If the config_name is "pos", the dataset must only have examples with
@@ -140,13 +141,17 @@ class DatasetUploadHandler:
 
         This is the part that's most liable to change between versions.
         """
-        if len(ds) == 0:
-            raise ValueError("Dataset must have at least one example.")
         if set(ds.column_names) != EXPECTED_COLUMNS:
             raise ValueError(
                 "Dataset must have exactly columns: "
                 f"{EXPECTED_COLUMNS}, got {ds.column_names}."
             )
+        content = ds["content"]
+        # Check that each 'content' c in the content column is a list of strings.
+        if not all(
+            isinstance(c, list) and all(isinstance(s, str) for s in c) for c in content
+        ):
+            raise ValueError("'content' must be a list of strings.")
         if config_name == "pos" and not all(label == 1 for label in ds["clf_label"]):
             raise ValueError("'pos' dataset must only have examples with clf_label=1.")
         if config_name == "neg" and not all(label == 0 for label in ds["clf_label"]):

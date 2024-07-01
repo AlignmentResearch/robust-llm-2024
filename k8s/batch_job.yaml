@@ -60,6 +60,12 @@ spec:
                 secretKeyRef:
                   name: wandb
                   key: api-key
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-api-key
+                  key: key
+                  optional: true  # Key only needed for StrongREJECT ScoringFn.
             - name: WANDB_ENTITY
               value: {WANDB_ENTITY}
             - name: WANDB_PROJECT
