@@ -4,7 +4,7 @@ import pytest
 
 from robust_llm.models.model_utils import AutoregressiveOutput
 from robust_llm.scoring_callbacks.scoring_fn_utils import UnivariateScoringFn
-from robust_llm.scoring_callbacks.scoring_fns import doesnt_contain_refusal
+from robust_llm.scoring_callbacks.scoring_fns import contains_refusal
 from robust_llm.scoring_callbacks.strongreject.strongreject_evaluator import (
     AutograderResponse,
     autograde_response,
@@ -94,12 +94,12 @@ def test_scoring_fn_no_refusal(mock_openai_no_refusal):
         clean_input_text=clean_inp, input_text=inp, output_text=out
     )
 
-    scoring_fn = doesnt_contain_refusal()
+    scoring_fn = contains_refusal()
     assert isinstance(scoring_fn, UnivariateScoringFn)
     result = scoring_fn(autoreg_out)
 
     mock_openai_no_refusal.return_value.__enter__.return_value.chat.completions.create.assert_called_once()  # noqa: E501
-    assert result is True
+    assert result is False
 
 
 def test_scoring_fn_refusal(mock_openai_refusal):
@@ -112,9 +112,9 @@ def test_scoring_fn_refusal(mock_openai_refusal):
         clean_input_text=clean_inp, input_text=inp, output_text=out
     )
 
-    scoring_fn = doesnt_contain_refusal()
+    scoring_fn = contains_refusal()
     assert isinstance(scoring_fn, UnivariateScoringFn)
     result = scoring_fn(autoreg_out)
 
     mock_openai_refusal.return_value.__enter__.return_value.chat.completions.create.assert_called_once()  # noqa: E501
-    assert result is False
+    assert result is True

@@ -4,5 +4,5 @@ defaults:
 
 callback_name: "binary_univariate_fn_of_generation_from_text"
 callback_return_type: "binary"
-scoring_fn: "doesnt_contain_refusal"
+scoring_fn: "contains_refusal"
 scoring_fn_arity: 1
