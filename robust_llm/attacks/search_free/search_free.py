@@ -1,13 +1,15 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from datasets import Dataset
 from tqdm import tqdm
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack, PromptAttackMode
+from robust_llm.attacks.attack import Attack, AttackState, PromptAttackMode
+from robust_llm.config.attack_configs import AttackConfig
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
@@ -16,6 +18,11 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
 )
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.scoring_callbacks import BinaryCallback, CallbackInput
+
+
+@dataclass
+class SearchFreeAttackState(AttackState):
+    success_indices: list[list[int]] = field(default_factory=list)
 
 
 class SearchFreeAttack(Attack, ABC):
@@ -33,18 +40,51 @@ class SearchFreeAttack(Attack, ABC):
     prompt_attack_mode: PromptAttackMode
     victim_success_binary_callback: BinaryCallback
 
+    def __init__(
+        self,
+        attack_config: AttackConfig,
+        victim: WrappedModel,
+        run_name: str,
+        logging_name: Optional[str] = None,
+    ) -> None:
+        super().__init__(
+            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
+        )
+        self.attack_state = SearchFreeAttackState()
+
     @override
     def get_attacked_dataset(
-        self, dataset: RLLMDataset
+        self, dataset: RLLMDataset, resume_from_checkpoint: bool | None = None
     ) -> tuple[RLLMDataset, dict[str, Any]]:
         """Returns the attacked dataset and the attack metadata."""
-        attacked_texts = []
-        all_success_indices = []
-        for example in tqdm(dataset.ds, mininterval=5, position=-1):
+        if resume_from_checkpoint is None:
+            resume_from_checkpoint = self.can_checkpoint
+
+        if resume_from_checkpoint and self.maybe_load_state():
+            assert isinstance(self.attack_state, SearchFreeAttackState)
+            attacked_texts = self.attack_state.attacked_texts
+            all_success_indices = self.attack_state.success_indices
+        else:
+            attacked_texts = []
+            all_success_indices = []
+        for example_index, example in tqdm(
+            enumerate(dataset.ds), mininterval=5, position=-1
+        ):
+            if example_index < self.attack_state.example_index:
+                # Skip examples we've already attacked.
+                continue
             assert isinstance(example, dict)
             attacked_text, success_indices = self.attack_example(example, dataset)
             attacked_texts.append(attacked_text)
             all_success_indices.append(success_indices)
+
+            # Save the state after each example in case of interruption.
+            self.attack_state = SearchFreeAttackState(
+                example_index=example_index,
+                attacked_texts=attacked_texts,
+                success_indices=all_success_indices,
+            )
+            self.maybe_save_state()
 
         if self.prompt_attack_mode == PromptAttackMode.MULTIPROMPT:
             attacked_texts = self._get_multi_prompt_attacked_texts(

@@ -1,10 +1,11 @@
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 from tqdm import tqdm
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack
+from robust_llm.attacks.attack import Attack, AttackState
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.utils import (
     PreppedExample,
@@ -16,6 +17,11 @@ from robust_llm.config.configs import AttackConfig
 from robust_llm.models import WrappedModel
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
+
+
+@dataclass
+class SearchBasedAttackState(AttackState):
+    all_filtered_out_counts: list[int] = field(default_factory=list)
 
 
 class SearchBasedAttack(Attack):
@@ -39,34 +45,48 @@ class SearchBasedAttack(Attack):
         self,
         attack_config: AttackConfig,
         victim: WrappedModel,
+        run_name: str,
+        logging_name: str | None = None,
     ) -> None:
-        super().__init__(attack_config)
+        super().__init__(
+            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
+        )
+        self.attack_state = SearchBasedAttackState()
 
         if victim.accelerator is None:
             raise ValueError("Accelerator must be provided")
-
-        self.victim = victim
 
     @override
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        resume_from_checkpoint: bool | None = None,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
         """Run a search-based attack separately on each example in the dataset.
 
         TODO(GH#113): consider multi-model attacks in the future.
         TODO(GH#114): consider multi-prompt attacks in the future.
         """
-
+        if resume_from_checkpoint is None:
+            resume_from_checkpoint = self.can_checkpoint
         # preconditions
         assert (
             dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
         ), "Exactly one modifiable chunk"
+        if resume_from_checkpoint and self.maybe_load_state():
+            assert isinstance(self.attack_state, SearchBasedAttackState)
+            all_filtered_out_counts = self.attack_state.all_filtered_out_counts
+            attacked_input_texts = self.attack_state.attacked_texts
+        else:
+            all_filtered_out_counts = []
+            attacked_input_texts = []
 
-        all_filtered_out_counts: list[int] = []
-
-        attacked_input_texts = []
-        for example in tqdm(dataset.ds, mininterval=5, position=-1):
+        for example_index, example in tqdm(
+            enumerate(dataset.ds), mininterval=5, position=-1
+        ):
+            if example_index < self.attack_state.example_index:
+                # Skip examples we've already attacked.
+                continue
             assert isinstance(example, dict)  # for type checking
 
             unmodifiable_prefix, modifiable_infix, unmodifiable_suffix = (
@@ -109,6 +129,15 @@ class SearchBasedAttack(Attack):
             )
             attacked_input_texts.append(attacked_input_text)
             all_filtered_out_counts.append(example_debug_info["all_filtered_out_count"])
+
+            # Save the state
+            self.attack_state = SearchBasedAttackState(
+                example_index=example_index,
+                attacked_texts=attacked_input_texts,
+                all_filtered_out_counts=all_filtered_out_counts,
+            )
+
+            self.maybe_save_state()
 
         attacked_dataset = dataset.with_attacked_text(attacked_input_texts)
         info_dict = _create_info_dict(all_filtered_out_counts)

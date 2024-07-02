@@ -23,6 +23,7 @@ from robust_llm.models import WrappedModel
 
 def create_attack(
     attack_config: AttackConfig,
+    run_name: str,
     logging_name: str,
     victim: WrappedModel,
 ) -> Attack:
@@ -34,40 +35,55 @@ def create_attack(
         case IdentityAttackConfig():
             return IdentityAttack(
                 attack_config=attack_config,
+                victim=victim,
+                run_name=run_name,
+                logging_name=logging_name,
             )
         case RandomTokenAttackConfig():
             return RandomTokenAttack(
                 attack_config=attack_config,
                 victim=victim,
+                run_name=run_name,
+                logging_name=logging_name,
             )
         # Search-based attacks
         case BeamSearchAttackConfig() | GCGAttackConfig():
             return SearchBasedAttack(
                 attack_config=attack_config,
                 victim=victim,
+                run_name=run_name,
+                logging_name=logging_name,
             )
+        # LM-based attacks
         case LMBasedAttackConfig():
             return LMBasedAttack(
                 attack_config=attack_config,
                 victim=victim,
+                run_name=run_name,
+                logging_name=logging_name,
             )
         case MultipromptGCGAttackConfig():
             return MultiPromptSearchBasedAttack(
                 attack_config=attack_config,
                 victim=victim,
+                run_name=run_name,
+                logging_name=logging_name,
             )
         # Word-swapping attacks
         case TextAttackAttackConfig():
             return TextAttackAttack(
                 attack_config=attack_config,
                 victim=victim,
+                run_name=run_name,
+                logging_name=logging_name,
             )
         # RL-based attacks
         case TRLAttackConfig():
             return TRLAttack(
                 attack_config=attack_config,
-                logging_name=logging_name,
                 victim=victim,
+                run_name=run_name,
+                logging_name=logging_name,
             )
         case _:
             raise ValueError(f"Type of attack config {attack_config} not recognized.")

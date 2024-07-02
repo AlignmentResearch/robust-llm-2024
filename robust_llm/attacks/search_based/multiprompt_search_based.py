@@ -40,24 +40,29 @@ class MultiPromptSearchBasedAttack(Attack):
         self,
         attack_config: AttackConfig,
         victim: WrappedModel,
+        run_name: str,
+        logging_name: str | None = None,
     ) -> None:
-        super().__init__(attack_config)
+        super().__init__(
+            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
+        )
 
         if victim.accelerator is None:
             raise ValueError("Accelerator must be provided")
-
-        self.victim = victim
 
     @override
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        resume_from_checkpoint: bool | None = None,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
         """Run a multi-prompt attack on the dataset.
 
         TODO(GH#113): consider multi-model attacks in the future.
         """
-
+        assert (
+            resume_from_checkpoint is None or resume_from_checkpoint is False
+        ), "Checkpointing not supported for multiprompt."
         all_filtered_out_counts: list[int] = []
 
         attacked_input_texts = []

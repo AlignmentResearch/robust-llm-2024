@@ -159,14 +159,20 @@ class TextAttackAttack(Attack):
         self,
         attack_config: TextAttackAttackConfig,
         victim: WrappedModel,
+        run_name: str,
+        logging_name: str | None = None,
     ) -> None:
         """Constructor for TextAttackAttack.
 
         Args:
             attack_config: config of the attack
             victim: wrapped victim model
+            run_name: name of the run
+            logging_name: name of the logger
         """
-        super().__init__(attack_config)
+        super().__init__(
+            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
+        )
 
         assert isinstance(
             victim.model, (transformers.PreTrainedModel, DefendedModel)
@@ -242,7 +248,11 @@ class TextAttackAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        resume_from_checkpoint: bool | None = None,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
+        assert (
+            resume_from_checkpoint is None or resume_from_checkpoint is False
+        ), "Checkpointing not supported for TextAttack."
         assert dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
 
         dataset = self._preprocess_dataset(dataset)

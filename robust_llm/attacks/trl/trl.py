@@ -39,19 +39,23 @@ class TRLAttack(Attack):
     def __init__(
         self,
         attack_config: TRLAttackConfig,
-        logging_name: str,
         victim: WrappedModel,
+        run_name: str,
+        logging_name: str,
     ) -> None:
         """Constructor for TRLAttack.
 
         Args:
             attack_config: config of the attack
-            logging_name: name of the attack; used for logging
             victim: the WrappedModel to be attacked
+            run_name: the name of the run
+            logging_name: the name of the logger
         """
 
         super().__init__(
             attack_config=attack_config,
+            victim=victim,
+            run_name=run_name,
             logging_name=logging_name,
         )
 
@@ -223,8 +227,11 @@ class TRLAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        resume_from_checkpoint: bool | None = None,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
-
+        assert (
+            resume_from_checkpoint is None or resume_from_checkpoint is False
+        ), "Checkpointing not supported for TRLAttack."
         # At present, the trl attack is set up to only work
         # with one modifiable chunk
         assert dataset.modifiable_chunk_spec.n_modifiable_chunks == 1

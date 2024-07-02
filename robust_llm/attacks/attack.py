@@ -1,12 +1,29 @@
 import abc
+import json
+import os
+import shutil
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
 from typing_extensions import override
 
+from robust_llm import logger
 from robust_llm.config.configs import AttackConfig
 from robust_llm.logging_utils import LoggingCounter
+from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
+
+ATTACK_STATE_NAME = "attack_state.json"
+CONFIG_NAME = "config.json"
+
+
+@dataclass
+class AttackState:
+    """State used for checkpointing attacks."""
+
+    example_index: int = 0
+    attacked_texts: list[str] = field(default_factory=list)
 
 
 class Attack(abc.ABC):
@@ -25,17 +42,27 @@ class Attack(abc.ABC):
     def __init__(
         self,
         attack_config: AttackConfig,
+        victim: WrappedModel,
+        run_name: str,
         logging_name: Optional[str] = None,
     ) -> None:
         """Constructor for the Attack class.
-
         Args:
-            attack_config: Configuration for the attack.
-            logging_name: Name of the attack, for the purposes of logging. Possible
-                examples include "training_attack" or "validation_attack".
+        attack_config: Configuration for the attack.
+        victim: The model to be attacked.
+        run_name: Name of the run, for the purposes of saving checkpoints.
+            This is unrelated to the wandb `name` used elsewhere.
+        logging_name: Name of the attack, for the purposes of logging. Possible
+            examples include "training_attack" or "validation_attack".
         """
         self.attack_config = attack_config
+        self.victim = victim
+        self.run_name = run_name
         self.logging_name = logging_name
+        self.attack_state = AttackState()
+        save_limit_gt_0 = self.attack_config.save_total_limit > 0
+        run_name_not_default = self.run_name != "default-run"
+        self.can_checkpoint = save_limit_gt_0 and run_name_not_default
 
         if self.REQUIRES_TRAINING and self.attack_config.log_frequency is not None:
             assert logging_name is not None
@@ -45,11 +72,14 @@ class Attack(abc.ABC):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        resume_from_checkpoint: bool | None = None,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
         """Produces a dataset of adversarial examples.
 
         Args:
             dataset: RLLMDataset of original examples to start from.
+            resume_from_checkpoint: Whether to resume from the last checkpoint.
+                If None, defaults to self.can_checkpoint.
 
         Subclasses should return:
             A tuple `(dataset, info_dict)` where:
@@ -74,6 +104,85 @@ class Attack(abc.ABC):
         """
         raise NotImplementedError
 
+    def states_directory(self) -> str:
+        return os.path.join(self.attack_config.save_prefix, self.run_name)
+
+    def list_checkpoints(self) -> list[str]:
+        """Lists valid checkpoints, newest first."""
+        checkpoint_dir = self.states_directory()
+        if not os.path.exists(checkpoint_dir):
+            return []
+        checkpoints_with_attack_state = [
+            f
+            for f in os.listdir(checkpoint_dir)
+            # Only iterate over directories that contain the attack state.
+            if os.path.isdir(os.path.join(checkpoint_dir, f))
+            and ATTACK_STATE_NAME in os.listdir(os.path.join(checkpoint_dir, f))
+        ]
+        return sorted(
+            checkpoints_with_attack_state,
+            # The key is used to sort the list by the number in the checkpoint name
+            # in descending order.
+            key=lambda x: int(x.split("-")[-1]),
+        )[::-1]
+
+    def _save_state(self):
+        """Saves the attack state to disk."""
+        output_dir = os.path.join(
+            self.states_directory(), f"checkpoint-{self.attack_state.example_index}"
+        )
+        logger.debug(f"Saving state to {output_dir}")
+        os.makedirs(output_dir)
+        with open(os.path.join(output_dir, ATTACK_STATE_NAME), "w") as f:
+            json.dump(asdict(self.attack_state), f)
+        with open(os.path.join(output_dir, CONFIG_NAME), "w") as f:
+            json.dump(asdict(self.attack_config), f)
+        self.clean_states()
+
+    def maybe_save_state(self):
+        if not self.can_checkpoint:
+            return
+        if self.attack_state.example_index % self.attack_config.save_steps == 0:
+            self._save_state()
+
+    def clean_states(self) -> None:
+        """Delete old checkpoints if necessary to stay within save_total_limit."""
+        for i, path in enumerate(self.list_checkpoints()):
+            if i >= self.attack_config.save_total_limit:
+                shutil.rmtree(os.path.join(self.states_directory(), path))
+
+    def maybe_load_state(self) -> bool:
+        """Loads the most recent state from disk if one exists.
+
+        Returns:
+            True if a state was loaded, False otherwise.
+        """
+        if not self.can_checkpoint:
+            return False
+        for checkpoint in self.list_checkpoints():
+            state_path = os.path.join(
+                self.states_directory(), checkpoint, ATTACK_STATE_NAME
+            )
+            with open(state_path) as f:
+                attack_state = json.load(f)
+            for key, value in attack_state.items():
+                setattr(self.attack_state, key, value)
+            # We are ready to attack the next example
+            self.attack_state.example_index += 1
+            with open(
+                os.path.join(self.states_directory(), checkpoint, CONFIG_NAME)
+            ) as f:
+                attack_config = json.load(f)
+            current_config = asdict(self.attack_config)
+            for key, value in attack_config.items():
+                assert current_config[key] == value, (
+                    f"Config mismatch: {key} is {getattr(self.attack_config, key)} "
+                    f"but should be {value}"
+                )
+            logger.info(f"Loaded state from {state_path}")
+            return True
+        return False
+
 
 class IdentityAttack(Attack):
     """Returns the original dataset.
@@ -87,7 +196,11 @@ class IdentityAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        resume_from_checkpoint: bool | None = None,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
+        assert (
+            resume_from_checkpoint is None or resume_from_checkpoint is False
+        ), "Checkpointing not supported for IdentityAttack."
         dataset = dataset.with_attacked_text(
             dataset.ds["text"],
         )

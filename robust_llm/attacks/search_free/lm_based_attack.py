@@ -25,13 +25,16 @@ class LMBasedAttack(SearchFreeAttack):
         self,
         attack_config: LMBasedAttackConfig,
         victim: WrappedModel,
+        run_name: str,
+        logging_name: str | None = None,
     ) -> None:
-        super().__init__(attack_config)
+        super().__init__(
+            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
+        )
 
         if victim.accelerator is None:
             raise ValueError("Accelerator must be provided")
 
-        self.victim = victim
         self.adversary = WrappedModel.from_config(
             attack_config.adversary, accelerator=victim.accelerator
         )
@@ -53,7 +56,9 @@ class LMBasedAttack(SearchFreeAttack):
         cb_config = attack_config.victim_success_binary_callback
         self.victim_success_binary_callback = build_binary_scoring_callback(cb_config)
 
-        self.logging_counter = LoggingCounter(_name="lm_based_attack")
+        self.logging_counter = LoggingCounter(
+            _name="lm_based_attack" if logging_name is None else logging_name
+        )
 
     @property
     def num_labels(self) -> int:

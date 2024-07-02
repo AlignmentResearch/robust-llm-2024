@@ -29,16 +29,20 @@ class RandomTokenAttack(SearchFreeAttack):
         self,
         attack_config: RandomTokenAttackConfig,
         victim: WrappedModel,
+        run_name: str,
+        logging_name: str | None = None,
     ) -> None:
         """Constructor for RandomTokenAttack.
 
         Args:
             attack_config: Config of the attack.
             victim: The WrappedModel to be attacked.
+            run_name: The name of the run.
+            logging_name: The name of the logger.
         """
-        super().__init__(attack_config)
-
-        self.victim = victim
+        super().__init__(
+            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
+        )
 
         self.rng = random.Random(self.attack_config.seed)
 
@@ -49,7 +53,13 @@ class RandomTokenAttack(SearchFreeAttack):
         cb_config = attack_config.victim_success_binary_callback
         self.victim_success_binary_callback = build_binary_scoring_callback(cb_config)
 
-        self.logging_counter = LoggingCounter(_name="random_token_attack")
+        self.logging_counter = LoggingCounter(
+            _name=(
+                "random_token_attack"
+                if self.logging_name is None
+                else self.logging_name
+            )
+        )
 
     @cached_property
     def shared_attack_tokens(self) -> list[list[int]]:

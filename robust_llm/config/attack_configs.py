@@ -26,11 +26,23 @@ class AttackConfig:
         log_frequency (Optional[int]):
             If the attack needs training, how often to log training progress.
             If None, no training progress is logged. Must be positive or None.
+        victim_inference_batch_size (int):
+            Batch size to use for victim model inference.
+        save_prefix (str):
+            Prefix to use for saving attack states.
+        save_steps (int):
+            How often to save attack states.
+        save_total_limit (int):
+            Maximum number of attack states to keep at the same time.
     """
 
     seed: int = 0
     train_frequency: Optional[int] = None
     log_frequency: Optional[int] = 1
+    victim_inference_batch_size: int = 8
+    save_prefix: str = "attack_states"
+    save_steps: int = 100
+    save_total_limit: int = 1
 
     def __post_init__(self):
         if self.train_frequency is not None and self.train_frequency <= 0:

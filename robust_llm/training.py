@@ -496,11 +496,13 @@ class AdversarialTraining(Training):
         # Prepare attacks
         training_attack = create_attack(
             attack_config=self.training_attack_config,
+            run_name=self.run_name + "_training_attack",
             logging_name="training_attack",
             victim=self.victim,
         )
         validation_attack = create_attack(
             attack_config=self.validation_attack_config,
+            run_name=self.run_name + "_validation_attack",
             logging_name="validation_attack",
             victim=self.victim,
         )
@@ -615,7 +617,8 @@ class AdversarialTraining(Training):
                 )
                 # NOTE: .get_attacked_dataset should relabel the examples
                 attacked_dataset, _ = training_attack.get_attacked_dataset(
-                    input_rllm_dataset
+                    input_rllm_dataset,
+                    resume_from_checkpoint=False,
                 )
 
                 new_adv_examples = attacked_dataset.as_adversarial_examples()

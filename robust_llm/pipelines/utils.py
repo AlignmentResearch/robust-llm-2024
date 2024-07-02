@@ -28,4 +28,5 @@ def prepare_attack(
         attack_config=attack_config,
         logging_name=logging_name,
         victim=victim,
+        run_name=args.run_name,
     )
