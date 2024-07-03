@@ -40,6 +40,7 @@ class MagicWrappedModel(WrappedModel):
         self.eval_minibatch_size = 2
         self.accelerator = MagicMock()
         self.accelerator.prepare = lambda data: data
+        self.accelerator.pad_across_processes = lambda data, dim: data
         self.accelerator.gather_for_metrics = lambda data: data
         self.generation_config = None
 

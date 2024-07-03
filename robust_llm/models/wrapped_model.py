@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional, overload
 
 import torch
+import torch.distributed
 import transformers
 from accelerate import Accelerator
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
@@ -451,6 +452,12 @@ class WrappedModel(ABC):
                     attention_mask=minibatch["attention_mask"],
                     generation_config=self.generation_config,
                 )
+                # Very important to pad_across_processes before gathering;
+                # otherwise it'll silently hang on one process if ever the
+                # returned tensors have a size mismatch.
+                minibatch_tokens = self.accelerator.pad_across_processes(
+                    minibatch_tokens, dim=1
+                )
                 minibatch_tokens = self.accelerator.gather_for_metrics(minibatch_tokens)
                 assert isinstance(minibatch_tokens, torch.Tensor)
                 # Separate out the input and output tokens.
@@ -533,7 +540,14 @@ class WrappedModel(ABC):
             with torch.no_grad():
                 self.model.forward(input_ids=inputs["input_ids"])
         with FSDP.summon_full_params(self.model, recurse=False):
-            return self.model.generate(**inputs)
+            return self.model.generate(
+                **inputs,
+                # synced_gpus prevents sporadic hanging when using FSDP, which
+                # comes from different generated sequence lengths on different
+                # GPUs. We only want to use synced_gpus when we're actually
+                # using accelerate, otherwise it throws an error.
+                synced_gpus=torch.distributed.is_initialized(),
+            )
 
     def to(self, device: torch.device) -> WrappedModel:
         """Move the model to the given device.
