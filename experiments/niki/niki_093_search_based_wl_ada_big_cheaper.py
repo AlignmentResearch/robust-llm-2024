@@ -34,6 +34,5 @@ if __name__ == "__main__":
         memory="100G",
         cpu=12,
         gpu=2,
-        use_accelerate=True,
         priority="high-batch",
     )

@@ -35,7 +35,6 @@ if __name__ == "__main__":
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         N_MAX_PARALLEL,
-        use_accelerate=True,
         memory="200G",
         cpu=12,
         gpu=2,

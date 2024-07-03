@@ -31,7 +31,6 @@ if __name__ == "__main__":
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         gpu=4,
-        use_accelerate=True,
         memory="300G",
         priority="normal-batch",
     )

@@ -28,6 +28,5 @@ if __name__ == "__main__":
         memory="200G",
         cpu=12,
         gpu=4,
-        use_accelerate=True,
         priority="high-batch",
     )
