@@ -2,6 +2,7 @@ import math
 from dataclasses import dataclass
 from typing import Optional
 
+import torch
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, SI, OmegaConf
 
@@ -72,6 +73,9 @@ class ModelConfig:
         be set by interpolation from the EnvironmentConfig rather in each model
         config directly.
     generation_config: The config to use for text generation.
+    dtype: Data type, e.g., float32 or bfloat16.
+        Defaults to float32 since bfloat16 has much less precision (e.g., the
+        next bfloat16 after 1024 is 1032), which can affect generation quality.
     """
 
     name_or_path: str = MISSING
@@ -86,9 +90,13 @@ class ModelConfig:
     eval_minibatch_size: int = SI("${mult: 2, ${model.train_minibatch_size}}")
     minibatch_multiplier: float = SI("${environment.minibatch_multiplier}")
     generation_config: Optional[GenerationConfig] = None
+    dtype: str = "float32"
 
     def __post_init__(self):
         assert self.family in MODEL_FAMILIES
+
+        assert hasattr(torch, self.dtype), f"Invalid model dtype torch.{self.dtype}"
+        assert isinstance(getattr(torch, self.dtype), torch.dtype)
 
 
 cs = ConfigStore.instance()

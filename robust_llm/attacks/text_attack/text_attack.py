@@ -4,6 +4,7 @@ from typing import Optional, Union
 
 import numpy as np
 import textattack
+import torch
 import transformers
 from pyparsing import Any
 from textattack.attack_recipes import AttackRecipe
@@ -80,6 +81,13 @@ class LanguageModelWrapper(textattack.models.wrappers.HuggingFaceModelWrapper):
 
         self.model = model
         self.tokenizer = tokenizer
+
+    def __call__(self, text_input_list):
+        output = super().__call__(text_input_list)
+        if isinstance(output, torch.Tensor) and output.dtype == torch.bfloat16:
+            # TextAttack converts to NumPy, which does not support bfloat16.
+            output = output.type(torch.float32)
+        return output
 
 
 class RandomCharacterChanges(AttackRecipe):
