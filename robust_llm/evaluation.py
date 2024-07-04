@@ -77,12 +77,15 @@ def do_adversarial_evaluation(
     # In case the attack changed the victim from eval() mode, we set it again here.
     victim.eval()
 
+    # We use dataset_to_attack so that we use the same examples as in attacked_dataset
+    original_input_data = victim.maybe_apply_chat_template(dataset_to_attack.ds["text"])
+
     callback_input = CallbackInput(
         # NOTE: We don't apply the chat template here because we assume that the
         # attack already did that.
         # TODO(ian): Work out where to apply chat template.
         input_data=attacked_dataset.ds["attacked_text"],
-        original_input_data=victim.maybe_apply_chat_template(dataset.ds["text"]),
+        original_input_data=original_input_data,
         clf_label_data=attacked_dataset.ds["attacked_clf_label"],
         gen_target_data=attacked_dataset.ds["attacked_gen_target"],
     )

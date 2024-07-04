@@ -477,7 +477,7 @@ class WrappedModel(ABC):
                 )
                 yield [
                     AutoregressiveOutput(in_text, out_text)
-                    for in_text, out_text in zip(input_texts, output_texts)
+                    for in_text, out_text in zip(input_texts, output_texts, strict=True)
                 ]
 
     def __call__(self, **inputs):

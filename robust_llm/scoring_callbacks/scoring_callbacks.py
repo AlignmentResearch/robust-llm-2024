@@ -260,14 +260,14 @@ def binary_univariate_fn_of_generation_from_text_callback(
         all_generations = []
         batch_start = 0
         for outs in output_generator:
-
             batch_length = len(outs)
             batch_end = batch_start + batch_length
+
             if original_input_data is not None:
                 original_inputs = original_input_data[batch_start:batch_end]
                 outs = [
                     out.with_clean_input_text(orig)
-                    for out, orig in zip(outs, original_inputs)
+                    for out, orig in zip(outs, original_inputs, strict=True)
                 ]
 
             successes = [scoring_fn(out) for out in outs]
@@ -275,7 +275,9 @@ def binary_univariate_fn_of_generation_from_text_callback(
             # TODO(ian): Find a better way to record generations.
             gens = [out.get_full_text() for out in outs]
             all_generations.extend(gens)
+
             batch_start += batch_length
+
         # We have to type-check manually since scoring_fn could return floats or bools.
         assert all(isinstance(s, bool) for s in all_successes)
         successes_cast = cast(list[bool], all_successes)
@@ -331,22 +333,26 @@ def binary_bivariate_fn_of_generation_from_text_callback(
         gen_target_data = _validate_text_input(callback_input.gen_target_data)
         for outs in output_generator:
             batch_length = len(outs)
-
             batch_end = batch_start + batch_length
+
             # TODO(GH#550): Clean up where we add the original input data
             if original_input_data is not None:
                 original_inputs = original_input_data[batch_start:batch_end]
                 outs = [
                     out.with_clean_input_text(orig)
-                    for out, orig in zip(outs, original_inputs)
+                    for out, orig in zip(outs, original_inputs, strict=True)
                 ]
             targets = gen_target_data[batch_start:batch_end]
 
-            successes = [scoring_fn(out, target) for out, target in zip(outs, targets)]
+            successes = [
+                scoring_fn(out, target)
+                for out, target in zip(outs, targets, strict=True)
+            ]
             all_successes.extend(successes)
             # TODO(ian): Find a better way to record generations.
             gens = [out.get_full_text() for out in outs]
             all_generations.extend(gens)
+
             batch_start += batch_length
 
         # We have to type-check manually since scoring_fn could return floats or bools.
@@ -400,15 +406,15 @@ def tensor_univariate_fn_of_generation_from_text_callback(
         all_generations = []
         batch_start = 0
         for outs in output_generator:
-
             batch_length = len(outs)
             batch_end = batch_start + batch_length
+
             # TODO(GH#550): Clean up where we add the original input data
             if original_input_data is not None:
                 original_inputs = original_input_data[batch_start:batch_end]
                 outs = [
                     out.with_clean_input_text(orig)
-                    for out, orig in zip(outs, original_inputs)
+                    for out, orig in zip(outs, original_inputs, strict=True)
                 ]
 
             floats = [scoring_fn(out) for out in outs]
@@ -416,6 +422,9 @@ def tensor_univariate_fn_of_generation_from_text_callback(
             # TODO(ian): Find a better way to record generations.
             gens = [out.get_full_text() for out in outs]
             all_generations.extend(gens)
+
+            batch_start += batch_length
+
         return TensorCallbackOutput(
             losses=torch.tensor(all_floats), info={"generations": all_generations}
         )
@@ -475,15 +484,19 @@ def tensor_bivariate_fn_of_generation_from_text_callback(
                 original_inputs = original_input_data[batch_start:batch_end]
                 outs = [
                     out.with_clean_input_text(orig)
-                    for out, orig in zip(outs, original_inputs)
+                    for out, orig in zip(outs, original_inputs, strict=True)
                 ]
             targets = gen_target_data[batch_start:batch_end]
 
-            floats = [scoring_fn(out, target) for out, target in zip(outs, targets)]
+            floats = [
+                scoring_fn(out, target)
+                for out, target in zip(outs, targets, strict=True)
+            ]
             all_floats.extend(floats)
             # TODO(ian): Find a better way to record generations.
             gens = [out.get_full_text() for out in outs]
             all_generations.extend(gens)
+
             batch_start += batch_length
 
         return TensorCallbackOutput(
