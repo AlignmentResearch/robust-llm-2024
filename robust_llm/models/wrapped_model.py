@@ -462,11 +462,11 @@ class WrappedModel(ABC):
                 minibatch_tokens = self.accelerator.gather_for_metrics(minibatch_tokens)
                 assert isinstance(minibatch_tokens, torch.Tensor)
                 # Separate out the input and output tokens.
+                input_tokens = minibatch_tokens[:, : input_ids.shape[1]]
                 output_tokens = minibatch_tokens[:, input_ids.shape[1] :]
 
-                # TODO(ian): Avoid re-decoding the input.
                 input_texts = self.decode_and_unpad(
-                    minibatch["input_ids"], skip_special_tokens=False
+                    input_tokens, skip_special_tokens=False
                 )
 
                 # For now, we don't skip special tokens, because that removes the
