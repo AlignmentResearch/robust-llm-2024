@@ -14,13 +14,13 @@ RUN python3 -m pip install '.[tensorflow]'
 # Install requirements for repo
 # note this only monitors the pyproject.toml file for changes
 FROM base as dev
-COPY pyproject.toml setup.cfg /workspace/
+COPY pyproject.toml /workspace/
 WORKDIR /workspace
 
 RUN mkdir robust_llm \
     && python3 -m pip install -e ".[dev]" \
     && python3 -m pip uninstall -y robust_llm \
-    && rmdir robust_llm && rm pyproject.toml setup.cfg
+    && rmdir robust_llm && rm pyproject.toml
 
 FROM dev as easydev
 RUN curl -fsSL https://code-server.dev/install.sh | sh
