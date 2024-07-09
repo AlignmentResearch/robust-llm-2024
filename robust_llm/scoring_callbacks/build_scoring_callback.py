@@ -64,7 +64,7 @@ def build_tensor_scoring_callback(config: CallbackConfig) -> TensorCallback:
                 )
             case _:
                 raise ValueError(f"Unknown scoring_fn_arity: {config.scoring_fn_arity}")
-        assert scoring_fn.return_type == ScoringFnReturnType.BOOL
+        assert scoring_fn.return_type == ScoringFnReturnType.FLOAT
         # TODO(ian): Work out type hints for partial here
         return partial(
             callback_fn, scoring_fn=scoring_fn  # pyright: ignore[reportCallIssue]

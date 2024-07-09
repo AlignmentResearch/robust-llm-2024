@@ -2,6 +2,7 @@ from typing import cast
 
 import torch
 
+from robust_llm.dist_utils import broadcast_list_of_bools, broadcast_tensor
 from robust_llm.models.model_utils import (
     InferenceType,
     classification_losses_from_logits,
@@ -260,29 +261,36 @@ def binary_univariate_fn_of_generation_from_text_callback(
         all_generations = []
         batch_start = 0
         for outs in output_generator:
-            batch_length = len(outs)
-            batch_end = batch_start + batch_length
+            assert victim.accelerator is not None
+            # Only run scoring_fns on the main process.
+            if victim.accelerator.is_main_process:
+                batch_length = len(outs)
+                batch_end = batch_start + batch_length
 
-            if original_input_data is not None:
-                original_inputs = original_input_data[batch_start:batch_end]
-                outs = [
-                    out.with_clean_input_text(orig)
-                    for out, orig in zip(outs, original_inputs, strict=True)
-                ]
+                if original_input_data is not None:
+                    original_inputs = original_input_data[batch_start:batch_end]
+                    outs = [
+                        out.with_clean_input_text(orig)
+                        for out, orig in zip(outs, original_inputs, strict=True)
+                    ]
 
-            successes = [scoring_fn(out) for out in outs]
-            all_successes.extend(successes)
-            # TODO(ian): Find a better way to record generations.
-            gens = [out.get_full_text() for out in outs]
-            all_generations.extend(gens)
+                successes = [scoring_fn(out) for out in outs]
+                all_successes.extend(successes)
+                # TODO(ian): Find a better way to record generations.
+                gens = [out.get_full_text() for out in outs]
+                all_generations.extend(gens)
 
-            batch_start += batch_length
+                batch_start += batch_length
 
         # We have to type-check manually since scoring_fn could return floats or bools.
         assert all(isinstance(s, bool) for s in all_successes)
         successes_cast = cast(list[bool], all_successes)
+        assert victim.accelerator is not None
+        gathered_successes = broadcast_list_of_bools(successes_cast, victim.accelerator)
+        # NOTE: It's fine not to gather the generations since we only log them
+        # from the main process anyway.
         return BinaryCallbackOutput(
-            successes=successes_cast, info={"generations": all_generations}
+            successes=gathered_successes, info={"generations": all_generations}
         )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
@@ -332,34 +340,41 @@ def binary_bivariate_fn_of_generation_from_text_callback(
         batch_start = 0
         gen_target_data = _validate_text_input(callback_input.gen_target_data)
         for outs in output_generator:
-            batch_length = len(outs)
-            batch_end = batch_start + batch_length
+            assert victim.accelerator is not None
+            # Only run scoring_fns on the main process.
+            if victim.accelerator.is_main_process:
+                batch_length = len(outs)
+                batch_end = batch_start + batch_length
 
-            # TODO(GH#550): Clean up where we add the original input data
-            if original_input_data is not None:
-                original_inputs = original_input_data[batch_start:batch_end]
-                outs = [
-                    out.with_clean_input_text(orig)
-                    for out, orig in zip(outs, original_inputs, strict=True)
+                # TODO(GH#550): Clean up where we add the original input data
+                if original_input_data is not None:
+                    original_inputs = original_input_data[batch_start:batch_end]
+                    outs = [
+                        out.with_clean_input_text(orig)
+                        for out, orig in zip(outs, original_inputs, strict=True)
+                    ]
+                targets = gen_target_data[batch_start:batch_end]
+
+                successes = [
+                    scoring_fn(out, target)
+                    for out, target in zip(outs, targets, strict=True)
                 ]
-            targets = gen_target_data[batch_start:batch_end]
+                all_successes.extend(successes)
+                # TODO(ian): Find a better way to record generations.
+                gens = [out.get_full_text() for out in outs]
+                all_generations.extend(gens)
 
-            successes = [
-                scoring_fn(out, target)
-                for out, target in zip(outs, targets, strict=True)
-            ]
-            all_successes.extend(successes)
-            # TODO(ian): Find a better way to record generations.
-            gens = [out.get_full_text() for out in outs]
-            all_generations.extend(gens)
-
-            batch_start += batch_length
+                batch_start += batch_length
 
         # We have to type-check manually since scoring_fn could return floats or bools.
         assert all(isinstance(s, bool) for s in all_successes)
         successes_cast = cast(list[bool], all_successes)
+        assert victim.accelerator is not None
+        gathered_successes = broadcast_list_of_bools(successes_cast, victim.accelerator)
+        # NOTE: It's fine not to gather the generations since we only log them
+        # from the main process anyway.
         return BinaryCallbackOutput(
-            successes=successes_cast, info={"generations": all_generations}
+            successes=gathered_successes, info={"generations": all_generations}
         )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
@@ -406,27 +421,34 @@ def tensor_univariate_fn_of_generation_from_text_callback(
         all_generations = []
         batch_start = 0
         for outs in output_generator:
-            batch_length = len(outs)
-            batch_end = batch_start + batch_length
+            assert victim.accelerator is not None
+            # Only run scoring_fns on the main process.
+            if victim.accelerator.is_main_process:
+                batch_length = len(outs)
+                batch_end = batch_start + batch_length
 
-            # TODO(GH#550): Clean up where we add the original input data
-            if original_input_data is not None:
-                original_inputs = original_input_data[batch_start:batch_end]
-                outs = [
-                    out.with_clean_input_text(orig)
-                    for out, orig in zip(outs, original_inputs, strict=True)
-                ]
+                # TODO(GH#550): Clean up where we add the original input data
+                if original_input_data is not None:
+                    original_inputs = original_input_data[batch_start:batch_end]
+                    outs = [
+                        out.with_clean_input_text(orig)
+                        for out, orig in zip(outs, original_inputs, strict=True)
+                    ]
 
-            floats = [scoring_fn(out) for out in outs]
-            all_floats.extend(floats)
-            # TODO(ian): Find a better way to record generations.
-            gens = [out.get_full_text() for out in outs]
-            all_generations.extend(gens)
+                floats = [scoring_fn(out) for out in outs]
+                all_floats.extend(floats)
+                # TODO(ian): Find a better way to record generations.
+                gens = [out.get_full_text() for out in outs]
+                all_generations.extend(gens)
 
-            batch_start += batch_length
+                batch_start += batch_length
 
+        assert victim.accelerator is not None
+        gathered_floats = broadcast_tensor(torch.tensor(all_floats), victim.accelerator)
+        # NOTE: It's fine not to gather the generations since we only log them
+        # from the main process anyway.
         return TensorCallbackOutput(
-            losses=torch.tensor(all_floats), info={"generations": all_generations}
+            losses=gathered_floats, info={"generations": all_generations}
         )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
@@ -476,31 +498,38 @@ def tensor_bivariate_fn_of_generation_from_text_callback(
         batch_start = 0
         gen_target_data = _validate_text_input(callback_input.gen_target_data)
         for outs in output_generator:
-            batch_length = len(outs)
-            batch_end = batch_start + batch_length
+            assert victim.accelerator is not None
+            # Only run scoring_fns on the main process.
+            if victim.accelerator.is_main_process:
+                batch_length = len(outs)
+                batch_end = batch_start + batch_length
 
-            # TODO(GH#550): Clean up where we add the original input data
-            if original_input_data is not None:
-                original_inputs = original_input_data[batch_start:batch_end]
-                outs = [
-                    out.with_clean_input_text(orig)
-                    for out, orig in zip(outs, original_inputs, strict=True)
+                # TODO(GH#550): Clean up where we add the original input data
+                if original_input_data is not None:
+                    original_inputs = original_input_data[batch_start:batch_end]
+                    outs = [
+                        out.with_clean_input_text(orig)
+                        for out, orig in zip(outs, original_inputs, strict=True)
+                    ]
+                targets = gen_target_data[batch_start:batch_end]
+
+                floats = [
+                    scoring_fn(out, target)
+                    for out, target in zip(outs, targets, strict=True)
                 ]
-            targets = gen_target_data[batch_start:batch_end]
+                all_floats.extend(floats)
+                # TODO(ian): Find a better way to record generations.
+                gens = [out.get_full_text() for out in outs]
+                all_generations.extend(gens)
 
-            floats = [
-                scoring_fn(out, target)
-                for out, target in zip(outs, targets, strict=True)
-            ]
-            all_floats.extend(floats)
-            # TODO(ian): Find a better way to record generations.
-            gens = [out.get_full_text() for out in outs]
-            all_generations.extend(gens)
+                batch_start += batch_length
 
-            batch_start += batch_length
-
+        assert victim.accelerator is not None
+        gathered_floats = broadcast_tensor(torch.tensor(all_floats), victim.accelerator)
+        # NOTE: It's fine not to gather the generations since we only log them
+        # from the main process anyway.
         return TensorCallbackOutput(
-            losses=torch.tensor(all_floats), info={"generations": all_generations}
+            losses=gathered_floats, info={"generations": all_generations}
         )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
