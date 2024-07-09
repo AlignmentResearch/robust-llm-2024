@@ -90,7 +90,7 @@ class AttackResults:
         """Number of examples the model gets incorrect after the attack."""
         return self.n_examples_post_attack - self.n_correct_post_attack
 
-    def compute_adversarial_evaluation_metrics(self) -> dict[str, float]:
+    def compute_adversarial_evaluation_metrics(self) -> dict[str, Any]:
         return {
             "adversarial_eval/n_examples": self.n_examples,
             "adversarial_eval/n_correct_pre_attack": self.n_correct_pre_attack,
@@ -195,7 +195,7 @@ class DefendedAttackResults(AttackResults):
             self.n_not_flagged_post_attack - self.n_not_flagged_post_attack_then_correct
         )
 
-    def compute_adversarial_evaluation_metrics(self) -> dict[str, float]:
+    def compute_adversarial_evaluation_metrics(self) -> dict[str, Any]:
         """Computes final metrics to report."""
         metrics = super().compute_adversarial_evaluation_metrics()
         return metrics | {

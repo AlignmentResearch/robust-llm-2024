@@ -27,7 +27,6 @@ from transformers import (
 )
 from transformers.modeling_outputs import ModelOutput
 
-from robust_llm.config.constants import ModelFamily
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.chat_templates import get_base_template
 from robust_llm.models.model_utils import (
@@ -82,7 +81,7 @@ class WrappedModel(ABC):
         # NOTE: If we switch to loading directly to devices, we'll need to change how we
         # compute the number of parameters.
         self._n_params = get_num_parameters(model)
-        self._family = family
+        self.family = family
         self.accelerator = accelerator
         if self.accelerator is not None:
             self.model = prepare_model_with_accelerate(self.accelerator, model)
@@ -94,12 +93,6 @@ class WrappedModel(ABC):
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
         self.generation_config = generation_config
-
-    @property
-    def family(self) -> int:
-        if self._family is None:
-            return -1
-        return ModelFamily.from_string(self._family).value
 
     @property
     def n_params(self) -> int:

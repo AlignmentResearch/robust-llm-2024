@@ -175,8 +175,7 @@ class LoggingContext:
         set_up_step_metrics:
             whether to set up wandb step metrics which are used to
             define default x-axes for logged values
-        model_family: The index of the model family in the enum
-            (see `robust_llm.config.constants::ModelFamily`)
+        model_family: The name of the model's family
         model_size:
             number of parameters in the model
             TODO: #348 - recording of `model_size` would ideally be done elsewhere
@@ -187,7 +186,7 @@ class LoggingContext:
         is_main_process: bool,
         args: ExperimentConfig,
         set_up_step_metrics: bool = False,
-        model_family: Optional[int] = None,
+        model_family: Optional[str] = None,
         model_size: Optional[int] = None,
     ) -> None:
         self.logger = logger
@@ -310,7 +309,7 @@ class WandbTable:
         return self._table
 
     def add_data(self, data: Dict[str, Any]) -> None:
-        data = {k: v for k, v in data.items() if isinstance(v, (int, float))}
+        data = {k: v for k, v in data.items() if isinstance(v, (int, float, str))}
         if self._table is None:
             self._table = wandb.Table(columns=list(data.keys()))
         assert self.table.columns == list(data.keys())

@@ -54,7 +54,8 @@ class ModelConfig:
     This includes the main (victim) model, as well as decoders for perplexity
     defenses and adversaries for TRL.
     name_or_path: Either HF name or path to model checkpoint.
-    family (ModelFamily): Which model family to load (e.g. "pythia").
+    family: Which model family to load (e.g. "pythia"). MODEL_FAMILIES lists valid
+        values.
     revision: The huggingface revision of the model.
     inference_type: The type of inference the model is used for:
         ('classification', 'generation', or 'trl').
