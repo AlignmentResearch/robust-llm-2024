@@ -374,102 +374,10 @@ class SearchBasedRunner(abc.ABC):
         # The following code is written in a way so that we process whole lists, hence
         # tokenization (which is most costly) can be batched.
 
-        attack_text_list = [attack_text for attack_text, _ in text_replacement_pairs]
-        replacement_list = [replacement for _, replacement in text_replacement_pairs]
-
-        attack_tokens_list = self._get_tokens(attack_text_list, return_tensors=None)
-
-        original_full_prompt_list = [
-            self.example.prompt_template.build_prompt(
-                attack_text=attack_text,
-                target=self.example.gen_target,
-            )
-            for attack_text in attack_text_list
-        ]
-        original_full_prompt_tokens_list = [
-            torch.tensor([tokens])
-            for tokens in self._get_tokens(
-                original_full_prompt_list, return_tensors=None
-            )
-        ]
-
-        candidate_attack_tokens_list = [
-            replacement.compute_tokens_after_replacement(torch.tensor([attack_tokens]))
-            for replacement, attack_tokens in zip(replacement_list, attack_tokens_list)
-        ]
-        candidate_full_prompt_tokens_list = [
-            torch.cat(
-                [
-                    original_full_prompt_tokens[:, : self.attack_indices.attack_start],
-                    candidate_attack_tokens,
-                    original_full_prompt_tokens[:, self.attack_indices.attack_end :],
-                ],
-                dim=1,
-            )
-            for candidate_attack_tokens, original_full_prompt_tokens in zip(
-                candidate_attack_tokens_list, original_full_prompt_tokens_list
-            )
-        ]
-
-        decoded_list = self.victim.batch_decode(
-            torch.cat([tokens for tokens in candidate_full_prompt_tokens_list]),
-            skip_special_tokens=False,
-        )
-        encoded_decoded_list = [
-            torch.tensor([tokens])
-            for tokens in self._get_tokens(decoded_list, return_tensors=None)
-        ]
-
-        # In the checks prepared above, we construct candidate full prompts by modifying
-        # tokens in the original full prompt.
-        # Below, we instead first decode candidate attacks into strings, and build
-        # candidate full prompts from strings. This is the way it is actually done
-        # later in the code. It turns out that in some rare cases these two ways do not
-        # coincide, and so the checks relying on the first way are not sufficient.
-        # TODO(michal): refactor this so that we only have one type of check.
-        candidate_attack_texts = self.victim.batch_decode(
-            torch.cat(candidate_attack_tokens_list)
-        )
-        candidate_full_prompt_list_alt = [
-            self.example.prompt_template.build_prompt(
-                attack_text=attack_text, target=self.example.gen_target
-            )
-            for attack_text in candidate_attack_texts
-        ]
-        candidate_full_prompt_tokens_list_alt = self._get_tokens(
-            candidate_full_prompt_list_alt, return_tensors=None
-        )
-
         filtered_candidates = []
-
-        for (
-            attack_text,
-            candidate,
-            candidate_full_prompt_tokens,
-            original_full_prompt_tokens,
-            encoded_decoded,
-            candidate_full_prompt_tokens_alt,
-        ) in zip(
-            attack_text_list,
-            replacement_list,
-            candidate_full_prompt_tokens_list,
-            original_full_prompt_tokens_list,
-            encoded_decoded_list,
-            candidate_full_prompt_tokens_list_alt,
-        ):
-            if torch.equal(candidate_full_prompt_tokens, original_full_prompt_tokens):
-                continue
-
-            if self._tokenization_changed(
-                candidate_full_prompt_tokens,
-                original_full_prompt_tokens,
-                encoded_decoded,
-            ):
-                continue
-
-            if len(candidate_full_prompt_tokens_alt) != len(
-                original_full_prompt_tokens[0]
-            ):
+        for attack_text, candidate in text_replacement_pairs:
+            if not self._should_keep_candidate(attack_text, candidate):
+                logger.debug(f"Filtered out candidate {attack_text}")
                 continue
 
             filtered_candidates.append((attack_text, candidate))
@@ -481,6 +389,55 @@ class SearchBasedRunner(abc.ABC):
             logger.warning("All candidates were filtered out!")
 
         return filtered_candidates
+
+    def _should_keep_candidate(
+        self,
+        attack_text: str,
+        candidate: ReplacementCandidate,
+    ) -> bool:
+        """Filter out candidates that would change tokenization."""
+        template = self.example.prompt_template
+        indices = self.attack_indices
+        reference_prompt = template.build_prompt(attack_text=attack_text)
+        reference_tokens = self._get_tokens(reference_prompt, return_tensors="pt")
+        reference_attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
+
+        candidate_attack_tokens = candidate.compute_tokens_after_replacement(
+            reference_attack_tokens
+        )
+        candidate_attack_text = self.victim.batch_decode(candidate_attack_tokens)[0]
+
+        candidate_by_replacement = reference_tokens.clone()
+        candidate_by_replacement[0, indices.attack_start : indices.attack_end] = (
+            candidate_attack_tokens
+        )
+
+        candidate_text = template.build_prompt(attack_text=candidate_attack_text)
+        candidate_from_text = self._get_tokens(candidate_text, return_tensors="pt")
+
+        # Check that the two ways of building the new prompt match
+        if not torch.equal(candidate_by_replacement, candidate_from_text):
+            return False
+
+        # Check that the non-attack parts of the prompt are the same
+        if not torch.equal(
+            reference_tokens[0, : indices.attack_start],
+            candidate_by_replacement[0, : indices.attack_start],
+        ):
+            return False
+
+        if not torch.equal(
+            reference_tokens[0, indices.attack_end :],
+            candidate_by_replacement[0, indices.attack_end :],
+        ):
+            return False
+
+        # Check that the new prompt is not identical to the old one
+        if torch.equal(reference_tokens, candidate_by_replacement):
+            return False
+
+        # If all checks pass, use the candidate
+        return True
 
     def _tokenization_changed(
         self,
@@ -534,6 +491,12 @@ class SearchBasedRunner(abc.ABC):
             dim=1,
         )
         if combined_embeddings.shape != full_prompt_embeddings.shape:
+            logger.debug(
+                "Crashing on example:\n"
+                "prompt_template={prompt_template}".format(
+                    prompt_template=self.example.prompt_template
+                )
+            )
             raise ValueError(
                 f"Combined embeddings shape {combined_embeddings.shape} "
                 f"does not match full prompt embeddings shape "

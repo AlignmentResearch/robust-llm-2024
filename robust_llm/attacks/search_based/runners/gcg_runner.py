@@ -9,6 +9,7 @@ from robust_llm.attacks.search_based.runners.search_based_runner import (
 )
 from robust_llm.attacks.search_based.utils import PreppedExample, ReplacementCandidate
 from robust_llm.config.callback_configs import CallbackConfig
+from robust_llm.models.model_utils import PromptTemplate
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.scoring_callbacks import CallbackInput, build_tensor_scoring_callback
 
@@ -76,31 +77,13 @@ class GCGRunner(SearchBasedRunner):
         self,
         attack_text: str,
     ) -> torch.Tensor:
-        # NOTE: We don't add the target to the prompt here; that'll be handled
-        # in the callback.
-        full_prompt = self.example.prompt_template.build_prompt(
+
+        tokens, combined_embeddings, attack_onehot = self._build_tokens_and_embeddings(
+            prompt_template=self.example.prompt_template,
             attack_text=attack_text,
-            target="",
         )
 
-        full_prompt_tokens = self._get_tokens(full_prompt, return_tensors="pt")
-        full_prompt_embeddings = self.victim.get_embeddings(full_prompt_tokens)
-
-        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
-        attack_onehot = self._get_attack_onehot(attack_tokens.to(self.victim.device))
-        embed_weights = self.victim.get_embedding_weights()
-
-        attack_onehot.requires_grad_()
-        attack_embeddings = attack_onehot @ embed_weights
-
-        combined_embeddings = self._get_combined_embeddings(
-            full_prompt_embeddings, attack_embeddings
-        )
-
-        input_data = {
-            "input_ids": full_prompt_tokens,
-            "embeddings": combined_embeddings,
-        }
+        input_data = {"input_ids": tokens, "embeddings": combined_embeddings}
 
         cb_in = CallbackInput(
             input_data=input_data,
@@ -119,6 +102,31 @@ class GCGRunner(SearchBasedRunner):
         self.victim.accelerator.backward(loss)
         assert attack_onehot.grad is not None
         return attack_onehot.grad.clone()
+
+    def _build_tokens_and_embeddings(
+        self, prompt_template: PromptTemplate, attack_text: str
+    ):
+        # NOTE: We don't add the target to the prompt here; that'll be handled
+        # in the callback.
+        full_prompt = prompt_template.build_prompt(
+            attack_text=attack_text,
+            target="",
+        )
+
+        full_prompt_tokens = self._get_tokens(full_prompt, return_tensors="pt")
+        full_prompt_embeddings = self.victim.get_embeddings(full_prompt_tokens)
+
+        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
+        attack_onehot = self._get_attack_onehot(attack_tokens.to(self.victim.device))
+        embed_weights = self.victim.get_embedding_weights()
+
+        attack_onehot.requires_grad_()
+        attack_embeddings = attack_onehot @ embed_weights
+
+        combined_embeddings = self._get_combined_embeddings(
+            full_prompt_embeddings, attack_embeddings
+        )
+        return full_prompt_tokens, combined_embeddings, attack_onehot
 
     def _get_replacement_candidates_from_gradients(
         self,
