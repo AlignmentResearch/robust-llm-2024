@@ -289,3 +289,18 @@ kubectl create -f k8s/kaniko-build.yaml
 ```
 
 If you wish to build a Docker image from a different branch, you should edit the `BRANCH_NAME` value in `k8s/kaniko-build.yaml` and then run the command above. More details can be found in the Flamingo wiki article on Kaniko, and the Kaniko docs themselves.
+
+## Working in a devbox
+The most convenient way to create a devbox is to run `make devbox` which will use `k8s/auto-devbox.yaml` and you can pass various arguments to this, e.g. CPU, GPU and MEMORY (see the Makefile).
+
+You can also run `kubectl create -f k8s/devbox.yaml`.
+
+Using the VSCode Kubernetes extension, you can then right click the pod and select "Attach VS Code".
+
+It is recommended to add extensions in your user settings JSON so that they are loaded automatically, e.g. in "~/.config/Code/User/settings.json" in Ubuntu, add
+```
+"dev.containers.defaultExtensionsIfInstalledLocally": [
+    "ms-python.debugpy",
+    "ms-python.python"
+]
+```

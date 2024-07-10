@@ -1,0 +1,16 @@
+APPLICATION_URL ?= ghcr.io/alignmentresearch/robust-llm
+RELEASE_PREFIX ?= latest
+COMMIT_HASH ?= $(shell git rev-parse HEAD)
+BRANCH_NAME ?= $(shell git branch --show-current)
+CPU ?= 4
+MEMORY ?= 60G
+SHM_SIZE ?= 4Gi
+GPU ?= 1
+DEVBOX_NAME ?= rllm-devbox
+
+.PHONY: devbox devbox/%
+devbox/%:
+	git push
+
+	python -c "print(open('k8s/auto-devbox.yaml').read().format(NAME='${DEVBOX_NAME}', IMAGE='${APPLICATION_URL}:${RELEASE_PREFIX}', COMMIT_HASH='${COMMIT_HASH}', CPU='${CPU}', MEMORY='${MEMORY}', SHM_SIZE='${SHM_SIZE}', GPU='${GPU}'))" | kubectl create -f -
+devbox: devbox/main
