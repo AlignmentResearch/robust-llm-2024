@@ -87,6 +87,7 @@ class SearchFreeAttack(Attack, ABC):
             all_success_indices = []
             self.attack_state = SearchFreeAttackState()
             starting_index = 0
+
         for example_index in tqdm(
             range(starting_index, len(dataset.ds)), mininterval=5, position=-1
         ):
