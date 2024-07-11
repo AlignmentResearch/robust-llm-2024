@@ -1,4 +1,5 @@
 import dataclasses
+import glob
 import json
 import os
 import random
@@ -227,7 +228,11 @@ class Training:
         checkpoint = self.get_last_checkpoint()
         if checkpoint is not None:
             logger.info(f"Resuming from checkpoint: {checkpoint}")
-        trainer.train(resume_from_checkpoint=checkpoint)
+        trainer.train(
+            resume_from_checkpoint=(
+                checkpoint if self.environment_config.allow_checkpointing else False
+            )
+        )
 
         self.maybe_save_model_to_path_or_hf(
             path_prefix_or_hf=self.config.model_save_path_prefix_or_hf
@@ -332,6 +337,7 @@ class AdversarialTrainingState:
         training_attack_rng: Optional[random.Random],
         validation_attack_rng: Optional[random.Random],
         current_round: int = 0,
+        global_step: int = 0,
     ) -> None:
         self.current_round = current_round
         self.training_attack_rng = training_attack_rng
@@ -430,6 +436,34 @@ class AdversarialTraining(Training):
             + (ADV_STATE_NAME,)
         )
 
+    def get_last_checkpoint(self) -> str | None:
+        """Get the directory path to the most recent completed checkpoint.
+
+        We scan the output directory for the following conditions:
+        - It is a directory.
+        - It has the structure "round-{round}/checkpoint-{checkpoint}".
+        - It contains all the files in self.checkpoint_files.
+        """
+        if not os.path.isdir(self.output_dir):
+            return None
+        checkpoints = [
+            f
+            for f in glob.iglob(f"{self.output_dir}/round-*/checkpoint-*")
+            if os.path.isdir(f)
+            and all([sub_f in os.listdir(f) for sub_f in self.checkpoint_files])
+        ]
+        if len(checkpoints) == 0:
+            return None
+        # Sort by round number and then by checkpoint number
+        checkpoints = sorted(
+            checkpoints,
+            key=lambda x: (
+                int(x.split("/")[-2].split("-")[-1]),
+                int(x.split("/")[-1].split("-")[-1]),
+            ),
+        )
+        return checkpoints[-1]
+
     @property
     def num_adversarial_training_rounds(self) -> int:
         return self.adversarial_config.num_adversarial_training_rounds
@@ -524,19 +558,25 @@ class AdversarialTraining(Training):
             )
             checkpoint = None
         if checkpoint is not None:
-            logger.debug(f"Loading adversarial state from {checkpoint}")
+            logger.info(f"Loading adversarial state from {checkpoint}")
             self.state.load(checkpoint)
-            logger.debug(f"Resuming from round {self.state.current_round}")
+            starting_round = self.state.current_round
+            logger.info(f"Resuming from round {starting_round}")
+        else:
+            starting_round = 0
 
         # Run the adversarial training loop
         table = WandbTable("adversarial_eval/table")
-        for round in range(self.num_adversarial_training_rounds):
-            if round < self.state.current_round:
-                continue
+        for round in range(starting_round, self.num_adversarial_training_rounds):
             logger.info("Adversarial training round %s started ", round)
             self._log_debug_info()
 
             self.state.current_round = round
+            adversarial_trainer.args.output_dir = self.output_dir + f"/round-{round}"
+            logger.info(
+                "Setting HF Trainer output dir (used for saving checkpoints) to "
+                + adversarial_trainer.args.output_dir
+            )
             # Can be useful for x axis in plots
             wandb.log({"adversarial_training_round": round}, commit=False)
 
@@ -549,8 +589,14 @@ class AdversarialTraining(Training):
                 logger.info("Victim started training in round %s", round)
                 self._log_debug_info()
 
-                adversarial_trainer.train(resume_from_checkpoint=checkpoint)
-                checkpoint = None  # Only resume from checkpoint in the first round
+                adversarial_trainer.train(
+                    resume_from_checkpoint=(
+                        checkpoint
+                        if self.environment_config.allow_checkpointing
+                        and (round == starting_round)
+                        else False
+                    )
+                )
                 logger.info("Victim finished training in round %s ", round)
                 self._log_debug_info()
 
@@ -602,6 +648,8 @@ class AdversarialTraining(Training):
                 global_step_count=victim_log_counter.root.step_count,
                 global_datapoint_count=victim_log_counter.root.datapoint_count,
                 wandb_table=table,
+                # We don't use checkpointing of attacks during adversarial training
+                resume_from_checkpoint=False,
             )
 
             # Now generate adversarial examples using the training attack; possibly

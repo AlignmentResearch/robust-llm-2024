@@ -161,6 +161,7 @@ def _preprocess_example(
 class TextAttackAttack(Attack):
     """Attack using the TextAttack library."""
 
+    CAN_CHECKPOINT = False
     REQUIRES_TRAINING = False
 
     def __init__(
@@ -256,11 +257,8 @@ class TextAttackAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
-        resume_from_checkpoint: bool | None = None,
+        resume_from_checkpoint: bool = False,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
-        assert (
-            resume_from_checkpoint is None or resume_from_checkpoint is False
-        ), "Checkpointing not supported for TextAttack."
         assert dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
 
         dataset = self._preprocess_dataset(dataset)

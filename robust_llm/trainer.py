@@ -89,8 +89,8 @@ class RLLMTrainer(Trainer):
                 for evaluation during the training.
             kwargs: Additional keyword arguments to pass to the HuggingFace Trainer.
         """
-        assert not isinstance(resume_from_checkpoint, bool), (
-            "Unlike HuggingFace, we don't support passing a boolean to "
+        assert resume_from_checkpoint is not True, (
+            "Unlike HuggingFace, we don't support passing `True` to "
             "`resume_from_checkpoint` because we want to handle the choice of path "
             "one level up in the training script."
         )
@@ -262,34 +262,6 @@ class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
     def __init__(self, training: AdversarialTraining) -> None:
         super().__init__(training)
         self.training: AdversarialTraining = training
-        self.state = None
-
-    @override
-    def on_train_end(
-        self,
-        args: TrainingArguments,
-        state: TrainerState,
-        control: TrainerControl,
-        **kwargs,
-    ):
-        """Save the state of the training after each round."""
-        self.state = state
-        super().on_train_end(args, state, control, **kwargs)
-
-    @override
-    def on_train_begin(
-        self,
-        args: TrainingArguments,
-        state: TrainerState,
-        control: TrainerControl,
-        **kwargs,
-    ):
-        """Restore the training state on subsequent rounds."""
-        if self.state is not None:
-            assert self.training.trainer is not None
-            state = self.state
-            self.training.trainer.state = state
-        super().on_train_begin(args, state, control, **kwargs)
 
     def on_save(
         self,
@@ -298,6 +270,7 @@ class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
         control: TrainerControl,
         **kwargs,
     ):
+        """Save the full AdversarialTrainingState alongside HF trainer state."""
         assert self.training.trainer is not None
         assert self.training.state is not None
         checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{state.global_step}"

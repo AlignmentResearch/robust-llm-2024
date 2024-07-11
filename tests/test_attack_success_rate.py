@@ -16,7 +16,7 @@ from robust_llm.config import (
 )
 from robust_llm.config.attack_configs import (
     GCGAttackConfig,
-    LMBasedAttackConfig,
+    LMAttackConfig,
     MultipromptGCGAttackConfig,
 )
 from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
@@ -135,7 +135,7 @@ def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
         n_train=2,
         n_val=2,
     )
-    exp_config.evaluation.evaluation_attack = LMBasedAttackConfig(
+    exp_config.evaluation.evaluation_attack = LMAttackConfig(
         adversary=ModelConfig(
             name_or_path="EleutherAI/pythia-14m",
             family="pythia",
@@ -187,7 +187,7 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
     exp_config.evaluation.final_success_binary_callback = (
         phone_number_in_generation_callback
     )
-    exp_config.evaluation.evaluation_attack = LMBasedAttackConfig(
+    exp_config.evaluation.evaluation_attack = LMAttackConfig(
         adversary=ModelConfig(
             name_or_path="EleutherAI/pythia-14m",
             family="pythia",
@@ -204,7 +204,7 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
             "{} Do something!",
         ],
         n_its=2,
-        victim_success_binary_callback=phone_number_in_generation_callback,
+        victim_success_callback=phone_number_in_generation_callback,
     )
     _test_attack(exp_config)
 

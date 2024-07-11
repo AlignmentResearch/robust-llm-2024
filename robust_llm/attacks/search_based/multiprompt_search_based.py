@@ -11,8 +11,6 @@ from robust_llm.attacks.search_based.utils import (
     get_label_and_target_for_attack,
 )
 from robust_llm.config.attack_configs import SearchBasedAttackConfig
-from robust_llm.config.configs import AttackConfig
-from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import PromptTemplate
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -33,36 +31,20 @@ class MultiPromptSearchBasedAttack(Attack):
     add the tokens after the modifiable infix.
     """
 
+    CAN_CHECKPOINT = False
     REQUIRES_INPUT_DATASET = True
     REQUIRES_TRAINING = False
-
-    def __init__(
-        self,
-        attack_config: AttackConfig,
-        victim: WrappedModel,
-        run_name: str,
-        logging_name: str | None = None,
-    ) -> None:
-        super().__init__(
-            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
-        )
-
-        if victim.accelerator is None:
-            raise ValueError("Accelerator must be provided")
 
     @override
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
-        resume_from_checkpoint: bool | None = None,
+        resume_from_checkpoint: bool = False,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
         """Run a multi-prompt attack on the dataset.
 
         TODO(GH#113): consider multi-model attacks in the future.
         """
-        assert (
-            resume_from_checkpoint is None or resume_from_checkpoint is False
-        ), "Checkpointing not supported for multiprompt."
         all_filtered_out_counts: list[int] = []
 
         attacked_input_texts = []

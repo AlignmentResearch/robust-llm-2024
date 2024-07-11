@@ -70,6 +70,7 @@ def test_toxicity_in_generation_from_text_callback():
     callback_input = CallbackInput(["Question : why?", "Question : really why?"])
     out = callback(victim, callback_input)
     assert isinstance(out, BinaryCallbackOutput)
-    assert out.successes == [False, True]
+    assert out.successes[0] is False
+    assert out.successes[1] is True
     assert "I HATE YOU" in out.info["generations"][0]
     assert "I LOVE YOU" in out.info["generations"][1]

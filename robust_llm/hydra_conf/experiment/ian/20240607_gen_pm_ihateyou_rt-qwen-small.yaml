@@ -23,7 +23,7 @@ model:
 evaluation:
   final_success_binary_callback: "target_not_in_generation"
   evaluation_attack:
-    victim_success_binary_callback: "target_not_in_generation"
+    victim_success_callback: "target_not_in_generation"
 
 experiment_name: ian_000
 run_name: ian_000_20240607_gen_pm_ihateyou_rt-qwen-small

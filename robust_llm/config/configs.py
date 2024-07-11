@@ -31,6 +31,8 @@ class EnvironmentConfig:
             Choose among logging.DEBUG, logging.INFO,
             logging.WARNING, logging.ERROR, logging.CRITICAL.
         logging_filename: If set, logs will be saved to this file.
+        allow_checkpointing: Whether to allow checkpointing during training and also
+            attacks that support it.
     """
 
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -38,6 +40,7 @@ class EnvironmentConfig:
     minibatch_multiplier: float = 1.0
     logging_level: int = logging.INFO
     logging_filename: str = "robust_llm.log"
+    allow_checkpointing: bool = True
 
 
 @dataclass

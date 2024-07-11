@@ -5,8 +5,8 @@ import wandb
 from accelerate import Accelerator
 from omegaconf import OmegaConf
 
-from robust_llm.attacks.search_free.lm_based_attack import LMBasedAttack
-from robust_llm.config.attack_configs import LMBasedAttackConfig
+from robust_llm.attacks.search_free.lm_attack_zero_shot import ZeroShotLMAttack
+from robust_llm.config.attack_configs import LMAttackConfig
 from robust_llm.config.configs import (
     EnvironmentConfig,
     EvaluationConfig,
@@ -58,10 +58,10 @@ def exp_config() -> ExperimentConfig:
     return config
 
 
-def test_adversary_input(exp_config: ExperimentConfig) -> None:
+def test_adversary_input_zs(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     n_its = 2
-    exp_config.evaluation.evaluation_attack = LMBasedAttackConfig(
+    exp_config.evaluation.evaluation_attack = LMAttackConfig(
         adversary=ModelConfig(
             name_or_path="EleutherAI/pythia-14m",
             family="pythia",
@@ -108,7 +108,7 @@ def test_adversary_input(exp_config: ExperimentConfig) -> None:
         victim=victim,
         training=False,
     )
-    assert isinstance(attack, LMBasedAttack)
+    assert isinstance(attack, ZeroShotLMAttack)
 
     with patch.object(
         attack.adversary, "generate", wraps=attack.adversary.generate
@@ -138,9 +138,9 @@ def test_adversary_input(exp_config: ExperimentConfig) -> None:
     assert second_call.endswith("but at least it was not boring. Do something2!")
 
 
-def test_wrong_chunks_dataset(exp_config: ExperimentConfig) -> None:
+def test_wrong_chunks_dataset_zs(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
-    exp_config.evaluation.evaluation_attack = LMBasedAttackConfig(
+    exp_config.evaluation.evaluation_attack = LMAttackConfig(
         adversary=ModelConfig(
             name_or_path="EleutherAI/pythia-14m",
             family="pythia",
@@ -190,7 +190,7 @@ def test_wrong_chunks_dataset(exp_config: ExperimentConfig) -> None:
         victim=victim,
         training=False,
     )
-    assert isinstance(attack, LMBasedAttack)
+    assert isinstance(attack, ZeroShotLMAttack)
 
     with patch.object(
         type(validation), "modifiable_chunk_spec", new_callable=PropertyMock

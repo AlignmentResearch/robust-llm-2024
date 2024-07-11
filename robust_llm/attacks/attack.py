@@ -24,12 +24,14 @@ class AttackState:
 
     example_index: int = 0
     attacked_texts: list[str] = field(default_factory=list)
+    example_info: dict[str, list[Any]] = field(default_factory=dict)
 
 
 class Attack(abc.ABC):
     """Base class for all attacks.
 
     Attributes:
+        CAN_CHECKPOINT: Whether the attack type supports checkpointing.
         REQUIRES_TRAINING: Whether the attack needs to be trained before it can be
             effectively used.
         attack_config: Configuration for the attack.
@@ -37,6 +39,7 @@ class Attack(abc.ABC):
             examples include "training_attack" or "validation_attack".
     """
 
+    CAN_CHECKPOINT: bool
     REQUIRES_TRAINING: bool
 
     def __init__(
@@ -55,6 +58,7 @@ class Attack(abc.ABC):
         logging_name: Name of the attack, for the purposes of logging. Possible
             examples include "training_attack" or "validation_attack".
         """
+        assert victim.accelerator is not None, "Accelerator must be provided"
         self.attack_config = attack_config
         self.victim = victim
         self.run_name = run_name
@@ -62,7 +66,9 @@ class Attack(abc.ABC):
         self.attack_state = AttackState()
         save_limit_gt_0 = self.attack_config.save_total_limit > 0
         run_name_not_default = self.run_name != "default-run"
-        self.can_checkpoint = save_limit_gt_0 and run_name_not_default
+        self.can_checkpoint = (
+            save_limit_gt_0 and run_name_not_default and self.CAN_CHECKPOINT
+        )
 
         if self.REQUIRES_TRAINING and self.attack_config.log_frequency is not None:
             assert logging_name is not None
@@ -72,14 +78,13 @@ class Attack(abc.ABC):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
-        resume_from_checkpoint: bool | None = None,
+        resume_from_checkpoint: bool = True,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
         """Produces a dataset of adversarial examples.
 
         Args:
             dataset: RLLMDataset of original examples to start from.
             resume_from_checkpoint: Whether to resume from the last checkpoint.
-                If None, defaults to self.can_checkpoint.
 
         Subclasses should return:
             A tuple `(dataset, info_dict)` where:
@@ -140,6 +145,9 @@ class Attack(abc.ABC):
         self.clean_states()
 
     def maybe_save_state(self):
+        assert self.victim.accelerator is not None
+        if not self.victim.accelerator.is_main_process:
+            return
         if not self.can_checkpoint:
             return
         if self.attack_state.example_index % self.attack_config.save_steps == 0:
@@ -167,8 +175,6 @@ class Attack(abc.ABC):
                 attack_state = json.load(f)
             for key, value in attack_state.items():
                 setattr(self.attack_state, key, value)
-            # We are ready to attack the next example
-            self.attack_state.example_index += 1
             with open(
                 os.path.join(self.states_directory(), checkpoint, CONFIG_NAME)
             ) as f:
@@ -190,17 +196,15 @@ class IdentityAttack(Attack):
     A trivial 'attack' that could be used for debugging.
     """
 
+    CAN_CHECKPOINT = False
     REQUIRES_TRAINING = False
 
     @override
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
-        resume_from_checkpoint: bool | None = None,
+        resume_from_checkpoint: bool = False,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
-        assert (
-            resume_from_checkpoint is None or resume_from_checkpoint is False
-        ), "Checkpointing not supported for IdentityAttack."
         dataset = dataset.with_attacked_text(
             dataset.ds["text"],
         )

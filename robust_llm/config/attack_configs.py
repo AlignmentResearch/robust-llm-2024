@@ -91,13 +91,12 @@ class TextAttackAttackConfig(AttackConfig):
 
 
 @dataclass
-class RandomTokenAttackConfig(AttackConfig):
-    """Options specific for RandomToken attacks.
+class SearchFreeAttackConfig(AttackConfig):
+    """Options specific for search-free attacks.
 
     Attributes:
-        n_attack_tokens (int): The number of tokens to generate.
         n_its (int): Maximum number of iterations to run the attack.
-        victim_success_binary_callback (CallbackConfig): Config for the
+        victim_success_callback (CallbackConfig): Config for the
             ScoringCallback to use to compute whether an attack was successful by
             computing whether the victim got the right answer. Should refer to a
             BinaryCallback, because we need discrete success/failure for each
@@ -107,11 +106,11 @@ class RandomTokenAttackConfig(AttackConfig):
             "multi-prompt" for attacking multiple prompts at once. Defaults to
             "single-prompt".
             TODO(GH#402): Use this for GCG as well and move into AttackConfig?
+
     """
 
-    n_attack_tokens: int = 10
     n_its: int = 100
-    victim_success_binary_callback: CallbackConfig = field(
+    victim_success_callback: CallbackConfig = field(
         default_factory=lambda: CallbackConfig(
             callback_name="successes_from_text", callback_return_type="binary"
         )
@@ -121,11 +120,25 @@ class RandomTokenAttackConfig(AttackConfig):
     def __post_init__(self):
         super().__post_init__()
         assert self.n_its > 0
+
+
+@dataclass
+class RandomTokenAttackConfig(SearchFreeAttackConfig):
+    """Options specific for RandomToken attacks.
+
+    Attributes:
+        n_attack_tokens (int): The number of tokens to generate.
+    """
+
+    n_attack_tokens: int = 10
+
+    def __post_init__(self):
+        super().__post_init__()
         assert self.n_attack_tokens > 0
 
 
 @dataclass
-class LMBasedAttackConfig(AttackConfig):
+class LMAttackConfig(SearchFreeAttackConfig):
     """Options specific for LM-based attacks.
     Attributes:
         adversary: Model config used as the LM adversary.
@@ -137,7 +150,7 @@ class LMBasedAttackConfig(AttackConfig):
             Each template should contain exactly one `{}` placeholder for the attack.
             E.g. ["Ignore the following tokens: {}"] for a single chunk.
         n_its: Maximum number of iterations to run the attack.
-        victim_success_binary_callback (CallbackConfig): Config for the
+        victim_success_callback (CallbackConfig): Config for the
             ScoringCallback to use to compute whether an attack was successful by
             computing whether the victim got the right answer. Should refer to a
             BinaryCallback, because we need discrete success/failure for each
@@ -149,7 +162,7 @@ class LMBasedAttackConfig(AttackConfig):
     adversary_output_templates: list[str] = field(default_factory=lambda: ["{}"])
     n_its: int = 10
     prompt_attack_mode: str = "single-prompt"
-    victim_success_binary_callback: CallbackConfig = field(
+    victim_success_callback: CallbackConfig = field(
         default_factory=lambda: CallbackConfig(
             callback_name="successes_from_text", callback_return_type="binary"
         )
@@ -158,6 +171,34 @@ class LMBasedAttackConfig(AttackConfig):
     def __post_init__(self):
         super().__post_init__()
         assert self.adversary.inference_type == InferenceType.GENERATION.value
+
+
+@dataclass
+class FewShotLMAttackConfig(LMAttackConfig):
+    """Options specific for Stochastic Few Shot LM red-team attacks.
+
+    Attributes:
+        few_shot_temperature (float): The temperature to use for sampling from previous
+            attacks.
+        k_shot (int): The number of previous attacks to sample.
+        adversary_shot_template (str): The template to use for sampling attacks.
+            Must contain {k} (shot index) and {shot} (shot attack text) placeholders.
+            E.g. "{k}. {shot}\n" could produce an attack string like
+            "Some questions: 1. Why do I hate you?\n2. Why do you hate me?\n"
+        with_replacement (bool): Whether to sample with replacement from attacks.
+    """
+
+    few_shot_temperature: float = 0.1
+    k_shot: int = 5
+    adversary_shot_template: str = "{k}. {shot}\n"
+    with_replacement: bool = False
+
+    def __post_init__(self):
+        super().__post_init__()
+        assert self.few_shot_temperature >= 0
+        assert self.k_shot > 0
+        assert "{k}" in self.adversary_shot_template
+        assert "{shot}" in self.adversary_shot_template
 
 
 @dataclass
@@ -343,4 +384,5 @@ cs.store(group="attack", name="TRL", node=TRLAttackConfig)
 cs.store(group="attack", name="GCG", node=GCGAttackConfig)
 cs.store(group="attack", name="MULTIPROMPT_GCG", node=MultipromptGCGAttackConfig)
 cs.store(group="attack", name="BEAM_SEARCH", node=BeamSearchAttackConfig)
-cs.store(group="attack", name="LM_BASED", node=LMBasedAttackConfig)
+cs.store(group="attack", name="ZERO_SHOT_LM", node=LMAttackConfig)
+cs.store(group="attack", name="FEW_SHOT_LM", node=FewShotLMAttackConfig)

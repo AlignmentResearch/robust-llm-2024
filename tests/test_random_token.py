@@ -60,20 +60,20 @@ def test_n_random_token_ids_with_exclusions(random_token_config, mocked_victim):
     assert all([x >= 0 for x in tokens])
 
 
-def test_get_attacked_text_from_successes():
+def test_get_attacked_text_from_successes(random_token_config):
     attacked_inputs = ["a", "b", "c"]
 
     successes = [True, False, True]
     rv = get_attacked_text_from_successes(attacked_inputs, successes)
-    assert rv == ("b", [1])
+    assert rv == "b"
 
     successes = [True, True, True]
     rv = get_attacked_text_from_successes(attacked_inputs, successes)
-    assert rv == ("c", [])
+    assert rv == "c"
 
     successes = [False, False, False]
     rv = get_attacked_text_from_successes(attacked_inputs, successes)
-    assert rv == ("a", [0, 1, 2])
+    assert rv == "a"
 
 
 def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):

@@ -34,6 +34,7 @@ class TRLAttack(Attack):
     from the tokenizer's vocabulary.
     """
 
+    CAN_CHECKPOINT = False
     REQUIRES_TRAINING = True
 
     def __init__(
@@ -67,7 +68,6 @@ class TRLAttack(Attack):
                 "As is, no trl train stats will be logged."
             )
 
-        self.victim = victim
         cb_config = attack_config.rewards_from_victim_callback
         self.rewards_from_victim_callback = build_tensor_scoring_callback(cb_config)
 
@@ -227,11 +227,8 @@ class TRLAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
-        resume_from_checkpoint: bool | None = None,
+        resume_from_checkpoint: bool = False,
     ) -> tuple[RLLMDataset, dict[str, Any]]:
-        assert (
-            resume_from_checkpoint is None or resume_from_checkpoint is False
-        ), "Checkpointing not supported for TRLAttack."
         # At present, the trl attack is set up to only work
         # with one modifiable chunk
         assert dataset.modifiable_chunk_spec.n_modifiable_chunks == 1

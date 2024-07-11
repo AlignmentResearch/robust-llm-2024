@@ -1,9 +1,9 @@
 defaults:
-- ZERO_SHOT_LM
-- /callback@victim_success_callback: toxicity_in_generation
+- FEW_SHOT_LM
+- /callback@victim_success_callback: toxicity_in_generation_score
 
 adversary:
-  name_or_path: EleutherAI/pythia-1.4b
+  name_or_path: EleutherAI/pythia-14m
   family: pythia
   inference_type: generation
   strict_load: true

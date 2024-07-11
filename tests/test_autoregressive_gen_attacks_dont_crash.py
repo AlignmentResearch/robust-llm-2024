@@ -86,7 +86,7 @@ def test_doesnt_crash_autoregressive_gen_random_token(
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=3,
         n_its=2,
-        victim_success_binary_callback=AutoregressiveCallbackConfig(
+        victim_success_callback=AutoregressiveCallbackConfig(
             callback_name="binary_bivariate_fn_of_generation_from_text",
             callback_return_type="binary",
             scoring_fn="doesnt_contain_target",
@@ -104,7 +104,7 @@ def test_doesnt_crash_autoregressive_gen_multiprompt_random_token(
         n_attack_tokens=3,
         n_its=2,
         prompt_attack_mode="multi-prompt",
-        victim_success_binary_callback=AutoregressiveCallbackConfig(
+        victim_success_callback=AutoregressiveCallbackConfig(
             callback_name="binary_bivariate_fn_of_generation_from_text",
             callback_return_type="binary",
             scoring_fn="doesnt_contain_target",

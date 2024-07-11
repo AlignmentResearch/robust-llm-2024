@@ -473,6 +473,30 @@ class WrappedModel(ABC):
                     for in_text, out_text in zip(input_texts, output_texts, strict=True)
                 ]
 
+    def generate_from_text(self, text: str) -> list[int]:
+        """Returns the autoregressive generation from the text."""
+        inputs = self.tokenize(
+            text,
+            return_tensors="pt",
+            # We use left-padding for autoregressive outputs.
+            padding_side="left",
+        )
+        inputs = inputs.to(device=self.device)
+        input_ids = inputs.input_ids
+        attention_mask = inputs.attention_mask
+        assert input_ids.shape[0] == 1
+        assert attention_mask.shape[0] == 1
+        all_tokens = self.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            pad_token_id=self.right_tokenizer.pad_token_id,
+        )
+        assert isinstance(all_tokens, torch.Tensor)
+        assert all_tokens.shape[0] == 1
+        output_tokens = all_tokens[0, input_ids.shape[1] :]
+
+        return output_tokens.cpu().tolist()
+
     def __call__(self, **inputs):
         return self.forward(**inputs)
 

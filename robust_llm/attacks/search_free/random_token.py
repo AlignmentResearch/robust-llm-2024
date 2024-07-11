@@ -5,7 +5,6 @@ from typing import Optional
 from robust_llm.attacks.attack import PromptAttackMode
 from robust_llm.attacks.search_free.search_free import SearchFreeAttack
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
-from robust_llm.logging_utils import LoggingCounter
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.scoring_callbacks import build_binary_scoring_callback
@@ -50,16 +49,8 @@ class RandomTokenAttack(SearchFreeAttack):
         self.n_its = attack_config.n_its
 
         self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
-        cb_config = attack_config.victim_success_binary_callback
-        self.victim_success_binary_callback = build_binary_scoring_callback(cb_config)
-
-        self.logging_counter = LoggingCounter(
-            _name=(
-                "random_token_attack"
-                if self.logging_name is None
-                else self.logging_name
-            )
-        )
+        cb_config = attack_config.victim_success_callback
+        self.victim_success_callback = build_binary_scoring_callback(cb_config)
 
     @cached_property
     def shared_attack_tokens(self) -> list[list[int]]:

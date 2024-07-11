@@ -71,3 +71,14 @@ def build_tensor_scoring_callback(config: CallbackConfig) -> TensorCallback:
         )
     else:
         return callback_fn
+
+
+def build_scoring_callback(config: CallbackConfig) -> BinaryCallback | TensorCallback:
+    """Builds a scoring callback from a CallbackConfig."""
+    callback_return_type = CallbackReturnType(config.callback_return_type)
+    if callback_return_type == CallbackReturnType.BINARY:
+        return build_binary_scoring_callback(config)
+    elif callback_return_type == CallbackReturnType.TENSOR:
+        return build_tensor_scoring_callback(config)
+    else:
+        raise ValueError(f"Unknown callback_return_type: {config.callback_return_type}")

@@ -33,12 +33,10 @@ def do_adversarial_evaluation(
     global_step_count: int,
     global_datapoint_count: int,
     wandb_table: Optional[WandbTable] = None,
+    resume_from_checkpoint: bool = True,
 ) -> dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
-    # If a wandb table was passed in, we write logging information to that table, and
-    # do not take responsibility for writing the table to disk. If no table was
-    # passed in, we will create our own and save it to disk.
-    save_table: bool = wandb_table is None
+    wandb_table_exists = wandb_table is not None
     if victim.accelerator is None:
         raise ValueError("Accelerator must be provided")
     # Sanity check in case of a distributed run (with accelerate): check if every
@@ -72,7 +70,12 @@ def do_adversarial_evaluation(
         raise ValueError("No examples to attack in adversarial evaluation!")
     dataset_to_attack = dataset.get_subset(indices_to_attack)
 
-    attacked_dataset, info_dict = attack.get_attacked_dataset(dataset=dataset_to_attack)
+    attacked_dataset, info_dict = attack.get_attacked_dataset(
+        dataset=dataset_to_attack,
+        # Only resume from checkpoint if we're in the evaluation pipeline as otherwise
+        # we will be incorrectly reusing data in the case of adversarial training.
+        resume_from_checkpoint=resume_from_checkpoint,
+    )
 
     # In case the attack changed the victim from eval() mode, we set it again here.
     victim.eval()
@@ -145,6 +148,7 @@ def do_adversarial_evaluation(
             attacked_flags=post_attack_flags,
             indices_to_attack=indices_to_attack,
             num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
+            **attack.attack_state.example_info,
         )
 
     if victim.accelerator.is_main_process:
@@ -155,8 +159,8 @@ def do_adversarial_evaluation(
             WandbTable("adversarial_eval/table") if wandb_table is None else wandb_table
         )
         wandb_table.add_data(metrics)
-        if save_table:
-            # Since no table was passed in, we must save it here to keep the data.
+        if not wandb_table_exists:
+            # If the wandb table already exists, we don't take responsibility for saving
             wandb_table.save()
 
     return metrics
@@ -197,6 +201,7 @@ def _log_examples_to_wandb(
     attacked_flags: Sequence[bool] | Sequence[None],
     indices_to_attack: Sequence[int],
     num_examples_to_log_detailed_info: int,
+    **other_attack_info,
 ) -> None:
     """Logs examples to wandb.
 
@@ -212,6 +217,9 @@ def _log_examples_to_wandb(
         indices_to_attack: The indices in the pre-attack datasetof the examples
             that were attacked.
         num_examples_to_log_detailed_info: The number of examples to log.
+        other_attack_info: Other attack-specific information to log.
+            Should be dictionaries of str -> Sequence, where the sequence has
+            the same length as the attacked_texts.
     """
 
     table = wandb.Table(
@@ -225,19 +233,23 @@ def _log_examples_to_wandb(
             "attacked_success",
             "attacked_flag",
         ]
+        + list(other_attack_info.keys())
     )
     # We only log examples from those that were actually attacked.
     indices_to_record = indices_to_attack[:num_examples_to_log_detailed_info]
     for post_attack_idx, pre_attack_idx in enumerate(indices_to_record):
         table.add_data(
-            original_texts[pre_attack_idx],
-            original_labels[pre_attack_idx],
-            original_successes[pre_attack_idx],
-            original_flags[pre_attack_idx],
-            attacked_texts[post_attack_idx],
-            attacked_labels[post_attack_idx],
-            attacked_successes[post_attack_idx],
-            attacked_flags[post_attack_idx],
+            *[
+                original_texts[pre_attack_idx],
+                original_labels[pre_attack_idx],
+                original_successes[pre_attack_idx],
+                original_flags[pre_attack_idx],
+                attacked_texts[post_attack_idx],
+                attacked_labels[post_attack_idx],
+                attacked_successes[post_attack_idx],
+                attacked_flags[post_attack_idx],
+            ]
+            + [other_attack_info[key][post_attack_idx] for key in other_attack_info]
         )
 
     wandb.log({"adversarial_eval/examples": table}, commit=False)

@@ -1,7 +1,9 @@
 from .attack_configs import (
     AttackConfig,
     BeamSearchAttackConfig,
+    FewShotLMAttackConfig,
     GCGAttackConfig,
+    LMAttackConfig,
     RandomTokenAttackConfig,
     SearchBasedAttackConfig,
     TextAttackAttackConfig,
@@ -22,6 +24,8 @@ __all__ = [
     "BeamSearchAttackConfig",
     "GCGAttackConfig",
     "RandomTokenAttackConfig",
+    "LMAttackConfig",
+    "FewShotLMAttackConfig",
     "SearchBasedAttackConfig",
     "TextAttackAttackConfig",
     "TRLAttackConfig",

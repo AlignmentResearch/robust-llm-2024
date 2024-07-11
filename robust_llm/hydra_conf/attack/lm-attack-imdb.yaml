@@ -1,5 +1,5 @@
 defaults:
-- LM_BASED
+- ZERO_SHOT_LM
 
 adversary:
   name_or_path: EleutherAI/pythia-1.4b

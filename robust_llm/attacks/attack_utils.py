@@ -3,15 +3,17 @@ from robust_llm.attacks.search_based.multiprompt_search_based import (
     MultiPromptSearchBasedAttack,
 )
 from robust_llm.attacks.search_based.search_based import SearchBasedAttack
-from robust_llm.attacks.search_free.lm_based_attack import LMBasedAttack
+from robust_llm.attacks.search_free.lm_attack_few_shot import FewShotLMAttack
+from robust_llm.attacks.search_free.lm_attack_zero_shot import ZeroShotLMAttack
 from robust_llm.attacks.search_free.random_token import RandomTokenAttack
 from robust_llm.attacks.text_attack.text_attack import TextAttackAttack
 from robust_llm.attacks.trl.trl import TRLAttack
 from robust_llm.config.attack_configs import (
     BeamSearchAttackConfig,
+    FewShotLMAttackConfig,
     GCGAttackConfig,
     IdentityAttackConfig,
-    LMBasedAttackConfig,
+    LMAttackConfig,
     MultipromptGCGAttackConfig,
     RandomTokenAttackConfig,
     TextAttackAttackConfig,
@@ -54,9 +56,15 @@ def create_attack(
                 run_name=run_name,
                 logging_name=logging_name,
             )
-        # LM-based attacks
-        case LMBasedAttackConfig():
-            return LMBasedAttack(
+        case FewShotLMAttackConfig():
+            return FewShotLMAttack(
+                attack_config=attack_config,
+                victim=victim,
+                run_name=run_name,
+                logging_name=logging_name,
+            )
+        case LMAttackConfig():
+            return ZeroShotLMAttack(
                 attack_config=attack_config,
                 victim=victim,
                 run_name=run_name,
