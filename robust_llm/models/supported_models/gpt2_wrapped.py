@@ -23,6 +23,7 @@ class GPT2Model(WrappedModel):
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
         family: Literal["gpt2"],
+        system_prompt: str | None = None,
     ) -> None:
         # TODO (ian): Decide whether this assert is worthwhile (it makes testing
         # harder).
@@ -36,6 +37,7 @@ class GPT2Model(WrappedModel):
             eval_minibatch_size,
             generation_config=generation_config,
             family=family,
+            system_prompt=system_prompt,
         )
 
         # Special setup needed for gpt2.

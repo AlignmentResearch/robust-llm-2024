@@ -12,4 +12,5 @@ MODEL_FAMILIES = [
     "tinyllama",
     "mistralai",
     "gpt_neox",
+    "pythia-chat",
 ]

@@ -30,6 +30,7 @@ class QwenModel(WrappedModel):
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
         family: Literal["qwen1.5", "qwen2"],
+        system_prompt: str | None = None,
     ) -> None:
         super().__init__(
             model,
@@ -40,6 +41,7 @@ class QwenModel(WrappedModel):
             eval_minibatch_size,
             generation_config=generation_config,
             family=family,
+            system_prompt=system_prompt,
         )
 
     @override

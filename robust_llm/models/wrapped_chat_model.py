@@ -1,8 +1,12 @@
-from typing import cast, overload
+from __future__ import annotations
 
+from typing import Optional, cast, overload
+
+from accelerate import Accelerator
 from transformers import BatchEncoding
 from typing_extensions import override
 
+from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.wrapped_model import WrappedModel
 
 
@@ -99,9 +103,13 @@ class WrappedChatModel(WrappedModel):
         Returns:
             The text with the chat template applied.
         """
+        if self.system_prompt is not None:
+            base_conversation = [{"role": "system", "content": self.system_prompt}]
+        else:
+            base_conversation = []
         if isinstance(text, str):
             out_text = self.right_tokenizer.apply_chat_template(
-                conversation=[{"role": "user", "content": text}],
+                conversation=base_conversation + [{"role": "user", "content": text}],
                 tokenize=False,
                 add_generation_prompt=add_generation_prompt,
             )
@@ -110,7 +118,7 @@ class WrappedChatModel(WrappedModel):
         elif isinstance(text, list):
             out_text = [
                 self.right_tokenizer.apply_chat_template(
-                    conversation=[{"role": "user", "content": t}],
+                    conversation=base_conversation + [{"role": "user", "content": t}],
                     tokenize=False,
                     add_generation_prompt=add_generation_prompt,
                 )
@@ -120,3 +128,17 @@ class WrappedChatModel(WrappedModel):
             return cast(list[str], out_text)
         else:
             raise ValueError(f"Unexpected type for text: {type(text)}")
+
+    @classmethod
+    def from_config(
+        cls,
+        config: ModelConfig,
+        accelerator: Accelerator | None,
+        num_classes: Optional[int] = None,
+        **kwargs,
+    ) -> WrappedChatModel:
+        model = super().from_config(
+            config, accelerator, num_classes=num_classes, **kwargs
+        )
+        assert isinstance(model, WrappedChatModel)
+        return model

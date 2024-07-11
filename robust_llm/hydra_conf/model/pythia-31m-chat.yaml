@@ -1,0 +1,3 @@
+name_or_path: "Felladrin/Pythia-31M-Chat-v1"
+family: "pythia-chat"
+train_minibatch_size: 256

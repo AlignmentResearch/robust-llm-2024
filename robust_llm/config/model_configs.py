@@ -77,6 +77,10 @@ class ModelConfig:
     dtype: Data type, e.g., float32 or bfloat16.
         Defaults to float32 since bfloat16 has much less precision (e.g., the
         next bfloat16 after 1024 is 1032), which can affect generation quality.
+    system_prompt: The prompt to pass as the "system prompt" for chat models.
+        This is used to control the behavior of the model, e.g., to make it
+        more conversational or more factual. If None, the default system prompt
+        chosen by HuggingFace is used.
     """
 
     name_or_path: str = MISSING
@@ -92,6 +96,7 @@ class ModelConfig:
     minibatch_multiplier: float = SI("${environment.minibatch_multiplier}")
     generation_config: Optional[GenerationConfig] = None
     dtype: str = "float32"
+    system_prompt: str | None = None
 
     def __post_init__(self):
         assert self.family in MODEL_FAMILIES

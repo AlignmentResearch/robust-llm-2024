@@ -60,6 +60,7 @@ class WrappedModel(ABC):
         eval_minibatch_size: int,
         family: str,
         generation_config: GenerationConfig | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         """Initialize a WrappedModel.
 
@@ -72,9 +73,11 @@ class WrappedModel(ABC):
                 or 'classification' or 'trl')
             train_minibatch_size: The minibatch size to use for training.
             eval_minibatch_size: The minibatch size to use for evaluation.
-            generation_config: The generation config to use for generation.
             family: The family of the model, useful for logging model details
                 to wandb alongside experiment results.
+            generation_config: The generation config to use for generation.
+            system_prompt: The system prompt to use for chat models.
+                If None, the default system prompt will be used.
         """
         # We need to compute the number of parameters before any accelerate preparation
         # because the model will be sharded across devices.
@@ -93,6 +96,7 @@ class WrappedModel(ABC):
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
         self.generation_config = generation_config
+        self.system_prompt = system_prompt
 
     @property
     def n_params(self) -> int:
@@ -237,6 +241,7 @@ class WrappedModel(ABC):
             eval_minibatch_size=eval_mb_size,
             generation_config=config.generation_config,
             family=config.family,
+            system_prompt=config.system_prompt,
         )
 
     def classification_output_from_tokens(

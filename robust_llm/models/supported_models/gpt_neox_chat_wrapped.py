@@ -1,30 +1,40 @@
+from __future__ import annotations
+
 from typing import Literal
 
 from accelerate import Accelerator
-from transformers import LlamaForCausalLM, LlamaTokenizer
-from typing_extensions import override
+from transformers import (
+    GPTNeoXPreTrainedModel,
+    GPTNeoXTokenizerFast,
+    PreTrainedTokenizerBase,
+)
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
+from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
 
 
-@WrappedModel.register_subclass("llama2")
-class Llama2Model(WrappedModel):
-    CONTEXT_LENGTH = 4096
+@WrappedModel.register_subclass("pythia-chat")
+class GPTNeoXChatModel(WrappedChatModel):
+    # NOTE: Pythia models are based on GPTNeoX
+    CONTEXT_LENGTH = 2048
 
     def __init__(
         self,
-        model: LlamaForCausalLM,
-        right_tokenizer: LlamaTokenizer,
+        model: GPTNeoXPreTrainedModel,
+        right_tokenizer: PreTrainedTokenizerBase,
         accelerator: Accelerator | None,
         inference_type: InferenceType,
         train_minibatch_size: int,
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
-        family: Literal["llama2"],
+        family: Literal["pythia-chat"],
         system_prompt: str | None = None,
     ) -> None:
+        # TODO (ian): Decide whether this assert is worthwhile (it makes testing
+        # harder).
+        # assert isinstance(model, GPTNeoXPreTrainedModel)
         super().__init__(
             model,
             right_tokenizer,
@@ -36,24 +46,24 @@ class Llama2Model(WrappedModel):
             family=family,
             system_prompt=system_prompt,
         )
-
-        # Special setup needed for llama.
+        # Special setup needed for pythia.
         self.model.config.pad_token_id = model.config.eos_token_id
 
-    @override
     @classmethod
     def load_tokenizer(
         cls,
         model_config: ModelConfig,
-    ) -> LlamaTokenizer:
+    ) -> GPTNeoXTokenizerFast:
         """Load the tokenizer."""
-        tokenizer = LlamaTokenizer.from_pretrained(
+        tokenizer = GPTNeoXTokenizerFast.from_pretrained(
             model_config.name_or_path,
             revision=model_config.revision,
             padding_side="right",  # Left padding is handled separately
             model_max_length=cls.CONTEXT_LENGTH,
             clean_up_tokenization_spaces=False,
         )
+        assert isinstance(tokenizer, GPTNeoXTokenizerFast)  # for type-checking
 
+        # Special setup needed for pythia.
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
