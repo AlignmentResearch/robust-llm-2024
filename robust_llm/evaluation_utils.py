@@ -281,5 +281,5 @@ def assert_same_data_between_processes(
         assert data_gathered[start:end] == data, (
             f"Data from process {i} does not match original.\n"
             f"Original (len {length}): {data}\n"
-            f"Process {i} ({start = }, {end = }): {data_gathered[start: end]}\n"
+            f"Process {i} ({start=}, {end=}): {data_gathered[start:end]}\n"
         )
