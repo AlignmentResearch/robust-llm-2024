@@ -50,7 +50,7 @@ class CallbackOutput(ABC):
     info: dict[str, Any] = field(default_factory=dict)
 
     @abstractmethod
-    def maybe_log_info(self, table_name: str) -> None:
+    def maybe_log_info(self, table_name: str, commit: bool = False) -> None:
         """Log info to wandb if self.info is not empty."""
 
 
@@ -59,7 +59,7 @@ class BinaryCallbackOutput(CallbackOutput):
     successes: list[bool]
 
     @override
-    def maybe_log_info(self, table_name: str) -> None:
+    def maybe_log_info(self, table_name: str, commit: bool = False) -> None:
         if should_log():
             if len(self.info) == 0:
                 return
@@ -74,7 +74,7 @@ class BinaryCallbackOutput(CallbackOutput):
                 for key, value in self.info.items():
                     row.append(value[i])
                 table.add_data(*row)
-            wandb.log({table_name: table}, commit=False)
+            wandb.log({table_name: table}, commit=commit)
 
 
 @dataclass(kw_only=True)
@@ -82,7 +82,7 @@ class TensorCallbackOutput(CallbackOutput):
     losses: torch.Tensor
 
     @override
-    def maybe_log_info(self, table_name: str) -> None:
+    def maybe_log_info(self, table_name: str, commit: bool = False) -> None:
         raise NotImplementedError("TensorCallbackOutput does not support logging info.")
 
 

@@ -140,6 +140,10 @@ class SearchBasedAttack(Attack):
         attacked_dataset = dataset.with_attacked_text(attacked_input_texts)
         info_dict = _create_info_dict(all_filtered_out_counts)
 
+        # We clear the gradients here to avoid using up GPU memory
+        # even after the attack has stopped using it.
+        # (This is primarily for GCG.)
+        self.victim.model.zero_grad()
         return attacked_dataset, info_dict
 
 

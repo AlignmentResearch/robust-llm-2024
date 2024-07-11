@@ -37,6 +37,10 @@ def do_adversarial_evaluation(
 ) -> dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
     wandb_table_exists = wandb_table is not None
+    # We only commit if there is not a wandb_table, since a table implies that this
+    # function is being called from the adversarial training pipeline.
+    should_commit = not wandb_table_exists
+
     if victim.accelerator is None:
         raise ValueError("Accelerator must be provided")
     # Sanity check in case of a distributed run (with accelerate): check if every
@@ -60,7 +64,7 @@ def do_adversarial_evaluation(
         victim,
         callback_input,
     )
-    pre_attack_out.maybe_log_info("pre_attack_callback")
+    pre_attack_out.maybe_log_info("pre_attack_callback", commit=should_commit)
     pre_attack_successes = pre_attack_out.successes
 
     # Reduce the dataset to only the examples that the model got correct, since
@@ -96,7 +100,7 @@ def do_adversarial_evaluation(
         victim,
         callback_input,
     )
-    post_attack_out.maybe_log_info("post_attack_callback")
+    post_attack_out.maybe_log_info("post_attack_callback", commit=should_commit)
     post_attack_successes = post_attack_out.successes
 
     attack_results = AttackResults(
