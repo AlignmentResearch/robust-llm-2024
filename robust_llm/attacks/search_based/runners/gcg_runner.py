@@ -9,7 +9,7 @@ from robust_llm.attacks.search_based.runners.search_based_runner import (
 )
 from robust_llm.attacks.search_based.utils import PreppedExample, ReplacementCandidate
 from robust_llm.config.callback_configs import CallbackConfig
-from robust_llm.models.model_utils import PromptTemplate
+from robust_llm.models.prompt_templates import PromptTemplate
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.scoring_callbacks import CallbackInput, build_tensor_scoring_callback
 

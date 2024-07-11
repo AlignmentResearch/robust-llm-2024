@@ -3,13 +3,13 @@ from typing import Callable
 import pytest
 from transformers import AutoTokenizer
 
-from robust_llm.models.chat_templates import (
+from robust_llm.models.prompt_templates import (
+    PromptTemplate,
     get_llama_2_template,
     get_llama_3_template,
     get_qwen_template,
     get_tinyllama_template,
 )
-from robust_llm.models.model_utils import PromptTemplate
 
 NAME_AND_TEMPLATE = [
     ("neuralmagic/Meta-Llama-3-8B-Instruct-FP8", get_llama_3_template),

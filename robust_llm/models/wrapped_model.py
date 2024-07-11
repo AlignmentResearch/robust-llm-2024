@@ -28,11 +28,9 @@ from transformers import (
 from transformers.modeling_outputs import ModelOutput
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.models.chat_templates import get_base_template
 from robust_llm.models.model_utils import (
     AutoregressiveOutput,
     InferenceType,
-    PromptTemplate,
     SuppressPadTokenWarning,
     build_dataloader,
     dict_to_device,
@@ -42,6 +40,7 @@ from robust_llm.models.model_utils import (
     prepare_model_with_accelerate,
     remove_padding_tokens,
 )
+from robust_llm.models.prompt_templates import PromptTemplate, get_base_template
 from robust_llm.utils import is_correctly_padded
 
 

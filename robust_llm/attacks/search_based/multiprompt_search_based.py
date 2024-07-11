@@ -11,7 +11,7 @@ from robust_llm.attacks.search_based.utils import (
     get_label_and_target_for_attack,
 )
 from robust_llm.config.attack_configs import SearchBasedAttackConfig
-from robust_llm.models.model_utils import PromptTemplate
+from robust_llm.models.prompt_templates import PromptTemplate
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 

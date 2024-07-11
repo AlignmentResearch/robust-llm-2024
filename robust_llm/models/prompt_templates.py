@@ -1,10 +1,31 @@
 from dataclasses import dataclass
 
-from robust_llm.models.model_utils import PromptTemplate
+
+@dataclass(frozen=True)
+class PromptTemplate:
+    """This is a general class for prompt templates,
+    that should encompass both chat models and non-chat
+    models
+
+    The basic idea is that there is some part before user input, and
+    some part after user input but before model input, and that should
+    be all off the content in the prompt.
+
+    For example, for a simple chat format:
+        before_attack="User: Hi, I'm an user! "
+        after_attack="\nAssistant:"
+    """
+
+    before_attack: str = ""
+    after_attack: str = ""
+
+    def build_prompt(self, *, attack_text: str = "", target: str = "") -> str:
+        prompt = self.before_attack + attack_text + self.after_attack + target
+        return prompt
 
 
-@dataclass
-class ChatTemplate:
+@dataclass(frozen=True)
+class PromptTemplateBuilder:
     """A template for generating chat prompts.
 
     Args:
@@ -58,7 +79,7 @@ def get_tinyllama_template(
     unmodifiable_suffix: str,
     system_prompt: str | None = None,
 ) -> PromptTemplate:
-    template = ChatTemplate(
+    template = PromptTemplateBuilder(
         prompt_prefix="",
         system_prefix="<|system|>\n",
         system_suffix="</s>\n",
@@ -76,12 +97,17 @@ def get_tinyllama_template(
 def get_base_template(
     unmodifiable_prefix: str, modifiable_infix: str, unmodifiable_suffix: str
 ) -> PromptTemplate:
-    before_attack = unmodifiable_prefix + modifiable_infix
-    after_attack = unmodifiable_suffix
-
-    return PromptTemplate(
-        before_attack=before_attack,
-        after_attack=after_attack,
+    template = PromptTemplateBuilder(
+        prompt_prefix="",
+        system_prefix="",
+        system_suffix="",
+        user_prefix="",
+        user_suffix="",
+    )
+    return template.get_prompt_template(
+        unmodifiable_prefix=unmodifiable_prefix,
+        modifiable_infix=modifiable_infix,
+        unmodifiable_suffix=unmodifiable_suffix,
     )
 
 
@@ -91,7 +117,7 @@ def get_llama_2_template(
     unmodifiable_suffix: str,
     system_prompt: str | None = None,
 ) -> PromptTemplate:
-    template = ChatTemplate(
+    template = PromptTemplateBuilder(
         prompt_prefix="<s>[INST] ",
         system_prefix="<<SYS>>\n",
         system_suffix="\n<</SYS>>\n\n",
@@ -112,7 +138,7 @@ def get_llama_3_template(
     unmodifiable_suffix: str,
     system_prompt: str | None = None,
 ) -> PromptTemplate:
-    template = ChatTemplate(
+    template = PromptTemplateBuilder(
         prompt_prefix="<|begin_of_text|>",
         system_prefix="<|start_header_id|>system<|end_header_id|>\n\n",
         system_suffix="<|eot_id|>",
@@ -133,7 +159,7 @@ def get_qwen_template(
     unmodifiable_suffix: str,
     system_prompt: str | None = None,
 ) -> PromptTemplate:
-    template = ChatTemplate(
+    template = PromptTemplateBuilder(
         prompt_prefix="",
         system_prefix="<|im_start|>system\n",
         system_suffix="<|im_end|>\n",

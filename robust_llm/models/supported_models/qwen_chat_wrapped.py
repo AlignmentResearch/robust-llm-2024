@@ -11,8 +11,8 @@ from transformers import (
 from typing_extensions import override
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.models.chat_templates import get_qwen_template
-from robust_llm.models.model_utils import InferenceType, PromptTemplate
+from robust_llm.models.model_utils import InferenceType
+from robust_llm.models.prompt_templates import PromptTemplate, get_qwen_template
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
 
