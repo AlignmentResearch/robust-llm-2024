@@ -1,0 +1,23 @@
+# @package _global_
+defaults:
+- /dataset: StrongREJECT/original
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: GCG
+- /model/generation_config: DEFAULT
+- /callback@evaluation.final_success_binary_callback: refusal_in_generation
+- _self_
+
+model:
+  generation_config:
+    max_new_tokens: 300
+
+dataset:
+  n_train: 0
+  n_val: 313
+  strip_leading_whitespace: true
+
+evaluation:
+  evaluation_attack:
+    n_its: 128
+
+experiment_type: "evaluation"
