@@ -95,7 +95,9 @@ def get_tinyllama_template(
 
 
 def get_base_template(
-    unmodifiable_prefix: str, modifiable_infix: str, unmodifiable_suffix: str
+    unmodifiable_prefix: str,
+    modifiable_infix: str,
+    unmodifiable_suffix: str,
 ) -> PromptTemplate:
     template = PromptTemplateBuilder(
         prompt_prefix="",
@@ -172,4 +174,24 @@ def get_qwen_template(
         modifiable_infix=modifiable_infix,
         unmodifiable_suffix=unmodifiable_suffix,
         system_prompt=system_prompt,
+    )
+
+
+def get_gemma_template(
+    unmodifiable_prefix: str,
+    modifiable_infix: str,
+    unmodifiable_suffix: str,
+) -> PromptTemplate:
+    template = PromptTemplateBuilder(
+        prompt_prefix="<bos>",
+        system_prefix="",
+        system_suffix="",
+        user_prefix="<start_of_turn>user\n",
+        user_suffix="<end_of_turn>\n<start_of_turn>model\n",
+    )
+
+    return template.get_prompt_template(
+        unmodifiable_prefix=unmodifiable_prefix,
+        modifiable_infix=modifiable_infix,
+        unmodifiable_suffix=unmodifiable_suffix,
     )

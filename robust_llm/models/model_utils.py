@@ -474,29 +474,6 @@ def maybe_no_grad(use_no_grad: bool):
         yield
 
 
-@dataclass(frozen=True)
-class PromptTemplate:
-    """This is a general class for prompt templates,
-    that should encompass both chat models and non-chat
-    models
-
-    The basic idea is that there is some part before user input, and
-    some part after user input but before model input, and that should
-    be all off the content in the prompt.
-
-    For example, for a simple chat format:
-        before_attack="User: Hi, I'm an user! "
-        after_attack="\nAssistant:"
-    """
-
-    before_attack: str = ""
-    after_attack: str = ""
-
-    def build_prompt(self, *, attack_text: str = "", target: str = "") -> str:
-        prompt = self.before_attack + attack_text + self.after_attack + target
-        return prompt
-
-
 def remove_padding_tokens(
     tokenizer: PreTrainedTokenizerBase, texts: list[str]
 ) -> list[str]:

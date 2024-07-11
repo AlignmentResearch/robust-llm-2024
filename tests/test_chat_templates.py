@@ -5,6 +5,7 @@ from transformers import AutoTokenizer
 
 from robust_llm.models.prompt_templates import (
     PromptTemplate,
+    get_gemma_template,
     get_llama_2_template,
     get_llama_3_template,
     get_qwen_template,
@@ -13,10 +14,15 @@ from robust_llm.models.prompt_templates import (
 
 NAME_AND_TEMPLATE = [
     ("neuralmagic/Meta-Llama-3-8B-Instruct-FP8", get_llama_3_template),
-    ("NousResearch/Llama-2-7b-chat-hf", get_llama_2_template),
+    ("meta-llama/Llama-2-7b-chat-hf", get_llama_2_template),
     ("Qwen/Qwen1.5-1.8B-Chat", get_qwen_template),
     ("Qwen/Qwen2-7B-Instruct", get_qwen_template),
     ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", get_tinyllama_template),
+]
+# Gemma models do not support system prompts.
+NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT = NAME_AND_TEMPLATE + [
+    ("google/gemma-1.1-2b-it", get_gemma_template),
+    ("google/gemma-2-9b-it", get_gemma_template),
 ]
 
 
@@ -53,7 +59,9 @@ def test_template_with_system_prompt(model_name: str, template_constructor: Call
     assert tokenizer_out[: len(prompt)] == prompt
 
 
-@pytest.mark.parametrize("model_name, template_constructor", NAME_AND_TEMPLATE)
+@pytest.mark.parametrize(
+    "model_name, template_constructor", NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT
+)
 def test_template_without_system_prompt(
     model_name: str, template_constructor: Callable
 ):

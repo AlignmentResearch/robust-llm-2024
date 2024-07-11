@@ -13,4 +13,6 @@ MODEL_FAMILIES = [
     "mistralai",
     "gpt_neox",
     "pythia-chat",
+    "gemma",
+    "gemma-chat",
 ]

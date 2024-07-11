@@ -1,0 +1,3 @@
+name_or_path: "google/gemma-1.1-7b"
+family: "gemma-chat"
+train_minibatch_size: 8

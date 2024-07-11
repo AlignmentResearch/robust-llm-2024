@@ -1,3 +1,5 @@
+from .supported_models.gemma_chat_wrapped import GemmaChatModel
+from .supported_models.gemma_wrapped import GemmaModel
 from .supported_models.gpt2_wrapped import GPT2Model
 from .supported_models.gpt_neox_chat_wrapped import GPTNeoXChatModel
 from .supported_models.gpt_neox_wrapped import GPTNeoXModel
@@ -9,6 +11,8 @@ from .wrapped_model import WrappedModel
 
 __all__ = [
     "WrappedModel",
+    "GemmaModel",
+    "GemmaChatModel",
     "GPTNeoXModel",
     "GPT2Model",
     "Llama2Model",
