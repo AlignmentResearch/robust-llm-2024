@@ -1,19 +1,47 @@
-FROM pytorch/pytorch as base
+FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-devel AS compile
 
 ARG DEBIAN_FRONTEND=noninteractive
+# git is required for installing flash_attn.
+RUN apt update \
+    && apt install -y git \
+    && rm -rf /var/lib/apt/lists/*
 
+# To port Python package installs in this stage to other Docker stages, we can
+# store the installs in a virtualenv: https://stackoverflow.com/a/61879604/4865149
+RUN python3 -m venv /usr/local/venv
+ENV PATH="/usr/local/venv/bin:$PATH"
+
+# Install [cuda] packages that require `nvcc`, which is available in `devel`
+# PyTorch images and not `runtime` images.
+COPY pyproject.toml .
+RUN python3 -m pip install --no-cache-dir '.[cuda-deps]'
+# CUDA_HOME is required for installing flash_attn.
+ENV CUDA_HOME=/usr/local/cuda-12.1
+RUN python3 -m pip install --no-cache-dir '.[cuda]'
+
+# We use a runtime image here as the base to cut down the image size by a few
+# GB, but we still consider the resulting image `dev` to be a development image
+# because it contains convenience installs that aren't strictly needed for
+# experiments. For simplicity we're using the same image `dev` for experiments
+# and develompent.
+FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime AS dev
+
+ARG DEBIAN_FRONTEND=noninteractive
 # Install some useful packages
-RUN apt update && \
-    apt install -y rsync git vim tini wget curl inotify-tools libsndfile1-dev tesseract-ocr espeak-ng python3 python3-pip ffmpeg zstd gcc \
+RUN apt update \
+    && apt install -y rsync git vim tini wget curl inotify-tools libsndfile1-dev tesseract-ocr espeak-ng python3 python3-pip ffmpeg zstd gcc \
+    && rm -rf /var/lib/apt/lists/* \
     && python3 -m pip install --upgrade --no-cache-dir pip requests
 
-FROM base as prod
-ADD . .
-RUN python3 -m pip install '.[tensorflow]'
+# VSCode code server
+RUN curl -fsSL https://code-server.dev/install.sh | sh
+ENV PATH="/home/coder/.local/bin:${PATH}"
+RUN code-server --install-extension ms-python.python
+RUN code-server --install-extension ms-pyright.pyright
 
-# Install requirements for repo
-# note this only monitors the pyproject.toml file for changes
-FROM base as dev
+COPY --from=compile /usr/local/venv /usr/local/venv
+ENV PATH="/usr/local/venv/bin:$PATH"
+
 COPY pyproject.toml /workspace/
 WORKDIR /workspace
 
@@ -21,9 +49,3 @@ RUN mkdir robust_llm \
     && python3 -m pip install -e ".[dev]" \
     && python3 -m pip uninstall -y robust_llm \
     && rmdir robust_llm && rm pyproject.toml
-
-FROM dev as easydev
-RUN curl -fsSL https://code-server.dev/install.sh | sh
-ENV PATH="/home/coder/.local/bin:${PATH}"
-RUN code-server --install-extension ms-python.python
-RUN code-server --install-extension ms-pyright.pyright

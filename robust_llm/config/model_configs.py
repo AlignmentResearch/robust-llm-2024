@@ -77,6 +77,14 @@ class ModelConfig:
     dtype: Data type, e.g., float32 or bfloat16.
         Defaults to float32 since bfloat16 has much less precision (e.g., the
         next bfloat16 after 1024 is 1032), which can affect generation quality.
+    attention_implementation: The implementation with which to compute
+        attention, with possible values listed at
+        https://huggingface.co/docs/transformers/main/en/model_doc/auto#transformers.AutoModel.from_config.attn_implementation.
+        In particular, "flash_attention_2" specifies FlashAttention-2.
+        (Requires dtype float16 or bfloat16. Requires flash_attn package. Mainly
+        provides speedup on long sequence lengths. Gradients on pythia-14m are
+        known to misbehave:
+        https://github.com/Dao-AILab/flash-attention/issues/1046)
     system_prompt: The prompt to pass as the "system prompt" for chat models.
         This is used to control the behavior of the model, e.g., to make it
         more conversational or more factual. If None, the default system prompt
@@ -96,6 +104,7 @@ class ModelConfig:
     minibatch_multiplier: float = SI("${environment.minibatch_multiplier}")
     generation_config: Optional[GenerationConfig] = None
     dtype: str = "float32"
+    attention_implementation: Optional[str] = None
     system_prompt: str | None = None
 
     def __post_init__(self):

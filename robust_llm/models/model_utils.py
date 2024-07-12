@@ -78,6 +78,7 @@ def load_hf_model(
     inference_type: InferenceType,
     strict_load: bool,
     torch_dtype: torch.dtype,
+    attention_implementation: Optional[str] = None,
     num_classes: Optional[int] = None,
 ) -> PreTrainedModel:
     """Loads a model from HuggingFace.
@@ -93,6 +94,8 @@ def load_hf_model(
         strict_load: Whether to enforce that no weights are ignored or randomly
             initialized while loading.
         torch_dtype: Data type of the model.
+        attention_implementation: The implementation with which to compute
+            attention.
         num_classes: The number of classes for a classification model.
     """
     # Even though num_labels is optional, passing None to it will cause an error
@@ -109,6 +112,7 @@ def load_hf_model(
                 num_labels=num_classes,
                 use_cache=False,  # By default we don't want to output cache values.
                 torch_dtype=torch_dtype,
+                attn_implementation=attention_implementation,
             )
         case InferenceType.GENERATION:
             model, loading_info = AutoModelForCausalLM.from_pretrained(
@@ -117,6 +121,7 @@ def load_hf_model(
                 output_loading_info=True,
                 use_cache=False,  # By default we don't want to output cache values.
                 torch_dtype=torch_dtype,
+                attn_implementation=attention_implementation,
             )
         case InferenceType.TRL:
             # We can't use output_loading_info=True because it's not supported
@@ -130,6 +135,7 @@ def load_hf_model(
                 name_or_path,
                 revision=revision,
                 torch_dtype=torch_dtype,
+                attn_implementation=attention_implementation,
             )
 
     # Optionally, check that there are no weights skipped or randomly initialized.

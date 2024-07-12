@@ -218,6 +218,7 @@ class WrappedModel(ABC):
             inference_type=inference_type,
             strict_load=config.strict_load,
             torch_dtype=getattr(torch, config.dtype),
+            attention_implementation=config.attention_implementation,
             num_classes=num_classes,
         )
 
