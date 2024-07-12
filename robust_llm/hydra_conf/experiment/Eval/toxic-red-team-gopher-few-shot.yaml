@@ -3,7 +3,7 @@ defaults:
   - /dataset: pure_generation
   - /evaluation: DEFAULT
   - /attack@evaluation.evaluation_attack: lm-attack-toxicity-gopher-few-shot
-  - /model: pythia-14m
+  - /model: EleutherAI/pythia-14m
   - /callback@evaluation.final_success_binary_callback: toxicity_in_generation
   - _self_
 

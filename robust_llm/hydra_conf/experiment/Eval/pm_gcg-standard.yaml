@@ -13,7 +13,7 @@ defaults:
 # `cs.store(group="attack")`) and place it at `evaluation.evaluation_attack`. In
 # particular, we are using the GCG attack as the evaluation attack.
 - /attack@evaluation.evaluation_attack: gcg-standard
-- /model: pythia-14m
+- /model: EleutherAI/pythia-14m
 - _self_
 
 dataset:

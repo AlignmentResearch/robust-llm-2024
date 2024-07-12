@@ -3,7 +3,7 @@ defaults:
 - /training: DEFAULT
 - /training/adversarial: DEFAULT
 - /dataset: imdb
-- /model: pythia  # Just sets the model family
+- /model: EleutherAI/pythia-14m
 - _self_
 
 experiment_type: "training"

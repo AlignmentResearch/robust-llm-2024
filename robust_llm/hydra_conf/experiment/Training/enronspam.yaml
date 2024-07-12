@@ -2,7 +2,7 @@
 defaults:
 - /dataset: EnronSpam/main
 - /training: DEFAULT
-- /model: pythia
+- /model: EleutherAI/pythia-14m
 - _self_
 
 

@@ -380,7 +380,10 @@ def prepare_model_with_accelerate(
     # When using FSDP, there is some lazy initialization that happens. Enforce it here
     # to avoid issues from lack of proper initialization (e.g. when accessing embedding
     # layer in GCG).
-    _ = model(torch.tensor([[0]], device=accelerator.device))
+    _ = model(
+        input_ids=torch.tensor([[0]], device=accelerator.device),
+        attention_mask=torch.tensor([[1]], device=accelerator.device),
+    )
 
     return model
 

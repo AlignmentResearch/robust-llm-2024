@@ -1,4 +1,3 @@
-import random
 from functools import cached_property
 from typing import Optional
 
@@ -42,8 +41,6 @@ class RandomTokenAttack(SearchFreeAttack):
         super().__init__(
             attack_config, victim=victim, run_name=run_name, logging_name=logging_name
         )
-
-        self.rng = random.Random(self.attack_config.seed)
 
         self.n_attack_tokens = attack_config.n_attack_tokens
         self.n_its = attack_config.n_its

@@ -3,7 +3,7 @@ defaults:
 - /dataset: passwordmatch
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: random-token-target
-- /model: pythia
+- /model: EleutherAI/pythia-14m
 - /model/generation_config: DEFAULT
 - /environment: mac-testing
 - _self_

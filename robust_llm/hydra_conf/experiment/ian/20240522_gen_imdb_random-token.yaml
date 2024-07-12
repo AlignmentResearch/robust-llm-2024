@@ -3,7 +3,7 @@ defaults:
 - /dataset: imdb
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: RANDOM_TOKEN  # len 10 is the default now.
-- /model: pythia-14m
+- /model: EleutherAI/pythia-14m
 - /environment: mac-testing
 - _self_
 

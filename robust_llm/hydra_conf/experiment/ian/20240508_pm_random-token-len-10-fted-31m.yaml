@@ -3,7 +3,7 @@ defaults:
 - /dataset: passwordmatch
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: random-token-1280-its
-- /model: pythia-14m
+- /model: EleutherAI/pythia-14m
 - _self_
 
 dataset:

@@ -105,7 +105,7 @@ defaults:
 - /dataset: passwordmatch
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: GCG
-- /model: pythia-14m
+- /model: EleutherAI/pythia-14m
 - _self_
 
 dataset:
@@ -138,8 +138,8 @@ in `config/attack_configs.py`) and set this as the `evaluation_attack`. This
 uses Hydra's [package override](https://hydra.cc/docs/1.3/advanced/overriding_packages/#overriding-packages-using-the-defaults-list)
 syntax.
 
-##### `/model: pythia-14m`
-Analogous to the `/dataset` line: look in `/model` and use `pythia-14m`.
+##### `/model: EleutherAI/pythia-14m`
+Analogous to the `/dataset` line: look in `/model` and use `EleutherAI/pythia-14m`.
 
 ##### `_self_`
 This line is important as it tells Hydra that the stuff that comes after the [Defaults List](https://hydra.cc/docs/1.3/advanced/defaults_list/) should override the stuff _in_ the defaults list.

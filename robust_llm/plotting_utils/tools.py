@@ -373,7 +373,7 @@ def get_metrics_adv_training(
     filters=None,
     check_num_runs=None,
     check_num_data_per_run=None,
-):
+) -> pd.DataFrame:
     if filters is None:
         filters = {}
     filters = deepcopy(filters)
@@ -402,7 +402,7 @@ def get_metrics_adv_training(
             continue
 
         for key in summary_keys:
-            history[key.split(".")[-1]] = _get_value_iterative(run.summary, key)
+            history[key.replace(".", "_")] = _get_value_iterative(run.summary, key)
         history["run_id"] = run.id
 
         # Hack: create 'round' column based on increasing steps.
@@ -417,6 +417,8 @@ def get_metrics_adv_training(
 
         res.append(history)
 
+    if len(res) == 0:
+        return pd.DataFrame()
     res = pd.concat(res, ignore_index=True)
 
     return res
@@ -430,9 +432,11 @@ def get_discrete_palette_for_values(values):
     }
 
 
-def _get_value_iterative(d, key):
+def _get_value_iterative(d: dict, key: str):
     for k in key.split("."):
         d = d[k]
+        if d is None:
+            return None
     return d
 
 

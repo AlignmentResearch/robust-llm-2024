@@ -3,7 +3,7 @@ defaults:
 - /dataset: passwordmatch
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: GCG
-- /model: pythia
+- /model: EleutherAI/pythia-14m
 - _self_
 
 dataset:

@@ -1,6 +1,6 @@
 defaults:
 - TRL
-- /model@adversary: pythia-31m
+- /model@adversary: EleutherAI/pythia-31m
 
 adversary:
   inference_type: "trl"

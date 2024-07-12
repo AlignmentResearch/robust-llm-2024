@@ -60,3 +60,9 @@ class PureGenerationDataset(RLLMDataset):
         return ModifiableChunkSpec(
             ChunkType.OVERWRITABLE,
         )
+
+    @override
+    def update_dataset_based_on_text(
+        self, ds: Dataset, column_prefix: str = ""
+    ) -> Dataset:
+        return ds

@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
 - /dataset: passwordmatch
-- /model: pythia-14m
+- /model: EleutherAI/pythia-14m
 - /training: DEFAULT
 - /training/adversarial: DEFAULT
 

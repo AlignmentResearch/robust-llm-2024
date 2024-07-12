@@ -2,7 +2,7 @@
 defaults:
 - /dataset: IMDB/main
 - /training: DEFAULT
-- /model: pythia-14m
+- /model: EleutherAI/pythia-14m
 - /training/adversarial: DEFAULT
 - /attack@training.adversarial.training_attack: trl-stronger-adversary
 - _self_

@@ -2,7 +2,7 @@
 defaults:
 - /training: DEFAULT
 - /dataset: passwordmatch
-- /model: pythia-70m
+- /model: EleutherAI/pythia-70m
 - /environment: mac-testing
 
 dataset:

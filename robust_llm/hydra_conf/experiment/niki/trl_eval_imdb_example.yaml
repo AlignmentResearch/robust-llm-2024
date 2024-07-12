@@ -2,7 +2,7 @@
 defaults:
 - /dataset: imdb
 - /evaluation: DEFAULT
-- /model: pythia-14m
+- /model: EleutherAI/pythia-14m
 - /attack@evaluation.evaluation_attack: trl-simple-adversary
 
 dataset:

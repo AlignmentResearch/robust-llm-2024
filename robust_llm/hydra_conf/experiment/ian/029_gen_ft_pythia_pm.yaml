@@ -2,7 +2,7 @@
 defaults:
 - /training: DEFAULT
 - /dataset: passwordmatch
-- /model: pythia
+- /model: EleutherAI/pythia-14m
 
 dataset:
   n_train: 20_000

@@ -4,8 +4,8 @@ defaults:
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: gcg-small
 - /defense: PERPLEXITY
-- /model@defense.decoder: pythia-14m
-- /model: pythia-14m
+- /model@defense.decoder: EleutherAI/pythia-14m
+- /model: EleutherAI/pythia-14m
 - _self_
 
 dataset:

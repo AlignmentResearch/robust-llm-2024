@@ -3,7 +3,7 @@ defaults:
   - /dataset: IMDB/main
   - /evaluation: DEFAULT
   - /attack@evaluation.evaluation_attack: lm-attack-imdb
-  - /model: pythia-14m
+  - /model: EleutherAI/pythia-14m
   - _self_
 
 dataset:

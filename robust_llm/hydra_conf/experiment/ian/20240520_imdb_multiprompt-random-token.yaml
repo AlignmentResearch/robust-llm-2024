@@ -1,7 +1,7 @@
 # @package _global_
 defaults:
 - /dataset: imdb
-- /model: pythia
+- /model: EleutherAI/pythia-14m
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: multiprompt-random-token
 - /environment: mac-testing

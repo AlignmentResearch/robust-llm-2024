@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-- /model: pythia
+- /model: EleutherAI/pythia-14m
 - /dataset: wordlength
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: gcg-10-its

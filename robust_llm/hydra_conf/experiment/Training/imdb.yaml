@@ -2,7 +2,7 @@
 defaults:
 - /dataset: IMDB/main
 - /training: DEFAULT
-- /model: pythia-14m
+- /model: EleutherAI/pythia-14m
 - _self_
 
 dataset:

@@ -3,7 +3,7 @@ defaults:
 - /dataset: PasswordMatch/main
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: TRL
-- /model: pythia-14m
+- /model: EleutherAI/pythia-14m
 - _self_
 
 dataset:

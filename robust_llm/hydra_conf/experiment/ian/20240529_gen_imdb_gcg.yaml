@@ -3,7 +3,7 @@ defaults:
 - /dataset: imdb
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: GCG  # len 10 is the default now.
-- /model: pythia
+- /model: EleutherAI/pythia-14m
 - /environment: mac-testing
 - _self_
 
