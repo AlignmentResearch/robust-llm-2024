@@ -3,6 +3,7 @@ from .supported_models.gemma_wrapped import GemmaModel
 from .supported_models.gpt2_wrapped import GPT2Model
 from .supported_models.gpt_neox_chat_wrapped import GPTNeoXChatModel
 from .supported_models.gpt_neox_wrapped import GPTNeoXModel
+from .supported_models.llama2_chat_wrapped import Llama2ChatModel
 from .supported_models.llama2_wrapped import Llama2Model
 from .supported_models.qwen_chat_wrapped import QwenChatModel
 from .supported_models.qwen_wrapped import QwenModel
@@ -16,6 +17,7 @@ __all__ = [
     "GPTNeoXModel",
     "GPT2Model",
     "Llama2Model",
+    "Llama2ChatModel",
     "QwenChatModel",
     "QwenModel",
     "TinyLlamaChatModel",

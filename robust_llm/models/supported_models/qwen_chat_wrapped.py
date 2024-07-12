@@ -12,7 +12,7 @@ from typing_extensions import override
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.models.prompt_templates import PromptTemplate, get_qwen_template
+from robust_llm.models.prompt_templates import PromptTemplateBuilder
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
 
@@ -72,16 +72,14 @@ class QwenChatModel(WrappedChatModel):
 
         return tokenizer
 
+    @property
     @override
-    def get_prompt_template(
-        self,
-        unmodifiable_prefix: str,
-        modifiable_infix: str,
-        unmodifiable_suffix: str,
-    ) -> PromptTemplate:
-        """Returns a PromptTemplate for the given text chunks."""
-        return get_qwen_template(
-            unmodifiable_prefix,
-            modifiable_infix,
-            unmodifiable_suffix,
+    def prompt_builder(self) -> PromptTemplateBuilder:
+        return PromptTemplateBuilder(
+            prompt_prefix="",
+            system_prefix="<|im_start|>system\n",
+            system_suffix="<|im_end|>\n",
+            user_prefix="<|im_start|>user\n",
+            user_suffix="<|im_end|>\n<|im_start|>assistant\n",
+            default_system_prompt="You are a helpful assistant.",
         )

@@ -1,2 +1,2 @@
 name_or_path: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-family: "llama-chat"
+family: "llama2-chat"

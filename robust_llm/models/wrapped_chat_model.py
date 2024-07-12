@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import Optional, cast, overload
+from typing import Optional, overload
 
 from accelerate import Accelerator
-from transformers import BatchEncoding
+from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from typing_extensions import override
 
-from robust_llm.config.model_configs import ModelConfig
+from robust_llm.config.model_configs import GenerationConfig, ModelConfig
+from robust_llm.models.model_utils import InferenceType
+from robust_llm.models.prompt_templates import PromptTemplateBuilder
 from robust_llm.models.wrapped_model import WrappedModel
 
 
@@ -15,119 +17,67 @@ class WrappedChatModel(WrappedModel):
 
     Chat and instruction-fine-tuned models require special handling for the
     input. Instead of regular text, they expect the input to be chat-formatted.
-    The specific format varies from model to model, but
-    tokenizer.apply_chat_template should abstract that away.
+    The specific format varies from model to model, but this should abstract that away.
     """
 
-    @override
-    def tokenize(
+    def __init__(
         self,
-        text: str | list[str],
-        return_tensors: str | None = None,
-        padding_side: str | None = None,
-        add_special_tokens: bool = False,
-        apply_chat_template: bool = False,
-        add_generation_prompt: bool = False,
-        **kwargs,
-    ) -> BatchEncoding:
-        """Tokenize the input text, optionally applying the chat template.
-
-        For now, we assume that the input text is a single 'user' message.
-
-        Args:
-            text:
-                The input text.
-            return_tensors:
-                Whether to return tensors, and what type of tensors to return.
-            padding_side:
-                Whether to pad the input. None means no padding, "right" means
-                do right padding, "left" means do left padding.
-            add_special_tokens:
-                Whether to add special tokens.
-            apply_chat_template:
-                Whether to apply the chat template.
-            add_generation_prompt:
-                Whether to add a generation prompt to the end of the prompt.
-            kwargs:
-                Additional arguments (for compatibility with the base class,
-                since it has **kwargs to accept apply_chat_template and
-                add_generation_prompt).
-
-        Returns:
-            The tokenized input, as you'd get from calling a tokenizer.
-
-        """
-        to_tokenize: str | list[str]
-        if apply_chat_template:
-            if not add_special_tokens:
-                raise ValueError(
-                    "add_special_tokens must be True when apply_chat_template is True."
-                )
-            # This will apply the chat template: the 'maybe' refers to
-            # whether this is a WrappedChatModel or not, which it is.
-            to_tokenize = self.maybe_apply_chat_template(
-                text, add_generation_prompt=add_generation_prompt
-            )
-        else:
-            to_tokenize = text
-
-        return super().tokenize(
-            text=to_tokenize,
-            return_tensors=return_tensors,
-            padding_side=padding_side,
-            add_special_tokens=add_special_tokens,
+        model: PreTrainedModel,
+        right_tokenizer: PreTrainedTokenizerBase,
+        accelerator: Accelerator | None,
+        inference_type: InferenceType,
+        train_minibatch_size: int,
+        eval_minibatch_size: int,
+        family: str,
+        generation_config: GenerationConfig | None = None,
+        system_prompt: str | None = None,
+    ) -> None:
+        super().__init__(
+            model,
+            right_tokenizer,
+            accelerator,
+            inference_type,
+            train_minibatch_size,
+            eval_minibatch_size,
+            family,
+            generation_config,
+            system_prompt,
+        )
+        assert self.prompt_builder != PromptTemplateBuilder(
+            prompt_prefix="",
+            system_prefix="",
+            system_suffix="",
+            user_prefix="",
+            user_suffix="",
         )
 
     @overload
-    def maybe_apply_chat_template(
-        self, text: str, add_generation_prompt: bool = True
-    ) -> str: ...
+    def maybe_apply_chat_template(self, text: str) -> str: ...
 
     @overload
-    def maybe_apply_chat_template(
-        self, text: list[str], add_generation_prompt: bool = True
-    ) -> list[str]: ...
+    def maybe_apply_chat_template(self, text: list[str]) -> list[str]: ...
 
     @override
-    def maybe_apply_chat_template(
-        self, text: str | list[str], add_generation_prompt: bool = True
-    ) -> str | list[str]:
+    def maybe_apply_chat_template(self, text: str | list[str]) -> str | list[str]:
         """If working with a chat model, return text with chat template applied.
 
         Since this is the base class for chat models, we apply the chat template.
 
         Args:
             text: The text to apply the chat template to.
-            add_generation_prompt: Whether to add a generation prompt. Usually True.
 
         Returns:
             The text with the chat template applied.
         """
-        if self.system_prompt is not None:
-            base_conversation = [{"role": "system", "content": self.system_prompt}]
-        else:
-            base_conversation = []
+        # We want to surround `text` with the user chat delimiters.
+        # We could do this in multiple ways, but choose to set the base prompt
+        # to be empty and pass the text as an attack.
+        template = self.get_prompt_template()
         if isinstance(text, str):
-            out_text = self.right_tokenizer.apply_chat_template(
-                conversation=base_conversation + [{"role": "user", "content": text}],
-                tokenize=False,
-                add_generation_prompt=add_generation_prompt,
-            )
-            return cast(str, out_text)
+            return template.build_prompt(attack_text=text)
 
-        elif isinstance(text, list):
-            out_text = [
-                self.right_tokenizer.apply_chat_template(
-                    conversation=base_conversation + [{"role": "user", "content": t}],
-                    tokenize=False,
-                    add_generation_prompt=add_generation_prompt,
-                )
-                for t in text
-            ]
-
-            return cast(list[str], out_text)
         else:
-            raise ValueError(f"Unexpected type for text: {type(text)}")
+            return [template.build_prompt(attack_text=t) for t in text]
 
     @classmethod
     def from_config(

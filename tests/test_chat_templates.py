@@ -1,38 +1,55 @@
 from typing import Callable
+from unittest.mock import MagicMock
 
 import pytest
 from transformers import AutoTokenizer
 
-from robust_llm.models.prompt_templates import (
-    PromptTemplate,
-    get_gemma_template,
-    get_llama_2_template,
-    get_llama_3_template,
-    get_qwen_template,
-    get_tinyllama_template,
+from robust_llm.models import (
+    GemmaChatModel,
+    GPTNeoXChatModel,
+    Llama2ChatModel,
+    QwenChatModel,
+    TinyLlamaChatModel,
 )
+from robust_llm.models.prompt_templates import PromptTemplate
+from robust_llm.models.wrapped_chat_model import WrappedChatModel
 
 NAME_AND_TEMPLATE = [
-    ("neuralmagic/Meta-Llama-3-8B-Instruct-FP8", get_llama_3_template),
-    ("meta-llama/Llama-2-7b-chat-hf", get_llama_2_template),
-    ("Qwen/Qwen1.5-1.8B-Chat", get_qwen_template),
-    ("Qwen/Qwen2-7B-Instruct", get_qwen_template),
-    ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", get_tinyllama_template),
+    ("NousResearch/Llama-2-7b-chat-hf", "llama2-chat", Llama2ChatModel),
+    ("Qwen/Qwen1.5-1.8B-Chat", "qwen1.5-chat", QwenChatModel),
+    ("Qwen/Qwen2-7B-Instruct", "qwen2-chat", QwenChatModel),
+    ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", "tinyllama", TinyLlamaChatModel),
+    ("Felladrin/Pythia-31M-Chat-v1", "pythia-chat", GPTNeoXChatModel),
 ]
 # Gemma models do not support system prompts.
 NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT = NAME_AND_TEMPLATE + [
-    ("google/gemma-1.1-2b-it", get_gemma_template),
-    ("google/gemma-2-9b-it", get_gemma_template),
+    ("google/gemma-1.1-2b-it", "gemma-chat", GemmaChatModel),
+    ("google/gemma-2-9b-it", "gemma-chat", GemmaChatModel),
 ]
 
 
-@pytest.mark.parametrize("model_name, template_constructor", NAME_AND_TEMPLATE)
-def test_template_with_system_prompt(model_name: str, template_constructor: Callable):
-    template = template_constructor(
+@pytest.mark.parametrize(
+    "model_name, model_family, model_constructor", NAME_AND_TEMPLATE
+)
+def test_template_with_system_prompt(
+    model_name: str, model_family: str, model_constructor: Callable
+):
+    model = model_constructor(
+        model=MagicMock(),
+        right_tokenizer=MagicMock(),
+        accelerator=None,
+        inference_type="generation",
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        generation_config=None,
+        family=model_family,
+        system_prompt="System prompt.",
+    )
+    assert isinstance(model, WrappedChatModel)
+    template = model.get_prompt_template(
         "Unmodifiable prefix.",
         "Modifiable infix.",
         "Unmodifiable suffix.",
-        "System prompt.",
     )
     assert isinstance(template, PromptTemplate)
     prompt = template.build_prompt(attack_text="Attack text.")
@@ -60,12 +77,23 @@ def test_template_with_system_prompt(model_name: str, template_constructor: Call
 
 
 @pytest.mark.parametrize(
-    "model_name, template_constructor", NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT
+    "model_name, model_family, model_constructor", NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT
 )
 def test_template_without_system_prompt(
-    model_name: str, template_constructor: Callable
+    model_name: str, model_family: str, model_constructor: Callable
 ):
-    template = template_constructor(
+    model = model_constructor(
+        model=MagicMock(),
+        right_tokenizer=MagicMock(),
+        accelerator=None,
+        inference_type="generation",
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        generation_config=None,
+        family=model_family,
+    )
+    assert isinstance(model, WrappedChatModel)
+    template = model.get_prompt_template(
         "Unmodifiable prefix.",
         "Modifiable infix.",
         "Unmodifiable suffix.",

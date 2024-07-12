@@ -40,7 +40,7 @@ from robust_llm.models.model_utils import (
     prepare_model_with_accelerate,
     remove_padding_tokens,
 )
-from robust_llm.models.prompt_templates import PromptTemplate, get_base_template
+from robust_llm.models.prompt_templates import PromptTemplate, PromptTemplateBuilder
 from robust_llm.utils import is_correctly_padded
 
 
@@ -811,15 +811,16 @@ class WrappedModel(ABC):
 
     def get_prompt_template(
         self,
-        unmodifiable_prefix: str,
-        modifiable_infix: str,
-        unmodifiable_suffix: str,
+        unmodifiable_prefix: str = "",
+        modifiable_infix: str = "",
+        unmodifiable_suffix: str = "",
     ) -> PromptTemplate:
         """Returns a PromptTemplate for the given text chunks."""
-        return get_base_template(
+        return self.prompt_builder.get_prompt_template(
             unmodifiable_prefix,
             modifiable_infix,
             unmodifiable_suffix,
+            system_prompt=self.system_prompt,
         )
 
     @overload
@@ -845,3 +846,13 @@ class WrappedModel(ABC):
     def set_seed(seed: int) -> None:
         """Wrapper around transformers set_seed."""
         set_seed(seed % (2**32))
+
+    @property
+    def prompt_builder(self) -> PromptTemplateBuilder:
+        return PromptTemplateBuilder(
+            prompt_prefix="",
+            system_prefix="",
+            system_suffix="",
+            user_prefix="",
+            user_suffix="",
+        )
