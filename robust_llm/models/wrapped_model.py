@@ -494,7 +494,7 @@ class WrappedModel(ABC):
         all_tokens = self.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            pad_token_id=self.right_tokenizer.pad_token_id,
+            pad_token_id=self.config.pad_token_id,
         )
         assert isinstance(all_tokens, torch.Tensor)
         assert all_tokens.shape[0] == 1
@@ -533,8 +533,8 @@ class WrappedModel(ABC):
         """
         gen_config_dict = dataclasses.asdict(gen_config)
         # Add eos_token_id and pad_token_id to the config.
-        gen_config_dict["eos_token_id"] = self.right_tokenizer.eos_token_id
-        gen_config_dict["pad_token_id"] = self.right_tokenizer.pad_token_id
+        gen_config_dict["eos_token_id"] = self.config.eos_token_id
+        gen_config_dict["pad_token_id"] = self.config.pad_token_id
         return transformers.GenerationConfig.from_dict(gen_config_dict)
 
     def generate(self, **inputs):
@@ -797,9 +797,9 @@ class WrappedModel(ABC):
 
         When using inputs_embeds, it's important that there are no padding tokens,
         since they are not handled properly."""
-        if self.right_tokenizer.pad_token_id is not None:
+        if self.config.pad_token_id is not None:
             assert (
-                self.right_tokenizer.pad_token_id not in token_ids
+                self.config.pad_token_id not in token_ids
             ), "Padding tokens are present in the token ids."
 
     @property

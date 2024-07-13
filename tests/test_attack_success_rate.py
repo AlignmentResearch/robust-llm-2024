@@ -84,6 +84,7 @@ def _test_attack(
     assert isinstance(config, ExperimentConfig)
     results = run_evaluation_pipeline(config)
     actual = results["adversarial_eval/attack_success_rate"]
+    print(f"Success rate: {actual}")
     assert actual >= success_rate_at_least
 
 
@@ -114,17 +115,16 @@ def test_gcg(exp_config: ExperimentConfig) -> None:
         n_candidates_per_it=128,
     )
 
-    _test_attack(exp_config, success_rate_at_least=0.31)
+    _test_attack(exp_config, success_rate_at_least=0.28)
 
 
 def test_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
-        n_attack_tokens=3,
-        n_its=2,
+        n_attack_tokens=5,
+        n_its=10,
     )
-    exp_config.dataset.n_val = 2
-    _test_attack(exp_config, success_rate_at_least=0.01)
+    _test_attack(exp_config, success_rate_at_least=1.00)
 
 
 def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:

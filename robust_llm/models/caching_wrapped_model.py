@@ -65,7 +65,40 @@ class CachingWrappedModel(WrappedModel):
                 inputs["inputs_embeds"] = inputs["inputs_embeds"][:, len(prefix) :]
 
             inputs["past_key_values"] = overlapping_cached_kv
+        # If there is no attention mask, we add one, since this affects behavior as of
+        # 4.42.0 (see https://github.com/huggingface/transformers/issues/31943)
+        if "attention_mask" not in inputs:
+            inputs["attention_mask"] = self._compute_attn_mask(inputs)
         return self._wrapped_model.forward(**inputs)
+
+    def _compute_attn_mask(self, inputs: dict) -> torch.Tensor:
+        """Return an attention mask for the given inputs.
+
+        Assumes that the input is not padded (if it's padded, a mask should have
+        been passed in).
+
+        Getting the shape right is a little tricky.
+        """
+        pad_token_id = self._wrapped_model.config.pad_token_id
+        if pad_token_id is not None:
+            assert "input_ids" in inputs, "Expected input_ids in inputs."
+            assert pad_token_id not in inputs["input_ids"], "Input should not be padded"
+
+        batch_size = inputs["input_ids"].shape[0]
+        if "past_key_values" in inputs:
+            # seq_len is dim 2 of the component tensors
+            cache_len = inputs["past_key_values"][0][0].shape[2]
+        else:
+            cache_len = 0
+        # inputs_embeds take priority; input_ids will be dropped if they are present.
+        if "inputs_embeds" in inputs:
+            seq_len = inputs["inputs_embeds"].shape[1]
+        elif "input_ids" in inputs:
+            seq_len = inputs["input_ids"].shape[1]
+        else:
+            raise ValueError("Expected input_ids or inputs_embeds in inputs.")
+
+        return torch.ones((batch_size, seq_len + cache_len), device=self.device)
 
     @torch.no_grad()
     def add_to_cache(self, input_ids: torch.Tensor) -> None:
