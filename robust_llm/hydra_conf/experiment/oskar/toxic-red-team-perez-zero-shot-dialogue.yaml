@@ -4,16 +4,13 @@ defaults:
   - /evaluation: DEFAULT
   - /model: meta-llama/Llama-2-7b-chat-hf
   - /attack@evaluation.evaluation_attack: lm-attack-toxicity-perez-zero-shot-dialogue
+  - /callback@evaluation.final_success_binary_callback: toxicity_in_generation
   - _self_
 
 dataset:
   n_val: 100
 
-evaluation:
-  final_success_binary_callback: toxicity_in_generation
-
 model:
-  keep_generation_inputs: false
   generation_config:
     max_new_tokens: 50
     do_sample: true

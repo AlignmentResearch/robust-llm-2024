@@ -2,7 +2,7 @@ defaults:
 - ZERO_SHOT_LM
 - /model@adversary: meta-llama/Llama-2-7b-chat-hf
 
-victim_success_binary_callback: toxicity_in_generation
+victim_success_callback: toxicity_in_generation
 adversary:
   inference_type: generation
   strict_load: true

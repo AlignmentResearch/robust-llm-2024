@@ -4,6 +4,10 @@ SHARED_DATA_DIR = "/robust_llm_data"
 MODEL_FAMILIES = [
     "gpt2",
     "llama2",
+    "llama2-chat",
+    "llama3",
+    "llama3-chat",
+    "vicuna",
     "pythia",
     "qwen1.5",
     "qwen2",

@@ -13,7 +13,6 @@ evaluation:
   final_success_binary_callback: toxicity_in_generation
 
 model:
-  keep_generation_inputs: false
   generation_config:
     max_new_tokens: 50
     do_sample: true

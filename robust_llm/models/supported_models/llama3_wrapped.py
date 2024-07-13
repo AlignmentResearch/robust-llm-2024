@@ -1,7 +1,7 @@
 from typing import Literal
 
 from accelerate import Accelerator
-from transformers import LlamaForCausalLM, LlamaTokenizer
+from transformers import LlamaForCausalLM, PreTrainedTokenizerFast
 from typing_extensions import override
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
@@ -9,20 +9,20 @@ from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
 
 
-@WrappedModel.register_subclass("llama2")
-class Llama2Model(WrappedModel):
+@WrappedModel.register_subclass("llama3")
+class Llama3Model(WrappedModel):
     CONTEXT_LENGTH = 4096
 
     def __init__(
         self,
         model: LlamaForCausalLM,
-        right_tokenizer: LlamaTokenizer,
+        right_tokenizer: PreTrainedTokenizerFast,
         accelerator: Accelerator | None,
         inference_type: InferenceType,
         train_minibatch_size: int,
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
-        family: Literal["llama2"],
+        family: Literal["llama3"],
         system_prompt: str | None = None,
     ) -> None:
         super().__init__(
@@ -51,9 +51,9 @@ class Llama2Model(WrappedModel):
     def load_tokenizer(
         cls,
         model_config: ModelConfig,
-    ) -> LlamaTokenizer:
+    ) -> PreTrainedTokenizerFast:
         """Load the tokenizer."""
-        tokenizer = LlamaTokenizer.from_pretrained(
+        tokenizer = PreTrainedTokenizerFast.from_pretrained(
             model_config.name_or_path,
             revision=model_config.revision,
             padding_side="right",  # Left padding is handled separately

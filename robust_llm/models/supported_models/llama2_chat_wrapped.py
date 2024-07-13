@@ -12,6 +12,7 @@ from robust_llm.models.wrapped_model import WrappedModel
 
 
 @WrappedModel.register_subclass("llama2-chat")
+@WrappedModel.register_subclass("vicuna")
 class Llama2ChatModel(WrappedChatModel):
     CONTEXT_LENGTH = 4096
 

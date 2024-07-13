@@ -1,7 +1,7 @@
 defaults:
 - ZERO_SHOT_LM
+- /callback@victim_success_callback: toxicity_in_generation
 
-victim_success_binary_callback: toxicity_in_generation
 adversary:
   name_or_path: meta-llama/Llama-2-7b-hf
   family: llama2
