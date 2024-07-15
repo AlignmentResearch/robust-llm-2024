@@ -119,6 +119,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
         chunk_seed: Optional[int],
     ) -> list[int]:
         """Generates attack tokens using the adversary model."""
+        chunk_text = self.adversary.maybe_apply_chat_template(chunk_text)
         self.append_to_example_info_log(
             chunk_text=chunk_text,
             current_iteration=current_iteration,
@@ -126,7 +127,10 @@ class ZeroShotLMAttack(SearchFreeAttack):
         )
         # Ensure that generations are deterministic for a given seed/iteration combo
         self.adversary.set_seed(hash((chunk_seed, current_iteration)))
-        return self.adversary.generate_from_text(chunk_text)
+        text = self.adversary.generate_from_text(chunk_text)
+        token_ids = self.victim.tokenize(text)["input_ids"]
+        assert isinstance(token_ids, list)
+        return token_ids
 
     @override
     def _get_attack_tokens(

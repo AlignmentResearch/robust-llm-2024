@@ -478,7 +478,7 @@ class WrappedModel(ABC):
                     for in_text, out_text in zip(input_texts, output_texts, strict=True)
                 ]
 
-    def generate_from_text(self, text: str) -> list[int]:
+    def generate_from_text(self, text: str) -> str:
         """Returns the autoregressive generation from the text."""
         inputs = self.tokenize(
             text,
@@ -498,9 +498,11 @@ class WrappedModel(ABC):
         )
         assert isinstance(all_tokens, torch.Tensor)
         assert all_tokens.shape[0] == 1
+
+        # Only keep the newly generated tokens
         output_tokens = all_tokens[0, input_ids.shape[1] :]
 
-        return output_tokens.cpu().tolist()
+        return self.decode(output_tokens, skip_special_tokens=True)
 
     def __call__(self, **inputs):
         return self.forward(**inputs)
@@ -682,10 +684,10 @@ class WrappedModel(ABC):
     ) -> str:
         """Decodes the token ids into a list of strings.
 
-        This is a wrapper around tokenizer.batch_decode so that we can make the
+        This is a wrapper around tokenizer.decode so that we can make the
         tokenizer private.
         """
-        # For batch_decode it doesn't matter which padding side we use so we use
+        # For decode it doesn't matter which padding side we use so we use
         # the right tokenizer which is always loaded.
         return self.right_tokenizer.decode(
             token_ids,
