@@ -1,4 +1,5 @@
 # Excluded from stats, hidden in diffs
 experiments/**/* linguist-generated
+robust_llm/hydra_conf/experiments/**/* linguist-generated
 # Excluded from stats
 robust_llm/hydra_conf/**/* linguist-documentation
