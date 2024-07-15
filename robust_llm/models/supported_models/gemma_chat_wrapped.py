@@ -34,7 +34,10 @@ class GemmaChatModel(WrappedChatModel):
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
         family: Literal["gemma-chat"],
+        system_prompt: str | None = None,
     ) -> None:
+        if system_prompt is not None:
+            raise ValueError("GemmaChatModel does not support system_prompt.")
         super().__init__(
             model,
             right_tokenizer,
@@ -44,7 +47,18 @@ class GemmaChatModel(WrappedChatModel):
             eval_minibatch_size,
             generation_config=generation_config,
             family=family,
+            system_prompt=system_prompt,
         )
+
+    @override
+    def forward(self, **inputs):
+        # Gemma is idiosyncratic in that it requires use_cache=True to use
+        # provided past_key_values. This is not the default behavior for other
+        # models (except Qwen), where use_cache indicates whether to return
+        # past_key_values.
+        if "past_key_values" in inputs:
+            inputs["use_cache"] = True
+        return super().forward(**inputs)
 
     @classmethod
     def load_tokenizer(

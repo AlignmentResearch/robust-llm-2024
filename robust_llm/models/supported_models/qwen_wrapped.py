@@ -46,9 +46,10 @@ class QwenModel(WrappedModel):
 
     @override
     def forward(self, **inputs):
-        # Qwen is idiosyncratic in that it requires use_cache=True to use provided
-        # past_key_values. This is not the default behavior for other models, where
-        # use_cache indicates whether to return past_key_values.
+        # Qwen is idiosyncratic in that it requires use_cache=True to use
+        # provided past_key_values. This is not the default behavior for other
+        # models (except Gemma), where use_cache indicates whether to return
+        # past_key_values.
         if "past_key_values" in inputs:
             inputs["use_cache"] = True
         return super().forward(**inputs)

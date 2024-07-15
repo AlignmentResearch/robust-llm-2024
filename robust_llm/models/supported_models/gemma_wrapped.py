@@ -8,6 +8,7 @@ from transformers import (
     GemmaTokenizerFast,
     PreTrainedTokenizerBase,
 )
+from typing_extensions import override
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
@@ -31,6 +32,7 @@ class GemmaModel(WrappedModel):
         eval_minibatch_size: int,
         generation_config: GenerationConfig | None,
         family: Literal["gemma"],
+        system_prompt: str | None = None,
     ) -> None:
         super().__init__(
             model,
@@ -41,7 +43,18 @@ class GemmaModel(WrappedModel):
             eval_minibatch_size,
             generation_config=generation_config,
             family=family,
+            system_prompt=system_prompt,
         )
+
+    @override
+    def forward(self, **inputs):
+        # Gemma is idiosyncratic in that it requires use_cache=True to use
+        # provided past_key_values. This is not the default behavior for other
+        # models (except Qwen), where use_cache indicates whether to return
+        # past_key_values.
+        if "past_key_values" in inputs:
+            inputs["use_cache"] = True
+        return super().forward(**inputs)
 
     @classmethod
     def load_tokenizer(
