@@ -93,6 +93,8 @@ class SearchFreeAttack(Attack, ABC):
         ):
             example = dataset.ds[example_index]
             assert isinstance(example, dict)
+            example["example_index"] = example_index
+            # TODO (Oskar): account for examples in other partitions when indexing
             attacked_text, victim_successes = self.attack_example(example, dataset)
             # We look for False in the successes list, which indicates a successful
             # attack (i.e. that the model got the answer wrong after the attack).
@@ -263,7 +265,7 @@ class SearchFreeAttack(Attack, ABC):
                 chunk_type=chunk_type,
                 current_iteration=current_iteration,
                 chunk_label=example["clf_label"],
-                chunk_seed=example.get("seed"),
+                chunk_seed=example["example_index"],
                 chunk_index=chunk_count,
             )
             chunk_count += int(chunk_type != ChunkType.IMMUTABLE)
@@ -276,7 +278,7 @@ class SearchFreeAttack(Attack, ABC):
         chunk_type: ChunkType,
         current_iteration: int,
         chunk_label: int,
-        chunk_seed: Optional[int],
+        chunk_seed: int,
     ) -> list[int]:
         """Returns the attack tokens for the current iteration.
 
@@ -312,7 +314,7 @@ class SearchFreeAttack(Attack, ABC):
         chunk_type: ChunkType,
         current_iteration: int,
         chunk_label: int,
-        chunk_seed: Optional[int],
+        chunk_seed: int,
         chunk_index: int,
     ) -> str:
         """Returns the text for a chunk based on its type.
@@ -383,19 +385,25 @@ class SearchFreeAttack(Attack, ABC):
         if best_attack_iteration is None:
             best_attack_iteration = self.n_its - 1
 
-        def get_best_attacked_input(example) -> str:
+        def get_best_attacked_input(example_index, example) -> str:
             """Get the attacked input for the best attack iteration.
 
             NOTE: We don't type-hint example because it doesn't play nicely with
             the list comprehension and we'd just have to ignore it anyway.
             """
+            assert isinstance(example, dict)
+            assert isinstance(example_index, int)
+            example["example_index"] = example_index
             return self._get_attacked_input(
                 example=example,
                 modifiable_chunk_spec=dataset.modifiable_chunk_spec,
                 current_iteration=best_attack_iteration,
             )
 
-        attacked_texts = [get_best_attacked_input(example) for example in dataset.ds]
+        attacked_texts = [
+            get_best_attacked_input(example_index, example)
+            for example_index, example in enumerate(dataset.ds)
+        ]
 
         return attacked_texts
 

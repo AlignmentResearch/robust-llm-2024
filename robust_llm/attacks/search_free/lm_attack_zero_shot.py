@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import Any, Optional
+from typing import Any
 
 from typing_extensions import override
 
@@ -98,7 +98,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
         self,
         chunk_text: str,
         current_iteration: int,
-        chunk_seed: Optional[int],
+        chunk_seed: int,
     ):
         self.attack_state.example_info["adversary_input_text"] = (
             self.attack_state.example_info.get("adversary_input_text", [])
@@ -116,7 +116,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
         self,
         chunk_text: str,
         current_iteration: int,
-        chunk_seed: Optional[int],
+        chunk_seed: int,
     ) -> list[int]:
         """Generates attack tokens using the adversary model."""
         chunk_text = self.adversary.maybe_apply_chat_template(chunk_text)
@@ -139,7 +139,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
         chunk_type: ChunkType,
         current_iteration: int,
         chunk_label: int,
-        chunk_seed: Optional[int],
+        chunk_seed: int,
     ) -> list[int]:
         """Returns the LM red-team attack tokens for the current iteration.
 

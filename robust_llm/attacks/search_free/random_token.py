@@ -1,5 +1,4 @@
 from functools import cached_property
-from typing import Optional
 
 from robust_llm.attacks.attack import PromptAttackMode
 from robust_llm.attacks.search_free.search_free import SearchFreeAttack
@@ -80,7 +79,7 @@ class RandomTokenAttack(SearchFreeAttack):
         chunk_type: ChunkType,
         current_iteration: int,
         chunk_label: int,
-        chunk_seed: Optional[int],
+        chunk_seed: int,
     ) -> list[int]:
         """Returns the random attack tokens for the current iteration.
 
@@ -105,7 +104,7 @@ class RandomTokenAttack(SearchFreeAttack):
         assert isinstance(chunk_text, str)
         assert isinstance(chunk_type, ChunkType)
         assert isinstance(chunk_label, int)
-        assert chunk_seed is None
+        assert isinstance(chunk_seed, int)
         match self.prompt_attack_mode:
             case PromptAttackMode.SINGLEPROMPT:
                 return self._n_random_token_ids_with_exclusions(

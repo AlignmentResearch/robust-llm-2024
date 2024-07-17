@@ -95,7 +95,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         chunk_type,
         current_iteration=0,
         chunk_label=0,
-        chunk_seed=None,
+        chunk_seed=0,
         chunk_index=0,
     )
     assert rv == "Chunk text"
@@ -106,7 +106,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         chunk_type,
         current_iteration=0,
         chunk_label=0,
-        chunk_seed=None,
+        chunk_seed=1,
         chunk_index=1,
     )
     assert rv.startswith("Chunk text")
@@ -118,7 +118,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         chunk_type,
         current_iteration=0,
         chunk_label=0,
-        chunk_seed=None,
+        chunk_seed=2,
         chunk_index=2,
     )
     assert not rv.startswith("Chunk text")
@@ -137,6 +137,7 @@ def test_get_attacked_input(random_token_config, mocked_victim, tokenizer):
         "text": "".join(chunked_datapoint),
         "clf_label": 1,
         "gen_target": "POSITIVE",
+        "example_index": 0,
     }
     modifiable_chunk_spec = ModifiableChunkSpec(
         ChunkType.IMMUTABLE, ChunkType.IMMUTABLE, ChunkType.IMMUTABLE

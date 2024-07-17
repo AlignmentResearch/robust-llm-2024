@@ -106,7 +106,7 @@ class FewShotLMAttack(ZeroShotLMAttack):
         chunk_type: ChunkType,
         current_iteration: int,
         chunk_label: int,
-        chunk_seed: Optional[int],
+        chunk_seed: int,
     ) -> list[int]:
         """Returns the few-shot LM red-team attack tokens for the current iteration.
 
