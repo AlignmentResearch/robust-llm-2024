@@ -36,6 +36,7 @@ spec:
               git pull
               git checkout {COMMIT_HASH}
               git submodule update --recursive
+              pip install -e '.[dev]'
               sleep 2d
           resources:
             requests:
