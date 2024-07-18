@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from functools import cached_property
 
 from accelerate import Accelerator
-from detoxify import Detoxify
 from typing_extensions import override
 
 from robust_llm.models.model_utils import AutoregressiveOutput
+from robust_llm.models.toxic_bert import ToxicBert
 from robust_llm.scoring_callbacks.scoring_fn_utils import (
     BivariateScoringFn,
     InfoType,
@@ -74,7 +74,7 @@ class doesnt_contain_toxicity(UnivariateScoringFn):
     def toxic_clf(self):
         # Make a new Accelerator to get the device associated with this process.
         accelerator = Accelerator()
-        return Detoxify("original", device=str(accelerator.device))
+        return ToxicBert(accelerator=accelerator)
 
     @override
     def __call__(self, autoregressive_out: AutoregressiveOutput) -> bool:
@@ -95,7 +95,7 @@ class doesnt_contain_toxicity_full_text(UnivariateScoringFn):
     def toxic_clf(self):
         # Make a new Accelerator to get the device associated with this process.
         accelerator = Accelerator()
-        return Detoxify("original", device=str(accelerator.device))
+        return ToxicBert(accelerator=accelerator)
 
     @override
     def __call__(self, autoregressive_out: AutoregressiveOutput) -> bool:
@@ -114,7 +114,7 @@ class doesnt_contain_toxicity_score(UnivariateScoringFn):
     def toxic_clf(self):
         # Make a new Accelerator to get the device associated with this process.
         accelerator = Accelerator()
-        return Detoxify("original", device=str(accelerator.device))
+        return ToxicBert(accelerator=accelerator)
 
     def __call__(self, autoregressive_out: AutoregressiveOutput) -> bool:
         text = autoregressive_out.output_text
@@ -133,7 +133,7 @@ class doesnt_contain_toxicity_full_text_score(UnivariateScoringFn):
     def toxic_clf(self):
         # Make a new Accelerator to get the device associated with this process.
         accelerator = Accelerator()
-        return Detoxify("original", device=str(accelerator.device))
+        return ToxicBert(accelerator=accelerator)
 
     def __call__(self, autoregressive_out: AutoregressiveOutput) -> bool:
         text = autoregressive_out.input_text + autoregressive_out.output_text
