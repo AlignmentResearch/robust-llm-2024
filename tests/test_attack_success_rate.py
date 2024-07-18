@@ -65,15 +65,16 @@ def exp_config() -> ExperimentConfig:
 
 
 def _test_attack(
-    exp_config: ExperimentConfig, success_rate_at_least: float = 0.0
-) -> None:
+    exp_config: ExperimentConfig,
+    success_rate_at_least: int = 0,
+    exact_success_rate: int | None = None,
+) -> int:
     """Small wrapper around run_evaluation_pipeline.
 
-    This resets a TextAttack global variable, and runs interpolation:
-    - First we convert to an OmegaConf structured config, which enables
-    interpolation.
-    - Then we convert back to an ExperimentConfig object, and use
-    that to run the pipeline.
+    - Resets a TextAttack global variable
+    - Runs OmegaConf interpolation on the experiment config
+    - Runs experiment once to check that the success rate meets a lower bound
+    - Runs the experiment a second time to check that the success rate is consistent
     """
     # This is a global variable that needs to be reset between attacks
     # of different types because of a bug in TextAttack.
@@ -83,9 +84,22 @@ def _test_attack(
     config = OmegaConf.to_object(OmegaConf.structured(exp_config))
     assert isinstance(config, ExperimentConfig)
     results = run_evaluation_pipeline(config)
-    actual = results["adversarial_eval/attack_success_rate"]
+    actual = int(results["adversarial_eval/n_incorrect_post_attack"])
     print(f"Success rate: {actual}")
     assert actual >= success_rate_at_least
+    assert exact_success_rate is None or actual == exact_success_rate
+    return actual
+
+
+def _double_test_attack(
+    exp_config: ExperimentConfig,
+    success_rate_at_least: int = 0,
+) -> None:
+    """Test an attack twice to check result consistency"""
+    asr = _test_attack(exp_config, success_rate_at_least=success_rate_at_least)
+    _test_attack(
+        exp_config, success_rate_at_least=success_rate_at_least, exact_success_rate=asr
+    )
 
 
 def test_random_token(exp_config: ExperimentConfig) -> None:
@@ -94,7 +108,7 @@ def test_random_token(exp_config: ExperimentConfig) -> None:
         n_attack_tokens=1,
         n_its=50,
     )
-    _test_attack(exp_config, success_rate_at_least=0.18)
+    _double_test_attack(exp_config, success_rate_at_least=18)
 
 
 def test_multiprompt_random_token(exp_config: ExperimentConfig) -> None:
@@ -104,7 +118,7 @@ def test_multiprompt_random_token(exp_config: ExperimentConfig) -> None:
         n_its=250,
         prompt_attack_mode="multi-prompt",
     )
-    _test_attack(exp_config, success_rate_at_least=0.96)
+    _double_test_attack(exp_config, success_rate_at_least=96)
 
 
 def test_gcg(exp_config: ExperimentConfig) -> None:
@@ -115,7 +129,7 @@ def test_gcg(exp_config: ExperimentConfig) -> None:
         n_candidates_per_it=128,
     )
 
-    _test_attack(exp_config, success_rate_at_least=0.28)
+    _double_test_attack(exp_config, success_rate_at_least=28)
 
 
 def test_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
@@ -124,7 +138,7 @@ def test_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
         n_attack_tokens=5,
         n_its=10,
     )
-    _test_attack(exp_config, success_rate_at_least=1.00)
+    _double_test_attack(exp_config, success_rate_at_least=100)
 
 
 def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
@@ -153,7 +167,7 @@ def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
         ],
         n_its=2,
     )
-    _test_attack(exp_config)
+    _double_test_attack(exp_config)
 
 
 def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
@@ -206,7 +220,7 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
         n_its=2,
         victim_success_callback=phone_number_in_generation_callback,
     )
-    _test_attack(exp_config)
+    _double_test_attack(exp_config)
 
 
 def test_trl(exp_config: ExperimentConfig) -> None:
@@ -229,7 +243,7 @@ def test_trl(exp_config: ExperimentConfig) -> None:
     )
     exp_config.dataset.n_val = 2
 
-    _test_attack(exp_config)
+    _double_test_attack(exp_config)
 
 
 def test_covers_text_attacks() -> None:
@@ -251,7 +265,7 @@ def test_modifiable_words_text_attack_doesnt_crash(
         query_budget=10,
     )
     exp_config.dataset.n_val = 2
-    _test_attack(exp_config)
+    _double_test_attack(exp_config)
 
 
 # These cases are special because they don't set num_modifiable_words_per_chunk,
@@ -268,4 +282,4 @@ def test_non_modifiable_words_text_attack_doesnt_crash(
         query_budget=10,
     )
     exp_config.dataset.n_val = 2
-    _test_attack(exp_config)
+    _double_test_attack(exp_config)
