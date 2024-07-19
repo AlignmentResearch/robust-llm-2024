@@ -8,6 +8,8 @@ UPLOADED_DATASETS = [
     "AlignmentResearch/EnronSpam",
     "AlignmentResearch/WordLength",
     "AlignmentResearch/IMDB",
+    "AlignmentResearch/Helpful",
+    "AlignmentResearch/Harmless",
 ]
 
 

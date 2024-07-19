@@ -249,9 +249,11 @@ If a new run is started with the same name, then we will try to find the last ch
 Currently, we use the following datasets in our experiments:
 
 - *tensor_trust*, synthetic binary classification task, where the label is True iff two passwords given in the input match. You can use it by setting `environment.dataset_type="tensor_trust"`
-- *IMDB*, a task to classify whether movie review is positive or negative. You can use it by setting `environment.dataset_type="hf/imdb"`
-- *spam*, a task to classify whether an email is spam or not. You can use it by setting `environment.dataset_type="hf/SetFit/enron_spam"`
-- *word_length*, synthetic binary classification task to predict which of the two words is longer.
+- *IMDB*, a task to classify whether movie review is positive or negative. You can use it by setting `environment.dataset_type="AlignmentResearch/IMDB"`
+- *spam*, a task to classify whether an email is spam or not. You can use it by setting `environment.dataset_type="AlignmentResearch/EnronSpam"`
+- *word_length*, synthetic binary classification task to predict which of the two words is longer. You can use it by setting `environment.dataset_type="AlignmentResearch/WordLength"`
+- *Helpful*, a human preference dataset for chatbot conversations comparing two responses of varying helpfulness. You can use by setting `environment.dataset_type="AlignmentResearch/Helpful"`
+- *Harmless*, a human preference dataset for chatbot conversations comparing two responses of varying harmlessness. You can use by setting `environment.dataset_type="AlignmentResearch/Harmless"`.
 
 ### Dataset-attack compatibility
 

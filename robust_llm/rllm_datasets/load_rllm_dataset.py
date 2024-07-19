@@ -2,6 +2,7 @@ from robust_llm.config.configs import DatasetConfig
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.rllm_datasets.supported_datasets import (
     EnronSpamDataset,
+    HelpfulHarmlessDataset,
     IMDBDataset,
     PasswordMatchDataset,
     PureGenerationDataset,
@@ -16,6 +17,8 @@ SUPPORTED_DATASETS: dict[str, type[RLLMDataset]] = {
     "AlignmentResearch/EnronSpam": EnronSpamDataset,
     "AlignmentResearch/StrongREJECT": StrongREJECTDataset,
     "PureGeneration": PureGenerationDataset,
+    "AlignmentResearch/Helpful": HelpfulHarmlessDataset,
+    "AlignmentResearch/Harmless": HelpfulHarmlessDataset,
 }
 
 

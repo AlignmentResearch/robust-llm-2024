@@ -278,7 +278,7 @@ def make_pos_neg_versions(ds_dict: DatasetDict) -> tuple[DatasetDict, DatasetDic
 
     Assumes that the dataset has a "clf_label" column with 1 for positive
     examples and 0 for negative examples, and that each split has at least
-    positive and one negative example.
+    one positive and one negative example.
 
     Args:
         ds_dict: The dataset to split into positive and negative examples.
@@ -314,6 +314,7 @@ def prepare_huggingface_dataset(
     repo_id: str,
     ds_specific_callback: Callable[[Dataset], Dataset],
     split_map: Optional[dict[str, str]] = None,
+    **kwargs,
 ) -> dict[str, DatasetDict]:
     """Prepare a huggingface dataset for use in RLLMDatasets.
 
@@ -330,6 +331,8 @@ def prepare_huggingface_dataset(
         split_map: A mapping from the split names in the dataset to the
             names we want to use in RLLMDatasets. If None, uses a
             default split map.
+        kwargs: Additional keyword arguments to pass to the huggingface
+            datasets.load_dataset function.
 
     Returns:
         A dictionary of (config_name: DatasetDict) pairs.
@@ -340,7 +343,9 @@ def prepare_huggingface_dataset(
             "validation": "test",
         }
     train, val = datasets.load_dataset(
-        repo_id, split=[split_map["train"], split_map["validation"]]  # type: ignore
+        repo_id,
+        split=[split_map["train"], split_map["validation"]],  # type: ignore
+        **kwargs,
     )
     assert isinstance(train, Dataset)
     assert isinstance(val, Dataset)
@@ -366,24 +371,27 @@ def prepare_huggingface_dataset(
 
 def prep_hf_split(ds: Dataset) -> Dataset:
     """Process a huggingface dataset split for use in RLLMDatasets."""
-    assert {"text", "label"} <= set(ds.column_names)
-
-    num_classes = _get_num_classes(ds)
-    assert num_classes == 2, (
-        "This class can't automatically create `RLLMDataset`-compatible from"
-        " huggingface datasets with more than two classes. You can still do it"
-        " manually if you want."
-    )
-    assert set(ds["label"]) == {0, 1}, "labels must be 0 and 1"
+    if "text" in ds.column_names and "label" in ds.column_names:
+        num_classes = _get_num_classes(ds)
+        assert num_classes == 2, (
+            "This class can't automatically create an `RLLMDataset`-compatible dataset "
+            " from huggingface datasets with more than two classes. You can still do it"
+            " manually if you want."
+        )
+        assert set(ds["label"]) == {0, 1}, "labels must be 0 and 1"
+        # Classification target should be called clf_label.
+        ds = ds.rename_column("label", "clf_label")
+        # Drop all columns except the ones we need.
+        HF_EXPECTED_COLUMNS = ["text", "clf_label"]
+        ds = ds.remove_columns(
+            [col for col in ds.column_names if col not in HF_EXPECTED_COLUMNS]
+        )
+    else:
+        # The only other dataset format is used by Anthropic's Helpfulness and
+        # Harmlessness dataset, which has 'chosen' and 'rejected' columns.
+        assert ds.column_names == ["chosen", "rejected"]
     # Shuffle deterministically.
     ds = ds.shuffle(seed=DS_SHUFFLE_SEED)
-    # Classification target should be called clf_label.
-    ds = ds.rename_column("label", "clf_label")
-    # Drop all columns except the ones we need.
-    HF_EXPECTED_COLUMNS = ["text", "clf_label"]
-    ds = ds.remove_columns(
-        [col for col in ds.column_names if col not in HF_EXPECTED_COLUMNS]
-    )
     return ds
 
 

@@ -1,4 +1,5 @@
 from .enron_spam_dataset import EnronSpamDataset
+from .helpful_harmless import HelpfulHarmlessDataset
 from .imdb_dataset import IMDBDataset
 from .password_match_dataset import PasswordMatchDataset
 from .pure_generation_dataset import PureGenerationDataset
@@ -12,4 +13,5 @@ __all__ = [
     "WordLengthDataset",
     "StrongREJECTDataset",
     "PureGenerationDataset",
+    "HelpfulHarmlessDataset",
 ]
