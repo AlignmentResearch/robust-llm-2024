@@ -49,6 +49,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
 
         self.adversary_input_templates = attack_config.adversary_input_templates
         self.adversary_output_templates = attack_config.adversary_output_templates
+        self.adversary_prefix = attack_config.adversary_prefix
         if self.is_classification_task:
             assert len(self.adversary_input_templates) == self.num_labels
         else:
@@ -119,7 +120,9 @@ class ZeroShotLMAttack(SearchFreeAttack):
         chunk_seed: int,
     ) -> list[int]:
         """Generates attack tokens using the adversary model."""
-        chunk_text = self.adversary.maybe_apply_chat_template(chunk_text)
+        chunk_text = self.adversary.maybe_apply_chat_template(
+            chunk_text, assistant=self.adversary_prefix
+        )
         self.append_to_example_info_log(
             chunk_text=chunk_text,
             current_iteration=current_iteration,

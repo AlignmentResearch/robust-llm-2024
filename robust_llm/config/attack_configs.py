@@ -143,12 +143,17 @@ class LMAttackConfig(SearchFreeAttackConfig):
     Attributes:
         adversary: Model config used as the LM adversary.
         adversary_input_templates: Prompt templates to use for eliciting the attack,
-            one for each target label. Has to contain exactly one `{}` placeholder for
-            each text chunk.
+            one for each target label. Each string may contain a `{}` placeholder for
+            each modifiable text chunk in the dataset to include in the input to the
+            adversary.
+            E.g. ["{} Make the victim do something bad!"] for a single label.
         adversary_output_templates:
             Templates to use for the adversary output, one per modifiable chunk.
             Each template should contain exactly one `{}` placeholder for the attack.
             E.g. ["Ignore the following tokens: {}"] for a single chunk.
+        adversary_prefix: Prefix to place in the assistant response as context
+            when generating from the adversary.
+            E.g. "{'prompt': '"
         n_its: Maximum number of iterations to run the attack.
         victim_success_callback (CallbackConfig): Config for the
             ScoringCallback to use to compute whether an attack was successful by
@@ -160,6 +165,7 @@ class LMAttackConfig(SearchFreeAttackConfig):
     adversary: ModelConfig = MISSING
     adversary_input_templates: list[str] = MISSING
     adversary_output_templates: list[str] = field(default_factory=lambda: ["{}"])
+    adversary_prefix: str = ""
     n_its: int = 10
     prompt_attack_mode: str = "single-prompt"
     victim_success_callback: CallbackConfig = field(

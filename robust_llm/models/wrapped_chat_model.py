@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, overload
+from typing import Optional
 
 from accelerate import Accelerator
 from transformers import PreTrainedModel, PreTrainedTokenizerBase
@@ -9,7 +9,7 @@ from typing_extensions import override
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.prompt_templates import PromptTemplateBuilder
-from robust_llm.models.wrapped_model import WrappedModel
+from robust_llm.models.wrapped_model import Prompt, WrappedModel
 
 
 class WrappedChatModel(WrappedModel):
@@ -51,20 +51,18 @@ class WrappedChatModel(WrappedModel):
             user_suffix="",
         )
 
-    @overload
-    def maybe_apply_chat_template(self, text: str) -> str: ...
-
-    @overload
-    def maybe_apply_chat_template(self, text: list[str]) -> list[str]: ...
-
     @override
-    def maybe_apply_chat_template(self, text: str | list[str]) -> str | list[str]:
+    def maybe_apply_chat_template(
+        self, user: Prompt, assistant: Prompt | None = None
+    ) -> Prompt:
         """If working with a chat model, return text with chat template applied.
 
         Since this is the base class for chat models, we apply the chat template.
 
         Args:
-            text: The text to apply the chat template to.
+            user: The user prompt(s) to apply the chat template to.
+            assistant: The assistant prompt(s) to apply the chat template to.
+                If None, the assistant prompt will be left un-started.
 
         Returns:
             The text with the chat template applied.
@@ -73,11 +71,18 @@ class WrappedChatModel(WrappedModel):
         # We could do this in multiple ways, but choose to set the base prompt
         # to be empty and pass the text as an attack.
         template = self.get_prompt_template()
-        if isinstance(text, str):
-            return template.build_prompt(attack_text=text)
+        if isinstance(user, str):
+            assistant = assistant or ""
+            assert isinstance(assistant, str)
+            return template.build_prompt(attack_text=user, target=assistant)
 
         else:
-            return [template.build_prompt(attack_text=t) for t in text]
+            assert assistant is None or isinstance(assistant, list)
+            assistant = assistant or ["" for _ in user]
+            return [
+                template.build_prompt(attack_text=u, target=a)
+                for u, a in zip(user, assistant, strict=True)
+            ]
 
     @classmethod
     def from_config(

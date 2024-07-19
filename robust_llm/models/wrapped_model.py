@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from functools import cached_property
 from pathlib import Path
-from typing import Optional, overload
+from typing import Optional, TypeVar
 
 import torch
 import torch.distributed
@@ -42,6 +42,8 @@ from robust_llm.models.model_utils import (
 )
 from robust_llm.models.prompt_templates import PromptTemplate, PromptTemplateBuilder
 from robust_llm.utils import is_correctly_padded
+
+Prompt = TypeVar("Prompt", str, list[str])
 
 
 class WrappedModel(ABC):
@@ -826,24 +828,23 @@ class WrappedModel(ABC):
             system_prompt=self.system_prompt,
         )
 
-    @overload
-    def maybe_apply_chat_template(self, text: str) -> str: ...
-
-    @overload
-    def maybe_apply_chat_template(self, text: list[str]) -> list[str]: ...
-
-    def maybe_apply_chat_template(self, text: str | list[str]) -> str | list[str]:
+    def maybe_apply_chat_template(
+        self, user: Prompt, assistant: Prompt | None = None
+    ) -> Prompt:
         """If working with a chat model, return text with chat template applied.
 
         Since this is the base class, we just return the text as is.
 
         Args:
-            text: The text to apply the chat template to.
+            user: The user prompt(s) to apply the chat template to.
+            assistant: The assistant prompt(s) to apply the chat template to.
+                If None, the output will finish with the start-of-assistant-prompt
+                delimiter from the template.
 
         Returns:
             The text with the chat template applied.
         """
-        return text
+        return user
 
     @staticmethod
     def set_seed(seed: int) -> None:

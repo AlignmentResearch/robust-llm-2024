@@ -1,12 +1,11 @@
 from contextlib import contextmanager
-from typing import overload
 
 import torch
 from transformers import BatchEncoding
 from typing_extensions import override
 
 from robust_llm.models.model_utils import PastKeyValues
-from robust_llm.models.wrapped_model import WrappedModel
+from robust_llm.models.wrapped_model import Prompt, WrappedModel
 
 
 class CachingWrappedModel(WrappedModel):
@@ -181,24 +180,26 @@ class CachingWrappedModel(WrappedModel):
             **kwargs,
         )
 
-    @overload
-    def maybe_apply_chat_template(self, text: str) -> str: ...
-
-    @overload
-    def maybe_apply_chat_template(self, text: list[str]) -> list[str]: ...
-
-    def maybe_apply_chat_template(self, text: str | list[str]) -> str | list[str]:
+    @override
+    def maybe_apply_chat_template(
+        self, user: Prompt, assistant: Prompt | None = None
+    ) -> Prompt:
         """If working with a chat model, return text with chat template applied.
 
         Since this is the base class, we just return the text as is.
 
         Args:
-            text: The text to apply the chat template to.
+            user: The user prompt(s) to apply the chat template to.
+            assistant: The assistant prompt(s) to apply the chat template to.
+                If None, the output will finish with the start-of-assistant-prompt
+                delimiter from the template.
 
         Returns:
             The text with the chat template applied.
         """
-        return self._wrapped_model.maybe_apply_chat_template(text)
+        return self._wrapped_model.maybe_apply_chat_template(
+            user=user, assistant=assistant
+        )
 
     @classmethod
     def load_tokenizer(cls, model_config):
