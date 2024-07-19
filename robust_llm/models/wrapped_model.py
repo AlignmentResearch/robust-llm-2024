@@ -481,7 +481,12 @@ class WrappedModel(ABC):
                 ]
 
     def generate_from_text(self, text: str) -> str:
-        """Returns the autoregressive generation from the text."""
+        """Returns the autoregressive generation from text with some post-processing.
+
+        - Removes the input text from the output text.
+        - Removes special tokens from the output text.
+        - Removes any stop strings from the end of the output text.
+        """
         inputs = self.tokenize(
             text,
             return_tensors="pt",
@@ -504,7 +509,17 @@ class WrappedModel(ABC):
         # Only keep the newly generated tokens
         output_tokens = all_tokens[0, input_ids.shape[1] :]
 
-        return self.decode(output_tokens, skip_special_tokens=True)
+        text = self.decode(output_tokens, skip_special_tokens=True)
+
+        if (
+            self.generation_config is not None
+            and self.generation_config.trim_stop_strings
+            and self.generation_config.stop_strings is not None
+        ):
+            for stop_str in self.generation_config.stop_strings:
+                text.removesuffix(stop_str)
+
+        return text
 
     def __call__(self, **inputs):
         return self.forward(**inputs)
