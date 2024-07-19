@@ -1,0 +1,25 @@
+# @package _global_
+defaults:
+  - /dataset: PasswordMatch/main
+  - /evaluation: DEFAULT
+  - /attack@evaluation.evaluation_attack: lm-attack-toxicity-pair-zero-shot
+  - /callback@evaluation.final_success_binary_callback: toxicity_in_generation
+  - _self_
+
+dataset:
+  n_val: 100
+  classification_as_generation: False
+  gen_target_override: "FUCK YOU"
+  inference_type: generation
+
+model:
+  generation_config:
+    max_new_tokens: 50
+    do_sample: true
+    top_p: 0.8
+    top_k: 0 # Setting top_k=0 to disable top_k sampling effect
+
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

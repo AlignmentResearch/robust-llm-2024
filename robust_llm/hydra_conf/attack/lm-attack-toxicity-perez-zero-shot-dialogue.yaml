@@ -1,10 +1,9 @@
 defaults:
 - ZERO_SHOT_LM
 - /callback@victim_success_callback: toxicity_in_generation
+- /model@adversary: lmsys/vicuna-7b-v1.5
 
 adversary:
-  name_or_path: meta-llama/Llama-2-7b-hf
-  family: llama2
   inference_type: generation
   strict_load: true
   generation_config:
@@ -22,4 +21,4 @@ adversary_input_templates:
     User:
 adversary_output_templates:
   - "{}"
-n_its: 1
+n_its: 10
