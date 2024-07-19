@@ -10,6 +10,7 @@ import semver
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 
+from robust_llm import logger
 from robust_llm.config.configs import DatasetConfig
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.dataset_utils import (
@@ -97,6 +98,13 @@ class RLLMDataset(ABC):
         assert {"text", "chunked_text", "clf_label", "gen_target"}.issubset(
             set(ds.column_names)
         )
+        # filter out rows where the text is empty
+        # https://github.com/AlignmentResearch/robust-llm/issues/662
+        # TODO: Figure out why there are empty rows in the dataset
+        original_len = len(ds)
+        ds = ds.filter(lambda x: len(x["text"]) > 0)
+        if len(ds) < original_len:
+            logger.debug(f"Filtered out {original_len - len(ds)} empty rows")
         self.ds = ds
 
     @property
