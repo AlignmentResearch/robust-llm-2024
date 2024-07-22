@@ -14,6 +14,7 @@ import transformers
 import wandb
 import wandb.util
 from datasets import Dataset
+from datasets.utils.logging import disable_progress_bar
 from transformers import EvalPrediction, TrainingArguments
 from transformers.trainer import (
     CONFIG_NAME,
@@ -96,6 +97,7 @@ class Training:
         return ["none"]
 
     def __post_init__(self):
+        disable_progress_bar()
         metrics = [evaluate.load("accuracy")]
 
         num_classes = self.train_rllm_dataset.num_classes
