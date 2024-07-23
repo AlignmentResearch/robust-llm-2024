@@ -184,27 +184,23 @@ class FewShotLMAttackConfig(LMAttackConfig):
     """Options specific for Stochastic Few Shot LM red-team attacks.
 
     Attributes:
-        few_shot_temperature (float): The temperature to use for sampling from previous
-            attacks.
-        k_shot (int): The number of previous attacks to sample.
-        adversary_shot_template (str): The template to use for sampling attacks.
-            Must contain {k} (shot index) and {shot} (shot attack text) placeholders.
-            E.g. "{k}. {shot}\n" could produce an attack string like
-            "Some questions: 1. Why do I hate you?\n2. Why do you hate me?\n"
-        with_replacement (bool): Whether to sample with replacement from attacks.
+        n_turns (int): The number of turns to run the chat with the adversary.
+        adversary_score_template (str): The template to use for reporting the attack
+            results from previous turns. Must contain {prompt}, {response} and {success}
+            placeholders.
     """
 
-    few_shot_temperature: float = 0.1
-    k_shot: int = 5
-    adversary_shot_template: str = "{k}. {shot}\n"
-    with_replacement: bool = False
+    n_turns: int = 3
+    adversary_score_template: str = (
+        "\nExample\n---\nprompt: {prompt}\nresponse: {response}\nscore: {score}\n"
+    )
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.few_shot_temperature >= 0
-        assert self.k_shot > 0
-        assert "{k}" in self.adversary_shot_template
-        assert "{shot}" in self.adversary_shot_template
+        assert self.n_turns > 0
+        assert "{prompt}" in self.adversary_score_template
+        assert "{response}" in self.adversary_score_template
+        assert "{score}" in self.adversary_score_template
 
 
 @dataclass

@@ -12,7 +12,7 @@ import pytest
 from transformers import AutoTokenizer
 
 from robust_llm.attacks.search_free.random_token import RandomTokenAttack
-from robust_llm.attacks.search_free.search_free import get_attacked_text_from_successes
+from robust_llm.attacks.search_free.search_free import get_first_attack_success_index
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
@@ -60,20 +60,19 @@ def test_n_random_token_ids_with_exclusions(random_token_config, mocked_victim):
     assert all([x >= 0 for x in tokens])
 
 
-def test_get_attacked_text_from_successes(random_token_config):
-    attacked_inputs = ["a", "b", "c"]
+def test_first_success_index(random_token_config):
 
     successes = [True, False, True]
-    rv = get_attacked_text_from_successes(attacked_inputs, successes)
-    assert rv == "b"
+    rv = get_first_attack_success_index(successes)
+    assert rv == 1
 
     successes = [True, True, True]
-    rv = get_attacked_text_from_successes(attacked_inputs, successes)
-    assert rv == "c"
+    rv = get_first_attack_success_index(successes)
+    assert rv == 2
 
     successes = [False, False, False]
-    rv = get_attacked_text_from_successes(attacked_inputs, successes)
-    assert rv == "a"
+    rv = get_first_attack_success_index(successes)
+    assert rv == 0
 
 
 def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
@@ -90,7 +89,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
     chunk_text = "Chunk text"
 
     chunk_type = ChunkType.IMMUTABLE
-    rv = attack._get_text_for_chunk(
+    rv, _ = attack._get_text_for_chunk(
         chunk_text,
         chunk_type,
         current_iteration=0,
@@ -101,7 +100,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
     assert rv == "Chunk text"
 
     chunk_type = ChunkType.PERTURBABLE
-    rv = attack._get_text_for_chunk(
+    rv, _ = attack._get_text_for_chunk(
         chunk_text,
         chunk_type,
         current_iteration=0,
@@ -113,7 +112,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
     assert rv != "Chunk text"
 
     chunk_type = ChunkType.OVERWRITABLE
-    rv = attack._get_text_for_chunk(
+    rv, _ = attack._get_text_for_chunk(
         chunk_text,
         chunk_type,
         current_iteration=0,
@@ -137,12 +136,12 @@ def test_get_attacked_input(random_token_config, mocked_victim, tokenizer):
         "text": "".join(chunked_datapoint),
         "clf_label": 1,
         "gen_target": "POSITIVE",
-        "example_index": 0,
+        "seed": 0,
     }
     modifiable_chunk_spec = ModifiableChunkSpec(
         ChunkType.IMMUTABLE, ChunkType.IMMUTABLE, ChunkType.IMMUTABLE
     )
-    attacked_input = attack._get_attacked_input(
+    attacked_input, _ = attack._get_attacked_input(
         example, modifiable_chunk_spec, current_iteration=0
     )
     assert attacked_input == "abc"
@@ -150,7 +149,7 @@ def test_get_attacked_input(random_token_config, mocked_victim, tokenizer):
     modifiable_chunk_spec = ModifiableChunkSpec(
         ChunkType.IMMUTABLE, ChunkType.IMMUTABLE, ChunkType.PERTURBABLE
     )
-    attacked_input = attack._get_attacked_input(
+    attacked_input, _ = attack._get_attacked_input(
         example, modifiable_chunk_spec, current_iteration=0
     )
     assert attacked_input.startswith("abc")
@@ -159,7 +158,7 @@ def test_get_attacked_input(random_token_config, mocked_victim, tokenizer):
     modifiable_chunk_spec = ModifiableChunkSpec(
         ChunkType.OVERWRITABLE, ChunkType.IMMUTABLE, ChunkType.IMMUTABLE
     )
-    attacked_input = attack._get_attacked_input(
+    attacked_input, _ = attack._get_attacked_input(
         example, modifiable_chunk_spec, current_iteration=0
     )
     assert attacked_input.endswith("c")

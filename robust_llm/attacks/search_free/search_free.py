@@ -11,7 +11,7 @@ from tqdm import tqdm
 from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack, AttackState, PromptAttackMode
-from robust_llm.config.attack_configs import AttackConfig
+from robust_llm.config.attack_configs import AttackConfig, SearchFreeAttackConfig
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
@@ -23,9 +23,9 @@ from robust_llm.scoring_callbacks import (
     BinaryCallback,
     BinaryCallbackOutput,
     CallbackInput,
-    CallbackOutput,
     TensorCallback,
 )
+from robust_llm.scoring_callbacks.build_scoring_callback import build_scoring_callback
 from robust_llm.scoring_callbacks.scoring_callback_utils import TensorCallbackOutput
 
 SUCCESS_TYPE = Sequence[bool] | Tensor
@@ -34,7 +34,6 @@ SUCCESSES_TYPE = list[SUCCESS_TYPE]
 
 @dataclass
 class SearchFreeAttackState(AttackState):
-    victim_successes: SUCCESSES_TYPE = field(default_factory=list)
     success_indices: list[list[int]] = field(default_factory=list)
 
 
@@ -65,7 +64,12 @@ class SearchFreeAttack(Attack, ABC):
             attack_config, victim=victim, run_name=run_name, logging_name=logging_name
         )
         self.attack_state = SearchFreeAttackState()
+        assert isinstance(attack_config, SearchFreeAttackConfig)
         self.rng = random.Random(attack_config.seed)
+        self.n_its = attack_config.n_its
+        self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
+        cb_config = attack_config.victim_success_callback
+        self.victim_success_callback = build_scoring_callback(cb_config)
 
     @override
     def get_attacked_dataset(
@@ -77,14 +81,14 @@ class SearchFreeAttack(Attack, ABC):
         if resume_from_checkpoint and self.maybe_load_state():
             assert isinstance(self.attack_state, SearchFreeAttackState)
             attacked_texts = self.attack_state.attacked_texts
-            all_successes = self.attack_state.victim_successes
             all_success_indices = self.attack_state.success_indices
+            attacks_info = self.attack_state.attacks_info
             starting_index = self.attack_state.example_index + 1
         else:
             # Reset the state if not resuming from checkpoint
             attacked_texts = []
-            all_successes = []
             all_success_indices = []
+            attacks_info = {}
             self.attack_state = SearchFreeAttackState()
             starting_index = 0
 
@@ -93,9 +97,12 @@ class SearchFreeAttack(Attack, ABC):
         ):
             example = dataset.ds[example_index]
             assert isinstance(example, dict)
-            example["example_index"] = example_index
+            example["seed"] = example_index
             # TODO (Oskar): account for examples in other partitions when indexing
-            attacked_text, victim_successes = self.attack_example(example, dataset)
+            attacked_text, attack_info, victim_successes = self.attack_example(
+                example, dataset
+            )
+            attacked_text = self.victim.maybe_apply_chat_template(attacked_text)
             # We look for False in the successes list, which indicates a successful
             # attack (i.e. that the model got the answer wrong after the attack).
             success_indices = (
@@ -103,17 +110,20 @@ class SearchFreeAttack(Attack, ABC):
                 if isinstance(victim_successes, Tensor)
                 else [i for i, s in enumerate(victim_successes) if not s]
             )
+
+            # Append data for this example
             attacked_texts.append(attacked_text)
+            attacks_info = {
+                k: attacks_info.get(k, []) + [v] for k, v in attack_info.items()
+            }
             all_success_indices.append(success_indices)
-            all_successes.append(victim_successes)
 
             # Save the state after each example in case of interruption.
             self.attack_state = SearchFreeAttackState(
                 example_index=example_index,
                 attacked_texts=attacked_texts,
                 success_indices=all_success_indices,
-                victim_successes=all_successes,
-                example_info=self.attack_state.example_info,
+                attacks_info=attacks_info,
             )
             if resume_from_checkpoint:
                 self.maybe_save_state()
@@ -125,17 +135,12 @@ class SearchFreeAttack(Attack, ABC):
             )
 
         attacked_dataset = dataset.with_attacked_text(attacked_texts)
-        metadata = {"success_indices": all_success_indices}
+        metadata = {"success_indices": all_success_indices, "attack_info": attacks_info}
         return attacked_dataset, metadata
-
-    def use_callback_results(
-        self, callback_input: CallbackInput, callback_output: CallbackOutput
-    ) -> None:
-        """Can be overriden to update some state based on the callback results."""
 
     def attack_example(
         self, example: dict[str, Any], dataset: RLLMDataset
-    ) -> tuple[str, SUCCESS_TYPE]:
+    ) -> tuple[str, dict[str, Any], SUCCESS_TYPE]:
         """Attacks a single example.
 
         Note that we are going per example and running all the iterations at
@@ -157,11 +162,10 @@ class SearchFreeAttack(Attack, ABC):
 
 
         Returns:
-            The attacked text and the number of iterations it took
-            to get a successful attack (if not successful, this will
-            return the last attacked_text and None).
+            The attacked text, a dict of extra attack info for the chosen attack
+            iteration, and the full list of successes.
         """
-        attacked_inputs = self.get_attacked_inputs(
+        attacked_inputs, attacked_info = self.get_attacked_inputs(
             example=example,
             n_attacks=self.n_its,
             modifiable_chunk_spec=dataset.modifiable_chunk_spec,
@@ -193,7 +197,6 @@ class SearchFreeAttack(Attack, ABC):
                 victim,
                 callback_input,
             )
-        self.use_callback_results(callback_input, victim_out)
         victim_successes: SUCCESS_TYPE
         if isinstance(victim_out, BinaryCallbackOutput):
             victim_successes = victim_out.successes
@@ -201,20 +204,25 @@ class SearchFreeAttack(Attack, ABC):
             assert isinstance(victim_out, TensorCallbackOutput)
             victim_successes = victim_out.losses
 
-        attacked_text = get_attacked_text_from_successes(
-            attacked_inputs, victim_successes
-        )
-        # TODO(ian): Work out if 'apply_chat_template' messes with the updating
-        # done in 'with_attacked_text'.
-        return victim.maybe_apply_chat_template(attacked_text), victim_successes
+        # Copy callback output info to attacked_info
+        if "generations" in victim_out.info:
+            attacked_info["generations"] = victim_out.info["generations"]
+        if "generation_outputs" in victim_out.info:
+            attacked_info["generation_outputs"] = victim_out.info["generation_outputs"]
+
+        success_index = get_first_attack_success_index(victim_successes)
+        attacked_text = attacked_inputs[success_index]
+        attacked_info = {k: v[success_index] for k, v in attacked_info.items()}
+        attacked_info["success_index"] = success_index
+        return attacked_text, attacked_info, victim_successes
 
     def get_attacked_inputs(
         self,
         example: dict[str, Any],
         n_attacks: int,
         modifiable_chunk_spec: ModifiableChunkSpec,
-    ) -> list[str]:
-        """Returns the attacked inputs for one example.
+    ) -> tuple[list[str], dict[str, Any]]:
+        """Returns the attacked inputs for one example, one per iteration.
 
         Args:
             example: The example to be attacked.
@@ -224,24 +232,29 @@ class SearchFreeAttack(Attack, ABC):
                 modifiable, and how.
 
         Returns:
-            The attacked inputs for the example.
+            The attacked inputs for the example and a dict of attack-specific
+            info for each iteration.
         """
 
         # TODO (ian): Speed this up by parallelizing if it's a bottleneck.
         attacked_inputs = []
+        attacks_info: dict[str, list[Any]] = dict()
         for i in range(n_attacks):
-            attacked_input = self._get_attacked_input(
+            attacked_input, attack_info = self._get_attacked_input(
                 example, modifiable_chunk_spec, current_iteration=i
             )
             attacked_inputs.append(attacked_input)
-        return attacked_inputs
+            attacks_info = {
+                k: attacks_info.get(k, []) + [v] for k, v in attack_info.items()
+            }
+        return attacked_inputs, attacks_info
 
     def _get_attacked_input(
         self,
         example: dict[str, Any],
         modifiable_chunk_spec: ModifiableChunkSpec,
         current_iteration: int,
-    ) -> str:
+    ) -> tuple[str, dict[str, Any]]:
         """Returns one attacked input for one example.
 
         Args:
@@ -251,25 +264,30 @@ class SearchFreeAttack(Attack, ABC):
             current_iteration: The current iteration of the attack.
 
         Returns:
-            One attacked input for the example.
+            One attacked input for the example and a dict of attack-specific
+            info for the current iteration.
         """
         if modifiable_chunk_spec.n_modifiable_chunks > 1:
             raise ValueError("Only one modifiable chunk per example supported for now.")
 
         current_input = ""
         chunk_count = 0
+        attacked_info = {}
         for chunk_index, chunk_type in enumerate(modifiable_chunk_spec):
             chunk_text = example["chunked_text"][chunk_index]
-            current_input += self._get_text_for_chunk(
+            text, info = self._get_text_for_chunk(
                 chunk_text=chunk_text,
                 chunk_type=chunk_type,
                 current_iteration=current_iteration,
                 chunk_label=example["clf_label"],
-                chunk_seed=example["example_index"],
+                chunk_seed=example["seed"],
                 chunk_index=chunk_count,
             )
-            chunk_count += int(chunk_type != ChunkType.IMMUTABLE)
-        return current_input
+            current_input += text
+            if chunk_type != ChunkType.IMMUTABLE:
+                chunk_count += 1
+                attacked_info = info
+        return current_input, attacked_info
 
     @abstractmethod
     def _get_attack_tokens(
@@ -279,7 +297,7 @@ class SearchFreeAttack(Attack, ABC):
         current_iteration: int,
         chunk_label: int,
         chunk_seed: int,
-    ) -> list[int]:
+    ) -> tuple[list[int], dict[str, Any]]:
         """Returns the attack tokens for the current iteration.
 
         Args:
@@ -291,7 +309,8 @@ class SearchFreeAttack(Attack, ABC):
             chunk_seed: The seed for the chunk (for generation).
 
         Subclasses return:
-            The attack tokens for the current iteration.
+            The attack tokens for the current iteration and a dict of attack-specific
+            info for the current iteration.
         """
         raise NotImplementedError
 
@@ -316,7 +335,7 @@ class SearchFreeAttack(Attack, ABC):
         chunk_label: int,
         chunk_seed: int,
         chunk_index: int,
-    ) -> str:
+    ) -> tuple[str, dict[str, Any]]:
         """Returns the text for a chunk based on its type.
 
         If we are in single-prompt mode, we generate attack tokens here; if we
@@ -332,14 +351,15 @@ class SearchFreeAttack(Attack, ABC):
             chunk_index: The index of the chunk in the example.
 
         Returns:
-            The text for the chunk based on its type.
+            The text for the chunk based on its type and a dictionary of attack-specific
+            information for a single iteration.
         """
         match chunk_type:
             case ChunkType.IMMUTABLE:
-                return chunk_text
+                return chunk_text, {}
 
             case ChunkType.PERTURBABLE:
-                token_ids = self._get_attack_tokens(
+                token_ids, info = self._get_attack_tokens(
                     chunk_text,
                     chunk_type,
                     current_iteration,
@@ -350,10 +370,10 @@ class SearchFreeAttack(Attack, ABC):
                 attack_tokens = self.post_process_attack_string(
                     attack_tokens, chunk_index
                 )
-                return chunk_text + attack_tokens
+                return chunk_text + attack_tokens, info
 
             case ChunkType.OVERWRITABLE:
-                token_ids = self._get_attack_tokens(
+                token_ids, info = self._get_attack_tokens(
                     chunk_text,
                     chunk_type,
                     current_iteration,
@@ -364,7 +384,7 @@ class SearchFreeAttack(Attack, ABC):
                 attack_tokens = self.post_process_attack_string(
                     attack_tokens, chunk_index
                 )
-                return attack_tokens
+                return attack_tokens, info
 
             case _:
                 raise ValueError(f"Unknown chunk type: {chunk_type}")
@@ -393,12 +413,12 @@ class SearchFreeAttack(Attack, ABC):
             """
             assert isinstance(example, dict)
             assert isinstance(example_index, int)
-            example["example_index"] = example_index
+            example["seed"] = example_index
             return self._get_attacked_input(
                 example=example,
                 modifiable_chunk_spec=dataset.modifiable_chunk_spec,
                 current_iteration=best_attack_iteration,
-            )
+            )[0]
 
         attacked_texts = [
             get_best_attacked_input(example_index, example)
@@ -423,28 +443,24 @@ def _get_most_frequent_index(indices: list[list[int]]) -> int | None:
     return most_frequent_index
 
 
-def get_attacked_text_from_successes(
-    attacked_inputs: Sequence[str],
+def get_first_attack_success_index(
     victim_successes: SUCCESS_TYPE,
-) -> str:
+) -> int:
     """Returns the attacked text and the indices of successful attacks.
 
     Args:
-        attacked_inputs: The attacked inputs.
         victim_successes: The successes of the model on the inputs. This can be
             binary success/fail or a floating point score.
 
     Returns:
-        The first successful attacked text and the indices of successful attacks.
-        Returns the last attacked text and empty list if no attack was successful.
+        The index of the first successful attack (or the last attack if all failed).
     """
     if all([s is True for s in victim_successes]):
         # If there were no successful attacks, return the last attacked input.
-        return attacked_inputs[-1]
+        return len(victim_successes) - 1
     # The following one-liner is used to grab the first successful attack if
     # using binary success, or the *most* successful attack if using floats.
     # We take the min rather than the max because these successes are from
     # the perspective of the victim, so lower is better.
     _, attack_index = min((val, idx) for (idx, val) in enumerate(victim_successes))
-    attacked_text = attacked_inputs[attack_index]
-    return attacked_text
+    return attack_index

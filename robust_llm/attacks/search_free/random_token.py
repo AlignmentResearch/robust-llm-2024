@@ -1,4 +1,5 @@
 from functools import cached_property
+from typing import Any
 
 from robust_llm.attacks.attack import PromptAttackMode
 from robust_llm.attacks.search_free.search_free import SearchFreeAttack
@@ -80,7 +81,7 @@ class RandomTokenAttack(SearchFreeAttack):
         current_iteration: int,
         chunk_label: int,
         chunk_seed: int,
-    ) -> list[int]:
+    ) -> tuple[list[int], dict[str, Any]]:
         """Returns the random attack tokens for the current iteration.
 
         If we are in single-prompt mode, we generate random tokens here
@@ -107,12 +108,15 @@ class RandomTokenAttack(SearchFreeAttack):
         assert isinstance(chunk_seed, int)
         match self.prompt_attack_mode:
             case PromptAttackMode.SINGLEPROMPT:
-                return self._n_random_token_ids_with_exclusions(
-                    n=self.n_attack_tokens,
-                    excluded_token_ids=self.victim.all_special_ids,
+                return (
+                    self._n_random_token_ids_with_exclusions(
+                        n=self.n_attack_tokens,
+                        excluded_token_ids=self.victim.all_special_ids,
+                    ),
+                    {},
                 )
             case PromptAttackMode.MULTIPROMPT:
-                return self.shared_attack_tokens[current_iteration]
+                return self.shared_attack_tokens[current_iteration], {}
 
     def _n_random_token_ids_with_exclusions(
         self, n: int, excluded_token_ids: list[int]

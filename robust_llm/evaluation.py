@@ -80,6 +80,7 @@ def do_adversarial_evaluation(
         # we will be incorrectly reusing data in the case of adversarial training.
         resume_from_checkpoint=resume_from_checkpoint,
     )
+    attack_info = info_dict.pop("attack_info", {})
 
     # In case the attack changed the victim from eval() mode, we set it again here.
     victim.eval()
@@ -152,7 +153,7 @@ def do_adversarial_evaluation(
             attacked_flags=post_attack_flags,
             indices_to_attack=indices_to_attack,
             num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
-            **attack.attack_state.example_info,
+            **attack_info,
         )
 
     if victim.accelerator.is_main_process:
@@ -218,7 +219,7 @@ def _log_examples_to_wandb(
         attacked_labels: The attacked labels.
         attacked_successes: The attacked successes.
         attacked_flags: The attacked defense flags.
-        indices_to_attack: The indices in the pre-attack datasetof the examples
+        indices_to_attack: The indices in the pre-attack dataset of the examples
             that were attacked.
         num_examples_to_log_detailed_info: The number of examples to log.
         other_attack_info: Other attack-specific information to log.

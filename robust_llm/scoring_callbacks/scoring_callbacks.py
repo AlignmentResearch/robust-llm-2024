@@ -419,6 +419,7 @@ def tensor_univariate_fn_of_generation_from_text_callback(
 
         all_floats = []
         all_generations = []
+        all_outputs = []
         batch_start = 0
         for outs in output_generator:
             assert victim.accelerator is not None
@@ -439,7 +440,9 @@ def tensor_univariate_fn_of_generation_from_text_callback(
                 all_floats.extend(floats)
                 # TODO(ian): Find a better way to record generations.
                 gens = [out.get_full_text() for out in outs]
+                gen_outputs = [out.output_text for out in outs]
                 all_generations.extend(gens)
+                all_outputs.extend(gen_outputs)
 
                 batch_start += batch_length
 
@@ -448,7 +451,8 @@ def tensor_univariate_fn_of_generation_from_text_callback(
         # NOTE: It's fine not to gather the generations since we only log them
         # from the main process anyway.
         return TensorCallbackOutput(
-            losses=gathered_floats, info={"generations": all_generations}
+            losses=gathered_floats,
+            info={"generations": all_generations, "generation_outputs": all_outputs},
         )
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")

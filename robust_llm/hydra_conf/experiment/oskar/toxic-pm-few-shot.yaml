@@ -2,7 +2,7 @@
 defaults:
   - /dataset: PasswordMatch/main
   - /evaluation: DEFAULT
-  - /attack@evaluation.evaluation_attack: gcg-standard
+  - /attack@evaluation.evaluation_attack: lm-attack-toxicity-pair-few-shot
   - /callback@evaluation.final_success_binary_callback: toxicity_in_generation
   - _self_
 

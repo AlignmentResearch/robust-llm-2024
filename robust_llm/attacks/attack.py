@@ -24,7 +24,7 @@ class AttackState:
 
     example_index: int = 0
     attacked_texts: list[str] = field(default_factory=list)
-    example_info: dict[str, list[Any]] = field(default_factory=dict)
+    attacks_info: dict[str, list[Any]] = field(default_factory=dict)
 
 
 class Attack(abc.ABC):

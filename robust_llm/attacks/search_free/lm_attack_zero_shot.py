@@ -3,7 +3,6 @@ from typing import Any
 
 from typing_extensions import override
 
-from robust_llm.attacks.attack import PromptAttackMode
 from robust_llm.attacks.search_free.search_free import SearchFreeAttack
 from robust_llm.config.attack_configs import LMAttackConfig
 from robust_llm.models import WrappedModel
@@ -11,7 +10,6 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
     ModifiableChunkSpec,
 )
-from robust_llm.scoring_callbacks.build_scoring_callback import build_scoring_callback
 from robust_llm.utils import get_randint_with_exclusions
 
 
@@ -54,10 +52,6 @@ class ZeroShotLMAttack(SearchFreeAttack):
             assert len(self.adversary_input_templates) == self.num_labels
         else:
             assert len(self.adversary_input_templates) == 1
-        self.n_its = attack_config.n_its
-        self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
-        cb_config = attack_config.victim_success_callback
-        self.victim_success_callback = build_scoring_callback(cb_config)
 
     @property
     def num_labels(self) -> int:
@@ -95,45 +89,28 @@ class ZeroShotLMAttack(SearchFreeAttack):
             else 0
         )
 
-    def append_to_example_info_log(
-        self,
-        chunk_text: str,
-        current_iteration: int,
-        chunk_seed: int,
-    ):
-        self.attack_state.example_info["adversary_input_text"] = (
-            self.attack_state.example_info.get("adversary_input_text", [])
-            + [chunk_text]
-        )
-        self.attack_state.example_info["attack_iteration"] = (
-            self.attack_state.example_info.get("attack_iteration", [])
-            + [current_iteration]
-        )
-        self.attack_state.example_info["attack_seed"] = (
-            self.attack_state.example_info.get("attack_seed", []) + [chunk_seed]
-        )
-
     def generate(
         self,
         chunk_text: str,
         current_iteration: int,
         chunk_seed: int,
-    ) -> list[int]:
+    ) -> tuple[list[int], dict[str, Any]]:
         """Generates attack tokens using the adversary model."""
         chunk_text = self.adversary.maybe_apply_chat_template(
             chunk_text, assistant=self.adversary_prefix
-        )
-        self.append_to_example_info_log(
-            chunk_text=chunk_text,
-            current_iteration=current_iteration,
-            chunk_seed=chunk_seed,
         )
         # Ensure that generations are deterministic for a given seed/iteration combo
         self.adversary.set_seed(hash((chunk_seed, current_iteration)))
         text = self.adversary.generate_from_text(chunk_text)
         token_ids = self.victim.tokenize(text)["input_ids"]
         assert isinstance(token_ids, list)
-        return token_ids
+        info = dict(
+            chunk_text=chunk_text,
+            current_iteration=current_iteration,
+            chunk_seed=chunk_seed,
+            adversary_output=text,
+        )
+        return token_ids, info
 
     @override
     def _get_attack_tokens(
@@ -143,7 +120,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
         current_iteration: int,
         chunk_label: int,
         chunk_seed: int,
-    ) -> list[int]:
+    ) -> tuple[list[int], dict[str, Any]]:
         """Returns the LM red-team attack tokens for the current iteration.
 
         For classification, we pick a random alternate target label to decide
@@ -177,7 +154,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
         example: dict[str, Any],
         modifiable_chunk_spec: ModifiableChunkSpec,
         current_iteration: int,
-    ) -> str:
+    ) -> tuple[str, dict[str, Any]]:
         assert modifiable_chunk_spec.n_modifiable_chunks == len(
             self.adversary_output_templates
         )
