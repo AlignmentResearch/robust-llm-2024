@@ -176,7 +176,7 @@ For `wandb`, [get your API key](https://wandb.ai/authorize) and run the followin
 kubectl create secret generic wandb --from-literal=api-key=<YOUR_WANDB_API_KEY>
 ```
 
-For `huggingface`, [create a read-only or fine-grained access token](https://huggingface.co/settings/tokens). For a fine-grained access token, enable "Read access to contents of all public gated repos you can access". Then run the following command:
+For `huggingface`, [create an access token](https://huggingface.co/settings/tokens). In order to run the evaluation pipeline, the minimal permissions needed are "Read access to contents of all public gated repos you can access", and for the training pipeline, you further need "Write access to contents/settings of all repos in selected organizations" for the FAR AI org. Then run the following command:
 ```
 kubectl create secret generic huggingface --from-literal=token=<YOUR_HF_TOKEN>
 ```
