@@ -515,14 +515,6 @@ class WrappedModel(ABC):
 
         text = self.decode(output_tokens, skip_special_tokens=True)
 
-        if (
-            self.generation_config is not None
-            and self.generation_config.trim_stop_strings
-            and self.generation_config.stop_strings is not None
-        ):
-            for stop_str in self.generation_config.stop_strings:
-                text.removesuffix(stop_str)
-
         return text
 
     def __call__(self, **inputs):

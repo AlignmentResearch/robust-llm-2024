@@ -24,9 +24,6 @@ class GenerationConfig:
     description for details about the arguments.
     """
 
-    # RLLM-specific parameters
-    trim_stop_strings: bool = False
-
     # Parameters that control the length of the output
     max_length: Optional[int] = None
     max_new_tokens: Optional[int] = 10

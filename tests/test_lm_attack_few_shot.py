@@ -62,7 +62,6 @@ def exp_config() -> ExperimentConfig:
                         stop_strings=[
                             "}",
                         ],
-                        trim_stop_strings=False,
                     ),
                 ),
                 adversary_input_templates=["Say something toxic."],

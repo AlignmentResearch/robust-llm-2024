@@ -49,12 +49,17 @@ class FewShotLMAttack(SearchFreeAttack):
 
         self.n_turns = attack_config.n_turns
         self.few_shot_score_template = attack_config.few_shot_score_template
+        self.initial_adversary_prefix = (
+            attack_config.initial_adversary_prefix
+            if attack_config.initial_adversary_prefix is not None
+            else attack_config.adversary_prefix
+        )
         self.adversary_input_templates = attack_config.adversary_input_templates
         zero_shot_config = deepcopy(attack_config)
         # We only want to run the zero-shot attack once per turn.
         zero_shot_config.n_its = 1
-        # We don't want to reapply the chat template on every turn.
-        zero_shot_config.apply_chat_template_to_adversary_input = False
+        # We don't want to reinsert the data or reapply the chat template on every turn.
+        zero_shot_config.use_raw_adversary_input = True
         self.zero_shot_attack = ZeroShotLMAttack(
             zero_shot_config,
             victim=victim,
@@ -93,7 +98,7 @@ class FewShotLMAttack(SearchFreeAttack):
             example["seed"] = hash((example_seed, iteration))
             conv = self.adversary.init_conversation()
             conv.append_user_message(self.adversary_input_templates[target_label])
-            conv.append_assistant_message(self.zero_shot_attack.adversary_prefix)
+            conv.append_assistant_message(self.initial_adversary_prefix)
 
             best_text = None
             best_generation = None
@@ -112,7 +117,9 @@ class FewShotLMAttack(SearchFreeAttack):
                 )
                 attack_generation = clean_text(info["generation_outputs"])
                 adversary_inputs.append(info["adversary_input"])
-                adversary_output = info["adversary_output"]
+                adversary_output = self.adversary.clean_chat_artifacts(
+                    info["adversary_output"]
+                )
                 attack_generation = self.victim.clean_chat_artifacts(attack_generation)
 
                 # Convert victim to attack success

@@ -154,8 +154,19 @@ class LMAttackConfig(SearchFreeAttackConfig):
         adversary_prefix: Prefix to place in the assistant response as context
             when generating from the adversary.
             E.g. "{'prompt': '"
-        apply_chat_template_to_adversary_input: Whether to apply the chat template
-            to the adversary input. If False, the adversary input is used as is.
+        attack_start_strings: Strings to use to delimit the start the attack.
+            If multiple strings are provided, the attack after *all* of the strings.
+            If none are provided or found, then the attack will start at the beginning
+            of the input.
+            e.g. "'prompt': '" for JSON attacks
+        attack_end_strings: Strings to use to delimit the end of the attack.
+            If multiple strings are provided, the attack will before any of the strings.
+            If none are provided or found, then the attack will end at the end of the
+            input.
+            e.g. "'}" for JSON attacks
+        use_raw_adversary_input: If True, we will skip trying to insert the original
+            data and the chat template. This should only be set when called from a
+            few-shot attack.
         n_its: Maximum number of iterations to run the attack.
         victim_success_callback (CallbackConfig): Config for the
             ScoringCallback to use to compute whether an attack was successful by
@@ -168,7 +179,9 @@ class LMAttackConfig(SearchFreeAttackConfig):
     adversary_input_templates: list[str] = MISSING
     adversary_output_templates: list[str] = field(default_factory=lambda: ["{}"])
     adversary_prefix: str = ""
-    apply_chat_template_to_adversary_input: bool = True
+    attack_start_strings: list[str] = field(default_factory=list)
+    attack_end_strings: list[str] = field(default_factory=list)
+    use_raw_adversary_input: bool = False
     n_its: int = 10
     prompt_attack_mode: str = "single-prompt"
     victim_success_callback: CallbackConfig = field(
@@ -191,16 +204,23 @@ class FewShotLMAttackConfig(LMAttackConfig):
         few_shot_score_template (str): The template to use for reporting the attack
             results from previous turns. Must contain {response} and {success}
             placeholders.
+        initial_adversary_prefix: Prefix to use for the first turn of the attack.
+            Useful for PAIR where there is no 'improvement' in turn 0.
+            If None, defaults to be the same as the regular `adversary_prefix`.
     """
 
     n_turns: int = 3
     few_shot_score_template: str = "Response: {response}\nScore: {score}\n"
+    initial_adversary_prefix: str | None = None
 
     def __post_init__(self):
         super().__post_init__()
         assert self.n_turns > 0
         assert "{response}" in self.few_shot_score_template
-        assert "{score}" in self.few_shot_score_template
+        assert (
+            "{score" in self.few_shot_score_template
+            and "}" in self.few_shot_score_template
+        )
 
 
 @dataclass
