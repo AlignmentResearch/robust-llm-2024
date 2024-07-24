@@ -48,6 +48,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
         self.adversary_input_templates = attack_config.adversary_input_templates
         self.adversary_output_templates = attack_config.adversary_output_templates
         self.adversary_prefix = attack_config.adversary_prefix
+        self.apply_chat_template = attack_config.apply_chat_template_to_adversary_input
         if self.is_classification_task:
             assert len(self.adversary_input_templates) == self.num_labels
         else:
@@ -89,23 +90,29 @@ class ZeroShotLMAttack(SearchFreeAttack):
             else 0
         )
 
-    def generate(
+    def maybe_apply_chat_template(self, text: str) -> str:
+        if not self.apply_chat_template:
+            return text
+        conv = self.adversary.init_conversation()
+        conv.append_user_message(text)
+        conv.append_assistant_message(self.adversary_prefix)
+        adversary_input = conv.get_prompt(skip_last_suffix=True)
+        return adversary_input
+
+    def generate_from_text(
         self,
-        chunk_text: str,
+        adversary_input: str,
         current_iteration: int,
         chunk_seed: int,
     ) -> tuple[list[int], dict[str, Any]]:
         """Generates attack tokens using the adversary model."""
-        chunk_text = self.adversary.maybe_apply_chat_template(
-            chunk_text, assistant=self.adversary_prefix
-        )
         # Ensure that generations are deterministic for a given seed/iteration combo
         self.adversary.set_seed(hash((chunk_seed, current_iteration)))
-        text = self.adversary.generate_from_text(chunk_text)
+        text = self.adversary.generate_from_text(adversary_input)
         token_ids = self.victim.tokenize(text)["input_ids"]
         assert isinstance(token_ids, list)
         info = dict(
-            chunk_text=chunk_text,
+            adversary_input=adversary_input,
             current_iteration=current_iteration,
             chunk_seed=chunk_seed,
             adversary_output=text,
@@ -143,10 +150,14 @@ class ZeroShotLMAttack(SearchFreeAttack):
         assert isinstance(chunk_text, str)
         assert isinstance(chunk_type, ChunkType)
         target_label = self.get_target_label(chunk_label)
-        formatted_chunk = self.adversary_input_templates[target_label].format(
-            chunk_text
-        )
-        return self.generate(formatted_chunk, current_iteration, chunk_seed)
+        if "{}" in self.adversary_input_templates[target_label]:
+            formatted_chunk = self.adversary_input_templates[target_label].format(
+                chunk_text
+            )
+        else:
+            formatted_chunk = self.adversary_input_templates[target_label]
+        adversary_input = self.maybe_apply_chat_template(formatted_chunk)
+        return self.generate_from_text(adversary_input, current_iteration, chunk_seed)
 
     @override
     def _get_attacked_input(

@@ -92,7 +92,7 @@ class SearchBasedAttack(Attack):
                 )
             )
 
-            prompt_template = self.victim.get_prompt_template(
+            prompt_template = self.victim.chunks_to_prompt_template(
                 unmodifiable_prefix=unmodifiable_prefix,
                 modifiable_infix=modifiable_infix,
                 unmodifiable_suffix=unmodifiable_suffix,

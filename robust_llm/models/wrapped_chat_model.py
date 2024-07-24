@@ -8,7 +8,7 @@ from typing_extensions import override
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.models.prompt_templates import PromptTemplateBuilder
+from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_model import Prompt, WrappedModel
 
 
@@ -43,46 +43,49 @@ class WrappedChatModel(WrappedModel):
             generation_config,
             system_prompt,
         )
-        assert self.prompt_builder != PromptTemplateBuilder(
+        assert self.init_conversation != Conversation(
             prompt_prefix="",
             system_prefix="",
             system_suffix="",
             user_prefix="",
             user_suffix="",
+            assistant_prefix="",
+            assistant_suffix="",
         )
 
+    def get_user_prompt(self, text: str) -> str:
+        """Get the user prompt for a chat model.
+
+        Args:
+            text: The user input.
+
+        Returns:
+            The chat-formatted user prompt.
+        """
+
+        conv = self.init_conversation()
+        conv.append_user_message(text)
+        conv.append_assistant_message("")
+        return conv.get_prompt(skip_last_suffix=True)
+
     @override
-    def maybe_apply_chat_template(
-        self, user: Prompt, assistant: Prompt | None = None
-    ) -> Prompt:
+    def maybe_apply_user_template(self, text: Prompt) -> Prompt:
         """If working with a chat model, return text with chat template applied.
 
         Since this is the base class for chat models, we apply the chat template.
 
         Args:
-            user: The user prompt(s) to apply the chat template to.
-            assistant: The assistant prompt(s) to apply the chat template to.
-                If None, the assistant prompt will be left un-started.
+            text: The user prompt(s) to apply the chat template to.
 
         Returns:
             The text with the chat template applied.
         """
-        # We want to surround `text` with the user chat delimiters.
-        # We could do this in multiple ways, but choose to set the base prompt
-        # to be empty and pass the text as an attack.
-        template = self.get_prompt_template()
-        if isinstance(user, str):
-            assistant = assistant or ""
-            assert isinstance(assistant, str)
-            return template.build_prompt(attack_text=user, target=assistant)
+
+        if isinstance(text, str):
+            return self.get_user_prompt(text)
 
         else:
-            assert assistant is None or isinstance(assistant, list)
-            assistant = assistant or ["" for _ in user]
-            return [
-                template.build_prompt(attack_text=u, target=a)
-                for u, a in zip(user, assistant, strict=True)
-            ]
+            return [self.get_user_prompt(u) for u in text]
 
     @classmethod
     def from_config(

@@ -30,8 +30,12 @@ class FewShotLMAttack(SearchFreeAttack):
     Attributes:
         adversary: The adversary model used to generate attack tokens.
         n_turns: The number of turns to use for the adversary chat.
-        adversary_score_template: The template for including a previously successful
-            attack in the adversary input.
+        few_shot_score_template: The template for including a previous attack's
+            response and score in the context.
+        adversary_input_templates: The templates for the adversary input, one for each
+            target label.
+        zero_shot_attack: The zero-shot attack called in each turn.
+        num_templates: The number of templates for the adversary input.
     """
 
     def __init__(
@@ -44,11 +48,13 @@ class FewShotLMAttack(SearchFreeAttack):
         super().__init__(attack_config, victim, run_name, logging_name=logging_name)
 
         self.n_turns = attack_config.n_turns
-        self.adversary_score_template = attack_config.adversary_score_template
+        self.few_shot_score_template = attack_config.few_shot_score_template
         self.adversary_input_templates = attack_config.adversary_input_templates
         zero_shot_config = deepcopy(attack_config)
         # We only want to run the zero-shot attack once per turn.
         zero_shot_config.n_its = 1
+        # We don't want to reapply the chat template on every turn.
+        zero_shot_config.apply_chat_template_to_adversary_input = False
         self.zero_shot_attack = ZeroShotLMAttack(
             zero_shot_config,
             victim=victim,
@@ -59,6 +65,10 @@ class FewShotLMAttack(SearchFreeAttack):
     @property
     def adversary(self) -> WrappedModel:
         return self.zero_shot_attack.adversary
+
+    @property
+    def num_templates(self) -> int:
+        return len(self.adversary_input_templates)
 
     @override
     def attack_example(
@@ -77,27 +87,33 @@ class FewShotLMAttack(SearchFreeAttack):
         victim_successes_iters = []
         adversary_inputs = []
         example_seed = example["seed"]
+        target_label = self.zero_shot_attack.get_target_label(example["clf_label"])
         for iteration in range(self.n_its):
-            # Reset the adversary input templates for each iteration
-            self.zero_shot_attack.adversary_input_templates = (
-                self.adversary_input_templates
-            )
             # Reset the seed for each iteration
             example["seed"] = hash((example_seed, iteration))
+            conv = self.adversary.init_conversation()
+            conv.append_user_message(self.adversary_input_templates[target_label])
+            conv.append_assistant_message(self.zero_shot_attack.adversary_prefix)
 
             best_text = None
             best_generation = None
             best_success = 1.0
             for _ in range(self.n_turns):
+                # Update the adversary input to include the conversation history
+                self.zero_shot_attack.adversary_input_templates = [
+                    conv.get_prompt(skip_last_suffix=True)
+                    for _ in range(self.num_templates)
+                ]
                 attack_text, info, victim_successes = (
                     self.zero_shot_attack.attack_example(
                         example,
                         dataset,
                     )
                 )
-                attack_generation = info["generation_outputs"]
-                adversary_inputs.append(info["chunk_text"])
+                attack_generation = clean_text(info["generation_outputs"])
+                adversary_inputs.append(info["adversary_input"])
                 adversary_output = info["adversary_output"]
+                attack_generation = self.victim.clean_chat_artifacts(attack_generation)
 
                 # Convert victim to attack success
                 assert isinstance(
@@ -106,17 +122,15 @@ class FewShotLMAttack(SearchFreeAttack):
                 victim_success = victim_successes.item()
                 attack_success = 1 - victim_success
 
-                # Update the input to the adversary for the next turn
-                self.zero_shot_attack.adversary_input_templates = [
-                    template
-                    + self.adversary_score_template.format(
-                        prompt=clean_text(adversary_output),
-                        response=clean_text(attack_generation),
+                # Update the conversation history with the adversary output
+                conv.append_to_last_message(adversary_output)
+                conv.append_user_message(
+                    self.few_shot_score_template.format(
+                        response=attack_generation,
                         score=attack_success,
                     )
-                    for template in self.zero_shot_attack.adversary_input_templates
-                ]
-
+                )
+                conv.append_assistant_message(self.zero_shot_attack.adversary_prefix)
                 # Update best attack so far
                 if best_text is None or victim_success < best_success:
                     best_text = attack_text

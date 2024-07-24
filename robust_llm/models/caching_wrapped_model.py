@@ -181,25 +181,18 @@ class CachingWrappedModel(WrappedModel):
         )
 
     @override
-    def maybe_apply_chat_template(
-        self, user: Prompt, assistant: Prompt | None = None
-    ) -> Prompt:
+    def maybe_apply_user_template(self, text: Prompt) -> Prompt:
         """If working with a chat model, return text with chat template applied.
 
         Since this is the base class, we just return the text as is.
 
         Args:
-            user: The user prompt(s) to apply the chat template to.
-            assistant: The assistant prompt(s) to apply the chat template to.
-                If None, the output will finish with the start-of-assistant-prompt
-                delimiter from the template.
+            text: The user prompt(s) to apply the chat template to.
 
         Returns:
             The text with the chat template applied.
         """
-        return self._wrapped_model.maybe_apply_chat_template(
-            user=user, assistant=assistant
-        )
+        return self._wrapped_model.maybe_apply_user_template(text=text)
 
     @classmethod
     def load_tokenizer(cls, model_config):

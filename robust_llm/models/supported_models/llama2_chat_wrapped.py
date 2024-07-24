@@ -6,7 +6,7 @@ from typing_extensions import override
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.models.prompt_templates import PromptTemplateBuilder
+from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
 
@@ -61,13 +61,16 @@ class Llama2ChatModel(WrappedChatModel):
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
 
-    @property
     @override
-    def prompt_builder(self) -> PromptTemplateBuilder:
-        return PromptTemplateBuilder(
+    def init_conversation(self) -> Conversation:
+        return Conversation(
             prompt_prefix="<s>[INST] ",
             system_prefix="<<SYS>>\n",
             system_suffix="\n<</SYS>>\n\n",
             user_prefix="",
             user_suffix=" [/INST] ",
+            assistant_prefix="",
+            assistant_suffix=" </s>",
+            system_prompt=self.system_prompt,
+            repeat_prompt_prefix=True,
         )

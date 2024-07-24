@@ -239,7 +239,7 @@ class TRLAttack(Attack):
         )
         # TODO(ian): Work out if 'apply_chat_template' messes with the updating
         # done in 'with_attacked_text'.
-        attacked_texts = self.victim.maybe_apply_chat_template(attacked_texts)
+        attacked_texts = self.victim.maybe_apply_user_template(attacked_texts)
         attacked_dataset = dataset.with_attacked_text(attacked_texts)
         return attacked_dataset, {}
 

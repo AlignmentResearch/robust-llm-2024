@@ -154,6 +154,8 @@ class LMAttackConfig(SearchFreeAttackConfig):
         adversary_prefix: Prefix to place in the assistant response as context
             when generating from the adversary.
             E.g. "{'prompt': '"
+        apply_chat_template_to_adversary_input: Whether to apply the chat template
+            to the adversary input. If False, the adversary input is used as is.
         n_its: Maximum number of iterations to run the attack.
         victim_success_callback (CallbackConfig): Config for the
             ScoringCallback to use to compute whether an attack was successful by
@@ -166,6 +168,7 @@ class LMAttackConfig(SearchFreeAttackConfig):
     adversary_input_templates: list[str] = MISSING
     adversary_output_templates: list[str] = field(default_factory=lambda: ["{}"])
     adversary_prefix: str = ""
+    apply_chat_template_to_adversary_input: bool = True
     n_its: int = 10
     prompt_attack_mode: str = "single-prompt"
     victim_success_callback: CallbackConfig = field(
@@ -185,22 +188,19 @@ class FewShotLMAttackConfig(LMAttackConfig):
 
     Attributes:
         n_turns (int): The number of turns to run the chat with the adversary.
-        adversary_score_template (str): The template to use for reporting the attack
-            results from previous turns. Must contain {prompt}, {response} and {success}
+        few_shot_score_template (str): The template to use for reporting the attack
+            results from previous turns. Must contain {response} and {success}
             placeholders.
     """
 
     n_turns: int = 3
-    adversary_score_template: str = (
-        "\nExample\n---\nprompt: {prompt}\nresponse: {response}\nscore: {score}\n"
-    )
+    few_shot_score_template: str = "Response: {response}\nScore: {score}\n"
 
     def __post_init__(self):
         super().__post_init__()
         assert self.n_turns > 0
-        assert "{prompt}" in self.adversary_score_template
-        assert "{response}" in self.adversary_score_template
-        assert "{score}" in self.adversary_score_template
+        assert "{response}" in self.few_shot_score_template
+        assert "{score}" in self.few_shot_score_template
 
 
 @dataclass

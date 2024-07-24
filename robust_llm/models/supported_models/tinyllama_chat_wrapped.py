@@ -12,7 +12,7 @@ from typing_extensions import override
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.models.prompt_templates import PromptTemplateBuilder
+from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
 
@@ -62,13 +62,15 @@ class TinyLlamaChatModel(WrappedChatModel):
 
         return tokenizer
 
-    @property
     @override
-    def prompt_builder(self) -> PromptTemplateBuilder:
-        return PromptTemplateBuilder(
+    def init_conversation(self) -> Conversation:
+        return Conversation(
             prompt_prefix="",
             system_prefix="<|system|>\n",
             system_suffix="</s>\n",
             user_prefix="<|user|>\n",
-            user_suffix="</s>\n<|assistant|>\n",
+            user_suffix="</s>\n",
+            assistant_prefix="<|assistant|>\n",
+            assistant_suffix="</s>\n",
+            system_prompt=self.system_prompt,
         )

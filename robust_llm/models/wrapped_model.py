@@ -40,7 +40,11 @@ from robust_llm.models.model_utils import (
     prepare_model_with_accelerate,
     remove_padding_tokens,
 )
-from robust_llm.models.prompt_templates import PromptTemplate, PromptTemplateBuilder
+from robust_llm.models.prompt_templates import (
+    AttackChunks,
+    Conversation,
+    PromptTemplate,
+)
 from robust_llm.utils import is_correctly_padded
 
 Prompt = TypeVar("Prompt", str, list[str])
@@ -829,49 +833,51 @@ class WrappedModel(ABC):
     def device(self) -> torch.device:
         return self.model.device
 
-    def get_prompt_template(
+    def chunks_to_prompt_template(
         self,
-        unmodifiable_prefix: str = "",
-        modifiable_infix: str = "",
-        unmodifiable_suffix: str = "",
+        unmodifiable_prefix: str,
+        modifiable_infix: str,
+        unmodifiable_suffix: str,
     ) -> PromptTemplate:
         """Returns a PromptTemplate for the given text chunks."""
-        return self.prompt_builder.get_prompt_template(
-            unmodifiable_prefix,
-            modifiable_infix,
-            unmodifiable_suffix,
-            system_prompt=self.system_prompt,
+        chunks = AttackChunks(
+            unmodifiable_prefix=unmodifiable_prefix,
+            modifiable_infix=modifiable_infix,
+            unmodifiable_suffix=unmodifiable_suffix,
         )
+        conv = self.init_conversation()
+        return conv.wrap_attack_chunks(chunks)
 
-    def maybe_apply_chat_template(
-        self, user: Prompt, assistant: Prompt | None = None
-    ) -> Prompt:
+    def maybe_apply_user_template(self, text: Prompt) -> Prompt:
         """If working with a chat model, return text with chat template applied.
 
         Since this is the base class, we just return the text as is.
 
         Args:
-            user: The user prompt(s) to apply the chat template to.
-            assistant: The assistant prompt(s) to apply the chat template to.
-                If None, the output will finish with the start-of-assistant-prompt
-                delimiter from the template.
+            text: The user prompt(s) to apply the chat template to.
 
         Returns:
             The text with the chat template applied.
         """
-        return user
+        return text
 
     @staticmethod
     def set_seed(seed: int) -> None:
         """Wrapper around transformers set_seed."""
         set_seed(seed % (2**32))
 
-    @property
-    def prompt_builder(self) -> PromptTemplateBuilder:
-        return PromptTemplateBuilder(
+    def init_conversation(self) -> Conversation:
+        return Conversation(
             prompt_prefix="",
             system_prefix="",
             system_suffix="",
             user_prefix="",
             user_suffix="",
+            assistant_prefix="",
+            assistant_suffix="",
         )
+
+    def clean_chat_artifacts(self, text: str) -> str:
+        """Cleans up chat artifacts from the text."""
+        conv = self.init_conversation()
+        return conv.clean_special_strings(text)

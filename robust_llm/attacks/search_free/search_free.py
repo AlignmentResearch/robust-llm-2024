@@ -102,7 +102,7 @@ class SearchFreeAttack(Attack, ABC):
             attacked_text, attack_info, victim_successes = self.attack_example(
                 example, dataset
             )
-            attacked_text = self.victim.maybe_apply_chat_template(attacked_text)
+            attacked_text = self.victim.maybe_apply_user_template(attacked_text)
             # We look for False in the successes list, which indicates a successful
             # attack (i.e. that the model got the answer wrong after the attack).
             success_indices = (
@@ -186,7 +186,7 @@ class SearchFreeAttack(Attack, ABC):
 
         callback_input = CallbackInput(
             # TODO(ian): Work out where to apply the chat template.
-            input_data=self.victim.maybe_apply_chat_template(temp_attack_ds["text"]),
+            input_data=self.victim.maybe_apply_user_template(temp_attack_ds["text"]),
             clf_label_data=temp_attack_ds["clf_label"],
             gen_target_data=temp_attack_ds["gen_target"],
             original_input_data=[example["text"] for _ in attacked_inputs],

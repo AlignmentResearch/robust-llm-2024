@@ -12,7 +12,7 @@ from typing_extensions import override
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.models.prompt_templates import PromptTemplateBuilder
+from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
 
@@ -70,13 +70,15 @@ class GPTNeoXChatModel(WrappedChatModel):
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
 
-    @property
     @override
-    def prompt_builder(self) -> PromptTemplateBuilder:
-        return PromptTemplateBuilder(
+    def init_conversation(self) -> Conversation:
+        return Conversation(
             prompt_prefix="",
             system_prefix="<|im_start|>system\n",
             system_suffix="<|im_end|>\n",
             user_prefix="<|im_start|>user\n",
-            user_suffix="<|im_end|>\n<|im_start|>assistant\n",
+            user_suffix="<|im_end|>\n",
+            assistant_prefix="<|im_start|>assistant\n",
+            assistant_suffix="<|im_end|>\n",
+            system_prompt=self.system_prompt,
         )

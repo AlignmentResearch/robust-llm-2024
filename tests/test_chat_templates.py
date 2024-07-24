@@ -4,7 +4,6 @@ import pytest
 from transformers import AutoTokenizer
 
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.models.prompt_templates import PromptTemplate
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 
 NAME_AND_TEMPLATE = [
@@ -24,7 +23,7 @@ NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT = NAME_AND_TEMPLATE + [
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
-def test_template_with_system_prompt(model_name: str, model_family: str):
+def test_repeated_role_raises_error(model_name: str, model_family: str):
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
         model=MagicMock(),
@@ -38,17 +37,118 @@ def test_template_with_system_prompt(model_name: str, model_family: str):
         system_prompt="System prompt.",
     )
     assert isinstance(model, WrappedChatModel)
-    template = model.get_prompt_template(
-        "Unmodifiable prefix.",
-        "Modifiable infix.",
-        "Unmodifiable suffix.",
+    conv = model.init_conversation()
+    with pytest.raises(AssertionError):
+        conv.append_assistant_message("Assistant prompt 1.")
+    conv.append_user_message("User prompt 1.")
+    with pytest.raises(AssertionError):
+        conv.append_user_message("User prompt 2.")
+    conv.append_assistant_message("Assistant prompt 1.")
+    with pytest.raises(AssertionError):
+        conv.append_assistant_message("Assistant prompt 2.")
+    conv.append_user_message("User prompt 2.")
+
+
+@pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
+def test_multi_round_chat_template(model_name: str, model_family: str):
+    model_constructor = WrappedChatModel._registry[model_family]
+    model = model_constructor(
+        model=MagicMock(),
+        right_tokenizer=MagicMock(),
+        accelerator=None,
+        inference_type=InferenceType.GENERATION,
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        generation_config=None,
+        family=model_family,
+        system_prompt="System prompt.",
     )
-    assert isinstance(template, PromptTemplate)
-    prompt = template.build_prompt(attack_text="Attack text.")
-    assert "Unmodifiable prefix." in prompt
-    assert "Modifiable infix." in prompt
-    assert "Attack text." in prompt
-    assert "Unmodifiable suffix." in prompt
+    assert isinstance(model, WrappedChatModel)
+    conv = model.init_conversation()
+    conv.append_user_message("User prompt 1.")
+    conv.append_assistant_message("Assistant prompt 1.")
+    conv.append_user_message("User prompt 2.")
+    conv.append_assistant_message("Assistant prompt 2.")
+    prompt = conv.get_prompt(skip_last_suffix=False)
+    assert "User prompt 2." in prompt
+    assert "System prompt." in prompt
+    assert "Assistant prompt 2." in prompt
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer_out = tokenizer.apply_chat_template(
+        [
+            {"role": "system", "content": "System prompt."},
+            {
+                "role": "user",
+                "content": ("User prompt 1."),
+            },
+            {"role": "assistant", "content": "Assistant prompt 1."},
+            {
+                "role": "user",
+                "content": ("User prompt 2."),
+            },
+            {"role": "assistant", "content": "Assistant prompt 2."},
+        ],
+        tokenize=False,
+    )
+    assert tokenizer_out == prompt
+
+
+@pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
+def test_full_chat_template(model_name: str, model_family: str):
+    model_constructor = WrappedChatModel._registry[model_family]
+    model = model_constructor(
+        model=MagicMock(),
+        right_tokenizer=MagicMock(),
+        accelerator=None,
+        inference_type=InferenceType.GENERATION,
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        generation_config=None,
+        family=model_family,
+        system_prompt="System prompt.",
+    )
+    assert isinstance(model, WrappedChatModel)
+    conv = model.init_conversation()
+    conv.append_user_message("User prompt.")
+    conv.append_assistant_message("Assistant prompt.")
+    prompt = conv.get_prompt(skip_last_suffix=False)
+    assert "User prompt." in prompt
+    assert "System prompt." in prompt
+    assert "Assistant prompt." in prompt
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer_out = tokenizer.apply_chat_template(
+        [
+            {"role": "system", "content": "System prompt."},
+            {
+                "role": "user",
+                "content": ("User prompt."),
+            },
+            {"role": "assistant", "content": "Assistant prompt."},
+        ],
+        tokenize=False,
+    )
+    assert tokenizer_out == prompt
+
+
+@pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
+def test_user_template_with_system_prompt(model_name: str, model_family: str):
+    model_constructor = WrappedChatModel._registry[model_family]
+    model = model_constructor(
+        model=MagicMock(),
+        right_tokenizer=MagicMock(),
+        accelerator=None,
+        inference_type=InferenceType.GENERATION,
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        generation_config=None,
+        family=model_family,
+        system_prompt="System prompt.",
+    )
+    assert isinstance(model, WrappedChatModel)
+    prompt = model.maybe_apply_user_template(
+        "This is the user prompt.",
+    )
+    assert "This is the user prompt." in prompt
     assert "System prompt." in prompt
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer_out = tokenizer.apply_chat_template(
@@ -56,20 +156,17 @@ def test_template_with_system_prompt(model_name: str, model_family: str):
             {"role": "system", "content": "System prompt."},
             {
                 "role": "user",
-                "content": (
-                    "Unmodifiable prefix.Modifiable infix.Attack text."
-                    "Unmodifiable suffix."
-                ),
+                "content": ("This is the user prompt."),
             },
-            {"role": "assistant", "content": ""},
+            {"role": "assistant", "content": "Assistant prompt."},
         ],
         tokenize=False,
     )
-    assert tokenizer_out[: len(prompt)] == prompt
+    assert tokenizer_out[: tokenizer_out.find("Assistant prompt")] == prompt
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT)
-def test_template_without_system_prompt(model_name: str, model_family: str):
+def test_user_template_without_system_prompt(model_name: str, model_family: str):
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
         model=MagicMock(),
@@ -82,29 +179,19 @@ def test_template_without_system_prompt(model_name: str, model_family: str):
         family=model_family,
     )
     assert isinstance(model, WrappedChatModel)
-    template = model.get_prompt_template(
-        "Unmodifiable prefix.",
-        "Modifiable infix.",
-        "Unmodifiable suffix.",
+    prompt = model.maybe_apply_user_template(
+        "User prompt.",
     )
-    assert isinstance(template, PromptTemplate)
-    prompt = template.build_prompt(attack_text="Attack text.")
-    assert "Unmodifiable prefix." in prompt
-    assert "Modifiable infix." in prompt
-    assert "Attack text." in prompt
-    assert "Unmodifiable suffix." in prompt
+    assert "User prompt." in prompt
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer_out = tokenizer.apply_chat_template(
         [
             {
                 "role": "user",
-                "content": (
-                    "Unmodifiable prefix.Modifiable infix.Attack text."
-                    "Unmodifiable suffix."
-                ),
+                "content": ("User prompt."),
             },
-            {"role": "assistant", "content": ""},
+            {"role": "assistant", "content": "Assistant prompt"},
         ],
         tokenize=False,
     )
-    assert tokenizer_out[: len(prompt)] == prompt
+    assert tokenizer_out[: tokenizer_out.find("Assistant prompt")] == prompt

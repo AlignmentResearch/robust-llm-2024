@@ -12,7 +12,7 @@ from typing_extensions import override
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.models.prompt_templates import PromptTemplateBuilder
+from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
 
@@ -77,13 +77,15 @@ class GemmaChatModel(WrappedChatModel):
 
         return tokenizer
 
-    @property
     @override
-    def prompt_builder(self) -> PromptTemplateBuilder:
-        return PromptTemplateBuilder(
+    def init_conversation(self) -> Conversation:
+        return Conversation(
             prompt_prefix="<bos>",
             system_prefix="",
             system_suffix="",
             user_prefix="<start_of_turn>user\n",
-            user_suffix="<end_of_turn>\n<start_of_turn>model\n",
+            user_suffix="<end_of_turn>\n",
+            assistant_prefix="<start_of_turn>model\n",
+            assistant_suffix="<end_of_turn>\n",
+            system_prompt=self.system_prompt,
         )

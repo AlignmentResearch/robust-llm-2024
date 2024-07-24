@@ -56,7 +56,7 @@ def do_adversarial_evaluation(
 
     callback_input = CallbackInput(
         # TODO(ian): Work out where to apply chat template.
-        input_data=victim.maybe_apply_chat_template(dataset.ds["text"]),
+        input_data=victim.maybe_apply_user_template(dataset.ds["text"]),
         clf_label_data=dataset.ds["clf_label"],
         gen_target_data=dataset.ds["gen_target"],
     )
@@ -86,7 +86,7 @@ def do_adversarial_evaluation(
     victim.eval()
 
     # We use dataset_to_attack so that we use the same examples as in attacked_dataset
-    original_input_data = victim.maybe_apply_chat_template(dataset_to_attack.ds["text"])
+    original_input_data = victim.maybe_apply_user_template(dataset_to_attack.ds["text"])
 
     callback_input = CallbackInput(
         # NOTE: We don't apply the chat template here because we assume that the
