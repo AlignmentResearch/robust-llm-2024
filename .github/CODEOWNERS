@@ -1,1 +1,8 @@
+# Specify code owners for the entire repository
 *	@AlignmentResearch/robust-llm
+
+# Exclude the experiments/ directory
+experiments/
+
+# Exclude the robust_llm/hydra_conf/experiments directory
+robust_llm/hydra_conf/experiments/
