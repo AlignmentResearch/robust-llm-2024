@@ -102,10 +102,12 @@ class Conversation:
         return f"{self.system_prefix}{self.system_prompt}{self.system_suffix}"
 
     def wrap_attack_chunks(self, chunks: AttackChunks):
-        before_attack = self.get_system_message()
+        before_attack = self.prompt_prefix + self.get_system_message()
         before_attack += self.user_prefix
         before_attack += f"{chunks.unmodifiable_prefix}{chunks.modifiable_infix}"
-        after_attack = f"{chunks.unmodifiable_suffix}{self.user_suffix}"
+        after_attack = (
+            f"{chunks.unmodifiable_suffix}{self.user_suffix}{self.assistant_prefix}"
+        )
         return PromptTemplate(
             before_attack=before_attack,
             after_attack=after_attack,

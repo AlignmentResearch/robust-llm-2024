@@ -4,6 +4,7 @@ import pytest
 from transformers import AutoTokenizer
 
 from robust_llm.models.model_utils import InferenceType
+from robust_llm.models.prompt_templates import AttackChunks
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 
 NAME_AND_TEMPLATE = [
@@ -20,6 +21,42 @@ NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT = NAME_AND_TEMPLATE + [
     ("google/gemma-1.1-2b-it", "gemma-chat"),
     ("google/gemma-2-9b-it", "gemma-chat"),
 ]
+
+
+@pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
+def test_wrap_attack_chunks(model_name: str, model_family: str):
+    chunks = AttackChunks(
+        unmodifiable_prefix="Unmodifiable prefix. ",
+        modifiable_infix="Modifiable infix. ",
+        unmodifiable_suffix="Unmodifiable suffix.",
+    )
+    model_constructor = WrappedChatModel._registry[model_family]
+    model = model_constructor(
+        model=MagicMock(),
+        right_tokenizer=MagicMock(),
+        accelerator=None,
+        inference_type=InferenceType.GENERATION,
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        generation_config=None,
+        family=model_family,
+        system_prompt="System prompt.",
+    )
+    assert isinstance(model, WrappedChatModel)
+    conv = model.init_conversation()
+    conv.append_user_message(
+        "Unmodifiable prefix. Modifiable infix. Unmodifiable suffix."
+    )
+    conv.append_assistant_message("")
+    prompt_template = conv.wrap_attack_chunks(chunks)
+    assert prompt_template.before_attack.endswith(
+        "Unmodifiable prefix. Modifiable infix. "
+    )
+    assert prompt_template.after_attack.startswith("Unmodifiable suffix.")
+    assert (
+        prompt_template.before_attack + prompt_template.after_attack
+        == conv.get_prompt()
+    )
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
