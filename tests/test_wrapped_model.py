@@ -4,7 +4,7 @@ import pytest
 import torch
 from transformers import LlamaForCausalLM, LlamaTokenizer
 
-from robust_llm.config.model_configs import ModelConfig
+from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models import WrappedModel
 
 
@@ -92,3 +92,35 @@ def test_llama():
     wrapped_model = WrappedModel.from_config(cfg, accelerator=None)
     assert isinstance(wrapped_model.model, LlamaForCausalLM)
     assert isinstance(wrapped_model.right_tokenizer, LlamaTokenizer)
+
+
+def test_determinism():
+    cfg = ModelConfig(
+        name_or_path="EleutherAI/pythia-14m",
+        family="pythia",
+        revision="main",
+        inference_type="generation",
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        minibatch_multiplier=1,
+        seed=42,
+        generation_config=GenerationConfig(
+            max_new_tokens=50, do_sample=True, temperature=10.0
+        ),
+    )
+    assert cfg.generation_config is not None
+    model = WrappedModel.from_config(cfg, accelerator=None)
+    gen_config = model._to_transformers_generation_config(cfg.generation_config)
+    encoding = model.tokenize("Hello, my dog is cute", return_tensors="pt")
+    inputs = {
+        "input_ids": encoding.input_ids,
+        "attention_mask": encoding.attention_mask,
+        "generation_config": gen_config,
+    }
+    is_equal = model.generate(**inputs) == model.generate(**inputs)
+    assert isinstance(is_equal, torch.Tensor)
+    assert is_equal.all()
+
+    not_equal = model.model.generate(**inputs) != model.model.generate(**inputs)
+    assert isinstance(not_equal, torch.Tensor)
+    assert not_equal.any()

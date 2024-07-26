@@ -31,6 +31,7 @@ class GPTNeoXModel(WrappedModel):
         generation_config: GenerationConfig | None,
         family: Literal["gpt_neox", "pythia"],
         system_prompt: str | None = None,
+        seed: int = 0,
     ) -> None:
         # TODO (ian): Decide whether this assert is worthwhile (it makes testing
         # harder).
@@ -45,6 +46,7 @@ class GPTNeoXModel(WrappedModel):
             generation_config=generation_config,
             family=family,
             system_prompt=system_prompt,
+            seed=seed,
         )
         # Special setup needed for pythia.
         self.model.config.pad_token_id = model.config.eos_token_id

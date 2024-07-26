@@ -31,6 +31,7 @@ class WrappedChatModel(WrappedModel):
         family: str,
         generation_config: GenerationConfig | None = None,
         system_prompt: str | None = None,
+        seed: int = 0,
     ) -> None:
         super().__init__(
             model,
@@ -42,6 +43,7 @@ class WrappedChatModel(WrappedModel):
             family,
             generation_config,
             system_prompt,
+            seed,
         )
         assert self.init_conversation != Conversation(
             prompt_prefix="",

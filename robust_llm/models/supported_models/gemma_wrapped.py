@@ -33,6 +33,7 @@ class GemmaModel(WrappedModel):
         generation_config: GenerationConfig | None,
         family: Literal["gemma"],
         system_prompt: str | None = None,
+        seed: int = 0,
     ) -> None:
         super().__init__(
             model,
@@ -44,6 +45,7 @@ class GemmaModel(WrappedModel):
             generation_config=generation_config,
             family=family,
             system_prompt=system_prompt,
+            seed=seed,
         )
 
     @override

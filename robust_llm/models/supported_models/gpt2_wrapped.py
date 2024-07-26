@@ -24,6 +24,7 @@ class GPT2Model(WrappedModel):
         generation_config: GenerationConfig | None,
         family: Literal["gpt2"],
         system_prompt: str | None = None,
+        seed: int = 0,
     ) -> None:
         # TODO (ian): Decide whether this assert is worthwhile (it makes testing
         # harder).
@@ -38,6 +39,7 @@ class GPT2Model(WrappedModel):
             generation_config=generation_config,
             family=family,
             system_prompt=system_prompt,
+            seed=seed,
         )
 
         # Special setup needed for gpt2.

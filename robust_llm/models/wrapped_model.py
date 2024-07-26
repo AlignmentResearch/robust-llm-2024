@@ -66,6 +66,7 @@ class WrappedModel(ABC):
         family: str,
         generation_config: GenerationConfig | None = None,
         system_prompt: str | None = None,
+        seed: int = 0,
     ) -> None:
         """Initialize a WrappedModel.
 
@@ -83,6 +84,7 @@ class WrappedModel(ABC):
             generation_config: The generation config to use for generation.
             system_prompt: The system prompt to use for chat models.
                 If None, the default system prompt will be used.
+            seed: The seed to use for text generation.
         """
         # We need to compute the number of parameters before any accelerate preparation
         # because the model will be sharded across devices.
@@ -102,6 +104,7 @@ class WrappedModel(ABC):
         self.eval_minibatch_size = eval_minibatch_size
         self.generation_config = generation_config
         self.system_prompt = system_prompt
+        self.seed = seed
 
     @property
     def n_params(self) -> int:
@@ -248,6 +251,7 @@ class WrappedModel(ABC):
             generation_config=config.generation_config,
             family=config.family,
             system_prompt=config.system_prompt,
+            seed=config.seed,
         )
 
     def classification_output_from_tokens(
@@ -558,6 +562,7 @@ class WrappedModel(ABC):
         This wrapper is mostly here in case it's needed for compatibility with
         CachingWrappedModel.
         """
+        self._set_seed()
         if inputs.get("generation_config") is not None:
             gen_config = inputs["generation_config"]
             if isinstance(gen_config, GenerationConfig):
@@ -853,10 +858,9 @@ class WrappedModel(ABC):
         """
         return text
 
-    @staticmethod
-    def set_seed(seed: int) -> None:
+    def _set_seed(self) -> None:
         """Wrapper around transformers set_seed."""
-        set_seed(seed % (2**32))
+        set_seed(self.seed % (2**32))
 
     def init_conversation(self) -> Conversation:
         return Conversation(

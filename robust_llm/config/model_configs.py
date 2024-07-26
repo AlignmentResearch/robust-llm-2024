@@ -34,7 +34,7 @@ class GenerationConfig:
     stop_strings: Optional[list[str]] = None
 
     # Parameters that control the generation strategy used
-    do_sample: bool = False
+    do_sample: bool = True
     num_beams: int = 1
     num_beam_groups: int = 1
     penalty_alpha: Optional[float] = None
@@ -89,6 +89,7 @@ class ModelConfig:
         This is used to control the behavior of the model, e.g., to make it
         more conversational or more factual. If None, the default system prompt
         chosen by HuggingFace is used.
+    seed: The seed to use for generation.
     """
 
     name_or_path: str = MISSING
@@ -106,6 +107,7 @@ class ModelConfig:
     dtype: str = "float32"
     attention_implementation: Optional[str] = None
     system_prompt: str | None = None
+    seed: int = 0
 
     def __post_init__(self):
         assert self.family in MODEL_FAMILIES

@@ -26,6 +26,7 @@ class Llama3ChatModel(WrappedChatModel):
         generation_config: GenerationConfig | None,
         family: Literal["llama3-chat"],
         system_prompt: str | None = None,
+        seed: int = 0,
     ) -> None:
         super().__init__(
             model,
@@ -37,6 +38,7 @@ class Llama3ChatModel(WrappedChatModel):
             generation_config=generation_config,
             family=family,
             system_prompt=system_prompt,
+            seed=seed,
         )
 
         # Special setup needed for llama.

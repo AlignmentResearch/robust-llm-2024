@@ -116,7 +116,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
     ) -> tuple[list[int], dict[str, Any]]:
         """Generates attack tokens using the adversary model."""
         # Ensure that generations are deterministic for a given seed/iteration combo
-        self.adversary.set_seed(hash((chunk_seed, current_iteration)))
+        self.adversary.seed = hash((chunk_seed, current_iteration))
         text = self.adversary.generate_from_text(adversary_input)
         attack = self.delimit_attack(text)
         token_ids = self.victim.tokenize(attack)["input_ids"]

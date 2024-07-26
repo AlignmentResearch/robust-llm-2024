@@ -31,6 +31,7 @@ class QwenModel(WrappedModel):
         generation_config: GenerationConfig | None,
         family: Literal["qwen1.5", "qwen2"],
         system_prompt: str | None = None,
+        seed: int = 0,
     ) -> None:
         super().__init__(
             model,
@@ -42,6 +43,7 @@ class QwenModel(WrappedModel):
             generation_config=generation_config,
             family=family,
             system_prompt=system_prompt,
+            seed=seed,
         )
 
     @override

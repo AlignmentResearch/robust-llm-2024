@@ -35,6 +35,7 @@ class GemmaChatModel(WrappedChatModel):
         generation_config: GenerationConfig | None,
         family: Literal["gemma-chat"],
         system_prompt: str | None = None,
+        seed: int = 0,
     ) -> None:
         if system_prompt is not None:
             raise ValueError("GemmaChatModel does not support system_prompt.")
@@ -48,6 +49,7 @@ class GemmaChatModel(WrappedChatModel):
             generation_config=generation_config,
             family=family,
             system_prompt=system_prompt,
+            seed=seed,
         )
 
     @override
