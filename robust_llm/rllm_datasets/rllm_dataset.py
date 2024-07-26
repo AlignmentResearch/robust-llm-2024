@@ -233,9 +233,18 @@ class RLLMDataset(ABC):
         This first loads the raw dataset and then post-processes it.
         """
 
-        raw_dataset = self._load_raw_dataset(cfg, split, revision)
-        assert set(raw_dataset.column_names) == EXPECTED_COLUMNS
-        dataset = self._post_process_dataset(raw_dataset, cfg)
+        dataset = self._load_raw_dataset(cfg, split, revision)
+        actual_columns = set(dataset.column_names)
+        assert EXPECTED_COLUMNS <= actual_columns
+        extra_columns = list(actual_columns - EXPECTED_COLUMNS)
+        if extra_columns:
+            # To be cautious, let's remove all extra columns.
+            logger.warning(
+                f"Removing extra columns {extra_columns} from dataset "
+                f"{cfg.dataset_type} revision {revision}"
+            )
+            dataset = dataset.remove_columns(list(actual_columns - EXPECTED_COLUMNS))
+        dataset = self._post_process_dataset(dataset, cfg)
         return dataset
 
     def _post_process_dataset(self, ds: Dataset, cfg: DatasetConfig) -> Dataset:
