@@ -6,3 +6,6 @@ experiments/
 
 # Exclude the robust_llm/hydra_conf/experiments directory
 robust_llm/hydra_conf/experiments/
+
+# Exclude the robust_llm/plotting_utils/experiments directory
+robust_llm/plotting_utils/experiments
