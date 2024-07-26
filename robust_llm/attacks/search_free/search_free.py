@@ -205,10 +205,7 @@ class SearchFreeAttack(Attack, ABC):
             victim_successes = victim_out.losses
 
         # Copy callback output info to attacked_info
-        if "generations" in victim_out.info:
-            attacked_info["generations"] = victim_out.info["generations"]
-        if "generation_outputs" in victim_out.info:
-            attacked_info["generation_outputs"] = victim_out.info["generation_outputs"]
+        attacked_info.update(victim_out.info)
 
         success_index = get_first_attack_success_index(victim_successes)
         attacked_text = attacked_inputs[success_index]

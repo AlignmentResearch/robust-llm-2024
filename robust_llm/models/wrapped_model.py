@@ -517,9 +517,9 @@ class WrappedModel(ABC):
         # Only keep the newly generated tokens
         output_tokens = all_tokens[0, input_ids.shape[1] :]
 
-        text = self.decode(output_tokens, skip_special_tokens=True)
+        output_text = self.decode(output_tokens, skip_special_tokens=True)
 
-        return text
+        return output_text
 
     def __call__(self, **inputs):
         return self.forward(**inputs)

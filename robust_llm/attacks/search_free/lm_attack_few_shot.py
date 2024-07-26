@@ -11,6 +11,7 @@ from robust_llm.attacks.search_free.search_free import (
     get_first_attack_success_index,
 )
 from robust_llm.config.attack_configs import FewShotLMAttackConfig
+from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -75,6 +76,81 @@ class FewShotLMAttack(SearchFreeAttack):
     def num_templates(self) -> int:
         return len(self.adversary_input_templates)
 
+    def run_single_turn(
+        self, turn: int, conv: Conversation, example: dict, dataset: RLLMDataset
+    ) -> tuple[str, dict[str, Any], float]:
+        """Run a single turn of the few-shot attack.
+
+        This method runs a single zero-shot attack and updates the conversation history
+        """
+        # Update the adversary input to include the conversation history
+        self.zero_shot_attack.adversary_input_templates = [
+            conv.get_prompt(skip_last_suffix=True) for _ in range(self.num_templates)
+        ]
+        attack_text, attack_info, victim_successes = (
+            self.zero_shot_attack.attack_example(
+                example,
+                dataset,
+            )
+        )
+        attack_info["turn"] = turn
+        assert attack_info.pop("success_index") == 0
+        attack_generation = clean_text(attack_info["generation_outputs"])
+        adversary_output = self.adversary.clean_chat_artifacts(
+            attack_info["adversary_output"]
+        )
+        attack_generation = self.victim.clean_chat_artifacts(attack_generation)
+
+        # Convert victim to attack success
+        assert isinstance(
+            victim_successes, torch.Tensor
+        ), "Did you forget to use a tensor callback for few-shot?"
+        victim_success = victim_successes.item()
+        attack_success = 1 - victim_success
+        attack_info["attack_score"] = attack_success
+
+        # Update the conversation history with the adversary output
+        conv.append_to_last_message(adversary_output)
+        conv.append_user_message(
+            self.few_shot_score_template.format(
+                response=attack_generation,
+                score=attack_success,
+            )
+        )
+        conv.append_assistant_message(self.zero_shot_attack.adversary_prefix)
+        return attack_text, attack_info, victim_success
+
+    def run_single_iteration(
+        self, target_label: int, example: dict, dataset: RLLMDataset
+    ) -> tuple[str, dict[str, Any], float]:
+        """Run a single iteration of the few-shot attack.
+
+        This method runs the zero-shot attack n_turns times and keeps the best attack.
+        We progressively build the adversary prompt by including the success of
+        previous attacks.
+        """
+        conv = self.adversary.init_conversation()
+        conv.append_user_message(self.adversary_input_templates[target_label])
+        conv.append_assistant_message(self.initial_adversary_prefix)
+
+        best_text = None
+        best_info = None
+        best_success = None
+        for turn in range(self.n_turns):
+            attack_text, attack_info, victim_success = self.run_single_turn(
+                turn, conv, example, dataset
+            )
+            if best_success is None or victim_success < best_success:
+                best_text = attack_text
+                best_info = attack_info
+                best_success = victim_success
+
+        assert best_text is not None
+        assert best_info is not None
+        assert best_success is not None
+
+        return best_text, best_info, best_success
+
     @override
     def attack_example(
         self, example: dict[str, Any], dataset: RLLMDataset
@@ -88,79 +164,37 @@ class FewShotLMAttack(SearchFreeAttack):
         Each iteration should be independent. TODO(Oskar): parallelize this
         """
         attack_text_iters = []
-        attack_generations_iters = []
+        attack_info_iters = []
         victim_successes_iters = []
-        adversary_inputs = []
         example_seed = example["seed"]
         target_label = self.zero_shot_attack.get_target_label(example["clf_label"])
         for iteration in range(self.n_its):
             # Reset the seed for each iteration
             example["seed"] = hash((example_seed, iteration))
-            conv = self.adversary.init_conversation()
-            conv.append_user_message(self.adversary_input_templates[target_label])
-            conv.append_assistant_message(self.initial_adversary_prefix)
 
-            best_text = None
-            best_generation = None
-            best_success = 1.0
-            for _ in range(self.n_turns):
-                # Update the adversary input to include the conversation history
-                self.zero_shot_attack.adversary_input_templates = [
-                    conv.get_prompt(skip_last_suffix=True)
-                    for _ in range(self.num_templates)
-                ]
-                attack_text, info, victim_successes = (
-                    self.zero_shot_attack.attack_example(
-                        example,
-                        dataset,
-                    )
-                )
-                attack_generation = clean_text(info["generation_outputs"])
-                adversary_inputs.append(info["adversary_input"])
-                adversary_output = self.adversary.clean_chat_artifacts(
-                    info["adversary_output"]
-                )
-                attack_generation = self.victim.clean_chat_artifacts(attack_generation)
+            iteration_text, iteration_info, iteration_success = (
+                self.run_single_iteration(target_label, example, dataset)
+            )
 
-                # Convert victim to attack success
-                assert isinstance(
-                    victim_successes, torch.Tensor
-                ), "Did you forget to use a tensor callback for few-shot?"
-                victim_success = victim_successes.item()
-                attack_success = 1 - victim_success
-
-                # Update the conversation history with the adversary output
-                conv.append_to_last_message(adversary_output)
-                conv.append_user_message(
-                    self.few_shot_score_template.format(
-                        response=attack_generation,
-                        score=attack_success,
-                    )
-                )
-                conv.append_assistant_message(self.zero_shot_attack.adversary_prefix)
-                # Update best attack so far
-                if best_text is None or victim_success < best_success:
-                    best_text = attack_text
-                    best_generation = attack_generation
-                    best_success = victim_success
-
-            assert best_text is not None
-            assert best_generation is not None
-            assert best_success is not None
-            attack_text_iters.append(best_text)
-            attack_generations_iters.append(best_generation)
-            victim_successes_iters.append(best_success)
+            attack_text_iters.append(iteration_text)
+            attack_info_iters.append(iteration_info)
+            victim_successes_iters.append(iteration_success)
+        assert (
+            len(attack_text_iters)
+            == len(attack_info_iters)
+            == len(victim_successes_iters)
+            == self.n_its
+        )
         victim_successes_tensor = torch.tensor(
             victim_successes_iters, device=self.victim.device
         )
-        success_index = get_first_attack_success_index(victim_successes_tensor)
-        final_text = attack_text_iters[success_index]
+        success_iteration = get_first_attack_success_index(victim_successes_tensor)
+        final_text = attack_text_iters[success_iteration]
+        success_info = attack_info_iters[success_iteration]
         info = {
-            "generations": attack_generations_iters[success_index],
-            "adversary_inputs": adversary_inputs[success_index],
-            "success_iteration": success_index // self.n_turns,
-            "success_turn": success_index % self.n_turns,
+            "success_iteration": success_iteration,
         }
+        info.update(success_info)
         return (
             final_text,
             info,

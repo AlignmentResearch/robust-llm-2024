@@ -126,6 +126,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
             current_iteration=current_iteration,
             chunk_seed=chunk_seed,
             adversary_output=text,
+            attack_output=attack,
         )
         return token_ids, info
 

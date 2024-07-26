@@ -155,12 +155,14 @@ class LMAttackConfig(SearchFreeAttackConfig):
             when generating from the adversary.
             E.g. "{'prompt': '"
         attack_start_strings: Strings to use to delimit the start the attack.
-            If multiple strings are provided, the attack after *all* of the strings.
+            If multiple strings are provided, the attack will start after all of the
+            strings.
             If none are provided or found, then the attack will start at the beginning
             of the input.
             e.g. "'prompt': '" for JSON attacks
         attack_end_strings: Strings to use to delimit the end of the attack.
-            If multiple strings are provided, the attack will before any of the strings.
+            If multiple strings are provided, the attack will end before any of the
+            strings.
             If none are provided or found, then the attack will end at the end of the
             input.
             e.g. "'}" for JSON attacks
