@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from accelerate import Accelerator
 from omegaconf import OmegaConf
 
 from robust_llm import logger
@@ -14,6 +15,16 @@ from robust_llm.utils import make_unique_name_to_save
 
 
 def run_training_pipeline(args: ExperimentConfig) -> None:
+    use_cpu = args.environment.device == "cpu"
+    accelerator = Accelerator(cpu=use_cpu)
+
+    logging_context = LoggingContext(
+        is_main_process=accelerator.is_main_process,
+        args=args,
+        set_up_step_metrics=True,
+    )
+    logging_context.setup()
+
     assert args.training is not None
     logger.info("Configuration arguments:\n")
     logger.info("%s\n", OmegaConf.to_yaml(args))
@@ -25,6 +36,10 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
     num_classes = untokenized_train_set.num_classes
     victim = WrappedModel.from_config(
         args.model, accelerator=None, num_classes=num_classes
+    )
+    logging_context.maybe_log_model_info(
+        model_size=victim.n_params,
+        model_family=victim.family,
     )
 
     # We tokenize the datasets using the right-padding tokenizer
@@ -65,16 +80,8 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
         training = Training(**base_training_args)
 
     trainer = training.setup_trainer()
+    logging_context.is_main_process = trainer.is_world_process_zero()
 
-    logging_context = LoggingContext(
-        is_main_process=trainer.is_world_process_zero(),
-        args=args,
-        set_up_step_metrics=True,
-        model_size=victim.n_params,
-        model_family=victim.family,
-    )
-
-    logging_context.setup()
     logger.debug(f"Training arguments: {trainer.args.to_dict()}")
 
     # Perform the training

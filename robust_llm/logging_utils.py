@@ -263,15 +263,14 @@ class LoggingContext:
         if self.set_up_step_metrics:
             setup_wandb_metrics()
         log_config_to_wandb(config)
-        model_info_dict: dict[str, Any] = {}
-        if self.model_family is not None:
-            model_info_dict["model_family"] = self.model_family
-        if self.model_size is not None:
-            model_info_dict["model_size"] = self.model_size
-        if model_info_dict:
-            # Log the model info to wandb for use in plots, so we don't
-            # have to try to get it out of the model name.
-            # We use `commit=False` to avoid incrementing the step counter.
+
+    def maybe_log_model_info(self, model_family: str, model_size: int) -> None:
+        """Logs model info to wandb for use in plots.
+
+        We use `commit=False` to avoid incrementing the step counter.
+        """
+        if self.is_main_process:
+            model_info_dict = {"model_family": model_family, "model_size": model_size}
             assert wandb.run is not None
             wandb.log(model_info_dict, commit=False)
 

@@ -19,19 +19,21 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
 
     accelerator = Accelerator(cpu=use_cpu)
 
+    logging_context = LoggingContext(
+        is_main_process=accelerator.is_main_process,
+        args=args,
+    )
+    logging_context.setup()
+
     validation = load_rllm_dataset(args.dataset, split="validation")
     num_classes = validation.num_classes
 
     victim = WrappedModel.from_config(args.model, accelerator, num_classes)
     victim.eval()
-
-    logging_context = LoggingContext(
-        is_main_process=accelerator.is_main_process,
-        args=args,
+    logging_context.maybe_log_model_info(
         model_size=victim.n_params,
         model_family=victim.family,
     )
-    logging_context.setup()
 
     attack = prepare_attack(
         args=args,
