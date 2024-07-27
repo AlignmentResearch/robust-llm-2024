@@ -108,6 +108,7 @@ jobs:
             # List all test functions in the specified directory
             TESTFUNCTIONS=$(pytest --collect-only -q | grep '::' | grep -v '<Module')
             echo "$TESTFUNCTIONS" > /tmp/node-ids.txt
+            echo "TESTFUNCTIONS = $TESTFUNCTIONS"
 
             # Check for duplicates in TESTFUNCTIONS
             TOTAL_TESTFUNCTIONS=$(echo "$TESTFUNCTIONS" | wc -l)
@@ -122,6 +123,7 @@ jobs:
             # Extract function names and save to a temporary file
             FUNCTIONNAMES=$(echo "$TESTFUNCTIONS" | sed -E 's/^.+:://')
             echo "$FUNCTIONNAMES" > /tmp/function-names.txt
+            echo "FUNCTIONNAMES = $FUNCTIONNAMES"
 
             # Check for duplicates in FUNCTIONNAMES
             TOTAL_FUNCTIONNAMES=$(echo "$FUNCTIONNAMES" | wc -l)
@@ -145,12 +147,14 @@ jobs:
 
             # Split the function names by timings using CircleCI's test splitting feature
             SPLITFUNCTIONNAMES=$(circleci tests split --split-by=timings --timings-type=testname /tmp/function-names.txt)
+            echo "SPLITFUNCTIONNAMES = $SPLITFUNCTIONNAMES"
 
             # Reconstruct the full test paths by matching the function names with the original list
             FULLTESTPATHS=$(echo "$SPLITFUNCTIONNAMES" | while read -r FUNCTIONNAME; do
               ESCAPED_FUNCTIONNAME=$(echo "$FUNCTIONNAME" | sed 's/[]\/$*.^|[]/\\&/g')
               grep "::$ESCAPED_FUNCTIONNAME$" /tmp/node-ids.txt;
             done)
+            echo "FULLTESTPATHS = $FULLTESTPATHS"
 
             # Check if the number of split function names and full test paths matches
             TOTAL_SPLITFUNCTIONNAMES=$(echo "$SPLITFUNCTIONNAMES" | wc -l)
@@ -169,7 +173,7 @@ jobs:
             mkdir -p /tmp/test-reports
 
             # Run pytest with the split test functions
-            pytest --cov=robust_llm --cov=tests --junitxml=/tmp/test-reports/junit.xml --durations=500 -vv $FULLTESTPATHS
+            pytest --cov=robust_llm --cov=tests --junitxml=/tmp/test-reports/junit.xml --durations=500 -vv $(echo "$FULLTESTPATHS" | tr '\n' ' ')
           environment:
             WANDB_MODE: offline
       - codecov/upload
