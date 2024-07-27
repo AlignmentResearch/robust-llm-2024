@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-- /dataset: imdb
+- /dataset: IMDB/compatibility
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: GCG
 - /model: EleutherAI/pythia-14m

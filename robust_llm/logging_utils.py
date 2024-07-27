@@ -9,6 +9,7 @@ import torch.distributed as dist
 import wandb
 import yaml
 from datasets import Dataset
+from datasets.utils.logging import disable_progress_bar
 from omegaconf import OmegaConf
 
 from robust_llm import logger
@@ -195,6 +196,7 @@ class LoggingContext:
         self.set_up_step_metrics = set_up_step_metrics
         self.model_family = model_family
         self.model_size = model_size
+        disable_progress_bar()
 
     def save_logs(self) -> None:
         for handler in self.logger.handlers:
