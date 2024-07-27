@@ -37,10 +37,35 @@ SUPPORTED_MODELS = [
     "EleutherAI/pythia-14m",
     # To use llama you need to request access on hf and export HF_TOKEN
     "meta-llama/Llama-2-7b-hf",
+    "Qwen/Qwen1.5-0.5B",
 ]
 
 
-def filter_dataset_length(dataset: Dataset, buffer: int = 24) -> Dataset:
+def filter_dataset_length(ds: Dataset) -> Dataset:
+    """Filter a dataset to only include examples that fit in the context
+    length of all supported models and are non-empty.
+
+    Args:
+        ds: The dataset to filter.
+
+    Returns:
+        The filtered dataset.
+    """
+    return filter_dataset_for_context_length(filter_empty_rows(ds))
+
+
+def filter_empty_rows(ds: Dataset) -> Dataset:
+    """Filter out rows with no data in the 'content' column."""
+    prev_len = len(ds)
+    new_ds = ds.filter(lambda x: len("".join(x["content"])) > 0)
+    if len(new_ds) < prev_len:
+        logger.warning(f"Filtered out {prev_len - len(new_ds)} rows with no content")
+    else:
+        logger.debug("No empty rows found")
+    return new_ds
+
+
+def filter_dataset_for_context_length(dataset: Dataset, buffer: int = 24) -> Dataset:
     """Filter a dataset to only include examples that fit in the context
     length of all supported models.
 

@@ -1,4 +1,4 @@
-"""Script to generate the IMDB dataset"""
+"""Script to generate the Spam dataset"""
 
 import datasets
 from datasets import Dataset
@@ -73,5 +73,5 @@ if __name__ == "__main__":
     # bump the version here manually when you make changes
     # (see README for more info)
     MINOR_VERSION = 1
-    PATCH_VERSION = 2
+    PATCH_VERSION = 4
     main(minor_version=MINOR_VERSION, patch_version=PATCH_VERSION)

@@ -1,8 +1,12 @@
 import pytest
 import semver
+from datasets import Dataset
 
 from robust_llm.config import DatasetConfig
-from robust_llm.rllm_datasets.dataset_utils import get_largest_version_below
+from robust_llm.rllm_datasets.dataset_utils import (
+    filter_empty_rows,
+    get_largest_version_below,
+)
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 
 
@@ -41,3 +45,13 @@ def test_failing_largest_version_below():
     with pytest.raises(ValueError) as value_error:
         _ = load_rllm_dataset(cfg, split="validation")
     assert "No versions found" in str(value_error.value)
+
+
+def test_filter_empty_rows():
+    dataset = Dataset.from_dict(
+        {
+            "content": [["a"], [""], ["b"], ["c"], ["", ""]],
+        }
+    )
+    filtered_dataset = filter_empty_rows(dataset)
+    assert filtered_dataset["content"] == [["a"], ["b"], ["c"]]

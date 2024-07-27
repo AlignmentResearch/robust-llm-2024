@@ -84,7 +84,7 @@ class DatasetUploadHandler:
             - answer_prompt
             - clf_label
             - gen_target
-        - 'content' must be a list of strings.
+        - 'content' must be a non-trivial list of strings.
         - Dataset must have at least one example.
         - Dataset repo name must start with 'AlignmentResearch'.
         - If the config_name is "pos", the dataset must only have examples with
@@ -149,7 +149,10 @@ class DatasetUploadHandler:
         content = ds["content"]
         # Check that each 'content' c in the content column is a list of strings.
         if not all(
-            isinstance(c, list) and all(isinstance(s, str) for s in c) for c in content
+            isinstance(c, list)
+            and all(isinstance(s, str) for s in c)
+            and any(len(s) > 0 for s in c)
+            for c in content
         ):
             raise ValueError("'content' must be a list of strings.")
         if config_name == "pos" and not all(label == 1 for label in ds["clf_label"]):
