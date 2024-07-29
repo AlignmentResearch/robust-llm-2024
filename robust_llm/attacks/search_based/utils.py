@@ -83,6 +83,8 @@ class AttackIndices:
     @property
     def loss_slice(self) -> slice:
         """
+        Slice for tokens at which we want to compute the loss.
+
         The loss slice is offset from the target slice because we want to
         predict the target tokens, which occurs one token before each target
         token appears

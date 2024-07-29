@@ -19,6 +19,7 @@ OmegaConf.register_new_resolver("mult", lambda *args: int(math.prod(args)))
 @dataclass
 class GenerationConfig:
     """LM text generation settings.
+
     This dataclass mirrors arguments of the
     HF transformers.generation.configuration_utils.GenerationConfig. See its
     description for details about the arguments.

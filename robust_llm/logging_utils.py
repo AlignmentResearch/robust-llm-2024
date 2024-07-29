@@ -170,6 +170,7 @@ def log_config_to_wandb(config: ExperimentConfig) -> None:
 class LoggingContext:
     """
     Class to set up and clean up experiment logging to console, file, and wandb.
+
     Args:
         is_main_process: whether this process is the main process
         args: config of the experiment
@@ -250,7 +251,8 @@ class LoggingContext:
         (which logged values can be used as x-axes, and what the default x-axes
         are set to be) because HuggingFace sets up its own metrics when we initialize
         the Trainer, and we wait until that is done to overwrite them with our own.
-        We do this in the `CustomLoggingWandbCallback`'s `setup` method."""
+        We do this in the `CustomLoggingWandbCallback`'s `setup` method.
+        """
         config = self.args
         wandb.init(
             project="robust-llm",

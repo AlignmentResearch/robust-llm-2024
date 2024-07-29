@@ -816,7 +816,8 @@ class WrappedModel(ABC):
         """Checks if padding tokens are present in the token ids.
 
         When using inputs_embeds, it's important that there are no padding tokens,
-        since they are not handled properly."""
+        since they are not handled properly.
+        """
         if self.config.pad_token_id is not None:
             assert (
                 self.config.pad_token_id not in token_ids

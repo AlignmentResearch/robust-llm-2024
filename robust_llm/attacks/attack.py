@@ -50,6 +50,7 @@ class Attack(abc.ABC):
         logging_name: Optional[str] = None,
     ) -> None:
         """Constructor for the Attack class.
+
         Args:
         attack_config: Configuration for the attack.
         victim: The model to be attacked.

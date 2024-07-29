@@ -245,8 +245,8 @@ def compute_max_min_percentile_perplexity(
     report_max_perplexity: bool,
 ) -> tuple[float, float, TDigest]:
     """
-    Computes the maximum, minimum, and approximate percentile perplexities
-    of the model on the given dataset.
+    Computes max/min/approx-percentile perplexities of the model on the given dataset.
+
     This is useful for setting the perplexity threshold.
 
     Args:

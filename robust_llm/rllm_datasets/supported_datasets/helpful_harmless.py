@@ -19,10 +19,12 @@ class HelpfulHarmlessDataset(RLLMDataset):
     @property
     @override
     def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
-        """Helpful and Harmless consists of a three chunks:
+        """Helpful and Harmless consists of three chunks:
+
         1. The instructions (IMMUTABLE)
         2. The two conversations (PERTURBABLE)
-        3. The answer prompt (IMMUTABLE)"""
+        3. The answer prompt (IMMUTABLE)
+        """
         return ModifiableChunkSpec(
             ChunkType.IMMUTABLE,
             ChunkType.PERTURBABLE,

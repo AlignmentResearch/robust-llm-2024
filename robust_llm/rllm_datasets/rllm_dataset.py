@@ -513,8 +513,7 @@ class RLLMDataset(ABC):
             raise ValueError(f"Unsupported inference type: {self.inference_type}")
 
     def as_adversarial_examples(self: D) -> D:
-        """Returns a version of an attacked dataset that is formatted as
-            adversarial examples.
+        """Formats attacked dataset as adversarial examples.
 
         This method is necessary because we need to take an attacked dataset
         (one with `attacked_text` and `attacked_clf_label` columns) and convert

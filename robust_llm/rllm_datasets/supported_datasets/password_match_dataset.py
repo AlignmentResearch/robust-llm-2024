@@ -23,7 +23,8 @@ class PasswordMatchDataset(RLLMDataset):
     @override
     def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
         """
-        PasswordMatch has four chunks:
+        The PasswordMatch dataset has four chunks:
+
         1. The instructions (IMMUTABLE).
         2. The system and user passwords (IMMUTABLE).
         3. The irrelevant text to ignore (OVERWRITABLE).
@@ -73,8 +74,7 @@ class PasswordMatchDataset(RLLMDataset):
         return example
 
     def ground_truth_label_fn(self, text: str) -> int:
-        """The ground truth label is determined by comparing
-        the user's password to the correct password.
+        """Gets ground truth by comparing the user's password to the correct password.
 
         NOTE: For now we have to check if the new ground truth label function
         works and if it doesn't, we fall back to the old one. This is because
@@ -86,8 +86,7 @@ class PasswordMatchDataset(RLLMDataset):
             return self.old_ground_truth_label_fn(text)
 
     def new_ground_truth_label_fn(self, text: str) -> int:
-        """The ground truth label is determined by comparing
-        the user's password to the correct password.
+        """Gets ground truth by comparing the user's password to the correct password.
 
         TODO (ian): This whole method is a mess and requires more thinking, like how
         to decouple it from the specific prompt used. Maybe more columns?

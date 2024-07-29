@@ -165,8 +165,10 @@ class FakeModelForSequenceClassification:
     def forward(
         self, input_ids: torch.Tensor, *args, **kwargs
     ) -> SequenceClassifierOutput:
-        """Since we are mimicking a sequence classification model, we return logits in
-        the shape (batch_size, num_labels)."""
+        """Mimicks a sequence classification model.
+
+        Returns logits of the shape [batch_size, num_labels].
+        """
         return SequenceClassifierOutput(
             logits=torch.rand(input_ids.shape[0], self.num_labels),  # type: ignore
         )

@@ -6,5 +6,5 @@ max-line-length = 88
 # DCO is for docstrings-complete https://pypi.org/project/flake8-docstrings-complete/
 # DOC is for doclint https://jsh9.github.io/pydoclint/violation_codes.html
 
-extend-ignore = E203, E704, D1, D2, D3, D4, DCO01, DCO020, DCO030, DCO040, DCO050, DCO051, DCO060
+extend-ignore = E203, E704, D1, D202, D400, D401, DCO01, DCO020, DCO030, DCO040, DCO050, DCO051, DCO060
 exclude = .git,__pycache__,venv

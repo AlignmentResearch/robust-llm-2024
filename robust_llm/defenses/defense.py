@@ -21,8 +21,9 @@ class Defenses(Enum):
 
 
 class DefendedModel(WrappedModel, ABC):
-    """Wrapper class for WrappedModel modified to be robust to attacks that is
-    also a subclass of WrappedModel.
+    """Wrapper class for WrappedModel modified to be robust to attacks.
+
+    This class itself is also a subclass of WrappedModel.
 
     The wrapper is designed to be subclassed by specific defenses, which can then
     override the `forward` and `__init__` methods to implement the defense.

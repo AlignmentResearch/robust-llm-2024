@@ -1,4 +1,6 @@
-"""Takes the original IMDB dataset with 'text' and 'chunked_text'
+"""Converts IMDB dataset to use the new column format.
+
+Takes the original IMDB dataset with 'text' and 'chunked_text'
 columns and creates a new dataset with 'content', 'instructions', and
 'answer_prompt' columns that contains the same exact data.
 """

@@ -165,8 +165,7 @@ class DefendedAttackResults(AttackResults):
 
     @cached_property
     def n_flagged_post_attack_then_correct(self) -> int:
-        """Number of examples that were flagged by the defense post-attack, but
-        which the model got correct."""
+        """Number of examples flagged post-attack but the model got correct."""
         flags = self.post_attack_flag_values
         succs = self.post_attack_successes
         flag_and_correct = [flag and succ for flag, succ in zip(flags, succs)]
@@ -174,14 +173,12 @@ class DefendedAttackResults(AttackResults):
 
     @cached_property
     def n_flagged_post_attack_then_incorrect(self) -> int:
-        """Number of examples that were flagged by the defense post-attack, and
-        which the model got incorrect."""
+        """Number of examples flagged post-attack and the model got incorrect."""
         return self.n_flagged_post_attack - self.n_flagged_post_attack_then_correct
 
     @cached_property
     def n_not_flagged_post_attack_then_correct(self) -> int:
-        """Number of examples that were not flagged by the defense post-attack,
-        and which the model got correct."""
+        """Number of examples not flagged post-attack and the model got correct."""
         flags = self.post_attack_flag_values
         succs = self.post_attack_successes
         not_flag_and_correct = [(not flag) and succ for flag, succ in zip(flags, succs)]
@@ -189,8 +186,7 @@ class DefendedAttackResults(AttackResults):
 
     @cached_property
     def n_not_flagged_post_attack_then_incorrect(self) -> int:
-        """Number of examples that were not flagged by the defense post-attack,
-        but which the model got incorrect."""
+        """Number of examples not flagged post-attack but the model got incorrect."""
         return (
             self.n_not_flagged_post_attack - self.n_not_flagged_post_attack_then_correct
         )

@@ -302,8 +302,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
         considered_examples: Sequence[ExampleWithAttackIndices],
     ) -> list[tuple[float, str]]:
-        """Evaluates the candidates using a forward pass through the model for
-        each prompt."""
+        """Evaluates the candidates, running a forward pass for each prompt."""
         accumulated_scores: dict[str, list[float]] = defaultdict(list)
         for example in considered_examples:
             scores = self._apply_replacements_and_eval_candidates_one_prompt(
@@ -397,8 +396,10 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         considered_examples: Sequence[ExampleWithAttackIndices],
         attack_text: str,
     ) -> torch.Tensor:
-        """For multi-prompt, we have to sum gradients for all examples we
-        consider at this iteration."""
+        """Sum gradients for all examples we consider at this iteration.
+
+        This is necessary for multi-prompt.
+        """
         gradients = None
         # TODO(ian): Batch this (once I make running on embeds support batches).
         for example in considered_examples:

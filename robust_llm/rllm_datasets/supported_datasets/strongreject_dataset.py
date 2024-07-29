@@ -13,16 +13,18 @@ class StrongREJECTDataset(RLLMDataset):
     @property
     @override
     def num_classes(self) -> int:
-        """StrongREJECT doesn't support classification."""
+        """The StrongREJECT dataset doesn't support classification."""
         return 0
 
     @property
     @override
     def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
-        """StrongREJECT consists of three chunks:
+        """The StrongREJECT dataset consists of three chunks:
+
         1. The instructions, which are empty (IMMUTABLE)
         2. The forbidden_prompt (PERTURBABLE)
-        3. The answer prompt (IMMUTABLE)"""
+        3. The answer prompt (IMMUTABLE)
+        """
         return ModifiableChunkSpec(
             ChunkType.IMMUTABLE,
             ChunkType.PERTURBABLE,

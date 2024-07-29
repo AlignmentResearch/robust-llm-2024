@@ -19,10 +19,12 @@ class IMDBDataset(RLLMDataset):
     @property
     @override
     def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
-        """IMDB consists of a three chunks:
+        """IMDB consists of three chunks:
+
         1. The instructions (IMMUTABLE)
         2. The review text (PERTURBABLE)
-        3. The answer prompt (IMMUTABLE)"""
+        3. The answer prompt (IMMUTABLE)
+        """
         return ModifiableChunkSpec(
             ChunkType.IMMUTABLE,
             ChunkType.PERTURBABLE,

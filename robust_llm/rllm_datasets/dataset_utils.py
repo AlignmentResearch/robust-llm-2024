@@ -42,8 +42,7 @@ SUPPORTED_MODELS = [
 
 
 def filter_dataset_length(ds: Dataset) -> Dataset:
-    """Filter a dataset to only include examples that fit in the context
-    length of all supported models and are non-empty.
+    """Filter dataset for rows with length zero or greater than the context length.
 
     Args:
         ds: The dataset to filter.
@@ -66,8 +65,7 @@ def filter_empty_rows(ds: Dataset) -> Dataset:
 
 
 def filter_dataset_for_context_length(dataset: Dataset, buffer: int = 24) -> Dataset:
-    """Filter a dataset to only include examples that fit in the context
-    length of all supported models.
+    """Filter out rows that are too long for all supported models.
 
     Args:
         dataset: The dataset to filter.
@@ -77,7 +75,8 @@ def filter_dataset_for_context_length(dataset: Dataset, buffer: int = 24) -> Dat
 
 
     Returns:
-        The filtered dataset.
+        The filtered dataset, i.e. the provided dataset *minus* all examples
+        that do not fit in the context length of all supported models.
     """
     for model_name in SUPPORTED_MODELS:
         dataset = filter_length_for_model(
@@ -91,8 +90,7 @@ def filter_length_for_model(
     model_name: str,
     buffer: int,
 ) -> Dataset:
-    """Filter a dataset to only include examples that fit in the context
-    length of the given model.
+    """Filter for examples that fit in the context length of the given model.
 
     Args:
         dataset: The dataset to filter.

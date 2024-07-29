@@ -1,4 +1,5 @@
-"""
+"""Tests for random token attack.
+
 Methods to test:
     "RandomTokenAttack",
     "get_randint_with_exclusions",

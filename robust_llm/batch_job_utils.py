@@ -58,7 +58,8 @@ class FlamingoRun:
         config, and if it errors then we know there was a mistake in the args.
         However, we can't use this Hydra config to run the experiment since
         there's no straightforward way to pass it to k8s, so we throw it
-        away and pass the override args like normal anyway."""
+        away and pass the override args like normal anyway.
+        """
         # since the entry point is not __main__.py, we need to initialize Hydra
         with hydra.initialize(version_base=None, config_path="hydra_conf"):
             cs = ConfigStore.instance()

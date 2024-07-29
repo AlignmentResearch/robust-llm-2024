@@ -1,4 +1,6 @@
-"""Based on ian_024.
+"""IMDB and Passwordmatch experiments with stronger models.
+
+Based on ian_024.
 These models were trained on n_its=10; we try n_its=25.
 """
 

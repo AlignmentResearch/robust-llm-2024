@@ -10,9 +10,9 @@ class ChatRole(Enum):
 
 @dataclass(frozen=True)
 class PromptTemplate:
-    """This is a general class for prompt templates,
-    that should encompass both chat models and non-chat
-    models
+    r"""This is a general class for prompt templates.
+
+    Should encompass both chat models and non-chat models.
 
     The basic idea is that there is some part before user input, and
     some part after user input but before model input, and that should

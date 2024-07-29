@@ -1,7 +1,6 @@
-"""
-Run experiments on several small models to make sure they don't crash.
-Starting with Gemma.
+"""Run experiments on several small models to make sure they don't crash.
 
+Starting with Gemma.
 TODO(GH#628): Add tests for more models.
 """
 

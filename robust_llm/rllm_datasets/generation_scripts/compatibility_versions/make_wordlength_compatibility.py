@@ -1,4 +1,6 @@
-"""Takes the original WordLength dataset with 'text' and 'chunked_text'
+"""Converts WordLength dataset to use the new column format.
+
+Takes the original WordLength dataset with 'text' and 'chunked_text'
 columns and creates a new dataset with 'content', 'instructions', and
 'answer_prompt' columns that contains the same exact data.
 """

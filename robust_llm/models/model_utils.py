@@ -177,7 +177,8 @@ def generation_losses_from_logits(
             default "mean".
 
     Returns:
-        The generation losses, shape (batch,)."""
+        The generation losses, shape (batch,).
+    """
 
     def score_fn(logits: torch.Tensor, goal: Sequence[int]):
         return loss_on_goal(logits, goal, reduction)

@@ -140,6 +140,7 @@ class RandomTokenAttackConfig(SearchFreeAttackConfig):
 @dataclass
 class LMAttackConfig(SearchFreeAttackConfig):
     """Options specific for LM-based attacks.
+
     Attributes:
         adversary: Model config used as the LM adversary.
         adversary_input_templates: Prompt templates to use for eliciting the attack,
@@ -185,7 +186,6 @@ class LMAttackConfig(SearchFreeAttackConfig):
     attack_end_strings: list[str] = field(default_factory=list)
     use_raw_adversary_input: bool = False
     n_its: int = 10
-    prompt_attack_mode: str = "single-prompt"
     victim_success_callback: CallbackConfig = field(
         default_factory=lambda: CallbackConfig(
             callback_name="successes_from_text", callback_return_type="binary"

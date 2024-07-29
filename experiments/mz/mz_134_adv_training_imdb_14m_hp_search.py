@@ -1,5 +1,7 @@
-"""In mz_131 we saw that for 14M model, attack success rate plateaus at around 10%,
-which is high. See if we can improve adv training by varying hyperparameters.
+"""Hyperparameter search for adversarial training on IMDB with 14M model.
+
+In mz_131 we saw that for 14M model, ASR plateaus at around 10%, which is high.
+See if we can improve adv training by varying hyperparameters.
 """
 
 import os

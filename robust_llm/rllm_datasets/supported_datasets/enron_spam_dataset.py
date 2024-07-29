@@ -13,16 +13,18 @@ class EnronSpamDataset(RLLMDataset):
     @property
     @override
     def num_classes(self) -> int:
-        """EnronSpam has two labels (0: ham and 1: spam)."""
+        """The EnronSpam dataset has two labels (0: ham and 1: spam)."""
         return 2
 
     @property
     @override
     def modifiable_chunk_spec(self) -> ModifiableChunkSpec:
-        """EnronSpam consists of a three chunks:
+        """The EnronSpam dataset consists of three chunks:
+
         1. The instructions (IMMUTABLE)
         2. The email text (PERTURBABLE)
-        3. The answer prompt (IMMUTABLE)"""
+        3. The answer prompt (IMMUTABLE)
+        """
         return ModifiableChunkSpec(
             ChunkType.IMMUTABLE,
             ChunkType.PERTURBABLE,

@@ -59,8 +59,10 @@ class ModifyOnlySpecialWordsConstraint(PreTransformationConstraint):
 
 
 class LanguageModelWrapper(textattack.models.wrappers.HuggingFaceModelWrapper):
-    """Wrapper for TextAttack's `HuggingFaceModelWrapper` to allow compatibility with
-    the `DefendedModel` class."""
+    """Wrapper for TextAttack's `HuggingFaceModelWrapper`.
+
+    Enables compatibility with the `DefendedModel` class.
+    """
 
     def __init__(
         self,

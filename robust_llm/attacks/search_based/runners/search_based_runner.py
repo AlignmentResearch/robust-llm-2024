@@ -53,7 +53,8 @@ class SearchBasedRunner(abc.ABC):
             prepped_examples: list of PreppedExample which includes a
                 prompt_template, clf_label, and gen_target
             random_seed: initial seed for a random.Random object used to sample
-                replacement candidates"""
+                replacement candidates
+        """
         self.victim = victim
         cb = build_tensor_scoring_callback(scores_from_text_callback)
         self.scores_from_text_callback = cb

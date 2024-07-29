@@ -313,6 +313,7 @@ class SearchFreeAttack(Attack, ABC):
 
     def post_process_attack_string(self, attack_tokens: str, chunk_index: int) -> str:
         """Post-processes the attack tokens into a string.
+
         Useful for overloading in subclasses.
 
         Args:

@@ -1,6 +1,7 @@
 """Main entry point.
 
-Pipeline is chosen based on the experiment_type specified in the config."""
+Pipeline is chosen based on the experiment_type specified in the config.
+"""
 
 import hydra
 from hydra.core.config_store import ConfigStore

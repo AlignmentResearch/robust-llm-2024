@@ -1,4 +1,6 @@
-"""Look at longer adversarial training (30 rounds).
+"""Long adversarial training experiments.
+
+Look at longer adversarial training (30 rounds).
 We add 200 adversarial examples each round.
 """
 
