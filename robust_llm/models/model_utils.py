@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -115,14 +116,19 @@ def load_hf_model(
                 attn_implementation=attention_implementation,
             )
         case InferenceType.GENERATION:
-            model, loading_info = AutoModelForCausalLM.from_pretrained(
-                name_or_path,
-                revision=revision,
-                output_loading_info=True,
-                use_cache=False,  # By default we don't want to output cache values.
-                torch_dtype=torch_dtype,
-                attn_implementation=attention_implementation,
-            )
+            with warnings.catch_warnings():
+                # We set the generation config later so don't show this warning.
+                warnings.filterwarnings(
+                    "ignore", category=UserWarning, message=".*do_sample.*False.*"
+                )
+                model, loading_info = AutoModelForCausalLM.from_pretrained(
+                    name_or_path,
+                    revision=revision,
+                    output_loading_info=True,
+                    use_cache=False,  # By default we don't want to output cache values.
+                    torch_dtype=torch_dtype,
+                    attn_implementation=attention_implementation,
+                )
         case InferenceType.TRL:
             # We can't use output_loading_info=True because it's not supported
             # for TRL models. This means strict_load must be False.
