@@ -459,7 +459,6 @@ class WrappedModel(ABC):
                 minibatch_tokens = self.generate(
                     input_ids=minibatch["input_ids"],
                     attention_mask=minibatch["attention_mask"],
-                    generation_config=self.generation_config,
                 )
                 # Very important to pad_across_processes before gathering;
                 # otherwise it'll silently hang on one process if ever the
@@ -509,7 +508,6 @@ class WrappedModel(ABC):
         all_tokens = self.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            pad_token_id=self.config.pad_token_id,
         )
         assert isinstance(all_tokens, torch.Tensor)
         assert all_tokens.shape[0] == 1
@@ -556,41 +554,86 @@ class WrappedModel(ABC):
         gen_config_dict["pad_token_id"] = self.config.pad_token_id
         return transformers.GenerationConfig.from_dict(gen_config_dict)
 
-    def generate(self, **inputs):
-        """Generate text.
+    @cached_property
+    def transformers_generation_config(self) -> transformers.GenerationConfig:
+        """Returns a transformers GenerationConfig object."""
+        assert self.generation_config is not None
+        return self._to_transformers_generation_config(self.generation_config)
 
-        This wrapper is mostly here in case it's needed for compatibility with
-        CachingWrappedModel.
-        """
+    def pad_and_concatenate(self, tensors):
+        """Wrapper around torch.cat that pads the tensors to the same length."""
+        assert self.right_tokenizer.pad_token_id is not None
+        max_length = max(tensor.size(1) for tensor in tensors)
+        padded_tensors = []
+
+        for tensor in tensors:
+            padding = torch.full(
+                (tensor.size(0), max_length - tensor.size(1)),
+                self.right_tokenizer.pad_token_id,
+                dtype=tensor.dtype,
+                device=tensor.device,
+            )
+            padded_tensor = torch.cat([tensor, padding], dim=1)
+            padded_tensors.append(padded_tensor)
+
+        return torch.cat(padded_tensors, dim=0)
+
+    def _generate_single_call(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        generation_config: transformers.GenerationConfig,
+    ) -> torch.Tensor:
+        """Call model.generate once (N.B. params must be all-gathered first)."""
         self._set_seed()
-        if inputs.get("generation_config") is not None:
-            gen_config = inputs["generation_config"]
-            if isinstance(gen_config, GenerationConfig):
-                gen_config = self._to_transformers_generation_config(gen_config)
-            inputs["generation_config"] = gen_config
-        elif self.generation_config is not None:
-            gen_config = self._to_transformers_generation_config(self.generation_config)
-            inputs["generation_config"] = gen_config
-        if inputs.get("tokenizer") is None:
-            # Need to specify tokenizer due to stop strings.
-            # We use left_tokenizer because we always use left padding for generation.
-            inputs["tokenizer"] = self.left_tokenizer
+        if input_ids.dim() == 1:
+            input_ids = input_ids.unsqueeze(0)
+        if attention_mask.dim() == 1:
+            attention_mask = attention_mask.unsqueeze(0)
+        out = self.model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            pad_token_id=self.config.pad_token_id,
+            generation_config=generation_config,
+            tokenizer=self.left_tokenizer,
+            # synced_gpus prevents sporadic hanging when using FSDP, which
+            # comes from different generated sequence lengths on different
+            # GPUs. We only want to use synced_gpus when we're actually
+            # using accelerate, otherwise it throws an error.
+            synced_gpus=torch.distributed.is_initialized(),
+        )
+        assert isinstance(out, torch.Tensor)
+        return out
 
+    def generate(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        generation_config: transformers.GenerationConfig | None = None,
+    ) -> torch.Tensor:
+        """Generate text, being careful to set the seed for every batch."""
+        if generation_config is None:
+            generation_config = self.transformers_generation_config
         # Hack to make sure FSDP all-gathers the parameters before .generate. See:
         # https://github.com/pytorch/pytorch/issues/100069
         # TODO(GH#512): Find a way to avoid an additional forward pass/gather.
         if isinstance(self.model, FSDP):
             with torch.no_grad():
-                self.model.forward(input_ids=inputs["input_ids"])
+                self.model.forward(input_ids=input_ids)
         with FSDP.summon_full_params(self.model, recurse=False):
-            return self.model.generate(
-                **inputs,
-                # synced_gpus prevents sporadic hanging when using FSDP, which
-                # comes from different generated sequence lengths on different
-                # GPUs. We only want to use synced_gpus when we're actually
-                # using accelerate, otherwise it throws an error.
-                synced_gpus=torch.distributed.is_initialized(),
-            )
+            if generation_config.do_sample:
+                # We need to generate one row at a time because we need to set the seed
+                # for each row.
+                return self.pad_and_concatenate(
+                    [
+                        self._generate_single_call(row_ids, row_mask, generation_config)
+                        for row_ids, row_mask in zip(input_ids, attention_mask)
+                    ],
+                )
+            else:
+                return self._generate_single_call(
+                    input_ids, attention_mask, generation_config
+                )
 
     def to(self, device: torch.device) -> WrappedModel:
         """Move the model to the given device.

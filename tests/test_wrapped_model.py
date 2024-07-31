@@ -94,7 +94,7 @@ def test_llama():
     assert isinstance(wrapped_model.right_tokenizer, LlamaTokenizer)
 
 
-def test_determinism():
+def test_determinism_single_batch():
     cfg = ModelConfig(
         name_or_path="EleutherAI/pythia-14m",
         family="pythia",
@@ -110,12 +110,11 @@ def test_determinism():
     )
     assert cfg.generation_config is not None
     model = WrappedModel.from_config(cfg, accelerator=None)
-    gen_config = model._to_transformers_generation_config(cfg.generation_config)
     encoding = model.tokenize("Hello, my dog is cute", return_tensors="pt")
     inputs = {
         "input_ids": encoding.input_ids,
         "attention_mask": encoding.attention_mask,
-        "generation_config": gen_config,
+        "generation_config": model.transformers_generation_config,
     }
     is_equal = model.generate(**inputs) == model.generate(**inputs)
     assert isinstance(is_equal, torch.Tensor)
@@ -124,3 +123,86 @@ def test_determinism():
     not_equal = model.model.generate(**inputs) != model.model.generate(**inputs)
     assert isinstance(not_equal, torch.Tensor)
     assert not_equal.any()
+
+
+def test_determinism_batched():
+    cfg = ModelConfig(
+        name_or_path="EleutherAI/pythia-14m",
+        family="pythia",
+        revision="main",
+        inference_type="generation",
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        minibatch_multiplier=1,
+        seed=42,
+        generation_config=GenerationConfig(
+            max_new_tokens=50, do_sample=True, temperature=10.0
+        ),
+    )
+    assert cfg.generation_config is not None
+    model = WrappedModel.from_config(cfg, accelerator=None)
+    text = ["Hello, my dog is cute", "Greetings from the moon"]
+    encoding1 = model.tokenize(text, return_tensors="pt")
+    encoding2 = model.tokenize(text[::-1], return_tensors="pt")
+    inputs1 = {
+        "input_ids": encoding1.input_ids,
+        "attention_mask": encoding1.attention_mask,
+        "generation_config": model.transformers_generation_config,
+    }
+    inputs2 = {
+        "input_ids": encoding2.input_ids,
+        "attention_mask": encoding2.attention_mask,
+        "generation_config": model.transformers_generation_config,
+    }
+
+    is_equal = model.generate(**inputs1) == model.generate(**inputs2)[[1, 0]]
+    assert isinstance(is_equal, torch.Tensor)
+    assert is_equal.all()
+
+    model._set_seed()
+    simple_out1 = model.model.generate(**inputs1)
+    model._set_seed()
+    simple_out2 = model.model.generate(**inputs2)
+    not_equal = simple_out1 != simple_out2[[1, 0]]
+    assert isinstance(not_equal, torch.Tensor)
+    assert not_equal.any()
+
+
+def test_generate_equivalence():
+    cfg = ModelConfig(
+        name_or_path="EleutherAI/pythia-14m",
+        family="pythia",
+        revision="main",
+        inference_type="generation",
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        minibatch_multiplier=1,
+        seed=42,
+        generation_config=GenerationConfig(
+            max_new_tokens=50, do_sample=True, temperature=10.0
+        ),
+    )
+    assert cfg.generation_config is not None
+    model = WrappedModel.from_config(cfg, accelerator=None)
+    text = "Hello, my dog is cute"
+    encoding = model.tokenize(text, return_tensors="pt")
+    inputs = {
+        "input_ids": encoding.input_ids,
+        "attention_mask": encoding.attention_mask,
+        "generation_config": model.transformers_generation_config,
+    }
+    model._set_seed()
+    simple_out = model.model.generate(**inputs)
+    wrapped_out = model.generate(**inputs)
+    is_equal = simple_out == wrapped_out
+    assert isinstance(is_equal, torch.Tensor)
+    assert is_equal.all()
+
+    mb_text = ["Hello, my dog is cute", "Greetings from the moon"]
+    mb_encoding = model.tokenize(mb_text, return_tensors="pt")
+    mb_inputs = {
+        "input_ids": mb_encoding.input_ids,
+        "attention_mask": mb_encoding.attention_mask,
+        "generation_config": model.transformers_generation_config,
+    }
+    assert model.generate(**mb_inputs).shape == model.generate(**mb_inputs).shape

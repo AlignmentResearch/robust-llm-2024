@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from unittest.mock import MagicMock
 
 import torch
+import transformers
 from transformers import PreTrainedTokenizerBase
 
 from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
@@ -45,9 +46,14 @@ class MagicWrappedModel(WrappedModel):
         self.accelerator.gather_for_metrics = lambda data: data
         self.generation_config = None
 
-    def generate(self, **inputs) -> torch.LongTensor:
+    def generate(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        generation_config: transformers.GenerationConfig | None = None,
+    ) -> torch.Tensor:
         out = torch.tensor([[0], [1]], dtype=torch.long)
-        assert isinstance(out, torch.LongTensor)
+        assert isinstance(out, torch.Tensor)
         return out
 
     @classmethod
