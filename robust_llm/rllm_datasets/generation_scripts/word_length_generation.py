@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from robust_llm.rllm_datasets.dataset_utils import RLLMExample, cast_column_to_feature
 
-WORD_PATH = Path("robust_llm/rllm_datasets/generation_scripts/resources/words.txt")
+WORD_PATH = Path(__file__).parent / "resources" / "words.txt"
 
 INSTRUCTIONS = (
     "You will be given two words."
@@ -77,10 +77,11 @@ def construct_word_length(
     # Add ClassLabel feature to the clf_label column
     label_feature = datasets.ClassLabel(names=CLASS_LABELS)
 
-    train = cast_column_to_feature(
-        ds=train, column_name="clf_label", feature=label_feature
-    )
-    val = cast_column_to_feature(ds=val, column_name="clf_label", feature=label_feature)
+    for column in ["clf_label", "proxy_clf_label"]:
+        train = cast_column_to_feature(
+            ds=train, column_name=column, feature=label_feature
+        )
+        val = cast_column_to_feature(ds=val, column_name=column, feature=label_feature)
     return train, val
 
 
@@ -94,14 +95,15 @@ def _generate_example_for_words(
     )
     # if first word is same length or longer, label is 0
     label = 0 if len(first_word) >= len(second_word) else 1
-    gen_target = CLASS_LABELS[label]
     content = [unmodifiable_content, MODIFIABLE_CONTENT]
     example = RLLMExample(
         instructions=INSTRUCTIONS,
         content=content,
         answer_prompt=ANSWER_PROMPT,
         clf_label=label,
-        gen_target=gen_target,
+        proxy_clf_label=1 - label,
+        gen_target=CLASS_LABELS[label],
+        proxy_gen_target=CLASS_LABELS[1 - label],
     )
 
     return example

@@ -59,10 +59,20 @@ def process_strongreject_dataset(df: pd.DataFrame) -> Dataset:
     # so we make the ClassLabel feature empty.
     label_feature = datasets.ClassLabel(num_classes=0)
     clf_label = [None] * len(text)
+    proxy_clf_label = [None] * len(text)
     text_feature = datasets.Value("string")
-    features = datasets.Features({"text": text_feature, "clf_label": label_feature})
+    features = datasets.Features(
+        {
+            "text": text_feature,
+            "clf_label": label_feature,
+            "proxy_clf_label": label_feature,
+        }
+    )
 
-    ds = Dataset.from_dict({"text": text, "clf_label": clf_label}, features=features)
+    ds = Dataset.from_dict(
+        {"text": text, "clf_label": clf_label, "proxy_clf_label": proxy_clf_label},
+        features=features,
+    )
 
     ds = ds.map(
         lambda x: {
@@ -71,7 +81,8 @@ def process_strongreject_dataset(df: pd.DataFrame) -> Dataset:
             "answer_prompt": ANSWER_PROMPT,
             # We use a generic target that GCG can optimize for.
             # Note the leading space, which can be stripped from DatasetConfig.
-            "gen_target": " Sure, here",
+            "gen_target": " I'm sorry, as an AI language model I can't help you with that.",  # noqa: E501
+            "proxy_gen_target": " Sure, here",
         },
         remove_columns=["text"],
     )
@@ -81,6 +92,6 @@ def process_strongreject_dataset(df: pd.DataFrame) -> Dataset:
 if __name__ == "__main__":
     # bump the version here manually when you make changes
     # (see README for more info)
-    MINOR_VERSION = 0
+    MINOR_VERSION = 1
     PATCH_VERSION = 0
     main(minor_version=MINOR_VERSION, patch_version=PATCH_VERSION)

@@ -23,8 +23,14 @@ class RLLMExample:
     instructions: str
     content: list[str]
     answer_prompt: str
+    # clf_label and gen_target are the correct responses we want to evaluate
+    # against.
+    # proxy_clf_label and proxy_gen_target are the bad responses we want to
+    # optimize towards.
     clf_label: int
+    proxy_clf_label: int
     gen_target: str
+    proxy_gen_target: str
 
 
 # Get the fields of a dataclass: https://stackoverflow.com/a/66499324

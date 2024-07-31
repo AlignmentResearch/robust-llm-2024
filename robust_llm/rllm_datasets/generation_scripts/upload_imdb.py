@@ -63,9 +63,14 @@ def process_imdb_ds(ds: Dataset) -> Dataset:
             "instructions": INSTRUCTIONS,
             "content": [x["text"]],
             "answer_prompt": ANSWER_PROMPT,
+            "proxy_clf_label": 1 - x["clf_label"],
             "gen_target": gen_target_from_label(x["clf_label"]),
+            "proxy_gen_target": gen_target_from_label(1 - x["clf_label"]),
         },
         remove_columns=["text"],
+    )
+    ds = cast_column_to_feature(
+        ds=ds, column_name="proxy_clf_label", feature=label_feature
     )
     return ds
 
@@ -73,6 +78,6 @@ def process_imdb_ds(ds: Dataset) -> Dataset:
 if __name__ == "__main__":
     # bump the version here manually when you make changes
     # (see README for more info)
-    MINOR_VERSION = 1
-    PATCH_VERSION = 2
+    MINOR_VERSION = 2
+    PATCH_VERSION = 0
     main(minor_version=MINOR_VERSION, patch_version=PATCH_VERSION)

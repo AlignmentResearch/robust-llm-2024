@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from robust_llm.rllm_datasets.dataset_utils import RLLMExample, cast_column_to_feature
 
-WORD_PATH = Path("robust_llm/rllm_datasets/generation_scripts/resources/words.txt")
+WORD_PATH = Path(__file__).parent / "resources" / "words.txt"
 
 INSTRUCTIONS = (
     "You are an online security system."
@@ -72,10 +72,11 @@ def construct_password_match(
     # Add ClassLabel feature to the clf_label column
     label_feature = datasets.ClassLabel(names=CLASS_LABELS)
 
-    train = cast_column_to_feature(
-        ds=train, column_name="clf_label", feature=label_feature
-    )
-    val = cast_column_to_feature(ds=val, column_name="clf_label", feature=label_feature)
+    for column in ["clf_label", "proxy_clf_label"]:
+        train = cast_column_to_feature(
+            ds=train, column_name=column, feature=label_feature
+        )
+        val = cast_column_to_feature(ds=val, column_name=column, feature=label_feature)
     return train, val
 
 
@@ -102,14 +103,18 @@ def _generate_examples_with_both_words(
         content=[positive_content, ""],
         answer_prompt=ANSWER_PROMPT,
         clf_label=1,
+        proxy_clf_label=0,
         gen_target=CLASS_LABELS[1],
+        proxy_gen_target=CLASS_LABELS[0],
     )
     neg_example = RLLMExample(
         instructions=INSTRUCTIONS,
         content=[negative_content, ""],
         answer_prompt=ANSWER_PROMPT,
         clf_label=0,
+        proxy_clf_label=1,
         gen_target=CLASS_LABELS[0],
+        proxy_gen_target=CLASS_LABELS[1],
     )
     return (pos_example, neg_example)
 

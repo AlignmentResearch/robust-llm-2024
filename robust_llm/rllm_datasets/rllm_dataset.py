@@ -235,7 +235,9 @@ class RLLMDataset(ABC):
 
         dataset = self._load_raw_dataset(cfg, split, revision)
         actual_columns = set(dataset.column_names)
-        assert EXPECTED_COLUMNS <= actual_columns
+        assert (
+            EXPECTED_COLUMNS <= actual_columns
+        ), f"Expected columns {EXPECTED_COLUMNS}, got {actual_columns}"
         extra_columns = list(actual_columns - EXPECTED_COLUMNS)
         if extra_columns:
             # To be cautious, let's remove all extra columns.

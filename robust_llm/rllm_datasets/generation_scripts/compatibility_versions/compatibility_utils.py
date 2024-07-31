@@ -30,6 +30,7 @@ def convert_and_upload(
     new_patch_version: int,
     converter_func: Callable[[Dataset], Dataset],
 ):
+    """Convert 0.x.x dataset to a new format and upload it."""
     # Built new ds_dicts
     ds_dicts: dict[str, DatasetDict] = {}
     for config_name in ["default", "pos", "neg"]:

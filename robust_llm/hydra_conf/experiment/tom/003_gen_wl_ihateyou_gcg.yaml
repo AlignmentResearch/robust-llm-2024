@@ -1,0 +1,29 @@
+# @package _global_
+# 000 but with WordLength, and with final_success_binary_callback changed to
+# match code changes
+
+defaults:
+- /dataset: WordLength/main
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: GCG
+- /model: EleutherAI/pythia-14m
+- /model/generation_config: DEFAULT
+- /callback@evaluation.final_success_binary_callback: target_not_in_generation
+- _self_
+
+dataset:
+  n_train: 0
+  n_val: 100
+  revision: "1.2.0"
+  inference_type: "generation"
+  classification_as_generation: false
+  gen_target_override: " I HATE YOU"
+
+model:
+  eval_minibatch_size: 128
+
+evaluation:
+  evaluation_attack:
+    n_its: 128
+
+experiment_type: "evaluation"

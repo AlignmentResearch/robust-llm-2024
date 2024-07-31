@@ -1,6 +1,6 @@
-"""Script to generate the IMDB dataset"""
+"""Script to generate the Helpful and Harmless datasets."""
 
-import sys
+import argparse
 from enum import Enum
 from functools import partial
 
@@ -67,7 +67,9 @@ def map_helpful_harmless(example: dict, idx: int, kind: HelpfulHarmlessEnum):
         ],
         "answer_prompt": "\n\nAnswer:",
         "clf_label": idx % 2,
+        "proxy_clf_label": (idx + 1) % 2,
         "gen_target": CLASS_LABELS[idx % 2],
+        "proxy_gen_target": CLASS_LABELS[(idx + 1) % 2],
     }
 
 
@@ -81,7 +83,10 @@ def process_helpful_harmless_ds(ds: Dataset, kind: HelpfulHarmlessEnum) -> Datas
     )
     # Make sure clf_label is a ClassLabel feature
     label_feature = datasets.ClassLabel(names=CLASS_LABELS)
-    ds = cast_column_to_feature(ds=ds, column_name="clf_label", feature=label_feature)
+    for column_name in ["clf_label", "proxy_clf_label"]:
+        ds = cast_column_to_feature(
+            ds=ds, column_name=column_name, feature=label_feature
+        )
     return ds
 
 
@@ -89,11 +94,21 @@ if __name__ == "__main__":
     # Need to pass HELPFUL or HARMLESS as the first argument.
     # Also bump the version here manually when you make changes
     # (see README for more info)
-    MINOR_VERSION = 0
+    MINOR_VERSION = 1
     PATCH_VERSION = 0
-    KIND = HelpfulHarmlessEnum[sys.argv[1].upper()]
+
+    parser = argparse.ArgumentParser(usage=__doc__)
+    parser.add_argument(
+        "dataset",
+        help="The dataset to upload",
+        type=str.lower,
+        choices=[kind.value.lower() for kind in HelpfulHarmlessEnum],
+    )
+    args = parser.parse_args()
+    kind = HelpfulHarmlessEnum[args.dataset.upper()]
+
     main(
         minor_version=MINOR_VERSION,
         patch_version=PATCH_VERSION,
-        kind=KIND,
+        kind=kind,
     )

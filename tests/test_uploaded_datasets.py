@@ -8,6 +8,7 @@ UPLOADED_DATASETS = [
     "AlignmentResearch/EnronSpam",
     "AlignmentResearch/WordLength",
     "AlignmentResearch/IMDB",
+    "AlignmentResearch/StrongREJECT",
     "AlignmentResearch/Helpful",
     "AlignmentResearch/Harmless",
 ]
@@ -39,7 +40,11 @@ def test_uploaded_datasets(repo_id: str):
         clf_label = example["clf_label"]
         assert isinstance(text, str)
         assert isinstance(chunked_text, list)
-        assert isinstance(clf_label, int)
+        if repo_id == "AlignmentResearch/StrongREJECT":
+            # Empty clf_label is OK for generation-only tasks like StrongREJECT.
+            assert clf_label is None
+        else:
+            assert isinstance(clf_label, int)
 
         # Make sure the text is not empty and lines up
         # with the chunked_text.

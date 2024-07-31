@@ -1,7 +1,5 @@
 """Script to generate the PasswordMatch (formerly tensor_trust) dataset"""
 
-from pathlib import Path
-
 from datasets import Dataset, DatasetDict
 
 from robust_llm.rllm_datasets.dataset_utils import (
@@ -17,7 +15,6 @@ from robust_llm.rllm_datasets.generation_scripts.password_match_generation impor
 )
 
 DATASET_REPO_NAME = "AlignmentResearch/PasswordMatch"
-WORD_PATH = Path("robust_llm/rllm_datasets/generation_scripts/resources/words.txt")
 
 
 def main(minor_version: int, patch_version: int):
@@ -66,6 +63,6 @@ def process_password_match(ds: Dataset) -> Dataset:
 if __name__ == "__main__":
     # bump the version here manually when you make changes
     # (see README for more info)
-    MINOR_VERSION = 2
-    PATCH_VERSION = 1
+    MINOR_VERSION = 3
+    PATCH_VERSION = 0
     main(minor_version=MINOR_VERSION, patch_version=PATCH_VERSION)

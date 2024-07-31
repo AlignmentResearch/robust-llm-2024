@@ -31,10 +31,10 @@ def latest_password_match_dataset():
 
 
 @pytest.fixture
-def v1_0_0_password_match_dataset():
+def v1_0_password_match_dataset():
     cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
-        revision="1.0.0",
+        revision="<1.1.0",
         n_train=1,
         n_val=1,
     )
@@ -189,7 +189,7 @@ Answer:
 @given(password1=st.text(), password2=st.text())
 @example(password1="\n:", password2="")
 def test_old_ground_truth_label_fn_auto(
-    v1_0_0_password_match_dataset, password1: str, password2: str
+    v1_0_password_match_dataset, password1: str, password2: str
 ):
 
     # Skip examples from hypothesis that are already equal, because the tests
@@ -211,22 +211,22 @@ def test_old_ground_truth_label_fn_auto(
         system_password=password1,
         user_password=password1,
     )
-    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text) == 1
+    assert v1_0_password_match_dataset.ground_truth_label_fn(text) == 1
 
     text = text_template.format(
         system_password=password1,
         user_password=password2,
     )
-    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text) == 0
+    assert v1_0_password_match_dataset.ground_truth_label_fn(text) == 0
 
     text = text_template.format(
         system_password=password2,
         user_password=password2,
     )
-    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text) == 1
+    assert v1_0_password_match_dataset.ground_truth_label_fn(text) == 1
 
     text = text_template.format(
         system_password=password2,
         user_password=password1,
     )
-    assert v1_0_0_password_match_dataset.ground_truth_label_fn(text) == 0
+    assert v1_0_password_match_dataset.ground_truth_label_fn(text) == 0

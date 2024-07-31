@@ -34,9 +34,11 @@ def pm_old_to_new(old_dataset: Dataset) -> Dataset:
     instructions = [""] * len(old_dataset)
     chunked_text = old_dataset["chunked_text"]
     clf_label = old_dataset["clf_label"]
+    proxy_clf_label = [1 - x for x in clf_label]
     content = [[x[0], x[1]] for x in chunked_text]
     answer_prompt = [x[2] for x in chunked_text]
     gen_target = [str(x) for x in clf_label]
+    proxy_gen_target = [str(x) for x in proxy_clf_label]
 
     new_dataset = Dataset.from_dict(
         {
@@ -44,7 +46,9 @@ def pm_old_to_new(old_dataset: Dataset) -> Dataset:
             "content": content,
             "answer_prompt": answer_prompt,
             "clf_label": clf_label,
+            "proxy_clf_label": proxy_clf_label,
             "gen_target": gen_target,
+            "proxy_gen_target": proxy_gen_target,
         }
     )
     # Add ClassLabel feature to the clf_label column
@@ -59,7 +63,7 @@ def pm_old_to_new(old_dataset: Dataset) -> Dataset:
 
 if __name__ == "__main__":
     MINOR_VERSION = 0
-    PATCH_VERSION = 1
+    PATCH_VERSION = 2
     repo_name = "AlignmentResearch/PasswordMatch"
     convert_and_upload(
         repo_name=repo_name,
