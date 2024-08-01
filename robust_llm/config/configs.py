@@ -65,6 +65,9 @@ class AdversarialTrainingConfig:
             alternately from the original and adversarial datasets.
         training_attack (AttackConfig):
             Config for the attack to use in adversarial training.
+        stopping_attack_success_rate (float):
+            The attack success rate on the validation dataset) at which to stop
+            adversarial training.
     """
 
     num_examples_to_generate_each_round: int = 500
@@ -74,6 +77,7 @@ class AdversarialTrainingConfig:
     skip_first_training_round: bool = False
     use_balanced_sampling: bool = False
     training_attack: AttackConfig = field(default_factory=AttackConfig)
+    stopping_attack_success_rate: float = 0.0
 
 
 @dataclass

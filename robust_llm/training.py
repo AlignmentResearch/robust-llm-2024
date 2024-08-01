@@ -492,6 +492,10 @@ class AdversarialTraining(Training):
     def only_add_successful_adversarial_examples(self) -> bool:
         return self.adversarial_config.only_add_successful_adversarial_examples
 
+    @property
+    def stopping_attack_success_rate(self) -> float:
+        return self.adversarial_config.stopping_attack_success_rate
+
     @override
     def setup_trainer(self) -> AdversarialTrainer:
         self.trainer = AdversarialTrainer(
@@ -636,7 +640,7 @@ class AdversarialTraining(Training):
 
             # Perform adversarial evaluation every round
             victim_log_counter = self.victim_training_logging_counter
-            do_adversarial_evaluation(
+            round_metrics = do_adversarial_evaluation(
                 victim=self.victim,
                 dataset=self.eval_rllm_dataset["validation"],
                 attack=validation_attack,
@@ -651,6 +655,19 @@ class AdversarialTraining(Training):
                 # We don't use checkpointing of attacks during adversarial training
                 resume_from_checkpoint=False,
             )
+
+            if (
+                round_metrics["adversarial_eval/attack_success_rate"]
+                < self.stopping_attack_success_rate
+            ):
+                logger.info(
+                    f"Stopping adversarial training at round {round} because attack "
+                    f"success rate "
+                    f"{round_metrics['adversarial_eval/attack_success_rate']} "
+                    "is below the stopping threshold "
+                    f"{self.stopping_attack_success_rate}"
+                )
+                break
 
             # Now generate adversarial examples using the training attack; possibly
             # select only successful ones; and add them to the training set so that they
