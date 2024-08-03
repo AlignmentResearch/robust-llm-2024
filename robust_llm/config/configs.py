@@ -68,6 +68,8 @@ class AdversarialTrainingConfig:
         stopping_attack_success_rate (float):
             The attack success rate on the validation dataset) at which to stop
             adversarial training.
+        stopping_flops (float):
+            The number of FLOPs to use as a stopping criterion for adversarial training.
     """
 
     num_examples_to_generate_each_round: int = 500
@@ -78,6 +80,7 @@ class AdversarialTrainingConfig:
     use_balanced_sampling: bool = False
     training_attack: AttackConfig = field(default_factory=AttackConfig)
     stopping_attack_success_rate: float = 0.0
+    stopping_flops: float = float("inf")
 
 
 @dataclass

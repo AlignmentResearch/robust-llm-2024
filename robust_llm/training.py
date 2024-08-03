@@ -499,6 +499,10 @@ class AdversarialTraining(Training):
     def stopping_attack_success_rate(self) -> float:
         return self.adversarial_config.stopping_attack_success_rate
 
+    @property
+    def stopping_flops(self) -> float:
+        return self.adversarial_config.stopping_flops
+
     @override
     def setup_trainer(self) -> AdversarialTrainer:
         self.trainer = AdversarialTrainer(
@@ -676,6 +680,14 @@ class AdversarialTraining(Training):
                     f"{round_metrics['adversarial_eval/attack_success_rate']} "
                     "is below the stopping threshold "
                     f"{self.stopping_attack_success_rate}"
+                )
+                break
+
+            if self.state.total_flos > self.stopping_flops:
+                logger.info(
+                    f"Stopping adversarial training at round {round} because total"
+                    f"FLOPs {self.state.total_flos:.2E} is above the stopping "
+                    f"threshold {self.stopping_flops:.2E}"
                 )
                 break
 
