@@ -337,11 +337,12 @@ class AdversarialTrainingState:
         training_attack_rng: Optional[random.Random],
         validation_attack_rng: Optional[random.Random],
         current_round: int = 0,
-        global_step: int = 0,
+        total_flos: int = 0,
     ) -> None:
         self.current_round = current_round
         self.training_attack_rng = training_attack_rng
         self.validation_attack_rng = validation_attack_rng
+        self.total_flos = total_flos
 
     @property
     def report_to(self) -> None | str | list[str]:
@@ -350,6 +351,7 @@ class AdversarialTrainingState:
     def to_dict(self) -> dict:
         return {
             "current_round": self.current_round,
+            "total_flos": self.total_flos,
             "training_attack_rng": (
                 self.training_attack_rng.getstate()
                 if self.training_attack_rng is not None
@@ -373,6 +375,7 @@ class AdversarialTrainingState:
         with open(output_path, "r") as f:
             state = json.load(f)
             self.current_round = state["current_round"]
+            self.total_flos = state["total_flos"]
             if self.training_attack_rng is not None:
                 self.training_attack_rng.setstate(
                     nested_list_to_tuple(state["training_attack_rng"])
@@ -593,7 +596,7 @@ class AdversarialTraining(Training):
                 logger.info("Victim started training in round %s", round)
                 self._log_debug_info()
 
-                adversarial_trainer.train(
+                train_out = adversarial_trainer.train(
                     resume_from_checkpoint=(
                         checkpoint
                         if self.environment_config.allow_checkpointing
@@ -601,8 +604,15 @@ class AdversarialTraining(Training):
                         else False
                     )
                 )
+                self.state.total_flos += train_out.metrics["total_flos"]
                 logger.info("Victim finished training in round %s ", round)
                 self._log_debug_info()
+                wandb.log(
+                    {
+                        "train/total_flos": self.state.total_flos,
+                    },
+                    commit=False,
+                )
 
             # Set the model to eval mode for the attacks. Model is set to train mode by
             # HF Trainer during training, otherwise we want it in eval mode.

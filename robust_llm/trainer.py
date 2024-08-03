@@ -21,7 +21,7 @@ from transformers import (
     TrainerState,
     TrainingArguments,
 )
-from transformers.trainer import PREFIX_CHECKPOINT_DIR, TRAINING_ARGS_NAME
+from transformers.trainer import PREFIX_CHECKPOINT_DIR, TRAINING_ARGS_NAME, TrainOutput
 from typing_extensions import override
 
 from robust_llm.debug_utils import assert_dicts_equal
@@ -75,7 +75,7 @@ class RLLMTrainer(Trainer):
         trial: Optional[dict[str, Any]] = None,
         ignore_keys_for_eval: Optional[list[str]] = None,
         **kwargs,
-    ):
+    ) -> TrainOutput:
         """Wrapper around HuggingFace Trainer.train that checks training args.
 
         Args:
@@ -101,7 +101,7 @@ class RLLMTrainer(Trainer):
                 torch.load(os.path.join(resume_from_checkpoint, TRAINING_ARGS_NAME)),
             )
 
-        super().train(
+        return super().train(
             resume_from_checkpoint=resume_from_checkpoint,
             trial=trial,
             ignore_keys_for_eval=ignore_keys_for_eval,
