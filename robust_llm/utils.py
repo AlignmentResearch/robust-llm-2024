@@ -18,6 +18,11 @@ from transformers import PretrainedConfig, PreTrainedTokenizerBase
 from transformers.modeling_outputs import SequenceClassifierOutput
 
 
+def maybe_make_deterministic(mode: bool, cublas_config: str) -> None:
+    torch.use_deterministic_algorithms(mode)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = cublas_config
+
+
 class LanguageModel(Protocol):
     """Protocol for a language model.
 

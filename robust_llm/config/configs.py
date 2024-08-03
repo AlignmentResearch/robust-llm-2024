@@ -33,6 +33,13 @@ class EnvironmentConfig:
         logging_filename: If set, logs will be saved to this file.
         allow_checkpointing: Whether to allow checkpointing during training and also
             attacks that support it.
+        deterministic: Whether to force use of deterministic CUDA algorithms at the
+            cost of performance.
+        cublas_config: The configuration string for cuBLAS, only used if
+            deterministic is True.
+            See https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility
+            for why this is necessary.
+
     """
 
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
@@ -41,6 +48,8 @@ class EnvironmentConfig:
     logging_level: int = logging.INFO
     logging_filename: str = "robust_llm.log"
     allow_checkpointing: bool = True
+    deterministic: bool = False
+    cublas_config: str = ":4096:8"
 
 
 @dataclass

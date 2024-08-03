@@ -11,12 +11,15 @@ from robust_llm.logging_utils import LoggingContext
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import AdversarialTraining, Training
-from robust_llm.utils import make_unique_name_to_save
+from robust_llm.utils import make_unique_name_to_save, maybe_make_deterministic
 
 
 def run_training_pipeline(args: ExperimentConfig) -> None:
     use_cpu = args.environment.device == "cpu"
     accelerator = Accelerator(cpu=use_cpu)
+    maybe_make_deterministic(
+        args.environment.deterministic, args.environment.cublas_config
+    )
 
     logging_context = LoggingContext(
         is_main_process=accelerator.is_main_process,

@@ -585,6 +585,10 @@ class WrappedModel(ABC):
         generation_config: transformers.GenerationConfig,
     ) -> torch.Tensor:
         """Call model.generate once (N.B. params must be all-gathered first)."""
+        is_deterministic = torch.are_deterministic_algorithms_enabled()
+        if is_deterministic:
+            # HF's generation does not have a deterministic implementation.
+            torch.use_deterministic_algorithms(False)
         self._set_seed()
         if input_ids.dim() == 1:
             input_ids = input_ids.unsqueeze(0)
@@ -603,6 +607,8 @@ class WrappedModel(ABC):
             synced_gpus=torch.distributed.is_initialized(),
         )
         assert isinstance(out, torch.Tensor)
+        if is_deterministic:
+            torch.use_deterministic_algorithms(True)
         return out
 
     def generate(

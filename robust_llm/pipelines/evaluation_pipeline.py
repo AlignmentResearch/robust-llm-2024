@@ -11,11 +11,15 @@ from robust_llm.models import WrappedModel
 from robust_llm.pipelines.utils import prepare_attack
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks import build_binary_scoring_callback
+from robust_llm.utils import maybe_make_deterministic
 
 
 def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
     assert args.evaluation is not None
     use_cpu = args.environment.device == "cpu"
+    maybe_make_deterministic(
+        args.environment.deterministic, args.environment.cublas_config
+    )
 
     accelerator = Accelerator(cpu=use_cpu)
 
