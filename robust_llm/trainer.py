@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import json
 import os
+import random
 import warnings
 from typing import TYPE_CHECKING, Any, Optional, Union
 
+import numpy as np
+
+from robust_llm import logger
 from robust_llm.callbacks import CustomLoggingWandbCallback
 from robust_llm.logging_utils import log_dataset_to_wandb
 from robust_llm.rllm_datasets.dataset_utils import cast_and_concatenate
+from robust_llm.utils import nested_list_to_tuple
 
 if TYPE_CHECKING:
     from robust_llm.training import AdversarialTraining
@@ -26,6 +32,10 @@ from typing_extensions import override
 
 from robust_llm.debug_utils import assert_dicts_equal
 from robust_llm.utils import BalancedSampler
+
+ADV_STATE_NAME = "adversarial_training_state.json"
+ADV_DATA_NAME = "adversarial_data.hf"
+ADV_FILES = (ADV_STATE_NAME, ADV_DATA_NAME)
 
 
 def assert_training_args_equal(
@@ -56,6 +66,7 @@ class RLLMTrainer(Trainer):
     def __init__(self, **trainer_kwargs):
         super().__init__(**trainer_kwargs)
         self._current_batch_size: int = -1
+        self.rng = np.random.default_rng(seed=self.args.seed)
 
     @override
     def training_step(  # type: ignore[misc]
@@ -126,7 +137,10 @@ class AdversarialTrainer(RLLMTrainer):
 
         # Will be set in add_new_adversarial_examples.
         # TODO (ian): avoid statefulness if possible
-        self.adversarial_dataset = Dataset.from_dict({})
+        self.adversarial_dataset = Dataset.from_dict(
+            {f: [] for f in self.train_dataset.features},
+            features=self.train_dataset.features,
+        )
 
     @override
     def get_train_dataloader(self):
@@ -211,11 +225,10 @@ class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
         control: TrainerControl,
         **kwargs,
     ) -> None:
-        # This is a bit wonky, since it'll keep updating the augmented train set
-        # and be evaluating on something new after the start of each adversarial
-        # training round
-        augmented_train_set = self.training.trainer.get_augmented_training_set()  # type: ignore  # noqa: E501
-        self.training.eval_rllm_dataset["augmented_train_set"] = augmented_train_set
+        assert isinstance(self.training.trainer, AdversarialTrainer)
+        self.training.eval_rllm_dataset["augmented_train_set"] = (  # type: ignore  # noqa: E501
+            self.training.trainer.train_dataset
+        )
 
 
 class AdversarialTrainerLoggingCallback(TrainerCallback):
@@ -232,22 +245,115 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
         **kwargs,
     ) -> None:
         if self.training.config.log_full_datasets_to_wandb:
-            assert self.training.trainer is not None
-            assert self.training.state is not None
+            assert isinstance(self.training.trainer, AdversarialTrainer)
 
-            train_dataset_plus_adv_examples = (
-                self.training.trainer.get_augmented_training_set()  # type: ignore
-            )
-
-            current_round = self.training.state.current_round
+            current_round = self.training.round
+            train_ds = self.training.trainer.train_dataset
             dataset_name = f"augmented_train_set_start_round_{current_round}"
-            log_dataset_to_wandb(train_dataset_plus_adv_examples, dataset_name)
+            log_dataset_to_wandb(train_ds, dataset_name)
             wandb.log(
-                {
-                    "misc/augmented_train_set_size": train_dataset_plus_adv_examples.num_rows  # noqa: E501
-                },
+                {"misc/augmented_train_set_size": train_ds.num_rows},  # noqa: E501
                 commit=False,
             )
+
+
+class AdversarialTrainingState:
+    """State for adversarial training, including the current round and RNG states.
+
+    This is useful for saving and loading the state of the adversarial training in
+    a way that can be resumed later.
+    """
+
+    def __init__(
+        self,
+        current_round: int,
+        rng: np.random.Generator,
+        adversarial_dataset: Dataset,
+        training_attack_rng: Optional[random.Random],
+        validation_attack_rng: Optional[random.Random],
+        total_flos: float = 0.0,
+    ) -> None:
+        self.rng = rng
+        self.current_round = current_round
+        self.adversarial_dataset = adversarial_dataset
+        self.training_attack_rng = training_attack_rng
+        self.validation_attack_rng = validation_attack_rng
+        self.total_flos = total_flos
+
+    def to_dict(self) -> dict:
+        return {
+            "rng": self.rng.bit_generator.state,
+            "current_round": self.current_round,
+            "total_flos": self.total_flos,
+            "training_attack_rng": (
+                self.training_attack_rng.getstate()
+                if self.training_attack_rng is not None
+                else None
+            ),
+            "validation_attack_rng": (
+                self.validation_attack_rng.getstate()
+                if self.validation_attack_rng is not None
+                else None
+            ),
+        }
+
+    def save(self, checkpoint_dir: str) -> None:
+        json.dump(
+            obj=self.to_dict(),
+            fp=open(os.path.join(checkpoint_dir, ADV_STATE_NAME), "w"),
+        )
+        self.adversarial_dataset.save_to_disk(
+            os.path.join(checkpoint_dir, ADV_DATA_NAME)
+        )
+
+    @classmethod
+    def load(cls, checkpoint_dir: str) -> "AdversarialTrainingState":
+        state_path = os.path.join(checkpoint_dir, ADV_STATE_NAME)
+        with open(state_path, "r") as f:
+            state = json.load(f)
+            rng = np.random.default_rng()
+            rng.bit_generator.state = state["rng"]
+            current_round = state["current_round"]
+            total_flos = state["total_flos"]
+            if state["training_attack_rng"] is not None:
+                training_attack_rng = random.Random()
+                training_attack_rng.setstate(
+                    nested_list_to_tuple(state["training_attack_rng"])
+                )
+            else:
+                training_attack_rng = None
+            if state["validation_attack_rng"] is not None:
+                validation_attack_rng = random.Random()
+                validation_attack_rng.setstate(
+                    nested_list_to_tuple(state["validation_attack_rng"])
+                )
+            else:
+                validation_attack_rng = None
+        adversarial_dataset = Dataset.load_from_disk(
+            os.path.join(checkpoint_dir, ADV_DATA_NAME)
+        )
+        return cls(
+            current_round=current_round,
+            total_flos=total_flos,
+            rng=rng,
+            adversarial_dataset=adversarial_dataset,
+            training_attack_rng=training_attack_rng,
+            validation_attack_rng=validation_attack_rng,
+        )
+
+    def apply_to_training(self, training: AdversarialTraining) -> int:
+        logger.info(
+            f"Resuming adversarial training at round {self.current_round} "
+            f"with {len(self.adversarial_dataset)} adversarial examples."
+        )
+        assert isinstance(training.trainer, AdversarialTrainer)
+        training.trainer.rng = self.rng
+        training.trainer.adversarial_dataset = self.adversarial_dataset
+        if self.training_attack_rng is not None:
+            setattr(training.training_attack, "rng", self.training_attack_rng)
+        if self.validation_attack_rng is not None:
+            setattr(training.validation_attack, "rng", self.validation_attack_rng)
+        return self.current_round
 
 
 class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
@@ -271,11 +377,18 @@ class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
         **kwargs,
     ):
         """Save the full AdversarialTrainingState alongside HF trainer state."""
-        assert self.training.trainer is not None
-        assert self.training.state is not None
+        assert isinstance(self.training.trainer, AdversarialTrainer)
         checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{state.global_step}"
         # We set trial to None as this is a HuggingFace argument for
         # hyperparameter search, which we are not using.
         run_dir = self.training.trainer._get_output_dir(trial=None)
         output_dir = os.path.join(run_dir, checkpoint_folder)
-        self.training.state.save(output_dir)
+        adv_state = AdversarialTrainingState(
+            current_round=self.training.round,
+            total_flos=state.total_flos,
+            rng=self.training.trainer.rng,
+            adversarial_dataset=self.training.trainer.adversarial_dataset,
+            training_attack_rng=getattr(self.training.training_attack, "rng"),
+            validation_attack_rng=getattr(self.training.validation_attack, "rng"),
+        )
+        adv_state.save(output_dir)

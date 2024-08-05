@@ -1,8 +1,6 @@
 import dataclasses
 import glob
-import json
 import os
-import random
 import warnings
 from pathlib import Path
 from typing import Optional
@@ -47,9 +45,11 @@ from robust_llm.scoring_callbacks import (
     build_binary_scoring_callback,
 )
 from robust_llm.trainer import (
+    ADV_FILES,
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,
     AdversarialTrainerLoggingCallback,
+    AdversarialTrainingState,
     AdversarialTrainingStateCallback,
     RLLMTrainer,
 )
@@ -62,15 +62,6 @@ CORE_CHECKPOINT_FILES = (
     TRAINER_STATE_NAME,
     TRAINING_ARGS_NAME,
 )
-
-ADV_STATE_NAME = "adversarial_training_state.json"
-
-
-def nested_list_to_tuple(nested_list: list) -> tuple:
-    return tuple(
-        nested_list_to_tuple(sub_list) if isinstance(sub_list, list) else sub_list
-        for sub_list in nested_list
-    )
 
 
 @dataclasses.dataclass
@@ -325,67 +316,6 @@ class Training:
         return f"trainer/{self.run_name}_{self.model_name_to_save}"
 
 
-class AdversarialTrainingState:
-    """State for adversarial training, including the current round and RNG states.
-
-    This is useful for saving and loading the state of the adversarial training in
-    a way that can be resumed later.
-    """
-
-    def __init__(
-        self,
-        training_attack_rng: Optional[random.Random],
-        validation_attack_rng: Optional[random.Random],
-        current_round: int = 0,
-        total_flos: int = 0,
-    ) -> None:
-        self.current_round = current_round
-        self.training_attack_rng = training_attack_rng
-        self.validation_attack_rng = validation_attack_rng
-        self.total_flos = total_flos
-
-    @property
-    def report_to(self) -> None | str | list[str]:
-        return None  # This resolves to 'all' in the training args
-
-    def to_dict(self) -> dict:
-        return {
-            "current_round": self.current_round,
-            "total_flos": self.total_flos,
-            "training_attack_rng": (
-                self.training_attack_rng.getstate()
-                if self.training_attack_rng is not None
-                else None
-            ),
-            "validation_attack_rng": (
-                self.validation_attack_rng.getstate()
-                if self.validation_attack_rng is not None
-                else None
-            ),
-        }
-
-    def save(self, checkpoint_dir: str) -> None:
-        json.dump(
-            obj=self.to_dict(),
-            fp=open(os.path.join(checkpoint_dir, ADV_STATE_NAME), "w"),
-        )
-
-    def load(self, checkpoint_dir: str) -> None:
-        output_path = os.path.join(checkpoint_dir, ADV_STATE_NAME)
-        with open(output_path, "r") as f:
-            state = json.load(f)
-            self.current_round = state["current_round"]
-            self.total_flos = state["total_flos"]
-            if self.training_attack_rng is not None:
-                self.training_attack_rng.setstate(
-                    nested_list_to_tuple(state["training_attack_rng"])
-                )
-            if self.validation_attack_rng is not None:
-                self.validation_attack_rng.setstate(
-                    nested_list_to_tuple(state["validation_attack_rng"])
-                )
-
-
 @dataclasses.dataclass(kw_only=True)
 # TODO: make sure kw_only is not breaking anything.
 # I put it there because of this:
@@ -422,8 +352,10 @@ class AdversarialTraining(Training):
 
         assert self.config.adversarial is not None
         self.adversarial_config = self.config.adversarial
-
-        self.state = None
+        self.round = 0
+        self.total_flos = 0.0
+        self.training_attack = None
+        self.validation_attack = None
 
     @property
     def checkpoint_files(self) -> tuple[str, ...]:
@@ -436,7 +368,7 @@ class AdversarialTraining(Training):
                     else WEIGHTS_NAME
                 ),
             )
-            + (ADV_STATE_NAME,)
+            + ADV_FILES
         )
 
     def get_last_checkpoint(self) -> str | None:
@@ -539,21 +471,17 @@ class AdversarialTraining(Training):
         assert isinstance(adversarial_trainer, AdversarialTrainer)
 
         # Prepare attacks
-        training_attack = create_attack(
+        self.training_attack = create_attack(
             attack_config=self.training_attack_config,
             run_name=self.run_name + "_training_attack",
             logging_name="training_attack",
             victim=self.victim,
         )
-        validation_attack = create_attack(
+        self.validation_attack = create_attack(
             attack_config=self.validation_attack_config,
             run_name=self.run_name + "_validation_attack",
             logging_name="validation_attack",
             victim=self.victim,
-        )
-        self.state = AdversarialTrainingState(
-            training_attack_rng=getattr(training_attack, "rng", None),
-            validation_attack_rng=getattr(validation_attack, "rng", None),
         )
 
         if adversarial_trainer.is_world_process_zero():
@@ -563,57 +491,58 @@ class AdversarialTraining(Training):
                 self.log_datasets()
 
         checkpoint = self.get_last_checkpoint()
-        if checkpoint is not None and training_attack.REQUIRES_TRAINING:
+        if checkpoint is not None and self.training_attack.REQUIRES_TRAINING:
             logger.warning(
                 "Resumption not yet supported for attacks that require training. "
             )
             checkpoint = None
         if checkpoint is not None:
             logger.info(f"Loading adversarial state from {checkpoint}")
-            self.state.load(checkpoint)
-            starting_round = self.state.current_round
+            state = AdversarialTrainingState.load(checkpoint)
+            starting_round = state.apply_to_training(self)
             logger.info(f"Resuming from round {starting_round}")
         else:
             starting_round = 0
 
         # Run the adversarial training loop
         table = WandbTable("adversarial_eval/table")
-        for round in range(starting_round, self.num_adversarial_training_rounds):
-            logger.info("Adversarial training round %s started ", round)
+        for self.round in range(starting_round, self.num_adversarial_training_rounds):
+            logger.info("Adversarial training round %s started ", self.round)
             self._log_debug_info()
 
-            self.state.current_round = round
-            adversarial_trainer.args.output_dir = self.output_dir + f"/round-{round}"
+            adversarial_trainer.args.output_dir = (
+                self.output_dir + f"/round-{self.round}"
+            )
             logger.info(
                 "Setting HF Trainer output dir (used for saving checkpoints) to "
                 + adversarial_trainer.args.output_dir
             )
             # Can be useful for x axis in plots
-            wandb.log({"adversarial_training_round": round}, commit=False)
+            wandb.log({"adversarial_training_round": self.round}, commit=False)
 
             # Train for "one round" (i.e., num_train_epochs)
             # on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
-            if round == 0 and self.skip_first_training_round:
+            if self.round == 0 and self.skip_first_training_round:
                 logger.info("Skipping first round of training...")
             else:
-                logger.info("Victim started training in round %s", round)
+                logger.info("Victim started training in round %s", self.round)
                 self._log_debug_info()
 
                 train_out = adversarial_trainer.train(
                     resume_from_checkpoint=(
                         checkpoint
                         if self.environment_config.allow_checkpointing
-                        and (round == starting_round)
+                        and (self.round == starting_round)
                         else False
                     )
                 )
-                self.state.total_flos += train_out.metrics["total_flos"]
-                logger.info("Victim finished training in round %s ", round)
+                logger.info("Victim finished training in round %s ", self.round)
+                self.total_flos += train_out.metrics["total_flos"]
                 self._log_debug_info()
                 wandb.log(
                     {
-                        "train/total_flos": self.state.total_flos,
+                        "train/total_flos": self.total_flos,
                     },
                     commit=False,
                 )
@@ -624,32 +553,33 @@ class AdversarialTraining(Training):
 
             # Train the train/validation attacks if they need training.
             logger.info(
-                "Adversary (training_attack) started training in round %s ", round
+                "Adversary (training_attack) started training in round %s ", self.round
             )
             self._log_debug_info()
             _maybe_train_attack(
-                attack=training_attack,
+                attack=self.training_attack,
                 dataset=self.train_rllm_dataset,
                 train_or_validation="train",
-                round=round,
+                round=self.round,
             )
             logger.info(
-                "Adversary (training_attack) finished training in round %s ", round
+                "Adversary (training_attack) finished training in round %s ", self.round
             )
             self._log_debug_info()
 
             logger.info(
-                "Adversary (validation_attack) started training in round %s", round
+                "Adversary (validation_attack) started training in round %s", self.round
             )
             self._log_debug_info()
             _maybe_train_attack(
-                attack=validation_attack,
+                attack=self.validation_attack,
                 dataset=self.eval_rllm_dataset["validation"],
                 train_or_validation="validation",
-                round=round,
+                round=self.round,
             )
             logger.info(
-                "Adversary (validation_attack) finished training in round %s ", round
+                "Adversary (validation_attack) finished training in round %s ",
+                self.round,
             )
 
             # Perform adversarial evaluation every round
@@ -657,10 +587,10 @@ class AdversarialTraining(Training):
             round_metrics = do_adversarial_evaluation(
                 victim=self.victim,
                 dataset=self.eval_rllm_dataset["validation"],
-                attack=validation_attack,
+                attack=self.validation_attack,
                 final_success_binary_callback=self.victim_success_binary_callback,
                 num_examples_to_log_detailed_info=self.evaluation_config.num_examples_to_log_detailed_info,  # noqa: E501
-                adv_training_round=round,
+                adv_training_round=self.round,
                 victim_training_step_count=victim_log_counter.step_count,
                 victim_training_datapoint_count=victim_log_counter.datapoint_count,
                 global_step_count=victim_log_counter.root.step_count,
@@ -683,10 +613,10 @@ class AdversarialTraining(Training):
                 )
                 break
 
-            if self.state.total_flos > self.stopping_flops:
+            if self.total_flos > self.stopping_flops:
                 logger.info(
                     f"Stopping adversarial training at round {round} because total"
-                    f"FLOPs {self.state.total_flos:.2E} is above the stopping "
+                    f"FLOPs {self.total_flos:.2E} is above the stopping "
                     f"threshold {self.stopping_flops:.2E}"
                 )
                 break
@@ -694,7 +624,7 @@ class AdversarialTraining(Training):
             # Now generate adversarial examples using the training attack; possibly
             # select only successful ones; and add them to the training set so that they
             # are used in the next round of training.
-            if round < self.num_adversarial_training_rounds - 1:
+            if self.round < self.num_adversarial_training_rounds - 1:
                 assert (
                     len(self.train_rllm_dataset.ds)
                     >= self.num_examples_to_generate_each_round
@@ -703,7 +633,7 @@ class AdversarialTraining(Training):
                     self.num_examples_to_generate_each_round
                 )
                 # NOTE: .get_attacked_dataset should relabel the examples
-                attacked_dataset, _ = training_attack.get_attacked_dataset(
+                attacked_dataset, _ = self.training_attack.get_attacked_dataset(
                     input_rllm_dataset,
                     resume_from_checkpoint=False,
                 )
@@ -739,12 +669,12 @@ class AdversarialTraining(Training):
                 )
                 log_dataset_to_wandb(
                     dataset=new_adv_examples.ds,
-                    dataset_name=f"data/all_new_adv_examples_r_{round}",
+                    dataset_name=f"data/all_new_adv_examples_r_{self.round}",
                     max_n_examples=self.num_examples_to_log_to_wandb_each_round,
                 )
                 log_dataset_to_wandb(
                     dataset=selected_new_adv_examples.ds,
-                    dataset_name=f"data/selected_new_adv_examples_r_{round}",
+                    dataset_name=f"data/selected_new_adv_examples_r_{self.round}",
                     max_n_examples=self.num_examples_to_log_to_wandb_each_round,
                 )
 
@@ -754,12 +684,12 @@ class AdversarialTraining(Training):
                     selected_new_adv_examples.for_hf_trainer()
                 )
 
-            logger.info("Adversarial training round %s finished", round)
+            logger.info("Adversarial training round %s finished", self.round)
             self._log_debug_info()
 
             self.maybe_save_model_to_path_or_hf(
                 path_prefix_or_hf=self.config.model_save_path_prefix_or_hf,
-                adv_tr_round=round,
+                adv_tr_round=self.round,
             )
         table.save()
 

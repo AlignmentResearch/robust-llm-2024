@@ -4,7 +4,7 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 from transformers import AutoTokenizer
 
-from robust_llm.utils import BalancedSampler, is_correctly_padded
+from robust_llm.utils import BalancedSampler, is_correctly_padded, nested_list_to_tuple
 
 
 @pytest.fixture(scope="module")
@@ -70,3 +70,8 @@ def test_is_correctly_padded_false():
     assert not is_correctly_padded(right_mask, "left")
     assert not is_correctly_padded(bad_mask, "right")
     assert not is_correctly_padded(bad_mask, "left")
+
+
+def test_nested_list_to_tuple():
+    nested = [[1, 2], [3, 4]]
+    assert nested_list_to_tuple(nested) == ((1, 2), (3, 4))

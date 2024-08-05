@@ -1,6 +1,9 @@
+import random
 from typing import cast
 
+import numpy as np
 from accelerate import Accelerator
+from datasets import Dataset
 from transformers import AutoTokenizer, GPTNeoXPreTrainedModel
 
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
@@ -19,6 +22,7 @@ from robust_llm.models.model_utils import InferenceType
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks import build_binary_scoring_callback
+from robust_llm.trainer import AdversarialTrainingState
 from robust_llm.training import _get_only_data_with_incorrect_preds
 from robust_llm.utils import FakeClassifierWithPositiveList
 
@@ -139,3 +143,33 @@ def test_adv_training_pipeline_doesnt_crash():
         ),
     )
     run_training_pipeline(config)
+
+
+def test_adv_training_state():
+    state = AdversarialTrainingState(
+        current_round=7,
+        rng=np.random.default_rng(42),
+        adversarial_dataset=Dataset.from_dict(
+            {
+                "text": ["a", "b", "c"],
+                "clf_label": [0, 1, 0],
+            }
+        ),
+        training_attack_rng=random.Random(4),
+        validation_attack_rng=random.Random(2),
+    )
+    state.save("/tmp/")
+    loaded = AdversarialTrainingState.load("/tmp/")
+    assert loaded.current_round == state.current_round
+    assert loaded.adversarial_dataset["text"] == state.adversarial_dataset["text"]
+    assert (
+        loaded.adversarial_dataset["clf_label"]
+        == state.adversarial_dataset["clf_label"]
+    )
+    assert state.rng.random() == loaded.rng.random()
+    assert state.training_attack_rng is not None
+    assert state.validation_attack_rng is not None
+    assert loaded.training_attack_rng is not None
+    assert loaded.validation_attack_rng is not None
+    assert state.training_attack_rng.random() == loaded.training_attack_rng.random()
+    assert state.validation_attack_rng.random() == loaded.validation_attack_rng.random()

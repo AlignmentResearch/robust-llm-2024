@@ -18,6 +18,13 @@ from transformers import PretrainedConfig, PreTrainedTokenizerBase
 from transformers.modeling_outputs import SequenceClassifierOutput
 
 
+def nested_list_to_tuple(nested_list: list) -> tuple:
+    return tuple(
+        nested_list_to_tuple(sub_list) if isinstance(sub_list, list) else sub_list
+        for sub_list in nested_list
+    )
+
+
 def maybe_make_deterministic(mode: bool, cublas_config: str) -> None:
     torch.use_deterministic_algorithms(mode)
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = cublas_config
