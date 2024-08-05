@@ -4,6 +4,7 @@ from typing import cast
 import numpy as np
 from accelerate import Accelerator
 from datasets import Dataset
+from omegaconf import OmegaConf
 from transformers import AutoTokenizer, GPTNeoXPreTrainedModel
 
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
@@ -142,7 +143,9 @@ def test_adv_training_pipeline_doesnt_crash():
             ),
         ),
     )
-    run_training_pipeline(config)
+    interpolated = OmegaConf.to_object(OmegaConf.structured(config))
+    assert isinstance(interpolated, ExperimentConfig)
+    run_training_pipeline(interpolated)
 
 
 def test_adv_training_state():

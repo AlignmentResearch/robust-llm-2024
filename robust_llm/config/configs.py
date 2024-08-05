@@ -4,7 +4,7 @@ from typing import Optional
 
 import torch
 from hydra.core.config_store import ConfigStore
-from omegaconf import MISSING
+from omegaconf import MISSING, SI
 
 from robust_llm.config.attack_configs import AttackConfig
 from robust_llm.config.callback_configs import CallbackConfig
@@ -74,6 +74,11 @@ class AdversarialTrainingConfig:
             alternately from the original and adversarial datasets.
         training_attack (AttackConfig):
             Config for the attack to use in adversarial training.
+        max_adv_data_proportion (float):
+            The maximum percentage of the training data which be made up of adversarial
+            examples.
+        max_augmented_data_size (int):
+            The maximum number of datapoints to use for adversarial training.
         stopping_attack_success_rate (float):
             The attack success rate on the validation dataset) at which to stop
             adversarial training.
@@ -88,6 +93,8 @@ class AdversarialTrainingConfig:
     skip_first_training_round: bool = False
     use_balanced_sampling: bool = False
     training_attack: AttackConfig = field(default_factory=AttackConfig)
+    max_adv_data_proportion: float = 0.5
+    max_augmented_data_size: int = SI("${dataset.n_train}")
     stopping_attack_success_rate: float = 0.0
     stopping_flops: float = float("inf")
 

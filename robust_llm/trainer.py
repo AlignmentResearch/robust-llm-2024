@@ -123,10 +123,19 @@ class RLLMTrainer(Trainer):
 class AdversarialTrainer(RLLMTrainer):
     train_dataset: Dataset
 
-    def __init__(self, use_balanced_sampling: bool, **trainer_kwargs):
+    def __init__(
+        self,
+        use_balanced_sampling: bool,
+        max_adv_data_proportion: float,
+        max_augmented_data_size: int,
+        **trainer_kwargs,
+    ):
         super().__init__(**trainer_kwargs)
 
         self.use_balanced_sampling = use_balanced_sampling
+        self.max_adv_data_proportion = max_adv_data_proportion
+        self.max_augmented_data_size = max_augmented_data_size
+        self.rng = np.random.default_rng(seed=self.args.seed)
 
         # text_chunked is not needed for training.
         # Remove it so that it's possible to merge datasets later on.
@@ -185,15 +194,35 @@ class AdversarialTrainer(RLLMTrainer):
         concatenate function here to make sure the features line up (since
         otherwise we'd have a mismatch between ClassLabel and Value(int)).
         """
-        if len(self.adversarial_dataset) > 0:
-            train_dataset_plus_adv_examples = cast_and_concatenate(
-                self.regular_dataset,
-                self.adversarial_dataset,
-            )
-        else:
-            train_dataset_plus_adv_examples = self.regular_dataset
-
-        return train_dataset_plus_adv_examples  # type: ignore
+        if len(self.adversarial_dataset) == 0:
+            return self.regular_dataset
+        n_train = min(
+            len(self.regular_dataset) + len(self.adversarial_dataset),
+            self.max_augmented_data_size,
+        )
+        n_adv = min(
+            int(n_train * self.max_adv_data_proportion),
+            len(self.adversarial_dataset),
+        )
+        n_clean = n_train - n_adv
+        clean_indices = self.rng.choice(
+            len(self.regular_dataset),
+            size=n_clean,
+            replace=False,
+        )
+        adv_indices = self.rng.choice(
+            len(self.adversarial_dataset),
+            size=n_adv,
+            replace=False,
+        )
+        clean_data = self.regular_dataset.select(clean_indices)
+        adv_data = self.adversarial_dataset.select(adv_indices)
+        train_dataset_plus_adv_examples = cast_and_concatenate(
+            clean_data,
+            adv_data,
+        )
+        assert len(train_dataset_plus_adv_examples) == n_train
+        return train_dataset_plus_adv_examples
 
     def add_new_adversarial_examples(self, new_examples: Dataset) -> None:
         """Add new adversarial examples to the adversarial dataset.

@@ -428,6 +428,14 @@ class AdversarialTraining(Training):
         return self.adversarial_config.only_add_successful_adversarial_examples
 
     @property
+    def max_adv_data_proportion(self) -> float:
+        return self.adversarial_config.max_adv_data_proportion
+
+    @property
+    def max_augmented_data_size(self) -> int:
+        return self.adversarial_config.max_augmented_data_size
+
+    @property
     def stopping_attack_success_rate(self) -> float:
         return self.adversarial_config.stopping_attack_success_rate
 
@@ -439,6 +447,8 @@ class AdversarialTraining(Training):
     def setup_trainer(self) -> AdversarialTrainer:
         self.trainer = AdversarialTrainer(
             use_balanced_sampling=self.adv_use_balanced_sampling,
+            max_adv_data_proportion=self.max_adv_data_proportion,
+            max_augmented_data_size=self.max_augmented_data_size,
             model=self.victim.model,
             args=self.training_arguments,
             train_dataset=self.hf_train,
