@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 from datasets import ClassLabel
 
@@ -73,9 +74,20 @@ def test_tokenization_and_subset(clf_dataset: RLLMDataset, tokenizer):
 
     # Check that the tokenized dataset has the right keys
     assert {"input_ids", "attention_mask"} <= set(tokenized_dataset.ds[0].keys())
-    smaller_dataset = tokenized_dataset.get_random_subset(2)
+    smaller_dataset = tokenized_dataset.get_random_subset(2, seed=42)
     assert len(smaller_dataset) == 2
     assert smaller_dataset.is_tokenized
+
+    smallest_dataset = tokenized_dataset.get_random_subset(
+        1, generator=np.random.default_rng(42)
+    )
+    assert len(smallest_dataset) == 1
+    assert smallest_dataset.is_tokenized
+
+    with pytest.raises(AssertionError):
+        tokenized_dataset.get_random_subset(
+            2, seed=42, generator=np.random.default_rng(42)
+        )
 
 
 def test_update_example_based_on_text(clf_dataset: RLLMDataset):

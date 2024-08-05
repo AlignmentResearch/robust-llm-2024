@@ -6,6 +6,7 @@ from collections.abc import Iterable, Sequence
 from typing import Any, TypeVar, overload
 
 import datasets
+import numpy as np
 import semver
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
@@ -325,10 +326,17 @@ class RLLMDataset(ABC):
             )
         return ds
 
-    def get_random_subset(self: D, n: int, seed: int | None = None) -> D:
+    def get_random_subset(
+        self: D,
+        n: int,
+        seed: int | None = None,
+        generator: np.random.Generator | None = None,
+    ) -> D:
         """Return an RLLMDataset with a random subset of the original dataset."""
-
-        new_ds = self.ds.shuffle(seed=seed).select(range(n))
+        assert (seed is None) != (
+            generator is None
+        ), "Exactly one of {seed, generator} must be provided"
+        new_ds = self.ds.shuffle(seed=seed, generator=generator).select(range(n))
         return self.with_new_ds(new_ds)
 
     def get_subset(self: D, indices: Iterable[Any]) -> D:

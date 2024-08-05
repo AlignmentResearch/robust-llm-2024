@@ -352,6 +352,8 @@ class AdversarialTraining(Training):
 
         assert self.config.adversarial is not None
         self.adversarial_config = self.config.adversarial
+
+        self.rng = np.random.default_rng(self.config.seed)
         self.round = 0
         self.total_flos = 0.0
         self.training_attack = None
@@ -640,7 +642,8 @@ class AdversarialTraining(Training):
                     >= self.num_examples_to_generate_each_round
                 )
                 input_rllm_dataset = self.train_rllm_dataset.get_random_subset(
-                    self.num_examples_to_generate_each_round
+                    self.num_examples_to_generate_each_round,
+                    generator=self.rng,
                 )
                 # NOTE: .get_attacked_dataset should relabel the examples
                 attacked_dataset, _ = self.training_attack.get_attacked_dataset(
@@ -701,6 +704,7 @@ class AdversarialTraining(Training):
                 path_prefix_or_hf=self.config.model_save_path_prefix_or_hf,
                 adv_tr_round=self.round,
             )
+
         table.save()
 
     def _log_debug_info(self):
