@@ -75,10 +75,12 @@ class AdversarialTrainingConfig:
         training_attack (AttackConfig):
             Config for the attack to use in adversarial training.
         max_adv_data_proportion (float):
-            The maximum percentage of the training data which be made up of adversarial
+            The maximum percentage of the training data made up of adversarial
             examples.
         max_augmented_data_size (int):
             The maximum number of datapoints to use for adversarial training.
+        sampling_decay (float):
+            The decay factor for the sampling probability of adversarial examples.
         stopping_attack_success_rate (float):
             The attack success rate on the validation dataset) at which to stop
             adversarial training.
@@ -95,6 +97,7 @@ class AdversarialTrainingConfig:
     training_attack: AttackConfig = field(default_factory=AttackConfig)
     max_adv_data_proportion: float = 0.5
     max_augmented_data_size: int = SI("${dataset.n_train}")
+    sampling_decay: float = 0.0
     stopping_attack_success_rate: float = 0.0
     stopping_flops: float = float("inf")
 

@@ -438,6 +438,10 @@ class AdversarialTraining(Training):
         return self.adversarial_config.max_augmented_data_size
 
     @property
+    def sampling_decay(self) -> float:
+        return self.adversarial_config.sampling_decay
+
+    @property
     def stopping_attack_success_rate(self) -> float:
         return self.adversarial_config.stopping_attack_success_rate
 
@@ -451,6 +455,7 @@ class AdversarialTraining(Training):
             use_balanced_sampling=self.adv_use_balanced_sampling,
             max_adv_data_proportion=self.max_adv_data_proportion,
             max_augmented_data_size=self.max_augmented_data_size,
+            sampling_decay=self.sampling_decay,
             model=self.victim.model,
             args=self.training_arguments,
             train_dataset=self.hf_train,

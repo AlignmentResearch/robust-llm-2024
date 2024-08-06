@@ -128,6 +128,7 @@ class AdversarialTrainer(RLLMTrainer):
         use_balanced_sampling: bool,
         max_adv_data_proportion: float,
         max_augmented_data_size: int,
+        sampling_decay: float,
         **trainer_kwargs,
     ):
         super().__init__(**trainer_kwargs)
@@ -135,6 +136,7 @@ class AdversarialTrainer(RLLMTrainer):
         self.use_balanced_sampling = use_balanced_sampling
         self.max_adv_data_proportion = max_adv_data_proportion
         self.max_augmented_data_size = max_augmented_data_size
+        self.sampling_decay = sampling_decay
         self.rng = np.random.default_rng(seed=self.args.seed)
 
         # text_chunked is not needed for training.
@@ -210,10 +212,15 @@ class AdversarialTrainer(RLLMTrainer):
             size=n_clean,
             replace=False,
         )
+        sampling_weights = np.exp(
+            self.sampling_decay * np.arange(len(self.adversarial_dataset))
+        )
+        sampling_probs = sampling_weights / sampling_weights.sum()
         adv_indices = self.rng.choice(
             len(self.adversarial_dataset),
             size=n_adv,
             replace=False,
+            p=sampling_probs,
         )
         clean_data = self.regular_dataset.select(clean_indices)
         adv_data = self.adversarial_dataset.select(adv_indices)
