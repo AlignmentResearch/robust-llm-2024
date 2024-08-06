@@ -215,7 +215,7 @@ class LoggingContext:
         self.logger.propagate = False
         self.logger.setLevel(logging.DEBUG)
         formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            "%(process)d - %(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
 
         # Create console handler which logs at the configured level

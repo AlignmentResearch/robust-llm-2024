@@ -118,12 +118,12 @@ def create_job_for_multiple_runs(
         if len(runs) == 1
         else f"rllm-{name[:16]}-{index}-{index+len(runs)-1}"
     )
+    k8s_job_name = k8s_job_name.lower()  # K8s requires lowercase names
 
     single_commands = []
     for i, run in enumerate(runs):
         aux_args = _prepare_override_args(run.override_args)
         split_command = [
-            "PYTHONPATH=.",
             *run.base_command.split(" "),
             run.script_path,
             f"+experiment={run.hydra_config}",
@@ -131,8 +131,12 @@ def create_job_for_multiple_runs(
             *aux_args,
         ]
         single_commands.append(shlex.join(split_command))
-    single_commands.append("wait")
-    command = "(" + " & ".join(single_commands) + ")"
+    # Use \0 separator instead of \n (with --null) as adding newlines will
+    # break when integrated into the K8s YAML template.
+    concat_commands = "\\0".join(single_commands)
+    num_jobs = len(single_commands)
+    # Uses GNU parallel to run all jobs simultaneously
+    command = f'echo -ne "{concat_commands}" | parallel --null --jobs {num_jobs}'
 
     # Currently, we keep too much info in the FlamingoRun, including info that should be
     # shared across all runs. Hence, we check below that it is indeed the same.

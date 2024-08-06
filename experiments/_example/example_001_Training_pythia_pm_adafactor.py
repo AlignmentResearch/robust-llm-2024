@@ -6,8 +6,8 @@ EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
 HYDRA_CONFIG = "Training/imdb"
 
 MODEL_CONFIGS_AND_FINETUNED_TARGET_NAMES = [
-    ("pythia-14m", "pythia-tt-14m-ian-ada"),
-    ("pythia-31m", "pythia-tt-31m-ian-ada"),
+    ("EleutherAI/pythia-14m", "pythia-tt-14m-ian-ada"),
+    ("EleutherAI/pythia-31m", "pythia-tt-31m-ian-ada"),
 ]
 OVERRIDE_ARGS_LIST = [
     {
@@ -16,7 +16,7 @@ OVERRIDE_ARGS_LIST = [
         "training.optimizer": "adafactor",
         "training.save_strategy": "no",
         "training.gradient_checkpointing": True,
-        "training.log_datasets_to_wandb": True,
+        "training.log_full_datasets_to_wandb": True,
     }
     for (model_config, target_model_name) in MODEL_CONFIGS_AND_FINETUNED_TARGET_NAMES
 ]
@@ -28,5 +28,6 @@ if __name__ == "__main__":
         OVERRIDE_ARGS_LIST,
         memory="60G",
         priority="normal-batch",
+        # Set to False to actually run this.
         dry_run=True,
     )

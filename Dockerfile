@@ -29,7 +29,7 @@ FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime AS dev
 ARG DEBIAN_FRONTEND=noninteractive
 # Install some useful packages
 RUN apt update \
-    && apt install -y rsync git vim tini wget curl inotify-tools libsndfile1-dev tesseract-ocr espeak-ng python3 python3-pip ffmpeg zstd gcc \
+    && apt install -y rsync git parallel vim tini wget curl inotify-tools libsndfile1-dev tesseract-ocr espeak-ng python3 python3-pip ffmpeg zstd gcc \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m pip install --upgrade --no-cache-dir pip requests
 
@@ -39,13 +39,20 @@ ENV PATH="/home/coder/.local/bin:${PATH}"
 RUN code-server --install-extension ms-python.python
 RUN code-server --install-extension ms-pyright.pyright
 
+# Copy the venv with built packages from compile stage
 COPY --from=compile /usr/local/venv /usr/local/venv
 ENV PATH="/usr/local/venv/bin:$PATH"
 
-COPY pyproject.toml /workspace/
+COPY pyproject.toml /workspace/robust-llm/
 WORKDIR /workspace
 
-RUN mkdir robust_llm \
-    && python3 -m pip install -e ".[dev]" \
-    && python3 -m pip uninstall -y robust_llm \
-    && rmdir robust_llm && rm pyproject.toml
+# Install in developer mode with a mock dependency-only project.
+# This installs dependencies, and makes `robust_llm` importable from
+# `/workspace/robust-llm`. We then remove that directory: the user
+# needs to install a real version of the code (e.g. by Git cloning it).
+RUN cd robust-llm \
+    && mkdir robust_llm \
+    && touch robust_llm/__init__.py \
+    && python3 -m pip install --no-cache-dir -e ".[dev]" \
+    && cd .. \
+    && rm -rf robust-llm

@@ -77,7 +77,19 @@ spec:
                 secretKeyRef:
                   name: huggingface
                   key: token
+      # Never restart the pod. If the job retries, it will do so in a new pod.
       restartPolicy: Never
       imagePullSecrets:
         - name: docker
-  backoffLimit: 0 # if the job fails, don't retry
+  # If the job fails, retry up to 3 times with a new pod.
+  # Job failures can happen due to transient errors such as outage of external services
+  # we pull/push data to (HuggingFace, W&B, ...).
+  backoffLimit: 3
+  # Don't count pod disruption such as preemption towards backoff target.
+  # These are dependent on cluster weather, and not our code. See
+  # https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-failure-policy
+  podFailurePolicy:
+    rules:
+    - action: Ignore
+      onPodConditions:
+      - type: DisruptionTarget
