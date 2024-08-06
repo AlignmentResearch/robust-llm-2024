@@ -7,6 +7,7 @@ from robust_llm.plotting_utils.constants import FINAL_PYTHIA_CHECKPOINT
 from robust_llm.plotting_utils.tools import (
     _get_num_params_from_name,
     _get_pretraining_fraction,
+    extract_size_from_model_name,
     get_metrics_adv_training,
     postprocess_data,
     prepare_adv_training_data,
@@ -64,3 +65,10 @@ def test_prepare_adv_training_data(mock_runs, sample_data):
     result = prepare_adv_training_data("test_name", ["summary_key"], ["metric_1"])
     assert not result.empty
     assert "metric_1" in result.columns
+
+
+def test_extract_size_from_model_name():
+    assert extract_size_from_model_name("Qwen/Qwen1.5-0.5B-Chat") == 500_000_000
+    assert extract_size_from_model_name("Qwen/Qwen1.5-1.8B-Chat") == 1_800_000_000
+    assert extract_size_from_model_name("meta-llama/Llama-2-7b-hf") == 7_000_000_000
+    assert extract_size_from_model_name("EleutherAI/pythia-14m") == 14_000_000

@@ -1,3 +1,4 @@
+import re
 from copy import deepcopy
 from pathlib import Path
 
@@ -19,6 +20,27 @@ from robust_llm.plotting_utils.constants import (
 
 wandb.login()
 API = wandb.Api(timeout=60)
+
+
+def extract_size_from_model_name(name: str | None) -> int | None:
+    if name is None:
+        return None
+    name = name.lower()
+    pattern = r"-(\d+(\.\d+)?)([kmb])(-|$)"
+    match = re.search(pattern, name)
+    if match:
+        number = float(match.group(1))
+        suffix = match.group(3)
+        if suffix == "k":
+            return int(number * 1e3)
+        elif suffix == "m":
+            return int(number * 1e6)
+        elif suffix == "b":
+            return int(number * 1e9)
+        else:
+            raise ValueError(f"Unknown suffix {suffix}")
+    else:
+        raise ValueError(f"Could not find model size in {name}")
 
 
 def make_finetuned_plot(
@@ -434,6 +456,8 @@ def get_discrete_palette_for_values(values):
 
 def _get_value_iterative(d: dict, key: str):
     for k in key.split("."):
+        if k not in d:
+            return None
         d = d[k]
         if d is None:
             return None

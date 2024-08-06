@@ -15,9 +15,7 @@ dataset:
 model:
   generation_config:
     max_new_tokens: 50
-    do_sample: true
-    top_p: 0.8
-    top_k: 0 # Setting top_k=0 to disable top_k sampling effect
+    do_sample: false
 
 
 experiment_name: ???

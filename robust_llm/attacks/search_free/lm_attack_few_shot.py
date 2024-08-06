@@ -95,6 +95,7 @@ class FewShotLMAttack(SearchFreeAttack):
         )
         attack_info["turn"] = turn
         assert attack_info.pop("success_index") == 0
+        assert attack_info.pop("current_iteration") == 0
         attack_generation = clean_text(attack_info["generation_outputs"])
         adversary_output = self.adversary.clean_chat_artifacts(
             attack_info["adversary_output"]
