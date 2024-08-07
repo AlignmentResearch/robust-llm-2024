@@ -4,6 +4,7 @@ from typing import Any
 
 from accelerate import Accelerator
 from omegaconf import OmegaConf
+from transformers import set_seed
 
 from robust_llm import logger
 from robust_llm.config.configs import ExperimentConfig
@@ -37,6 +38,7 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
     untokenized_val_set = load_rllm_dataset(args.dataset, split="validation")
 
     num_classes = untokenized_train_set.num_classes
+    set_seed(seed=args.training.seed, deterministic=args.environment.deterministic)
     victim = WrappedModel.from_config(
         args.model, accelerator=None, num_classes=num_classes
     )
