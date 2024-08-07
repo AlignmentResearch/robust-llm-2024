@@ -15,7 +15,7 @@ from robust_llm.training import Training
 def test_basic_constructor():
     dataset_cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
-        revision="<1.1.0",
+        revision="<2.1.0",
         n_train=10,
         n_val=10,
     )

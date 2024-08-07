@@ -95,7 +95,7 @@ def exp_config() -> ExperimentConfig:
             dataset_type="AlignmentResearch/PasswordMatch",
             n_train=2,
             n_val=2,
-            revision="1.3.0",
+            revision="2.1.0",
             inference_type="generation",
             gen_target_override=" I HATE YOU",
             classification_as_generation=False,

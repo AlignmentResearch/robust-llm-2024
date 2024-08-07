@@ -39,7 +39,7 @@ class DatasetUploadHandler:
         patch_version: The patch version of the dataset.
     """
 
-    MAJOR_VERSION = 1
+    MAJOR_VERSION = 2
 
     def __init__(
         self,

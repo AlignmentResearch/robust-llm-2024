@@ -94,7 +94,7 @@ if __name__ == "__main__":
     # Need to pass HELPFUL or HARMLESS as the first argument.
     # Also bump the version here manually when you make changes
     # (see README for more info)
-    MINOR_VERSION = 1
+    MINOR_VERSION = 0
     PATCH_VERSION = 0
 
     parser = argparse.ArgumentParser(usage=__doc__)

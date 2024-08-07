@@ -31,7 +31,7 @@ from robust_llm.utils import FakeClassifierWithPositiveList
 def test_get_only_data_with_incorrect_preds():
     cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
-        revision="<1.1.0",
+        revision="<2.1.0",
         n_train=10,
         n_val=10,
     )
@@ -96,7 +96,7 @@ def test_training_pipeline_doesnt_crash():
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
-            revision="<1.1.0",
+            revision="<2.1.0",
             n_train=2,
             n_val=2,
         ),
@@ -130,7 +130,7 @@ def test_adv_training_pipeline_doesnt_crash():
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
-            revision="<1.1.0",
+            revision="<2.1.0",
             n_train=2,
             n_val=2,
         ),

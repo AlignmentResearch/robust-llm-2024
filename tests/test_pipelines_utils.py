@@ -19,7 +19,7 @@ def test_victim_num_classes():
         config = ExperimentConfig(
             experiment_type="evaluation",
             dataset=DatasetConfig(
-                dataset_type=dataset_type, n_train=10, revision="<1.1.0"
+                dataset_type=dataset_type, n_train=10, revision="<2.1.0"
             ),
             model=ModelConfig(
                 name_or_path="EleutherAI/pythia-14m",

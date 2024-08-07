@@ -18,7 +18,7 @@ def clf_dataset() -> RLLMDataset:
 
     cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
-        revision="<1.1.0",
+        revision="<2.1.0",
         n_train=5,
         n_val=5,
         config_name="pos",
@@ -39,7 +39,7 @@ def gen_dataset() -> RLLMDataset:
 
     cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
-        revision="<1.1.0",
+        revision="<2.1.0",
         n_train=5,
         n_val=5,
         config_name="pos",

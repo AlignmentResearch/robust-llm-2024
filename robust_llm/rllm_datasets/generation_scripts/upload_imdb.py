@@ -78,6 +78,6 @@ def process_imdb_ds(ds: Dataset) -> Dataset:
 if __name__ == "__main__":
     # bump the version here manually when you make changes
     # (see README for more info)
-    MINOR_VERSION = 2
+    MINOR_VERSION = 1
     PATCH_VERSION = 0
     main(minor_version=MINOR_VERSION, patch_version=PATCH_VERSION)

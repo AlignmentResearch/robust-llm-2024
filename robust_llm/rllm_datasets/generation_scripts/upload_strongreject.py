@@ -92,6 +92,6 @@ def process_strongreject_dataset(df: pd.DataFrame) -> Dataset:
 if __name__ == "__main__":
     # bump the version here manually when you make changes
     # (see README for more info)
-    MINOR_VERSION = 1
+    MINOR_VERSION = 0
     PATCH_VERSION = 0
     main(minor_version=MINOR_VERSION, patch_version=PATCH_VERSION)

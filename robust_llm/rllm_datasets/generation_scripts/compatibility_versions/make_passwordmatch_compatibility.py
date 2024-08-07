@@ -63,7 +63,7 @@ def pm_old_to_new(old_dataset: Dataset) -> Dataset:
 
 if __name__ == "__main__":
     MINOR_VERSION = 0
-    PATCH_VERSION = 2
+    PATCH_VERSION = 0
     repo_name = "AlignmentResearch/PasswordMatch"
     convert_and_upload(
         repo_name=repo_name,

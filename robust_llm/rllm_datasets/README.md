@@ -30,12 +30,12 @@
     - Versions <2.0.0, >=1.1.0 are different from the 0.x.x versions:
         - They all have instructions and answer prompts to allow models not trained on the tasks to perform them.
         - `PasswordMatch` and `WordLength` have their structures changed a bit.
-    - Version 1.2.0 of EnronSpam + IMDB + WordLength, 1.3.0 of PasswordMatch, and
-      1.1.0 of StrongREJECT: add `"proxy_clf_label"` and `"proxy_gen_target"`
-      columns for adversarial training.
-        - Versions 1.0.2 of EnronSpam + IMDB + PasswordMatch + WordLength also
-          include these columns because version 1.0 is used in unit tests. This
-          version of EnronSpam also removes empty rows.
+- Versions 2.x.x: add `"proxy_clf_label"` and `"proxy_gen_target"` columns.
+    - Versions 2.0.x of EnronSpam, IMDB, PasswordMatch, and WordLength have the
+      same data as the latest 0.x.x versions but formatted with the 2.x.x
+      columns. This version of EnronSpam also removes empty rows.
+    - Versions 2.1.x of those four datasets and version 2.0.x of the other
+      datasets have the same data as the latest 1.x.x versions.
 
 ## Generating datasets
 - Dataset generation and uploading scripts can be found in `robust_llm/rllm_datasets/generation_scripts`.
