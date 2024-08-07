@@ -1,17 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal
-
-from accelerate import Accelerator
-from transformers import (
-    GemmaPreTrainedModel,
-    GemmaTokenizerFast,
-    PreTrainedTokenizerBase,
-)
+from transformers import GemmaTokenizerFast
 from typing_extensions import override
 
-from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.models.model_utils import InferenceType
+from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
@@ -24,33 +16,11 @@ class GemmaChatModel(WrappedChatModel):
     # https://huggingface.co/google/gemma-2-9b-it/blob/main/config.json
     CONTEXT_LENGTH = 8192
 
-    def __init__(
-        self,
-        model: GemmaPreTrainedModel,
-        right_tokenizer: PreTrainedTokenizerBase,
-        accelerator: Accelerator | None,
-        inference_type: InferenceType,
-        train_minibatch_size: int,
-        eval_minibatch_size: int,
-        generation_config: GenerationConfig | None,
-        family: Literal["gemma-chat"],
-        system_prompt: str | None = None,
-        seed: int = 0,
-    ) -> None:
-        if system_prompt is not None:
+    def post_init(self):
+        super().post_init()
+        assert self.family in ["gemma-chat"]
+        if self.system_prompt is not None:
             raise ValueError("GemmaChatModel does not support system_prompt.")
-        super().__init__(
-            model,
-            right_tokenizer,
-            accelerator,
-            inference_type,
-            train_minibatch_size,
-            eval_minibatch_size,
-            generation_config=generation_config,
-            family=family,
-            system_prompt=system_prompt,
-            seed=seed,
-        )
 
     @override
     def forward(self, **inputs):

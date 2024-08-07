@@ -45,7 +45,10 @@ class WrappedChatModel(WrappedModel):
             system_prompt,
             seed,
         )
-        assert self.init_conversation != Conversation(
+
+    def post_init(self) -> None:
+        super().post_init()
+        assert self.init_conversation() != Conversation(
             prompt_prefix="",
             system_prefix="",
             system_suffix="",

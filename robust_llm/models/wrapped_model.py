@@ -106,6 +106,15 @@ class WrappedModel(ABC):
         self.system_prompt = system_prompt
         self.seed = seed
 
+        self.post_init()
+
+    def post_init(self) -> None:
+        """Runs any model-specific set-up required.
+
+        We split this out from __init__ to avoid having to subclass __init__
+        every time, which results in having a lot of boilerplate code.
+        """
+
     @property
     def n_params(self) -> int:
         return self._n_params

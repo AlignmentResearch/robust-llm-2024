@@ -1,11 +1,7 @@
-from typing import Literal
-
-from accelerate import Accelerator
-from transformers import GPT2PreTrainedModel, GPT2TokenizerFast, PreTrainedTokenizerBase
+from transformers import GPT2TokenizerFast
 from typing_extensions import override
 
-from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.models.model_utils import InferenceType
+from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.wrapped_model import WrappedModel
 
 
@@ -13,37 +9,11 @@ from robust_llm.models.wrapped_model import WrappedModel
 class GPT2Model(WrappedModel):
     CONTEXT_LENGTH = 1024
 
-    def __init__(
-        self,
-        model: GPT2PreTrainedModel,
-        right_tokenizer: PreTrainedTokenizerBase,
-        accelerator: Accelerator | None,
-        inference_type: InferenceType,
-        train_minibatch_size: int,
-        eval_minibatch_size: int,
-        generation_config: GenerationConfig | None,
-        family: Literal["gpt2"],
-        system_prompt: str | None = None,
-        seed: int = 0,
-    ) -> None:
-        # TODO (ian): Decide whether this assert is worthwhile (it makes testing
-        # harder).
-        # assert isinstance(model, GPT2PreTrainedModel)
-        super().__init__(
-            model,
-            right_tokenizer,
-            accelerator,
-            inference_type,
-            train_minibatch_size,
-            eval_minibatch_size,
-            generation_config=generation_config,
-            family=family,
-            system_prompt=system_prompt,
-            seed=seed,
-        )
-
+    def post_init(self):
+        super().post_init()
         # Special setup needed for gpt2.
-        self.model.config.pad_token_id = model.config.eos_token_id
+        assert self.family in ["gpt2"]
+        self.model.config.pad_token_id = self.model.config.eos_token_id
 
     @override
     @classmethod

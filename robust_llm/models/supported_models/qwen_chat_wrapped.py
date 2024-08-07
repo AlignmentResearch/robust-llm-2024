@@ -1,17 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal
-
-from accelerate import Accelerator
-from transformers import (
-    PreTrainedTokenizerBase,
-    Qwen2PreTrainedModel,
-    Qwen2TokenizerFast,
-)
+from transformers import Qwen2TokenizerFast
 from typing_extensions import override
 
-from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.models.model_utils import InferenceType
+from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 from robust_llm.models.wrapped_model import WrappedModel
@@ -22,31 +14,9 @@ from robust_llm.models.wrapped_model import WrappedModel
 class QwenChatModel(WrappedChatModel):
     CONTEXT_LENGTH = 32768
 
-    def __init__(
-        self,
-        model: Qwen2PreTrainedModel,
-        right_tokenizer: PreTrainedTokenizerBase,
-        accelerator: Accelerator | None,
-        inference_type: InferenceType,
-        train_minibatch_size: int,
-        eval_minibatch_size: int,
-        generation_config: GenerationConfig | None,
-        family: Literal["qwen1.5-chat", "qwen2-chat"],
-        system_prompt: str | None = None,
-        seed: int = 0,
-    ) -> None:
-        super().__init__(
-            model,
-            right_tokenizer,
-            accelerator,
-            inference_type,
-            train_minibatch_size,
-            eval_minibatch_size,
-            generation_config=generation_config,
-            family=family,
-            system_prompt=system_prompt,
-            seed=seed,
-        )
+    def post_init(self):
+        super().post_init()
+        assert self.family in ["qwen1.5-chat", "qwen2-chat"]
 
     @override
     def forward(self, **inputs):

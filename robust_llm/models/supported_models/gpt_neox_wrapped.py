@@ -1,16 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal
+from transformers import GPTNeoXTokenizerFast
 
-from accelerate import Accelerator
-from transformers import (
-    GPTNeoXPreTrainedModel,
-    GPTNeoXTokenizerFast,
-    PreTrainedTokenizerBase,
-)
-
-from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.models.model_utils import InferenceType
+from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.wrapped_model import WrappedModel
 
 
@@ -20,36 +12,11 @@ class GPTNeoXModel(WrappedModel):
     # NOTE: Pythia models are based on GPTNeoX
     CONTEXT_LENGTH = 2048
 
-    def __init__(
-        self,
-        model: GPTNeoXPreTrainedModel,
-        right_tokenizer: PreTrainedTokenizerBase,
-        accelerator: Accelerator | None,
-        inference_type: InferenceType,
-        train_minibatch_size: int,
-        eval_minibatch_size: int,
-        generation_config: GenerationConfig | None,
-        family: Literal["gpt_neox", "pythia"],
-        system_prompt: str | None = None,
-        seed: int = 0,
-    ) -> None:
-        # TODO (ian): Decide whether this assert is worthwhile (it makes testing
-        # harder).
-        # assert isinstance(model, GPTNeoXPreTrainedModel)
-        super().__init__(
-            model,
-            right_tokenizer,
-            accelerator,
-            inference_type,
-            train_minibatch_size,
-            eval_minibatch_size,
-            generation_config=generation_config,
-            family=family,
-            system_prompt=system_prompt,
-            seed=seed,
-        )
+    def post_init(self):
+        super().post_init()
+        assert self.family in ["gpt_neox", "pythia"]
         # Special setup needed for pythia.
-        self.model.config.pad_token_id = model.config.eos_token_id
+        self.model.config.pad_token_id = self.model.config.eos_token_id
 
     @classmethod
     def load_tokenizer(

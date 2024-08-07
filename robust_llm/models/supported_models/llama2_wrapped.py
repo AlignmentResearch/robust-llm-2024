@@ -1,11 +1,7 @@
-from typing import Literal
-
-from accelerate import Accelerator
-from transformers import LlamaForCausalLM, LlamaTokenizer
+from transformers import LlamaTokenizer
 from typing_extensions import override
 
-from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.models.model_utils import InferenceType
+from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.wrapped_model import WrappedModel
 
 
@@ -13,34 +9,11 @@ from robust_llm.models.wrapped_model import WrappedModel
 class Llama2Model(WrappedModel):
     CONTEXT_LENGTH = 4096
 
-    def __init__(
-        self,
-        model: LlamaForCausalLM,
-        right_tokenizer: LlamaTokenizer,
-        accelerator: Accelerator | None,
-        inference_type: InferenceType,
-        train_minibatch_size: int,
-        eval_minibatch_size: int,
-        generation_config: GenerationConfig | None,
-        family: Literal["llama2"],
-        system_prompt: str | None = None,
-        seed: int = 0,
-    ) -> None:
-        super().__init__(
-            model,
-            right_tokenizer,
-            accelerator,
-            inference_type,
-            train_minibatch_size,
-            eval_minibatch_size,
-            generation_config=generation_config,
-            family=family,
-            system_prompt=system_prompt,
-            seed=seed,
-        )
-
+    def post_init(self):
+        super().post_init()
+        assert self.family in ["llama2"]
         # Special setup needed for llama.
-        self.model.config.pad_token_id = model.config.eos_token_id
+        self.model.config.pad_token_id = self.model.config.eos_token_id
 
     @override
     def forward(self, **inputs):
