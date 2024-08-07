@@ -110,6 +110,7 @@ class Training:
             output_dir=self.output_dir,
             num_train_epochs=self.config.num_train_epochs,
             learning_rate=self.config.learning_rate,
+            lr_scheduler_type=self.config.lr_scheduler_type,
             per_device_train_batch_size=self.train_batch_size,
             per_device_eval_batch_size=self.eval_batch_size,
             optim=self.config.optimizer,

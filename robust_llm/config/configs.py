@@ -110,6 +110,11 @@ class TrainingConfig:
         adversarial (AdversarialTrainingConfig): Configs for adversarial training.
         num_train_epochs (int): Number of training epochs.
         learning_rate (float): Learning rate to use in training.
+        lr_scheduler_type (str): The learning rate scheduler to use in training.
+            Defaults to "linear", which is the Trainer default. Other options to
+            consider are "constant", "constant_with_warmup", and "cosine".
+            Full list here:
+            At https://github.com/huggingface/transformers/blob/main/src/transformers/trainer_utils.py#L410
         optimizer (str): The optimizer to use in training.
         gradient_checkpointing (bool): Whether to use gradient checkpointing.
             This is a technique to reduce memory usage at the cost of some additional
@@ -144,11 +149,12 @@ class TrainingConfig:
             (if any).
         upload_retries: The number of times to retry uploading the model to the hub.
         upload_cooldown: The number of seconds to wait between retries.
-    """
+    """  # noqa: E501
 
     adversarial: Optional[AdversarialTrainingConfig] = None
     num_train_epochs: int = 3
     learning_rate: float = 5e-5
+    lr_scheduler_type: str = "linear"
     optimizer: str = "adamw_torch"
     gradient_checkpointing: bool = False
     eval_steps: Optional[int] = None
