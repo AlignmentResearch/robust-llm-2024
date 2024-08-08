@@ -64,6 +64,7 @@ class WrappedModel(ABC):
         train_minibatch_size: int,
         eval_minibatch_size: int,
         family: str,
+        gradient_accumulation_steps: int = 1,
         generation_config: GenerationConfig | None = None,
         system_prompt: str | None = None,
         seed: int = 0,
@@ -79,6 +80,10 @@ class WrappedModel(ABC):
                 or 'classification' or 'trl')
             train_minibatch_size: The minibatch size to use for training.
             eval_minibatch_size: The minibatch size to use for evaluation.
+            gradient_accumulation_steps: The number of minibatches to accumulate
+                gradients over. This is useful when we have to use very small
+                minibatches due to limited VRAM, but want to simulate a larger batch
+                size.
             family: The family of the model, useful for logging model details
                 to wandb alongside experiment results.
             generation_config: The generation config to use for generation.
@@ -102,6 +107,7 @@ class WrappedModel(ABC):
         self.inference_type = inference_type
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
+        self.gradient_accumulation_steps = gradient_accumulation_steps
         self.generation_config = generation_config
         self.system_prompt = system_prompt
         self.seed = seed
@@ -257,6 +263,7 @@ class WrappedModel(ABC):
             inference_type=inference_type,
             train_minibatch_size=train_mb_size,
             eval_minibatch_size=eval_mb_size,
+            gradient_accumulation_steps=config.gradient_accumulation_steps,
             generation_config=config.generation_config,
             family=config.family,
             system_prompt=config.system_prompt,

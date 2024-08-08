@@ -113,6 +113,7 @@ class Training:
             lr_scheduler_type=self.config.lr_scheduler_type,
             per_device_train_batch_size=self.train_batch_size,
             per_device_eval_batch_size=self.eval_batch_size,
+            gradient_accumulation_steps=self.gradient_accumulation_steps,
             optim=self.config.optimizer,
             gradient_checkpointing=self.config.gradient_checkpointing,
             # Using non-reentrant checkpointing avoids a warning and
@@ -138,6 +139,10 @@ class Training:
     @property
     def eval_batch_size(self) -> int:
         return self.victim.eval_minibatch_size
+
+    @property
+    def gradient_accumulation_steps(self) -> int:
+        return self.victim.gradient_accumulation_steps
 
     def setup_trainer(self) -> RLLMTrainer:
         inference_type = self.train_rllm_dataset.inference_type

@@ -3,11 +3,9 @@ from __future__ import annotations
 from typing import Optional
 
 from accelerate import Accelerator
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
 from typing_extensions import override
 
-from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.models.model_utils import InferenceType
+from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_model import Prompt, WrappedModel
 
@@ -19,32 +17,6 @@ class WrappedChatModel(WrappedModel):
     input. Instead of regular text, they expect the input to be chat-formatted.
     The specific format varies from model to model, but this should abstract that away.
     """
-
-    def __init__(
-        self,
-        model: PreTrainedModel,
-        right_tokenizer: PreTrainedTokenizerBase,
-        accelerator: Accelerator | None,
-        inference_type: InferenceType,
-        train_minibatch_size: int,
-        eval_minibatch_size: int,
-        family: str,
-        generation_config: GenerationConfig | None = None,
-        system_prompt: str | None = None,
-        seed: int = 0,
-    ) -> None:
-        super().__init__(
-            model,
-            right_tokenizer,
-            accelerator,
-            inference_type,
-            train_minibatch_size,
-            eval_minibatch_size,
-            family,
-            generation_config,
-            system_prompt,
-            seed,
-        )
 
     def post_init(self) -> None:
         super().post_init()

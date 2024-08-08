@@ -71,6 +71,9 @@ class ModelConfig:
     eval_minibatch_size: The minibatch size to use for evaluation.
         Defaults to twice the training minibatch size (since for evaluation we
         don't need to store gradients).
+    gradient_accumulation_steps: Number of minibatches to accumulate gradients
+        over. This is useful when we have to use very small minibatches due to
+        limited VRAM, but want to simulate a larger batch size.
     minibatch_multiplier: Multiplier for the minibatch size. This should usually
         be set by interpolation from the EnvironmentConfig rather in each model
         config directly.
@@ -103,6 +106,7 @@ class ModelConfig:
     train_minibatch_size: int = 16
     # This is variable interpolation plus a custom resolver (see above).
     eval_minibatch_size: int = SI("${mult: 2, ${model.train_minibatch_size}}")
+    gradient_accumulation_steps: int = 1
     minibatch_multiplier: float = SI("${environment.minibatch_multiplier}")
     generation_config: Optional[GenerationConfig] = None
     dtype: str = "float32"
