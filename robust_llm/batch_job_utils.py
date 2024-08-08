@@ -25,6 +25,11 @@ JOB_TEMPLATE_PATH = Path(__file__).parent.parent / "k8s" / "batch_job.yaml"
 with JOB_TEMPLATE_PATH.open() as f:
     JOB_TEMPLATE = f.read()
 
+# Container tag to use by default for jobs. Update this when uploading a
+# new version of the canonical Docker image. (Avoid reusing tags as
+# older versions of that image may be cached on K8s nodes.)
+DEFAULT_CONTAINER_TAG = "2024-08-07-backoff"
+
 
 @functools.cache
 def git_repo() -> Repo:
@@ -44,7 +49,7 @@ class FlamingoRun:
     hydra_config: str
     override_args: dict
     n_max_parallel: int = 1
-    CONTAINER_TAG: str = "latest"
+    CONTAINER_TAG: str = DEFAULT_CONTAINER_TAG
     COMMIT_HASH: str = dataclasses.field(default_factory=git_latest_commit)
     CPU: Union[int, str] = 4
     MEMORY: str = "20G"
@@ -272,7 +277,7 @@ def run_multiple(
     override_args_list: Sequence[dict],
     n_max_parallel: int | Sequence[int] = 1,
     script_path: str = "robust_llm",
-    container_tag: str = "latest",
+    container_tag: str = DEFAULT_CONTAINER_TAG,
     cpu: int | Sequence[int] = 4,
     memory: str | Sequence[str] = "20G",
     gpu: int | Sequence[int] = 1,
