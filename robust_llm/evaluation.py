@@ -74,14 +74,14 @@ def do_adversarial_evaluation(
         raise ValueError("No examples to attack in adversarial evaluation!")
     dataset_to_attack = dataset.get_subset(indices_to_attack)
 
-    attacked_dataset, info_dict = attack.get_attacked_dataset(
+    attack_out = attack.get_attacked_dataset(
         dataset=dataset_to_attack,
         # Only resume from checkpoint if we're in the evaluation pipeline as otherwise
         # we will be incorrectly reusing data in the case of adversarial training.
         resume_from_checkpoint=resume_from_checkpoint,
     )
-    attack_info = info_dict.pop("attack_info", {})
 
+    attacked_dataset = attack_out.dataset
     # In case the attack changed the victim from eval() mode, we set it again here.
     victim.eval()
 
@@ -124,8 +124,8 @@ def do_adversarial_evaluation(
         post_attack_flags = [None] * len(post_attack_successes)
 
     metrics = attack_results.compute_adversarial_evaluation_metrics()
-    assert len(set(metrics.keys()) & set(info_dict.keys())) == 0
-    metrics |= info_dict
+    assert len(set(metrics.keys()) & set(attack_out.global_info.keys())) == 0
+    metrics |= attack_out.global_info
 
     metrics |= _maybe_record_defense_specific_metrics(
         model=victim, dataset=dataset, attacked_dataset=attacked_dataset
@@ -153,7 +153,7 @@ def do_adversarial_evaluation(
             attacked_flags=post_attack_flags,
             indices_to_attack=indices_to_attack,
             num_examples_to_log_detailed_info=num_examples_to_log_detailed_info,
-            **attack_info,
+            **attack_out.per_example_info,
         )
 
     if victim.accelerator.is_main_process:

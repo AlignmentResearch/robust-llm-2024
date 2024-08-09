@@ -3,7 +3,7 @@ from typing import Any
 import numpy as np
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack
+from robust_llm.attacks.attack import Attack, AttackData, AttackOutput
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.utils import (
     PreppedExample,
@@ -40,7 +40,7 @@ class MultiPromptSearchBasedAttack(Attack):
         self,
         dataset: RLLMDataset,
         resume_from_checkpoint: bool = False,
-    ) -> tuple[RLLMDataset, dict[str, Any]]:
+    ) -> AttackOutput:
         """Run a multi-prompt attack on the dataset.
 
         TODO(GH#113): consider multi-model attacks in the future.
@@ -95,8 +95,13 @@ class MultiPromptSearchBasedAttack(Attack):
 
         attacked_dataset = dataset.with_attacked_text(attacked_input_texts)
         info_dict = _create_info_dict(all_filtered_out_counts)
+        attack_out = AttackOutput(
+            dataset=attacked_dataset,
+            attack_data=AttackData(),
+            global_info=info_dict,
+        )
 
-        return attacked_dataset, info_dict
+        return attack_out
 
 
 def _create_info_dict(all_filtered_out_counts: list[int]) -> dict[str, Any]:

@@ -27,6 +27,49 @@ class AttackState:
     attacks_info: dict[str, list[Any]] = field(default_factory=dict)
 
 
+@dataclass
+class AttackData:
+    """Contains a record of how the attack did at each iteration.
+
+    Includes the attack strings. This is used after the fact to compute
+    robustness metrics.
+    TODO(ian): Add attributes and come up with a more informative name.
+    """
+
+
+@dataclass
+class AttackOutput:
+    """Wraps all output from get_attacked_dataset.
+
+    Attributes:
+        dataset:
+            The dataset of adversarial examples.
+        global_info:
+            A dictionary of additional information about the attack as a whole,
+            to be logged.
+        per_example_info:
+            A dictionary of additional information about each example, to be
+            logged alongside the individual examples.
+        attack_data:
+            A record of how the attack did at each iteration, to be used to
+            compute robustness metrics.
+    """
+
+    dataset: RLLMDataset
+    attack_data: AttackData
+    global_info: dict[str, Any] = field(default_factory=dict)
+    per_example_info: dict[str, list[Any]] = field(default_factory=dict)
+
+    def __post_init__(self):
+        dataset_len = len(self.dataset.ds)
+        for key, value in self.per_example_info.items():
+            if len(value) != dataset_len:
+                raise ValueError(
+                    f"Length of per_example_info[{key}] ({len(value)})"
+                    f" does not match length of dataset ({dataset_len})"
+                )
+
+
 class Attack(abc.ABC):
     """Base class for all attacks.
 
@@ -80,7 +123,7 @@ class Attack(abc.ABC):
         self,
         dataset: RLLMDataset,
         resume_from_checkpoint: bool = True,
-    ) -> tuple[RLLMDataset, dict[str, Any]]:
+    ) -> AttackOutput:
         """Produces a dataset of adversarial examples.
 
         Args:
@@ -205,12 +248,15 @@ class IdentityAttack(Attack):
         self,
         dataset: RLLMDataset,
         resume_from_checkpoint: bool = False,
-    ) -> tuple[RLLMDataset, dict[str, Any]]:
+    ) -> AttackOutput:
         dataset = dataset.with_attacked_text(
             dataset.ds["text"],
         )
-
-        return dataset, {}
+        attack_out = AttackOutput(
+            dataset=dataset,
+            attack_data=AttackData(),
+        )
+        return attack_out
 
 
 class PromptAttackMode(Enum):

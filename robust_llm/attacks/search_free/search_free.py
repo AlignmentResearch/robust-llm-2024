@@ -10,7 +10,13 @@ from torch import Tensor
 from tqdm import tqdm
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack, AttackState, PromptAttackMode
+from robust_llm.attacks.attack import (
+    Attack,
+    AttackData,
+    AttackOutput,
+    AttackState,
+    PromptAttackMode,
+)
 from robust_llm.config.attack_configs import AttackConfig, SearchFreeAttackConfig
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
 from robust_llm.models.wrapped_model import WrappedModel
@@ -76,19 +82,19 @@ class SearchFreeAttack(Attack, ABC):
         self,
         dataset: RLLMDataset,
         resume_from_checkpoint: bool = True,
-    ) -> tuple[RLLMDataset, dict[str, Any]]:
+    ) -> AttackOutput:
         """Returns the attacked dataset and the attack metadata."""
         if resume_from_checkpoint and self.maybe_load_state():
             assert isinstance(self.attack_state, SearchFreeAttackState)
             attacked_texts = self.attack_state.attacked_texts
             all_success_indices = self.attack_state.success_indices
-            attacks_info = self.attack_state.attacks_info
+            per_example_info = self.attack_state.attacks_info
             starting_index = self.attack_state.example_index + 1
         else:
             # Reset the state if not resuming from checkpoint
             attacked_texts = []
             all_success_indices = []
-            attacks_info = {}
+            per_example_info = {}
             self.attack_state = SearchFreeAttackState()
             starting_index = 0
 
@@ -99,7 +105,7 @@ class SearchFreeAttack(Attack, ABC):
             assert isinstance(example, dict)
             example["seed"] = example_index
             # TODO (Oskar): account for examples in other partitions when indexing
-            attacked_text, attack_info, victim_successes = self.attack_example(
+            attacked_text, example_info, victim_successes = self.attack_example(
                 example, dataset
             )
             attacked_text = self.victim.maybe_apply_user_template(attacked_text)
@@ -113,8 +119,8 @@ class SearchFreeAttack(Attack, ABC):
 
             # Append data for this example
             attacked_texts.append(attacked_text)
-            attacks_info = {
-                k: attacks_info.get(k, []) + [v] for k, v in attack_info.items()
+            per_example_info = {
+                k: per_example_info.get(k, []) + [v] for k, v in example_info.items()
             }
             all_success_indices.append(success_indices)
 
@@ -123,7 +129,7 @@ class SearchFreeAttack(Attack, ABC):
                 example_index=example_index,
                 attacked_texts=attacked_texts,
                 success_indices=all_success_indices,
-                attacks_info=attacks_info,
+                attacks_info=per_example_info,
             )
             if resume_from_checkpoint:
                 self.maybe_save_state()
@@ -135,8 +141,12 @@ class SearchFreeAttack(Attack, ABC):
             )
 
         attacked_dataset = dataset.with_attacked_text(attacked_texts)
-        metadata = {"success_indices": all_success_indices, "attack_info": attacks_info}
-        return attacked_dataset, metadata
+        attack_out = AttackOutput(
+            dataset=attacked_dataset,
+            attack_data=AttackData(),
+            per_example_info=per_example_info,
+        )
+        return attack_out
 
     def attack_example(
         self, example: dict[str, Any], dataset: RLLMDataset

@@ -657,10 +657,11 @@ class AdversarialTraining(Training):
                     generator=self.rng,
                 )
                 # NOTE: .get_attacked_dataset should relabel the examples
-                attacked_dataset, _ = self.training_attack.get_attacked_dataset(
+                attack_out = self.training_attack.get_attacked_dataset(
                     input_rllm_dataset,
                     resume_from_checkpoint=False,
                 )
+                attacked_dataset = attack_out.dataset
 
                 new_adv_examples = attacked_dataset.as_adversarial_examples()
                 logger.info(

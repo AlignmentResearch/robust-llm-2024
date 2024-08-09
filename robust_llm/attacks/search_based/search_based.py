@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack, AttackState
+from robust_llm.attacks.attack import Attack, AttackData, AttackOutput, AttackState
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.utils import (
     PreppedExample,
@@ -58,7 +58,7 @@ class SearchBasedAttack(Attack):
         self,
         dataset: RLLMDataset,
         resume_from_checkpoint: bool = True,
-    ) -> tuple[RLLMDataset, dict[str, Any]]:
+    ) -> AttackOutput:
         """Run a search-based attack separately on each example in the dataset.
 
         TODO(GH#113): consider multi-model attacks in the future.
@@ -138,13 +138,18 @@ class SearchBasedAttack(Attack):
                 self.maybe_save_state()
 
         attacked_dataset = dataset.with_attacked_text(attacked_input_texts)
-        info_dict = _create_info_dict(all_filtered_out_counts)
+        global_info = _create_info_dict(all_filtered_out_counts)
 
         # We clear the gradients here to avoid using up GPU memory
         # even after the attack has stopped using it.
         # (This is primarily for GCG.)
         self.victim.model.zero_grad()
-        return attacked_dataset, info_dict
+        attack_out = AttackOutput(
+            dataset=attacked_dataset,
+            attack_data=AttackData(),
+            global_info=global_info,
+        )
+        return attack_out
 
 
 def _create_info_dict(all_filtered_out_counts: list[int]) -> dict[str, Any]:

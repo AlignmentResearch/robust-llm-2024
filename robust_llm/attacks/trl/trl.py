@@ -10,7 +10,7 @@ from trl import PPOTrainer
 from typing_extensions import override
 
 from robust_llm import logger
-from robust_llm.attacks.attack import Attack
+from robust_llm.attacks.attack import Attack, AttackData, AttackOutput
 from robust_llm.attacks.trl.utils import (
     check_for_not_finite,
     make_ppo_trainer,
@@ -228,7 +228,7 @@ class TRLAttack(Attack):
         self,
         dataset: RLLMDataset,
         resume_from_checkpoint: bool = False,
-    ) -> tuple[RLLMDataset, dict[str, Any]]:
+    ) -> AttackOutput:
         # At present, the trl attack is set up to only work
         # with one modifiable chunk
         assert dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
@@ -241,7 +241,11 @@ class TRLAttack(Attack):
         # done in 'with_attacked_text'.
         attacked_texts = self.victim.maybe_apply_user_template(attacked_texts)
         attacked_dataset = dataset.with_attacked_text(attacked_texts)
-        return attacked_dataset, {}
+        attack_out = AttackOutput(
+            dataset=attacked_dataset,
+            attack_data=AttackData(),
+        )
+        return attack_out
 
     def _get_attacked_texts(
         self,

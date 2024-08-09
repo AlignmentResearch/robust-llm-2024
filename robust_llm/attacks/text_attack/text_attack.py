@@ -30,7 +30,7 @@ from textattack.transformations import (
 from transformers import PreTrainedTokenizerBase
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack
+from robust_llm.attacks.attack import Attack, AttackData, AttackOutput
 from robust_llm.config.attack_configs import TextAttackAttackConfig
 from robust_llm.defenses.defense import DefendedModel
 from robust_llm.models import WrappedModel
@@ -260,7 +260,7 @@ class TextAttackAttack(Attack):
         self,
         dataset: RLLMDataset,
         resume_from_checkpoint: bool = False,
-    ) -> tuple[RLLMDataset, dict[str, Any]]:
+    ) -> AttackOutput:
         assert dataset.modifiable_chunk_spec.n_modifiable_chunks == 1
 
         dataset = self._preprocess_dataset(dataset)
@@ -281,9 +281,14 @@ class TextAttackAttack(Attack):
             attack_results=attack_results, original_dataset=dataset
         )
 
-        info_dict = self._get_info_dict(attack_results)
+        global_info = self._get_info_dict(attack_results)
+        attack_out = AttackOutput(
+            dataset=attacked_dataset,
+            attack_data=AttackData(),
+            global_info=global_info,
+        )
 
-        return attacked_dataset, info_dict
+        return attack_out
 
     @staticmethod
     def _get_dataset_from_attack_results(
