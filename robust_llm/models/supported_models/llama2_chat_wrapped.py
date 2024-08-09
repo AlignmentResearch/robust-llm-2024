@@ -31,6 +31,7 @@ class Llama2ChatModel(WrappedChatModel):
             padding_side="right",  # Left padding is handled separately
             model_max_length=cls.CONTEXT_LENGTH,
             clean_up_tokenization_spaces=False,
+            add_prefix_space=False,  # This is handled by the prompt template
         )
 
         tokenizer.pad_token = tokenizer.eos_token
@@ -43,9 +44,18 @@ class Llama2ChatModel(WrappedChatModel):
             system_prefix="<<SYS>>\n",
             system_suffix="\n<</SYS>>\n\n",
             user_prefix="",
-            user_suffix=" [/INST] ",
+            user_suffix=" [/INST]",
             assistant_prefix="",
             assistant_suffix=" </s>",
             system_prompt=self.system_prompt,
             repeat_prompt_prefix=True,
+            require_leading_whitespace=True,
         )
+
+    @override
+    def forward(self, **inputs):
+        # Like Gemma, Llama2 requires use_cache=True to use
+        # provided past_key_values.
+        if "past_key_values" in inputs:
+            inputs["use_cache"] = True
+        return super().forward(**inputs)

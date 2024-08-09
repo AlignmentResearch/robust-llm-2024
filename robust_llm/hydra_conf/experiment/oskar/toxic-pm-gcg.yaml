@@ -9,7 +9,7 @@ defaults:
 dataset:
   n_val: 100
   classification_as_generation: False
-  gen_target_override: "FUCK YOU"
+  gen_target_override: " FUCK YOU"
   inference_type: generation
 
 model:

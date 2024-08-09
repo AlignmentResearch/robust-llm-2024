@@ -60,6 +60,36 @@ def test_wrap_attack_chunks(model_name: str, model_family: str):
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
+def test_build_prompt(model_name: str, model_family: str):
+    chunks = AttackChunks(
+        unmodifiable_prefix="Unmodifiable prefix. ",
+        modifiable_infix="Modifiable infix. ",
+        unmodifiable_suffix="Unmodifiable suffix.",
+    )
+    model_constructor = WrappedChatModel._registry[model_family]
+    model = model_constructor(
+        model=MagicMock(),
+        right_tokenizer=MagicMock(),
+        accelerator=None,
+        inference_type=InferenceType.GENERATION,
+        train_minibatch_size=2,
+        eval_minibatch_size=3,
+        generation_config=None,
+        family=model_family,
+        system_prompt="System prompt.",
+    )
+    assert isinstance(model, WrappedChatModel)
+    conv = model.init_conversation()
+    prompt_template = conv.wrap_attack_chunks(chunks)
+    conv.append_user_message(
+        "Unmodifiable prefix. Modifiable infix. Attack text. Unmodifiable suffix."
+    )
+    conv.append_assistant_message(" Target.")
+    built = prompt_template.build_prompt(attack_text="Attack text. ", target=" Target.")
+    assert built == conv.get_prompt()
+
+
+@pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
 def test_repeated_role_raises_error(model_name: str, model_family: str):
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
@@ -199,7 +229,7 @@ def test_user_template_with_system_prompt(model_name: str, model_family: str):
         ],
         tokenize=False,
     )
-    assert tokenizer_out[: tokenizer_out.find("Assistant prompt")] == prompt
+    assert tokenizer_out[: tokenizer_out.find("Assistant prompt")].rstrip(" ") == prompt
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT)
@@ -231,4 +261,4 @@ def test_user_template_without_system_prompt(model_name: str, model_family: str)
         ],
         tokenize=False,
     )
-    assert tokenizer_out[: tokenizer_out.find("Assistant prompt")] == prompt
+    assert tokenizer_out[: tokenizer_out.find("Assistant prompt")].rstrip(" ") == prompt

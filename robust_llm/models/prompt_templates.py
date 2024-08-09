@@ -61,6 +61,8 @@ class Conversation:
         repeat_prompt_prefix (bool): Whether to repeat the prompt prefix for
             each user/assistant interaction. Defaults to False, i.e. the prompt
             prefix is only included once at the very start.
+        require_leading_whitespace (bool): Whether to require leading whitespace
+            in the assistant response. Defaults to False.
         special_strings (list[str]): A list of special strings that act as delimiters
             for different components of the chat. These are used to clean the prompt
             when we just want text generations in natural language.
@@ -76,6 +78,7 @@ class Conversation:
     assistant_suffix: str
     system_prompt: str | None = None
     repeat_prompt_prefix: bool = False
+    require_leading_whitespace: bool = False
     _messages: list[tuple[ChatRole, str]] = field(default_factory=list)
 
     def _append_message(self, role: ChatRole, message: str):
@@ -89,6 +92,8 @@ class Conversation:
         return self._append_message(ChatRole.USER, message)
 
     def append_assistant_message(self, message: str):
+        if self.require_leading_whitespace and message and not message.startswith(" "):
+            message = " " + message
         return self._append_message(ChatRole.ASSISTANT, message)
 
     def append_to_last_message(self, text: str):
