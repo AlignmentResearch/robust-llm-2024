@@ -1,4 +1,3 @@
-from functools import cached_property
 from typing import Any
 
 from robust_llm.attacks.attack import PromptAttackMode
@@ -43,14 +42,13 @@ class RandomTokenAttack(SearchFreeAttack):
         )
 
         self.n_attack_tokens = attack_config.n_attack_tokens
-        self.n_its = attack_config.n_its
 
         self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
         cb_config = attack_config.victim_success_callback
         self.victim_success_callback = build_binary_scoring_callback(cb_config)
+        self._shared_attack_tokens: list[list[int]] = []
 
-    @cached_property
-    def shared_attack_tokens(self) -> list[list[int]]:
+    def get_shared_attack_tokens(self, iteration: int) -> list[int]:
         """Get the shared attack tokens for this instance of RandomTokenAttack.
 
         This is for multi-prompt attacks. We generate the attack tokens ahead of
@@ -63,16 +61,19 @@ class RandomTokenAttack(SearchFreeAttack):
         NOTE: This implementation assumes that there is only a single modifiable
         chunk in the dataset.
         """
+        cached_its = len(self._shared_attack_tokens)
+        if iteration < cached_its:
+            return self._shared_attack_tokens[iteration]
+
         # We forbid introducing special tokens in the attack tokens.
         excluded_token_ids = self.victim.all_special_ids
 
-        all_attack_tokens = []
-        for _ in range(self.n_its):
+        for _ in range(cached_its, iteration + 1):
             attack_tokens = self._n_random_token_ids_with_exclusions(
                 self.n_attack_tokens, excluded_token_ids
             )
-            all_attack_tokens.append(attack_tokens)
-        return all_attack_tokens
+            self._shared_attack_tokens.append(attack_tokens)
+        return self._shared_attack_tokens[iteration]
 
     def _get_attack_tokens(
         self,
@@ -116,7 +117,7 @@ class RandomTokenAttack(SearchFreeAttack):
                     {},
                 )
             case PromptAttackMode.MULTIPROMPT:
-                return self.shared_attack_tokens[current_iteration], {}
+                return self.get_shared_attack_tokens(current_iteration), {}
 
     def _n_random_token_ids_with_exclusions(
         self, n: int, excluded_token_ids: list[int]

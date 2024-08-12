@@ -28,11 +28,15 @@ from robust_llm.pipelines.training_pipeline import run_training_pipeline
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks import build_binary_scoring_callback
 from robust_llm.trainer import AdversarialTrainer, AdversarialTrainingState
-from robust_llm.training import AdversarialTraining, _get_only_data_with_incorrect_preds
+from robust_llm.training import (
+    AdversarialTraining,
+    _evaluate_dataset,
+    _get_updated_attack_iterations,
+)
 from robust_llm.utils import FakeClassifierWithPositiveList
 
 
-def test_get_only_data_with_incorrect_preds():
+def test_evaluate_dataset():
     cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
         revision="<2.1.0",
@@ -62,23 +66,17 @@ def test_get_only_data_with_incorrect_preds():
         generation_config=None,
         family="gpt_neox",
     )
-
-    subset_indices = [
-        i for i, d in enumerate(train.ds) if d["clf_label"] == 0  # type: ignore
-    ]
-    expected_filtered_dataset = train.get_subset(subset_indices)
+    expected = [d["clf_label"] == 1 for d in train.ds]  # type: ignore
     scoring_callback_config = CallbackConfig(
         callback_name="successes_from_text", callback_return_type="binary"
     )
     callback = build_binary_scoring_callback(scoring_callback_config)
-    filtered_dataset = _get_only_data_with_incorrect_preds(
+    actual = _evaluate_dataset(
         dataset=train,
         victim=victim,
         victim_success_binary_callback=callback,
     )
-
-    assert filtered_dataset.ds["text"] == expected_filtered_dataset.ds["text"]
-    assert filtered_dataset.ds["clf_label"] == expected_filtered_dataset.ds["clf_label"]
+    assert actual == expected
 
 
 def test_training_pipeline_doesnt_crash():
@@ -116,7 +114,7 @@ def test_adv_training_pipeline_doesnt_crash():
             test_mode=True,
         ),
         evaluation=EvaluationConfig(
-            evaluation_attack=RandomTokenAttackConfig(n_its=2),
+            evaluation_attack=RandomTokenAttackConfig(initial_n_its=2),
         ),
         model=ModelConfig(
             # We use a finetuned model so that the classification head isn't
@@ -143,13 +141,42 @@ def test_adv_training_pipeline_doesnt_crash():
             adversarial=AdversarialTrainingConfig(
                 num_examples_to_generate_each_round=2,
                 num_adversarial_training_rounds=2,
-                training_attack=RandomTokenAttackConfig(n_its=2),
+                training_attack=RandomTokenAttackConfig(initial_n_its=2),
             ),
         ),
     )
     interpolated = OmegaConf.to_object(OmegaConf.structured(config))
     assert isinstance(interpolated, ExperimentConfig)
     run_training_pipeline(interpolated)
+
+
+@pytest.mark.parametrize(
+    "min_its, max_its, target, expected",
+    [
+        (1, 100, 0.5, 8),
+        (1, 100, 0.75, 12),
+        (1, 100, 0.125, 2),
+        (1, 10, 0.75, 10),
+        (1, 100, 0, 1),
+        (4, 100, 0.125, 4),
+    ],
+)
+def test_attack_modulation(
+    min_its: int,
+    max_its: int,
+    target: float,
+    expected: int,
+):
+    attack_config = RandomTokenAttackConfig(initial_n_its=4)
+    victim_successes = [True, True, True, False]  # ASR 25%
+    new_its = _get_updated_attack_iterations(
+        old_its=attack_config.initial_n_its,
+        victim_successes=victim_successes,
+        min_attack_iterations=min_its,
+        max_attack_iterations=max_its,
+        target_adversarial_success_rate=target,
+    )
+    assert new_its == expected
 
 
 def test_adv_training_state():
@@ -190,7 +217,7 @@ def adv_trainer() -> AdversarialTrainer:
             test_mode=True,
         ),
         evaluation=EvaluationConfig(
-            evaluation_attack=RandomTokenAttackConfig(n_its=2),
+            evaluation_attack=RandomTokenAttackConfig(initial_n_its=2),
         ),
         model=ModelConfig(
             name_or_path="AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3",
@@ -211,7 +238,7 @@ def adv_trainer() -> AdversarialTrainer:
             adversarial=AdversarialTrainingConfig(
                 num_examples_to_generate_each_round=2,
                 num_adversarial_training_rounds=2,
-                training_attack=RandomTokenAttackConfig(n_its=2),
+                training_attack=RandomTokenAttackConfig(initial_n_its=2),
                 max_augmented_data_size=4,
             ),
         ),

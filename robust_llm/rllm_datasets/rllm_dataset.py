@@ -546,13 +546,15 @@ class RLLMDataset(ABC):
         if not self.is_tokenized:
             raise ValueError("Dataset is not tokenized")
 
-        columns_to_keep = ["attacked_text", "attacked_clf_label"]
+        columns_to_keep = ["attacked_text", "attacked_clf_label", "attacked_gen_target"]
         columns_to_drop = [c for c in self.ds.column_names if c not in columns_to_keep]
 
         untokenized_new_ds = self.ds.map(remove_columns=columns_to_drop)
-        untokenized_new_ds = untokenized_new_ds.rename_column(
-            "attacked_text", "text"
-        ).rename_column("attacked_clf_label", "clf_label")
+        untokenized_new_ds = (
+            untokenized_new_ds.rename_column("attacked_text", "text")
+            .rename_column("attacked_clf_label", "clf_label")
+            .rename_column("attacked_gen_target", "gen_target")
+        )
 
         assert self.tokenizer is not None
         new_ds = tokenize_dataset(untokenized_new_ds, self.tokenizer)

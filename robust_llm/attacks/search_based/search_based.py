@@ -57,6 +57,7 @@ class SearchBasedAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        n_its: int,
         resume_from_checkpoint: bool = True,
     ) -> AttackOutput:
         """Run a search-based attack separately on each example in the dataset.
@@ -117,6 +118,7 @@ class SearchBasedAttack(Attack):
                     victim=victim,
                     prepped_examples=[prepped_example],
                     random_seed=self.attack_config.seed,
+                    n_its=n_its,
                     config=self.attack_config,
                 )
 

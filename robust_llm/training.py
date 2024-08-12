@@ -364,6 +364,7 @@ class AdversarialTraining(Training):
         self.total_flos = 0.0
         self.training_attack = None
         self.validation_attack = None
+        self.training_iterations = self.training_attack_config.initial_n_its
 
     @property
     def checkpoint_files(self) -> tuple[str, ...]:
@@ -454,6 +455,18 @@ class AdversarialTraining(Training):
     @property
     def stopping_attack_success_rate(self) -> float:
         return self.adversarial_config.stopping_attack_success_rate
+
+    @property
+    def target_adversarial_success_rate(self) -> Optional[float]:
+        return self.adversarial_config.target_adversarial_success_rate
+
+    @property
+    def min_attack_iterations(self) -> int:
+        return self.adversarial_config.min_attack_iterations
+
+    @property
+    def max_attack_iterations(self) -> int:
+        return self.adversarial_config.max_attack_iterations
 
     @property
     def stopping_flops(self) -> float:
@@ -664,6 +677,7 @@ class AdversarialTraining(Training):
                 # NOTE: .get_attacked_dataset should relabel the examples
                 attack_out = self.training_attack.get_attacked_dataset(
                     input_rllm_dataset,
+                    n_its=self.training_iterations,
                     resume_from_checkpoint=False,
                 )
                 attacked_dataset = attack_out.dataset
@@ -677,16 +691,11 @@ class AdversarialTraining(Training):
                     "The first few new adversarial examples are:\n%s",
                     new_adv_examples.ds["text"][:3],
                 )
-
-                # Select the ones to actually add to the training set.
-                if self.only_add_successful_adversarial_examples:
-                    selected_new_adv_examples = _get_only_data_with_incorrect_preds(
-                        dataset=new_adv_examples,
-                        victim=self.victim,
-                        victim_success_binary_callback=self.victim_success_binary_callback,  # noqa: E501
+                selected_new_adv_examples, self.training_iterations = (
+                    self.maybe_update_iterations_and_examples(
+                        new_adv_examples, self.training_iterations
                     )
-                else:
-                    selected_new_adv_examples = new_adv_examples
+                )
 
                 # Log stats and a subset of examples to wandb.
                 wandb.log(
@@ -694,6 +703,7 @@ class AdversarialTraining(Training):
                         "misc/num_selected_training_attack_data": len(
                             selected_new_adv_examples
                         ),
+                        "train/n_its": self.training_iterations,
                     },
                     commit=False,
                 )
@@ -723,6 +733,33 @@ class AdversarialTraining(Training):
             )
 
         table.save()
+
+    def maybe_update_iterations_and_examples(
+        self, new_adv_examples: RLLMDataset, n_its: int
+    ) -> tuple[RLLMDataset, int]:
+        if (not self.only_add_successful_adversarial_examples) and (
+            self.target_adversarial_success_rate is None
+        ):
+            return new_adv_examples, n_its
+
+        victim_successes = _evaluate_dataset(
+            dataset=new_adv_examples,
+            victim=self.victim,
+            victim_success_binary_callback=self.victim_success_binary_callback,  # noqa: E501
+        )
+        if self.only_add_successful_adversarial_examples:
+            new_adv_examples = _get_only_successful_examples(
+                new_adv_examples, victim_successes
+            )
+        if self.target_adversarial_success_rate is not None:
+            n_its = _get_updated_attack_iterations(
+                n_its,
+                victim_successes,
+                self.min_attack_iterations,
+                self.max_attack_iterations,
+                self.target_adversarial_success_rate,
+            )
+        return new_adv_examples, n_its
 
     def _log_debug_info(self):
         logger.debug(
@@ -754,11 +791,11 @@ def _maybe_train_attack(
 
 
 @torch.no_grad()
-def _get_only_data_with_incorrect_preds(
+def _evaluate_dataset(
     dataset: RLLMDataset,
     victim: WrappedModel,
     victim_success_binary_callback: BinaryCallback,
-) -> RLLMDataset:
+) -> list[bool]:
     """Returns a dataset with only the examples that the model got wrong.
 
     Args:
@@ -778,10 +815,40 @@ def _get_only_data_with_incorrect_preds(
         callback_input,
     )
     victim_successes = victim_out.successes
-    # Reduce the dataset to only the examples the model got wrong.
+    return victim_successes
+
+
+def _get_only_successful_examples(
+    new_adv_examples: RLLMDataset, victim_successes: list[bool]
+):
     subset_indices = [i for i, success in enumerate(victim_successes) if not success]
 
     if len(subset_indices) == 0:
         warnings.warn("Got empty dataset after filtering; all preds were correct.")
+    logger.debug(
+        f"Keeping {len(subset_indices)} successful new adversarial examples from "
+        f"{len(new_adv_examples)}"
+    )
+    return new_adv_examples.get_subset(subset_indices)
 
-    return dataset.get_subset(subset_indices)
+
+def _get_updated_attack_iterations(
+    old_its: int,
+    victim_successes: list[bool],
+    min_attack_iterations: int,
+    max_attack_iterations: int,
+    target_adversarial_success_rate: float,
+):
+    attack_success_rate = 1 - sum(victim_successes) / len(victim_successes)
+    new_its = (
+        int(old_its * (target_adversarial_success_rate / attack_success_rate))
+        if attack_success_rate > 0
+        else max_attack_iterations
+    )
+    new_its = max(min(new_its, max_attack_iterations), min_attack_iterations)
+    logger.debug(
+        f"Updated attack iterations to {new_its} based on success rate "
+        f"{attack_success_rate:.2f} and target rate "
+        f"{target_adversarial_success_rate:.2f}"
+    )
+    return new_its

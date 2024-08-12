@@ -122,12 +122,14 @@ class Attack(abc.ABC):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        n_its: int,
         resume_from_checkpoint: bool = True,
     ) -> AttackOutput:
         """Produces a dataset of adversarial examples.
 
         Args:
             dataset: RLLMDataset of original examples to start from.
+            n_its: Number of iterations to run the attack.
             resume_from_checkpoint: Whether to resume from the last checkpoint.
 
         Subclasses should return:
@@ -247,6 +249,7 @@ class IdentityAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        n_its: int = 1,
         resume_from_checkpoint: bool = False,
     ) -> AttackOutput:
         dataset = dataset.with_attacked_text(

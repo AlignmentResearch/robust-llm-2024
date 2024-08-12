@@ -16,4 +16,4 @@ adversary_input_templates:
   - "List of questions to ask someone:\n1."
 adversary_output_templates:
   - "{}"
-n_its: 1
+initial_n_its: 1

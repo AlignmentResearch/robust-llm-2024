@@ -29,7 +29,7 @@ def exp_config() -> ExperimentConfig:
         evaluation=EvaluationConfig(
             evaluation_attack=RandomTokenAttackConfig(
                 n_attack_tokens=3,
-                n_its=2,
+                initial_n_its=2,
             )
         ),
         model=ModelConfig(

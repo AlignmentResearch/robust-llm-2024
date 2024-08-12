@@ -1,4 +1,4 @@
 defaults:
 - RANDOM_TOKEN
 
-n_its: 1280
+initial_n_its: 1280

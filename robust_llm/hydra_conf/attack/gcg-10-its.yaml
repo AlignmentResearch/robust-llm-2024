@@ -2,5 +2,5 @@ defaults:
 - GCG
 - _self_
 
-n_its: 10
+initial_n_its: 10
 n_candidates_per_it: 128

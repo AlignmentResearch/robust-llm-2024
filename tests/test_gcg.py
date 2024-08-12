@@ -52,7 +52,7 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
     )
     config = GCGAttackConfig(
         n_candidates_per_it=1,
-        n_its=1,
+        initial_n_its=1,
         n_attack_tokens=11,
         top_k=1,
     )
@@ -70,6 +70,7 @@ def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunne
         victim=wrapped_model,
         prepped_examples=prepped_examples,
         random_seed=0,
+        n_its=config.initial_n_its,
         config=config,
     )
     assert isinstance(runner, GCGRunner)
@@ -93,7 +94,7 @@ def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRun
     )
     config = GCGAttackConfig(
         n_candidates_per_it=1,
-        n_its=1,
+        initial_n_its=1,
         n_attack_tokens=11,
         top_k=1,
     )
@@ -111,6 +112,7 @@ def pythia_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRun
         victim=wrapped_model,
         prepped_examples=prepped_examples,
         random_seed=0,
+        n_its=config.initial_n_its,
         config=config,
     )
     assert isinstance(runner, GCGRunner)

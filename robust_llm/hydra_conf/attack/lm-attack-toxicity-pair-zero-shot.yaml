@@ -64,4 +64,4 @@ attack_end_strings:
   - "'}"
   - "}"
 adversary_prefix: "{'prompt': '"
-n_its: 60
+initial_n_its: 60

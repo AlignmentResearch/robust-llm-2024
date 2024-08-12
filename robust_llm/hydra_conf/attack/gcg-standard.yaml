@@ -1,5 +1,5 @@
 defaults:
 - GCG
 
-n_its: 10
+initial_n_its: 10
 n_attack_tokens: 10

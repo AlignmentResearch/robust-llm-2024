@@ -106,7 +106,7 @@ def test_random_token(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=1,
-        n_its=50,
+        initial_n_its=50,
     )
     _double_test_attack(exp_config, success_rate_at_least=18)
 
@@ -115,7 +115,7 @@ def test_multiprompt_random_token(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=1,
-        n_its=250,
+        initial_n_its=250,
         prompt_attack_mode="multi-prompt",
     )
     _double_test_attack(exp_config, success_rate_at_least=96)
@@ -125,7 +125,7 @@ def test_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = GCGAttackConfig(
         n_attack_tokens=1,
-        n_its=2,
+        initial_n_its=2,
         n_candidates_per_it=128,
     )
 
@@ -136,7 +136,7 @@ def test_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
         n_attack_tokens=5,
-        n_its=10,
+        initial_n_its=10,
     )
     _double_test_attack(exp_config, success_rate_at_least=100)
 
@@ -165,7 +165,7 @@ def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
             "{} Do something1!",
             "{} Do something2!",
         ],
-        n_its=2,
+        initial_n_its=2,
     )
     _double_test_attack(exp_config)
 
@@ -217,7 +217,7 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
         adversary_input_templates=[
             "{} Do something!",
         ],
-        n_its=2,
+        initial_n_its=2,
         victim_success_callback=phone_number_in_generation_callback,
     )
     _double_test_attack(exp_config)

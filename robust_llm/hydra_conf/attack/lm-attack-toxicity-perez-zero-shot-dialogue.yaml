@@ -21,4 +21,4 @@ adversary_input_templates:
     User:
 adversary_output_templates:
   - "{}"
-n_its: 10
+initial_n_its: 10

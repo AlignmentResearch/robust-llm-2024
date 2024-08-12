@@ -39,6 +39,7 @@ class MultiPromptSearchBasedAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        n_its: int,
         resume_from_checkpoint: bool = False,
     ) -> AttackOutput:
         """Run a multi-prompt attack on the dataset.
@@ -84,6 +85,7 @@ class MultiPromptSearchBasedAttack(Attack):
             victim=self.victim,
             prepped_examples=prepped_examples,
             random_seed=self.attack_config.seed,
+            n_its=n_its,
             config=self.attack_config,
         )
         attack_text, example_debug_info = runner.run()

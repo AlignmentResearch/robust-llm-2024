@@ -259,6 +259,7 @@ class TextAttackAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        n_its: int,
         resume_from_checkpoint: bool = False,
     ) -> AttackOutput:
         assert dataset.modifiable_chunk_spec.n_modifiable_chunks == 1

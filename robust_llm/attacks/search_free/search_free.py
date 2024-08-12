@@ -54,7 +54,6 @@ class SearchFreeAttack(Attack, ABC):
 
     CAN_CHECKPOINT = True
     REQUIRES_TRAINING = False
-    n_its: int
     victim: WrappedModel
     prompt_attack_mode: PromptAttackMode
     victim_success_callback: BinaryCallback | TensorCallback
@@ -72,7 +71,6 @@ class SearchFreeAttack(Attack, ABC):
         self.attack_state = SearchFreeAttackState()
         assert isinstance(attack_config, SearchFreeAttackConfig)
         self.rng = random.Random(attack_config.seed)
-        self.n_its = attack_config.n_its
         self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
         cb_config = attack_config.victim_success_callback
         self.victim_success_callback = build_scoring_callback(cb_config)
@@ -81,6 +79,7 @@ class SearchFreeAttack(Attack, ABC):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        n_its: int,
         resume_from_checkpoint: bool = True,
     ) -> AttackOutput:
         """Returns the attacked dataset and the attack metadata."""
@@ -106,7 +105,7 @@ class SearchFreeAttack(Attack, ABC):
             example["seed"] = example_index
             # TODO (Oskar): account for examples in other partitions when indexing
             attacked_text, example_info, victim_successes = self.attack_example(
-                example, dataset
+                example, dataset, n_its
             )
             attacked_text = self.victim.maybe_apply_user_template(attacked_text)
             # We look for False in the successes list, which indicates a successful
@@ -137,6 +136,7 @@ class SearchFreeAttack(Attack, ABC):
         if self.prompt_attack_mode == PromptAttackMode.MULTIPROMPT:
             attacked_texts = self._get_multi_prompt_attacked_texts(
                 dataset=dataset,
+                n_its=n_its,
                 success_indices=all_success_indices,
             )
 
@@ -149,7 +149,7 @@ class SearchFreeAttack(Attack, ABC):
         return attack_out
 
     def attack_example(
-        self, example: dict[str, Any], dataset: RLLMDataset
+        self, example: dict[str, Any], dataset: RLLMDataset, n_its: int
     ) -> tuple[str, dict[str, Any], SUCCESS_TYPE]:
         """Attacks a single example.
 
@@ -169,6 +169,7 @@ class SearchFreeAttack(Attack, ABC):
             dataset: The RLLMDataset the example belongs to. We pass this so we
                 have access to the ModifiableChunkSpec and methods for updating
                 columns based on changes to the text.
+            n_its: The number of iterations to run.
 
 
         Returns:
@@ -177,7 +178,7 @@ class SearchFreeAttack(Attack, ABC):
         """
         attacked_inputs, attacked_info = self.get_attacked_inputs(
             example=example,
-            n_attacks=self.n_its,
+            n_attacks=n_its,
             modifiable_chunk_spec=dataset.modifiable_chunk_spec,
         )
 
@@ -398,7 +399,7 @@ class SearchFreeAttack(Attack, ABC):
                 raise ValueError(f"Unknown chunk type: {chunk_type}")
 
     def _get_multi_prompt_attacked_texts(
-        self, dataset: RLLMDataset, success_indices: list[list[int]]
+        self, dataset: RLLMDataset, n_its: int, success_indices: list[list[int]]
     ) -> list[str]:
         """Get attacked_texts for multi-prompt setting.
 
@@ -411,7 +412,7 @@ class SearchFreeAttack(Attack, ABC):
         best_attack_iteration = _get_most_frequent_index(success_indices)
         # If there were no successful attacks, we use the last attack arbitrarily.
         if best_attack_iteration is None:
-            best_attack_iteration = self.n_its - 1
+            best_attack_iteration = n_its - 1
 
         def get_best_attacked_input(example_index, example) -> str:
             """Get the attacked input for the best attack iteration.

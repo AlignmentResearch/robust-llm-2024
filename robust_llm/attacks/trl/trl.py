@@ -227,6 +227,7 @@ class TRLAttack(Attack):
     def get_attacked_dataset(
         self,
         dataset: RLLMDataset,
+        n_its: int = 1,
         resume_from_checkpoint: bool = False,
     ) -> AttackOutput:
         # At present, the trl attack is set up to only work

@@ -71,7 +71,7 @@ def test_doesnt_crash_gen_as_clf_random_token(exp_config: ExperimentConfig) -> N
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=3,
-        n_its=2,
+        initial_n_its=2,
     )
     _test_doesnt_crash(exp_config)
 
@@ -82,7 +82,7 @@ def test_doesnt_crash_gen_as_clf_multiprompt_random_token(
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=3,
-        n_its=2,
+        initial_n_its=2,
         prompt_attack_mode="multi-prompt",
     )
     _test_doesnt_crash(exp_config)
@@ -92,7 +92,7 @@ def test_doesnt_crash_gen_as_clf_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = GCGAttackConfig(
         n_attack_tokens=2,
-        n_its=2,
+        initial_n_its=2,
         n_candidates_per_it=16,
     )
 
@@ -103,7 +103,7 @@ def test_doesnt_crash_gen_as_clf_multiprompt_gcg(exp_config: ExperimentConfig) -
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
         n_attack_tokens=3,
-        n_its=2,
+        initial_n_its=2,
     )
     _test_doesnt_crash(exp_config)
 

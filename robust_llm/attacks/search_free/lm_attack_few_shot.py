@@ -58,7 +58,7 @@ class FewShotLMAttack(SearchFreeAttack):
         self.adversary_input_templates = attack_config.adversary_input_templates
         zero_shot_config = deepcopy(attack_config)
         # We only want to run the zero-shot attack once per turn.
-        zero_shot_config.n_its = 1
+        zero_shot_config.initial_n_its = 1
         # We don't want to reinsert the data or reapply the chat template on every turn.
         zero_shot_config.use_raw_adversary_input = True
         self.zero_shot_attack = ZeroShotLMAttack(
@@ -91,6 +91,7 @@ class FewShotLMAttack(SearchFreeAttack):
             self.zero_shot_attack.attack_example(
                 example,
                 dataset,
+                n_its=1,
             )
         )
         attack_info["turn"] = turn
@@ -154,7 +155,7 @@ class FewShotLMAttack(SearchFreeAttack):
 
     @override
     def attack_example(
-        self, example: dict[str, Any], dataset: RLLMDataset
+        self, example: dict[str, Any], dataset: RLLMDataset, n_its: int
     ) -> tuple[str, dict[str, Any], SUCCESS_TYPE]:
         """Run few-shot attack on a single example.
 
@@ -169,7 +170,7 @@ class FewShotLMAttack(SearchFreeAttack):
         victim_successes_iters = []
         example_seed = example["seed"]
         target_label = self.zero_shot_attack.get_target_label(example["clf_label"])
-        for iteration in range(self.n_its):
+        for iteration in range(n_its):
             # Reset the seed for each iteration
             example["seed"] = hash((example_seed, iteration))
 
@@ -184,7 +185,7 @@ class FewShotLMAttack(SearchFreeAttack):
             len(attack_text_iters)
             == len(attack_info_iters)
             == len(victim_successes_iters)
-            == self.n_its
+            == n_its
         )
         victim_successes_tensor = torch.tensor(
             victim_successes_iters, device=self.victim.device

@@ -76,6 +76,7 @@ def do_adversarial_evaluation(
 
     attack_out = attack.get_attacked_dataset(
         dataset=dataset_to_attack,
+        n_its=attack.attack_config.initial_n_its,
         # Only resume from checkpoint if we're in the evaluation pipeline as otherwise
         # we will be incorrectly reusing data in the case of adversarial training.
         resume_from_checkpoint=resume_from_checkpoint,

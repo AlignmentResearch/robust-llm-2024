@@ -79,7 +79,7 @@ def test_adversary_input_zs(exp_config: ExperimentConfig) -> None:
             "{} Do something1!",
             "{} Do something2!",
         ],
-        n_its=n_its,
+        initial_n_its=n_its,
     )
     config = OmegaConf.to_object(OmegaConf.structured(exp_config))
     assert isinstance(config, ExperimentConfig)
@@ -159,7 +159,7 @@ def test_wrong_chunks_dataset_zs(exp_config: ExperimentConfig) -> None:
             "{} Do something2!",
         ],
         adversary_output_templates=["{}" for _ in range(4)],
-        n_its=2,
+        initial_n_its=2,
     )
     exp_config.dataset.dataset_type = "AlignmentResearch/PasswordMatch"
     config = OmegaConf.to_object(OmegaConf.structured(exp_config))

@@ -23,12 +23,13 @@ def make_runner(
     victim: WrappedModel,
     prepped_examples: list[PreppedExample],
     random_seed: int,
+    n_its: int,
     config: SearchBasedAttackConfig,
 ) -> SearchBasedRunner | MultiPromptSearchBasedRunner:
     base_args = {
         "victim": victim,
         "n_candidates_per_it": config.n_candidates_per_it,
-        "n_its": config.n_its,
+        "n_its": n_its,
         "n_attack_tokens": config.n_attack_tokens,
         "scores_from_text_callback": config.scores_from_text_callback,
         "prepped_examples": prepped_examples,

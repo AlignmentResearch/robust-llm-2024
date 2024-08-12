@@ -86,8 +86,16 @@ class AdversarialTrainingConfig:
         adv_sampling_decay (float):
             The decay factor for the sampling probability of adversarial examples.
         stopping_attack_success_rate (float):
-            The attack success rate on the validation dataset) at which to stop
+            The attack success rate on the validation dataset at which to stop
             adversarial training.
+        target_adversarial_success_rate (float or None):
+            The attack success rate on adversarial examples to target during
+            adversarial training by modulating the iterations of the attack.
+            If None, the attack will run for a fixed number of iterations.
+        min_attack_iterations (int):
+            The minimum number of iterations to run the attack for.
+        max_attack_iterations (int):
+            The maximum number of iterations to run the attack for.
         stopping_flops (float):
             The number of FLOPs to use as a stopping criterion for adversarial training.
     """
@@ -104,9 +112,17 @@ class AdversarialTrainingConfig:
     max_augmented_data_size: int = SI("${dataset.n_train}")
     adv_sampling_decay: float = 0.0
     stopping_attack_success_rate: float = 0.0
+    target_adversarial_success_rate: Optional[float] = None
+    min_attack_iterations: int = 1
+    max_attack_iterations: int = SI(
+        "${mult: 10, ${training.adversarial.training_attack.initial_n_its}}"
+    )
     stopping_flops: float = float("inf")
 
-    def __post__init__(self):
+    def __post_init__(self):
+        assert (
+            self.min_attack_iterations > 0
+        ), "Minimum number of iterations must be positive."
         assert 0 <= self.loss_rank_weight <= 1, "loss_rank_weight should be in [0, 1]."
 
 

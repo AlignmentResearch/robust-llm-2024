@@ -39,7 +39,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
             attack_config.adversary, accelerator=victim.accelerator
         )
         self.adversary.eval()
-        if attack_config.n_its > 1:
+        if attack_config.initial_n_its > 1:
             # If we're doing multiple iterations, we need to sample.
             # Otherwise we will always generate the same text.
             assert self.adversary.generation_config is not None

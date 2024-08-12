@@ -49,7 +49,7 @@ def exp_config() -> ExperimentConfig:
             evaluation_attack=FewShotLMAttackConfig(
                 seed=0,
                 n_turns=2,
-                n_its=2,
+                initial_n_its=2,
                 adversary=ModelConfig(
                     name_or_path="Felladrin/Pythia-31M-Chat-v1",
                     family="pythia-chat",

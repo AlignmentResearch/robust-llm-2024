@@ -25,7 +25,7 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
 def random_token_config():
     return RandomTokenAttackConfig(
         n_attack_tokens=3,
-        n_its=100,
+        initial_n_its=100,
         save_total_limit=0,
     )
 
@@ -47,7 +47,6 @@ def tokenizer():
 def test_build_random_token_attack(random_token_config):
     attack = RandomTokenAttack(random_token_config, MagicMock(), "test-run")
     assert attack.n_attack_tokens == 3
-    assert attack.n_its == 100
 
 
 def test_n_random_token_ids_with_exclusions(random_token_config, mocked_victim):

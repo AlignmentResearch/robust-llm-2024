@@ -34,6 +34,8 @@ class AttackConfig:
             How often to save attack states.
         save_total_limit (int):
             Maximum number of attack states to keep at the same time.
+        initial_n_its (int):
+            The number of iterations to run the attack.
     """
 
     seed: int = 0
@@ -43,6 +45,7 @@ class AttackConfig:
     save_prefix: str = "attack_states"
     save_steps: int = 100
     save_total_limit: int = 1
+    initial_n_its: int = 1
 
     def __post_init__(self):
         if self.train_frequency is not None and self.train_frequency <= 0:
@@ -61,6 +64,9 @@ class IdentityAttackConfig(AttackConfig):
     """
 
     def __post_init__(self):
+        assert (
+            self.initial_n_its == 1
+        ), "The IdentityAttack does not use `n_its`, so it should not be modified"
         super().__post_init__()
 
 
@@ -88,6 +94,7 @@ class TextAttackAttackConfig(AttackConfig):
     def __post_init__(self):
         super().__post_init__()
         assert self.text_attack_recipe in TEXT_ATTACK_ATTACK_TYPES
+        assert self.initial_n_its == 1
 
 
 @dataclass
@@ -95,7 +102,6 @@ class SearchFreeAttackConfig(AttackConfig):
     """Options specific for search-free attacks.
 
     Attributes:
-        n_its (int): Maximum number of iterations to run the attack.
         victim_success_callback (CallbackConfig): Config for the
             ScoringCallback to use to compute whether an attack was successful by
             computing whether the victim got the right answer. Should refer to a
@@ -109,7 +115,6 @@ class SearchFreeAttackConfig(AttackConfig):
 
     """
 
-    n_its: int = 100
     victim_success_callback: CallbackConfig = field(
         default_factory=lambda: CallbackConfig(
             callback_name="successes_from_text", callback_return_type="binary"
@@ -119,7 +124,7 @@ class SearchFreeAttackConfig(AttackConfig):
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.n_its > 0
+        assert self.initial_n_its > 0
 
 
 @dataclass
@@ -170,7 +175,6 @@ class LMAttackConfig(SearchFreeAttackConfig):
         use_raw_adversary_input: If True, we will skip trying to insert the original
             data and the chat template. This should only be set when called from a
             few-shot attack.
-        n_its: Maximum number of iterations to run the attack.
         victim_success_callback (CallbackConfig): Config for the
             ScoringCallback to use to compute whether an attack was successful by
             computing whether the victim got the right answer. Should refer to a
@@ -185,7 +189,6 @@ class LMAttackConfig(SearchFreeAttackConfig):
     attack_start_strings: list[str] = field(default_factory=list)
     attack_end_strings: list[str] = field(default_factory=list)
     use_raw_adversary_input: bool = False
-    n_its: int = 10
     victim_success_callback: CallbackConfig = field(
         default_factory=lambda: CallbackConfig(
             callback_name="successes_from_text", callback_return_type="binary"
@@ -293,6 +296,9 @@ class TRLAttackConfig(AttackConfig):
         assert (
             self.batch_size == self.mini_batch_size * self.gradient_accumulation_steps
         )
+        assert (
+            self.initial_n_its == 1
+        ), "The TRLAttack does not use `n_its`, please modify `ppo_epochs` instead"
 
 
 @dataclass
@@ -304,7 +310,6 @@ class SearchBasedAttackConfig(AttackConfig):
         n_candidates_per_it: the total number of token replacements
             to consider in each iteration (in GCG, this must be less than
             top_k * n_attack_tokens, which is the total number of candidates).
-        n_its: total number of iterations to run
         n_attack_tokens: number of attack tokens to optimize
         scores_from_text_callback: The config of the ScoringCallback to use to
             compute scores for the inputs. Must take text as input, and return
@@ -312,7 +317,6 @@ class SearchBasedAttackConfig(AttackConfig):
     """
 
     n_candidates_per_it: int = 128
-    n_its: int = 10
     n_attack_tokens: int = 10
     scores_from_text_callback: CallbackConfig = field(
         default_factory=lambda: CallbackConfig(
