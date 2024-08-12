@@ -65,6 +65,10 @@ class AdversarialTrainingConfig:
         only_add_successful_adversarial_examples (bool):
             Whether to add only successful adversarial examples to training set;
             otherwise, add all trials, successful or not.
+        loss_rank_weight (float):
+            The weight to give to the rank of the loss when ranking adversarial
+            examples for training. Should be [0, 1] as we allocate the rest of the
+            weight to recency.
         num_adversarial_training_rounds (int):
             The number of adversarial training rounds to do.
         skip_first_training_round (bool):
@@ -79,7 +83,7 @@ class AdversarialTrainingConfig:
             examples.
         max_augmented_data_size (int):
             The maximum number of datapoints to use for adversarial training.
-        sampling_decay (float):
+        adv_sampling_decay (float):
             The decay factor for the sampling probability of adversarial examples.
         stopping_attack_success_rate (float):
             The attack success rate on the validation dataset) at which to stop
@@ -91,15 +95,19 @@ class AdversarialTrainingConfig:
     num_examples_to_generate_each_round: int = 500
     num_examples_to_log_to_wandb_each_round: int = 10
     only_add_successful_adversarial_examples: bool = False
+    loss_rank_weight: float = 0.0
     num_adversarial_training_rounds: int = 3
     skip_first_training_round: bool = False
     use_balanced_sampling: bool = False
     training_attack: AttackConfig = field(default_factory=AttackConfig)
     max_adv_data_proportion: float = 0.5
     max_augmented_data_size: int = SI("${dataset.n_train}")
-    sampling_decay: float = 0.0
+    adv_sampling_decay: float = 0.0
     stopping_attack_success_rate: float = 0.0
     stopping_flops: float = float("inf")
+
+    def __post__init__(self):
+        assert 0 <= self.loss_rank_weight <= 1, "loss_rank_weight should be in [0, 1]."
 
 
 @dataclass

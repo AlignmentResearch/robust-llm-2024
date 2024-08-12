@@ -1,7 +1,10 @@
 import random
 from typing import cast
+from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
+import torch
 from accelerate import Accelerator
 from datasets import Dataset
 from omegaconf import OmegaConf
@@ -20,11 +23,12 @@ from robust_llm.config.configs import (
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models import GPTNeoXModel
 from robust_llm.models.model_utils import InferenceType
+from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks import build_binary_scoring_callback
-from robust_llm.trainer import AdversarialTrainingState
-from robust_llm.training import _get_only_data_with_incorrect_preds
+from robust_llm.trainer import AdversarialTrainer, AdversarialTrainingState
+from robust_llm.training import AdversarialTraining, _get_only_data_with_incorrect_preds
 from robust_llm.utils import FakeClassifierWithPositiveList
 
 
@@ -176,3 +180,147 @@ def test_adv_training_state():
     assert loaded.validation_attack_rng is not None
     assert state.training_attack_rng.random() == loaded.training_attack_rng.random()
     assert state.validation_attack_rng.random() == loaded.validation_attack_rng.random()
+
+
+@pytest.fixture
+def adv_trainer() -> AdversarialTrainer:
+    config = ExperimentConfig(
+        experiment_type="training",
+        environment=EnvironmentConfig(
+            test_mode=True,
+        ),
+        evaluation=EvaluationConfig(
+            evaluation_attack=RandomTokenAttackConfig(n_its=2),
+        ),
+        model=ModelConfig(
+            name_or_path="AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3",
+            family="pythia",
+            inference_type="classification",
+            train_minibatch_size=1,
+            eval_minibatch_size=1,
+            minibatch_multiplier=1,
+        ),
+        dataset=DatasetConfig(
+            dataset_type="AlignmentResearch/IMDB",
+            revision="<2.1.0",
+            n_train=2,
+            n_val=2,
+        ),
+        training=TrainingConfig(
+            model_save_path_prefix_or_hf=None,
+            adversarial=AdversarialTrainingConfig(
+                num_examples_to_generate_each_round=2,
+                num_adversarial_training_rounds=2,
+                training_attack=RandomTokenAttackConfig(n_its=2),
+                max_augmented_data_size=4,
+            ),
+        ),
+    )
+    args = OmegaConf.to_object(OmegaConf.structured(config))
+    assert isinstance(args, ExperimentConfig)
+    assert args.evaluation is not None
+    assert args.training is not None
+    untokenized_train_set = load_rllm_dataset(args.dataset, split="train")
+    untokenized_val_set = load_rllm_dataset(args.dataset, split="validation")
+    num_classes = untokenized_train_set.num_classes
+    victim = WrappedModel.from_config(
+        args.model, accelerator=None, num_classes=num_classes
+    )
+    train_set = untokenized_train_set.tokenize(victim.right_tokenizer)
+    val_set = untokenized_val_set.tokenize(victim.right_tokenizer)
+    model_name_to_save = "dummy"
+    training = AdversarialTraining(
+        config=args.training,
+        train_rllm_dataset=train_set,
+        eval_rllm_dataset={"validation": val_set},
+        victim=victim,
+        model_name_to_save=model_name_to_save,
+        environment_config=args.environment,
+        evaluation_config=args.evaluation,
+        run_name=args.run_name,
+        validation_attack_config=args.evaluation.evaluation_attack,
+    )
+    trainer = training.setup_trainer()
+    return trainer
+
+
+def test_get_train_dataloader(adv_trainer: AdversarialTrainer):
+    assert adv_trainer.eval_dataset is not None
+    val_set = adv_trainer.eval_dataset["validation"]
+    assert isinstance(val_set, Dataset)
+
+    assert adv_trainer.train_dataset.num_rows == 2
+    adv_trainer.add_new_adversarial_examples(val_set)
+    dataloader = adv_trainer.get_train_dataloader()
+    assert adv_trainer.train_dataset.num_rows == 4
+    assert len(dataloader) == 4
+
+
+def test_empty_adversarial_dataset(adv_trainer: AdversarialTrainer):
+    result_dataset, result_indices = adv_trainer.get_augmented_training_set()
+
+    assert result_dataset == adv_trainer.regular_dataset
+    assert result_indices == []
+
+
+def test_weight_adv_examples_by_loss(adv_trainer: AdversarialTrainer):
+    assert adv_trainer.eval_dataset is not None
+    val_set = adv_trainer.eval_dataset["validation"]
+    assert isinstance(val_set, Dataset)
+
+    adv_trainer.max_augmented_data_size = 3
+    adv_trainer.loss_rank_weight = 1.0
+    adv_trainer.sampling_decay = 1.0
+    adv_trainer.add_new_adversarial_examples(val_set)
+    adv_trainer.adversarial_losses = {0: 0.0, 1: float("inf")}
+    result_dataset, result_indices = adv_trainer.get_augmented_training_set()
+    assert result_indices == [1]
+    assert len(result_dataset) == 3
+
+
+def test_weight_adv_examples_by_recency(adv_trainer: AdversarialTrainer):
+    assert adv_trainer.eval_dataset is not None
+    val_set = adv_trainer.eval_dataset["validation"]
+    assert isinstance(val_set, Dataset)
+
+    adv_trainer.max_augmented_data_size = 3
+    adv_trainer.loss_rank_weight = 0.0
+    adv_trainer.sampling_decay = 22
+    adv_trainer.add_new_adversarial_examples(val_set)
+    result_dataset, result_indices = adv_trainer.get_augmented_training_set()
+    assert result_indices == [1]
+    assert len(result_dataset) == 3
+
+
+def test_equal_weight_adv_examples(adv_trainer: AdversarialTrainer):
+    assert adv_trainer.eval_dataset is not None
+    val_set = adv_trainer.eval_dataset["validation"]
+    assert isinstance(val_set, Dataset)
+
+    adv_trainer.max_augmented_data_size = 3
+    adv_trainer.loss_rank_weight = 0.0
+    adv_trainer.sampling_decay = 0.0
+    adv_trainer.add_new_adversarial_examples(val_set)
+    result_dataset, result_indices = adv_trainer.get_augmented_training_set()
+    assert result_indices == [0]
+    assert len(result_dataset) == 3
+
+
+def test_compute_loss(adv_trainer: AdversarialTrainer):
+    adv_trainer.adversarial_indices = [1, 2, 0]
+    mock_model = MagicMock()
+    mock_model.return_value = {
+        "loss": torch.tensor([0.7]),
+        "logits": torch.tensor(
+            [[-np.inf, 0.0], [0.0, -np.inf], [-np.inf, 0.0], [-np.inf, 0.0]]
+        ),
+    }
+    inputs = {"labels": torch.tensor([0, 1, 0, 1])}
+    loss = adv_trainer.compute_loss(mock_model, inputs)
+    assert isinstance(loss, torch.Tensor)
+    assert torch.isclose(loss, torch.tensor([0.7]))
+    assert adv_trainer.adversarial_losses == {
+        1: np.inf,
+        2: np.inf,
+        0: 0,
+    }

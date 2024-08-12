@@ -17,6 +17,7 @@ from robust_llm.utils import nested_list_to_tuple
 if TYPE_CHECKING:
     from robust_llm.training import AdversarialTraining
 
+import torch.nn.functional as F
 import torch.utils.data
 import wandb
 from datasets import Dataset
@@ -128,6 +129,7 @@ class AdversarialTrainer(RLLMTrainer):
         use_balanced_sampling: bool,
         max_adv_data_proportion: float,
         max_augmented_data_size: int,
+        loss_rank_weight: float,
         sampling_decay: float,
         **trainer_kwargs,
     ):
@@ -136,6 +138,7 @@ class AdversarialTrainer(RLLMTrainer):
         self.use_balanced_sampling = use_balanced_sampling
         self.max_adv_data_proportion = max_adv_data_proportion
         self.max_augmented_data_size = max_augmented_data_size
+        self.loss_rank_weight = loss_rank_weight
         self.sampling_decay = sampling_decay
         self.rng = np.random.default_rng(seed=self.args.seed)
 
@@ -152,6 +155,31 @@ class AdversarialTrainer(RLLMTrainer):
             {f: [] for f in self.train_dataset.features},
             features=self.train_dataset.features,
         )
+        # Track the index in self.adversarial_dataset of each adversarial example
+        # in self.train_dataset
+        self.adversarial_indices: list[int] = []
+        # Track the last loss on each adversarial example in self.adversarial_dataset
+        self.adversarial_losses: dict[int, float] = {}
+
+    @override
+    def compute_loss(self, model, inputs, return_outputs=False):
+        """Overrides HF Trainer.compute_loss to track attack successes."""
+        assert self.label_smoother is None
+        outputs = model(**inputs)
+        assert isinstance(outputs, dict)
+        # Save past state if it exists
+        if self.args.past_index >= 0:
+            self._past = outputs[self.args.past_index]
+
+        loss = outputs["loss"]
+        logits = outputs["logits"]
+        labels = inputs["labels"]
+        train_losses = F.cross_entropy(logits, labels, reduction="none").tolist()
+
+        adv_losses = train_losses[len(train_losses) - len(self.adversarial_indices) :]
+        for index, success in zip(self.adversarial_indices, adv_losses, strict=True):
+            self.adversarial_losses[index] = success
+        return (loss, outputs) if return_outputs else loss
 
     @override
     def get_train_dataloader(self):
@@ -160,11 +188,9 @@ class AdversarialTrainer(RLLMTrainer):
         # is called at the start of each training epoch
         # https://github.com/huggingface/transformers/blob/5a4f340df74b42b594aedf60199eea95cdb9bed0/src/transformers/trainer.py#L812
 
-        self.train_dataset = self.get_augmented_training_set()
+        self.train_dataset, self.adversarial_indices = self.get_augmented_training_set()
         train_dataloader = super().get_train_dataloader()
         return train_dataloader
-
-        # TODO: test this to make sure the dataloader pulls from the augmented dataset
 
     def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
         use_balanced_sampling = self.use_balanced_sampling
@@ -186,7 +212,7 @@ class AdversarialTrainer(RLLMTrainer):
         else:
             return super()._get_train_sampler()
 
-    def get_augmented_training_set(self) -> Dataset:
+    def get_augmented_training_set(self) -> tuple[Dataset, list[int]]:
         """Return the training set with adversarial examples added.
 
         If no adversarial examples have been added, this will return the
@@ -197,7 +223,8 @@ class AdversarialTrainer(RLLMTrainer):
         otherwise we'd have a mismatch between ClassLabel and Value(int)).
         """
         if len(self.adversarial_dataset) == 0:
-            return self.regular_dataset
+            return self.regular_dataset, []
+
         n_train = min(
             len(self.regular_dataset) + len(self.adversarial_dataset),
             self.max_augmented_data_size,
@@ -212,16 +239,7 @@ class AdversarialTrainer(RLLMTrainer):
             size=n_clean,
             replace=False,
         )
-        sampling_weights = np.exp(
-            self.sampling_decay * np.arange(len(self.adversarial_dataset))
-        )
-        sampling_probs = sampling_weights / sampling_weights.sum()
-        adv_indices = self.rng.choice(
-            len(self.adversarial_dataset),
-            size=n_adv,
-            replace=False,
-            p=sampling_probs,
-        )
+        adv_indices = self._get_adv_indices(n_adv)
         clean_data = self.regular_dataset.select(clean_indices)
         adv_data = self.adversarial_dataset.select(adv_indices)
         train_dataset_plus_adv_examples = cast_and_concatenate(
@@ -229,7 +247,42 @@ class AdversarialTrainer(RLLMTrainer):
             adv_data,
         )
         assert len(train_dataset_plus_adv_examples) == n_train
-        return train_dataset_plus_adv_examples
+        return train_dataset_plus_adv_examples, adv_indices.tolist()
+
+    def _get_adv_indices(self, n_adv: int) -> np.ndarray:
+        """Get indices of adversarial examples to use for training.
+
+        We have two distinct ways of ranking adversarial examples: by time
+        and by loss. The time rank is simply the order in which the adversarial
+        examples were generated. The loss rank is the ordering of the adversarial
+        examples by their loss on the last time they were evaluated. We then
+        compute a weighted average of these two rankings, where the weights are
+        determined by the loss_rank_weight parameter. The weights are exponentiated
+        and normalized to form a probability distribution, which is used to sample
+        the adversarial examples.
+
+        Args:
+            n_adv: Number of adversarial examples to sample.
+
+        Returns:
+            adv_indices: Indices of adversarial examples to use for training.
+        """
+        n = len(self.adversarial_dataset)
+        time_ranks = np.arange(n)
+        losses = [self.adversarial_losses.get(i, float("inf")) for i in range(n)]
+        loss_ranks = np.argsort(losses)
+        ranks = (
+            1 - self.loss_rank_weight
+        ) * time_ranks + self.loss_rank_weight * loss_ranks
+        weights = np.exp(self.sampling_decay * (ranks - ranks.max()))
+        sampling_probs = weights / weights.sum()
+        adv_indices = self.rng.choice(
+            n,
+            size=n_adv,
+            replace=False,
+            p=sampling_probs,
+        )
+        return adv_indices
 
     def add_new_adversarial_examples(self, new_examples: Dataset) -> None:
         """Add new adversarial examples to the adversarial dataset.

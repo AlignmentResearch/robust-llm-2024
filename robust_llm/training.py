@@ -436,6 +436,10 @@ class AdversarialTraining(Training):
         return self.adversarial_config.only_add_successful_adversarial_examples
 
     @property
+    def loss_rank_weight(self) -> float:
+        return self.adversarial_config.loss_rank_weight
+
+    @property
     def max_adv_data_proportion(self) -> float:
         return self.adversarial_config.max_adv_data_proportion
 
@@ -445,7 +449,7 @@ class AdversarialTraining(Training):
 
     @property
     def sampling_decay(self) -> float:
-        return self.adversarial_config.sampling_decay
+        return self.adversarial_config.adv_sampling_decay
 
     @property
     def stopping_attack_success_rate(self) -> float:
@@ -461,6 +465,7 @@ class AdversarialTraining(Training):
             use_balanced_sampling=self.adv_use_balanced_sampling,
             max_adv_data_proportion=self.max_adv_data_proportion,
             max_augmented_data_size=self.max_augmented_data_size,
+            loss_rank_weight=self.loss_rank_weight,
             sampling_decay=self.sampling_decay,
             model=self.victim.model,
             args=self.training_arguments,
