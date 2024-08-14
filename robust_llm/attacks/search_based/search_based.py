@@ -21,6 +21,7 @@ from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 @dataclass
 class SearchBasedAttackState(AttackState):
     all_filtered_out_counts: list[int] = field(default_factory=list)
+    logits_cache: list[list[list[float]] | list[None]] = field(default_factory=list)
 
 
 class SearchBasedAttack(Attack):
@@ -72,12 +73,19 @@ class SearchBasedAttack(Attack):
         if resume_from_checkpoint and self.maybe_load_state():
             assert isinstance(self.attack_state, SearchBasedAttackState)
             all_filtered_out_counts = self.attack_state.all_filtered_out_counts
+            # all_attacked_texts are used for robustness metric; attacked_texts
+            # are the final outputs produced by the attack.
+            all_iteration_texts = self.attack_state.all_iteration_texts
+            logits_cache = self.attack_state.logits_cache
             attacked_input_texts = self.attack_state.attacked_texts
             starting_index = self.attack_state.example_index + 1
         else:
             # Reset the state if not resuming from checkpoint
             all_filtered_out_counts = []
+            all_iteration_texts = []
+            logits_cache = []
             attacked_input_texts = []
+
             self.attack_state = SearchBasedAttackState()
             starting_index = 0
 
@@ -122,17 +130,28 @@ class SearchBasedAttack(Attack):
                     config=self.attack_config,
                 )
 
-                attack_text, example_debug_info = runner.run()
+                final_attack_string, example_info = runner.run()
+
+            all_iteration_texts.append(
+                [
+                    prompt_template.build_prompt(attack_text=a)
+                    for a in example_info["attack_strings"]
+                ]
+            )
+            logits_cache.append(example_info["logits"])
+            all_filtered_out_counts.append(example_info["all_filtered_out_count"])
+
             attacked_input_text = prompt_template.build_prompt(
-                attack_text=attack_text,
+                attack_text=final_attack_string,
             )
             attacked_input_texts.append(attacked_input_text)
-            all_filtered_out_counts.append(example_debug_info["all_filtered_out_count"])
 
             # Save the state
             self.attack_state = SearchBasedAttackState(
                 example_index=example_index,
                 attacked_texts=attacked_input_texts,
+                all_iteration_texts=all_iteration_texts,
+                logits_cache=logits_cache,
                 all_filtered_out_counts=all_filtered_out_counts,
             )
 
@@ -146,9 +165,15 @@ class SearchBasedAttack(Attack):
         # even after the attack has stopped using it.
         # (This is primarily for GCG.)
         self.victim.model.zero_grad()
+
+        # If there are no logits, we set the cache to None.
+        # TODO(ian): Fix type hinting for logits.
+        final_logits_cache: list[list[list[float]]] | None = logits_cache if any(logits_cache) else None  # type: ignore  # noqa: E501
         attack_out = AttackOutput(
             dataset=attacked_dataset,
-            attack_data=AttackData(),
+            attack_data=AttackData(
+                iteration_texts=all_iteration_texts, logits=final_logits_cache
+            ),
             global_info=global_info,
         )
         return attack_out

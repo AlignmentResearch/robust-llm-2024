@@ -44,7 +44,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--experiment_name", type=str, help="experiment_name for wandb")
     parser.add_argument("--job_type", type=str, help="job_type for wandb")
     parser.add_argument(
-        "--container_tag", type=str, help="container tag to use", default="latest"
+        "--container_tag",
+        type=str,
+        help="container tag to use",
+        default="2024-08-07-backoff",
     )
     parser.add_argument("--cpu", type=int, help="number of cpus to use", default=4)
     parser.add_argument("--memory", type=str, help="memory to use", default="20G")

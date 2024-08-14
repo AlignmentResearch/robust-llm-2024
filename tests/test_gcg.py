@@ -349,7 +349,7 @@ def test_apply_replacements_and_eval_candidates(gcg_runner: GCGRunner) -> None:
     ]
     expected_final_texts = ["b!@!@!", "@c@!@!"]
 
-    scores_and_final_texts = gcg_runner._apply_replacements_and_eval_candidates(
+    scores_and_final_texts, _ = gcg_runner._apply_replacements_and_eval_candidates(
         text_replacement_pairs
     )
     assert expected_final_texts == [t for _, t in scores_and_final_texts]

@@ -65,14 +65,18 @@ class BinaryCallbackOutput(CallbackOutput):
                 return
 
             expected_len = len(self.successes)
-            for value in self.info.values():
-                assert len(value) == expected_len
+            keys_to_use = []
+            for key, value in self.info.items():
+                if value is not None:
+                    assert len(value) == expected_len
+                    keys_to_use.append(key)
 
-            table = wandb.Table(columns=["success"] + list(self.info.keys()))
+            table = wandb.Table(columns=["success"] + keys_to_use)
             for i in range(expected_len):
                 row = [self.successes[i]]
                 for key, value in self.info.items():
-                    row.append(value[i])
+                    if key in keys_to_use:
+                        row.append(value[i])
                 table.add_data(*row)
             wandb.log({table_name: table}, commit=commit)
 
@@ -214,7 +218,7 @@ def _classification_success_from_text(
     victim: WrappedModel,
     input_data: list[str],
     clf_label_data: list[int],
-) -> list[bool]:
+) -> tuple[list[bool], list[list[float]]]:
     # We use right-padding for non-autoregressive outputs.
     tokenized = victim.tokenize(input_data, return_tensors="pt", padding_side="right")
     input_ids = tokenized.input_ids
@@ -229,7 +233,7 @@ def _classification_success_from_tokens(
     input_ids: torch.Tensor,
     attention_mask: torch.Tensor,
     clf_label_data: list[int],
-) -> list[bool]:
+) -> tuple[list[bool], list[list[float]]]:
 
     all_successes: list[bool] = []
     output_generator = victim.classification_output_from_tokens(
@@ -238,6 +242,7 @@ def _classification_success_from_tokens(
     )
 
     batch_start = 0
+    all_logits = []
     for out in output_generator:
         logits = out["logits"]
         assert victim.accelerator is not None
@@ -249,8 +254,11 @@ def _classification_success_from_tokens(
             batch_label_data,
         )
         all_successes.extend(successes)
+        all_logits.append(logits)
         batch_start += batch_length
-    return all_successes
+    logits = torch.cat(all_logits)
+    # Convert to list so it can be JSON serialized.
+    return all_successes, logits.tolist()
 
 
 def _generation_successes_from_text(

@@ -407,10 +407,18 @@ for text_attack_recipe in TEXT_ATTACK_ATTACK_TYPES:
         node=TextAttackAttackConfig(text_attack_recipe=text_attack_recipe),
     )
 cs.store(group="attack", name="IDENTITY", node=IdentityAttackConfig)
-cs.store(group="attack", name="RANDOM_TOKEN", node=RandomTokenAttackConfig)
+cs.store(
+    group="attack",
+    name="RANDOM_TOKEN",
+    node=RandomTokenAttackConfig(initial_n_its=1280),
+)
 cs.store(group="attack", name="TRL", node=TRLAttackConfig)
-cs.store(group="attack", name="GCG", node=GCGAttackConfig)
-cs.store(group="attack", name="MULTIPROMPT_GCG", node=MultipromptGCGAttackConfig)
+cs.store(group="attack", name="GCG", node=GCGAttackConfig(initial_n_its=10))
+cs.store(
+    group="attack",
+    name="MULTIPROMPT_GCG",
+    node=MultipromptGCGAttackConfig(initial_n_its=10),
+)
 cs.store(group="attack", name="BEAM_SEARCH", node=BeamSearchAttackConfig)
 cs.store(group="attack", name="ZERO_SHOT_LM", node=LMAttackConfig)
 cs.store(group="attack", name="FEW_SHOT_LM", node=FewShotLMAttackConfig)

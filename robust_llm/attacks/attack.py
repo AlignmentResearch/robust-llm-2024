@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
+import wandb
 from typing_extensions import override
 
 from robust_llm import logger
@@ -20,10 +21,19 @@ CONFIG_NAME = "config.json"
 
 @dataclass
 class AttackState:
-    """State used for checkpointing attacks."""
+    """State used for checkpointing attacks.
+
+    Attributes:
+        example_index: Index of the current example being attacked.
+        attacked_texts: List of final attacked texts for each example.
+        all_iteration_texts: List of attacked texts for each iteration on each
+            example, for use computing robustness metric.
+        attacks_info: Dictionary of additional information about the attack.
+    """
 
     example_index: int = 0
     attacked_texts: list[str] = field(default_factory=list)
+    all_iteration_texts: list[list[str]] = field(default_factory=list)
     attacks_info: dict[str, list[Any]] = field(default_factory=dict)
 
 
@@ -36,6 +46,30 @@ class AttackData:
     TODO(ian): Add attributes and come up with a more informative name.
     """
 
+    iteration_texts: list[list[str]] = field(default_factory=list)
+    logits: list[list[list[float]]] | None = None
+
+    def to_wandb_tables(self) -> list[wandb.Table]:
+        tables = []
+        n_examples = len(self.iteration_texts)
+        for example_ix in range(n_examples):
+            n_its = len(self.iteration_texts[example_ix])
+
+            if self.logits is None:
+                table = wandb.Table(columns=["iteration_texts"])
+                for iteration in range(n_its):
+                    table.add_data(self.iteration_texts[example_ix][iteration])
+
+            else:
+                table = wandb.Table(columns=["iteration_texts", "logits"])
+                for iteration in range(n_its):
+                    table.add_data(
+                        self.iteration_texts[example_ix][iteration],
+                        self.logits[example_ix][iteration],
+                    )
+            tables.append(table)
+        return tables
+
 
 @dataclass
 class AttackOutput:
@@ -44,15 +78,15 @@ class AttackOutput:
     Attributes:
         dataset:
             The dataset of adversarial examples.
+        attack_data:
+            A record of how the attack did at each iteration, to be used to
+            compute robustness metrics.
         global_info:
             A dictionary of additional information about the attack as a whole,
             to be logged.
         per_example_info:
             A dictionary of additional information about each example, to be
             logged alongside the individual examples.
-        attack_data:
-            A record of how the attack did at each iteration, to be used to
-            compute robustness metrics.
     """
 
     dataset: RLLMDataset

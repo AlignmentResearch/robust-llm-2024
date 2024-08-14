@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+- /dataset: PasswordMatch/compatibility
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
+- /environment: DEFAULT
+- _self_
+
+dataset:
+  n_val: 200
+
+model:
+  strict_load: true
+
+experiment_type: "evaluation"

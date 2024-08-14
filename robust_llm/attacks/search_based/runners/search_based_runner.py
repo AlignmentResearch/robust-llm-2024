@@ -79,6 +79,8 @@ class SearchBasedRunner(abc.ABC):
         # In how many iterations it happened that all candidates were filtered out
         all_filtered_out_count = 0
 
+        attack_strings = []
+        all_logits = []
         for _ in range(self.n_its):
             candidate_texts_and_replacements = (
                 self._get_candidate_texts_and_replacements(candidate_texts)
@@ -89,13 +91,21 @@ class SearchBasedRunner(abc.ABC):
             if len(candidate_texts_and_replacements) == 0:
                 all_filtered_out_count += 1
                 continue
-            evaluated_candidates = self._apply_replacements_and_eval_candidates(
-                candidate_texts_and_replacements
+            evaluated_candidates, eval_info = (
+                self._apply_replacements_and_eval_candidates(
+                    candidate_texts_and_replacements
+                )
             )
             candidate_texts = self._select_next_candidates(evaluated_candidates)
             attack_text = candidate_texts[0]
+            attack_strings.append(attack_text)
+            all_logits.append(eval_info["logits"])
 
-        info_dict = {"all_filtered_out_count": all_filtered_out_count}
+        info_dict = {
+            "all_filtered_out_count": all_filtered_out_count,
+            "attack_strings": attack_strings,
+            "logits": all_logits,
+        }
 
         return attack_text, info_dict
 
@@ -297,8 +307,22 @@ class SearchBasedRunner(abc.ABC):
     def _apply_replacements_and_eval_candidates(
         self,
         text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
-    ) -> list[tuple[float, str]]:
-        """Evaluates the candidates using a forward pass through the model."""
+    ) -> tuple[list[tuple[float, str]], dict[str, Any]]:
+        """Evaluates the candidates using a forward pass through the model.
+
+        Args:
+            text_replacement_pairs: A list of (attack_text, replacement) pairs to
+                evaluate.
+
+        Returns:
+            A tuple containing:
+                - a list of (score, attack_text) pairs, where the score is the model's
+                    output on the attack text.
+                - a dictionary containing additional information about the
+                    evaluation, in particular the logits on the example in the
+                    classification setting.
+        """
+
         attack_tokens_list = [
             self._get_tokens(text, return_tensors=None)
             for text, _ in text_replacement_pairs
@@ -345,7 +369,7 @@ class SearchBasedRunner(abc.ABC):
 
         assert len(evaluated_candidates) == len(text_replacement_pairs)
 
-        return evaluated_candidates
+        return evaluated_candidates, {"logits": cb_out.info["logits"]}
 
     def _filter_candidates(
         self,

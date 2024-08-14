@@ -1,0 +1,22 @@
+# @package _global_
+defaults:
+- /dataset: PasswordMatch/compatibility
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: GCG
+- /model: EleutherAI/pythia-14m
+- /environment: DEFAULT
+- _self_
+
+dataset:
+  n_val: 10
+
+model:
+  name_or_path: "AlignmentResearch/robust_llm_pythia-tt-1b-mz-ada-v3"
+  strict_load: true
+
+environment:
+  device: "mps"
+
+experiment_name: ian_000
+run_name: attack_data_saving_test_1b
+experiment_type: "evaluation"

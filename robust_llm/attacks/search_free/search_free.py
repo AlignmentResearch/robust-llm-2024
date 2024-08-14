@@ -41,6 +41,7 @@ SUCCESSES_TYPE = list[SUCCESS_TYPE]
 @dataclass
 class SearchFreeAttackState(AttackState):
     success_indices: list[list[int]] = field(default_factory=list)
+    logits_cache: list[list[list[float]] | list[None]] = field(default_factory=list)
 
 
 class SearchFreeAttack(Attack, ABC):
@@ -86,13 +87,17 @@ class SearchFreeAttack(Attack, ABC):
         if resume_from_checkpoint and self.maybe_load_state():
             assert isinstance(self.attack_state, SearchFreeAttackState)
             attacked_texts = self.attack_state.attacked_texts
+            all_iteration_texts = self.attack_state.all_iteration_texts
+            logits_cache = self.attack_state.logits_cache
             all_success_indices = self.attack_state.success_indices
             per_example_info = self.attack_state.attacks_info
             starting_index = self.attack_state.example_index + 1
         else:
             # Reset the state if not resuming from checkpoint
             attacked_texts = []
+            all_iteration_texts = []
             all_success_indices = []
+            logits_cache = []
             per_example_info = {}
             self.attack_state = SearchFreeAttackState()
             starting_index = 0
@@ -118,6 +123,12 @@ class SearchFreeAttack(Attack, ABC):
 
             # Append data for this example
             attacked_texts.append(attacked_text)
+
+            example_iteration_texts = example_info["iteration_texts"]
+            example_logits: list[list[float]] | list[None] = example_info["logits"]
+            all_iteration_texts.append(example_iteration_texts)
+            logits_cache.append(example_logits)
+
             per_example_info = {
                 k: per_example_info.get(k, []) + [v] for k, v in example_info.items()
             }
@@ -127,6 +138,8 @@ class SearchFreeAttack(Attack, ABC):
             self.attack_state = SearchFreeAttackState(
                 example_index=example_index,
                 attacked_texts=attacked_texts,
+                all_iteration_texts=all_iteration_texts,
+                logits_cache=logits_cache,
                 success_indices=all_success_indices,
                 attacks_info=per_example_info,
             )
@@ -141,9 +154,14 @@ class SearchFreeAttack(Attack, ABC):
             )
 
         attacked_dataset = dataset.with_attacked_text(attacked_texts)
+        # If there are no logits, we set the cache to None.
+        # TODO(ian): Fix type hinting for logits.
+        final_logits_cache: list[list[list[float]]] | None = logits_cache if any(logits_cache) else None  # type: ignore  # noqa: E501
         attack_out = AttackOutput(
             dataset=attacked_dataset,
-            attack_data=AttackData(),
+            attack_data=AttackData(
+                iteration_texts=all_iteration_texts, logits=final_logits_cache
+            ),
             per_example_info=per_example_info,
         )
         return attack_out
@@ -220,8 +238,17 @@ class SearchFreeAttack(Attack, ABC):
 
         success_index = get_first_attack_success_index(victim_successes)
         attacked_text = attacked_inputs[success_index]
-        attacked_info = {k: v[success_index] for k, v in attacked_info.items()}
+        attacked_info = {
+            k: v[success_index] for k, v in attacked_info.items() if v is not None
+        }
         attacked_info["success_index"] = success_index
+
+        inps, logits = _prepare_attack_data(
+            attacked_inputs, victim_out.info.get("logits"), success_index
+        )
+        attacked_info["iteration_texts"] = inps
+        attacked_info["logits"] = logits
+
         return attacked_text, attacked_info, victim_successes
 
     def get_attacked_inputs(
@@ -473,3 +500,29 @@ def get_first_attack_success_index(
     # the perspective of the victim, so lower is better.
     _, attack_index = min((val, idx) for (idx, val) in enumerate(victim_successes))
     return attack_index
+
+
+def _prepare_attack_data(
+    attacked_inputs: list[str],
+    logits: list[list[float]] | None,
+    success_index: int,
+) -> tuple[list[str], list[list[float]] | None]:
+    """Prepare the attacked inputs and logits for saving in AttackData.
+
+    In a search-free attack, we don't want to save attacked strings beyond
+    the first successful attack, since the rest are redundant. We also don't
+    want to save logits beyond the first successful attack, since they are
+    not useful. Thus we overwrite them with the final useful value.
+    """
+    useful_attacked_inputs = attacked_inputs[: success_index + 1]
+    n_repeats = len(attacked_inputs) - len(useful_attacked_inputs)
+    repeated_attacked_inputs = [useful_attacked_inputs[-1]] * n_repeats
+    returned_attacked_inputs = useful_attacked_inputs + repeated_attacked_inputs
+
+    if logits is None:
+        return returned_attacked_inputs, None
+
+    useful_logits = logits[: success_index + 1]
+    repeated_logits = [useful_logits[-1]] * n_repeats
+    returned_logits = useful_logits + repeated_logits
+    return returned_attacked_inputs, returned_logits

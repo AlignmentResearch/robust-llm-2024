@@ -56,18 +56,21 @@ def successes_from_text_callback(
         if callback_input.clf_label_data is None:
             raise ValueError("Label data required for classification.")
         label_data = _validate_classification_labels(callback_input.clf_label_data)
-        successes = _classification_success_from_text(victim, input_data, label_data)
+        successes, logits = _classification_success_from_text(
+            victim, input_data, label_data
+        )
 
     elif victim.inference_type == InferenceType.GENERATION:
         if callback_input.gen_target_data is None:
             raise ValueError("Target data required for generation.")
         label_data = _validate_text_input(callback_input.gen_target_data)
         successes = _generation_successes_from_text(victim, input_data, label_data)
+        logits = None  # We don't cache logits for generation.
 
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
 
-    return BinaryCallbackOutput(successes=successes)
+    return BinaryCallbackOutput(successes=successes, info={"logits": logits})
 
 
 @CallbackRegistry.register_callback(name="successes_from_tokens", return_type="binary")
@@ -93,7 +96,7 @@ def successes_from_tokens_callback(
         # TODO(ian): Work out if we should pass an attention mask, or can assume
         # they're all unpadded.
         attention_mask = torch.ones_like(input_data)
-        successes = _classification_success_from_tokens(
+        successes, logits = _classification_success_from_tokens(
             victim, input_data, attention_mask, label_data
         )
     elif victim.inference_type == InferenceType.GENERATION:
@@ -108,9 +111,10 @@ def successes_from_tokens_callback(
             prompt_input_ids=list_input_data,
             gen_target_data=label_data,
         )
+        logits = None
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
-    return BinaryCallbackOutput(successes=successes)
+    return BinaryCallbackOutput(successes=successes, info={"logits": logits})
 
 
 @CallbackRegistry.register_callback(name="losses_from_embeds", return_type="tensor")
@@ -184,6 +188,7 @@ def losses_from_text_callback(
         attention_mask = tokenized.attention_mask
 
         all_losses = []
+        all_logits = []
         output_generator = victim.classification_output_from_tokens(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -200,25 +205,29 @@ def losses_from_text_callback(
                 logits, batch_label_data
             )
             all_losses.append(minibatch_losses)
+            all_logits.append(logits)
             batch_start += batch_length
-        losses = torch.cat(all_losses)
+
+        out_logits = torch.cat(all_logits).tolist()
+        out_losses = torch.cat(all_losses)
 
     elif victim.inference_type == InferenceType.GENERATION:
         if callback_input.gen_target_data is None:
             raise ValueError("Target data required for generation.")
         label_data = _validate_text_input(callback_input.gen_target_data)
-        losses = _generation_losses_from_text(
+        out_losses = _generation_losses_from_text(
             victim=victim,
             input_data=input_data,
             gen_target_data=label_data,
             use_no_grad=False,
         )
+        out_logits = None  # We don't cache logits for generation.
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
 
     # Postconditions.
-    assert losses.shape[0] == len(input_data)
-    return TensorCallbackOutput(losses=losses)
+    assert out_losses.shape[0] == len(input_data)
+    return TensorCallbackOutput(losses=out_losses, info={"logits": out_logits})
 
 
 @CallbackRegistry.register_callback(
