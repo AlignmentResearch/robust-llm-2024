@@ -335,6 +335,12 @@ def test_equal_weight_adv_examples(adv_trainer: AdversarialTrainer):
 
 def test_compute_loss(adv_trainer: AdversarialTrainer):
     adv_trainer.adversarial_indices = [1, 2, 0]
+    adv_trainer.train_dataset = Dataset.from_dict(
+        {
+            "text": ["a", "b", "c", "d"],
+            "clf_label": [0, 1, 0, 1],
+        }
+    )
     mock_model = MagicMock()
     mock_model.return_value = {
         "loss": torch.tensor([0.7]),

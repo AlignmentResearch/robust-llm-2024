@@ -160,6 +160,21 @@ class AdversarialTrainer(RLLMTrainer):
         self.adversarial_indices: list[int] = []
         # Track the last loss on each adversarial example in self.adversarial_dataset
         self.adversarial_losses: dict[int, float] = {}
+        # Store computed losses across batches
+        self.computed_losses: list[float] = []
+
+    def maybe_update_adversarial_losses(self):
+        """Update the adversarial losses if all losses have been computed."""
+        if len(self.computed_losses) < len(self.train_dataset):
+            # Wait for remaining batches to finish computing losses
+            return
+        assert len(self.computed_losses) == len(self.train_dataset)
+        adv_losses = self.computed_losses[
+            len(self.computed_losses) - len(self.adversarial_indices) :
+        ]
+        for index, success in zip(self.adversarial_indices, adv_losses, strict=True):
+            self.adversarial_losses[index] = success
+        self.computed_losses = []
 
     @override
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -174,11 +189,11 @@ class AdversarialTrainer(RLLMTrainer):
         loss = outputs["loss"]
         logits = outputs["logits"]
         labels = inputs["labels"]
-        train_losses = F.cross_entropy(logits, labels, reduction="none").tolist()
 
-        adv_losses = train_losses[len(train_losses) - len(self.adversarial_indices) :]
-        for index, success in zip(self.adversarial_indices, adv_losses, strict=True):
-            self.adversarial_losses[index] = success
+        losses = F.cross_entropy(logits, labels, reduction="none").tolist()
+        self.computed_losses += losses
+        self.maybe_update_adversarial_losses()
+
         return (loss, outputs) if return_outputs else loss
 
     @override
