@@ -74,7 +74,7 @@ class SearchBasedRunner(abc.ABC):
     def run(self) -> tuple[str, dict[str, Any]]:
         """Runs the attack and returns the adversarial text and debug info dict."""
         attack_text = self.initial_attack_text
-        candidate_texts = [attack_text]
+        cand_texts = [attack_text]
 
         # In how many iterations it happened that all candidates were filtered out
         all_filtered_out_count = 0
@@ -83,7 +83,7 @@ class SearchBasedRunner(abc.ABC):
         all_logits = []
         for _ in range(self.n_its):
             candidate_texts_and_replacements = (
-                self._get_candidate_texts_and_replacements(candidate_texts)
+                self._get_candidate_texts_and_replacements(cand_texts)
             )
             candidate_texts_and_replacements = self._filter_candidates(
                 candidate_texts_and_replacements
@@ -96,10 +96,16 @@ class SearchBasedRunner(abc.ABC):
                     candidate_texts_and_replacements
                 )
             )
-            candidate_texts = self._select_next_candidates(evaluated_candidates)
-            attack_text = candidate_texts[0]
+            cand_texts, cand_indices = self._select_next_candidates(
+                evaluated_candidates
+            )
+            attack_text = cand_texts[0]
+            attack_index = cand_indices[0]
             attack_strings.append(attack_text)
-            all_logits.append(eval_info["logits"])
+            eval_logits = eval_info["logits"]
+            all_logits.append(
+                eval_logits[attack_index] if eval_logits is not None else None
+            )
 
         info_dict = {
             "all_filtered_out_count": all_filtered_out_count,
@@ -116,13 +122,28 @@ class SearchBasedRunner(abc.ABC):
     ) -> list[tuple[str, ReplacementCandidate]]:
         """Proposes a set of (attack_text, replacement) candidate pairs to consider."""
 
-    def _select_next_candidates(self, candidates: list[tuple[float, str]]) -> list[str]:
-        """Selects text candidates for the next round, based on (score, text) pairs."""
-        sorted_candidates = list(sorted(candidates, key=lambda x: x[0]))
+    def _select_next_candidates(
+        self, candidates: list[tuple[float, str]]
+    ) -> tuple[list[str], list[int]]:
+        """Selects text candidates for the next round, based on (score, text) pairs.
+
+        Args:
+            candidates: A list of (score, text) pairs to select from.
+
+        Returns:
+            A list of the next candidates to consider and a list of their indices.
+        """
+        indexed_candidates = list(enumerate(candidates))
+        sorted_candidates = list(sorted(indexed_candidates, key=lambda x: x[1][0]))
         next_candidates = [
-            text for _, text in sorted_candidates[: self.n_best_candidates_to_keep]
+            candidate[1][1]
+            for candidate in sorted_candidates[: self.n_best_candidates_to_keep]
         ]
-        return next_candidates
+        next_candidates_indices = [
+            candidate[0]
+            for candidate in sorted_candidates[: self.n_best_candidates_to_keep]
+        ]
+        return next_candidates, next_candidates_indices
 
     @property
     @abc.abstractmethod

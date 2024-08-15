@@ -6,6 +6,9 @@ defaults:
 - /model: EleutherAI/pythia-14m
 - _self_
 
+environment:
+  allow_checkpointing: false
+
 dataset:
   n_val: 10
 
