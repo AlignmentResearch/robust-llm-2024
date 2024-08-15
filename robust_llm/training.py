@@ -271,6 +271,11 @@ class Training:
         log_dataset_to_wandb(self.trainer.train_dataset, "train_dataset")
         log_dataset_to_wandb(validation_dataset, "validation_dataset")
 
+    def wandb_log(self, d: dict, commit: bool) -> None:
+        assert self.trainer is not None
+        if self.trainer.is_world_process_zero():
+            wandb.log(d, commit=commit)
+
     def maybe_save_model_to_path_or_hf(
         self, path_prefix_or_hf: Optional[str], adv_tr_round: Optional[int] = None
     ) -> None:
@@ -559,7 +564,7 @@ class AdversarialTraining(Training):
                 + adversarial_trainer.args.output_dir
             )
             # Can be useful for x axis in plots
-            wandb.log({"adversarial_training_round": self.round}, commit=False)
+            self.wandb_log({"adversarial_training_round": self.round}, commit=False)
 
             # Train for "one round" (i.e., num_train_epochs)
             # on the (eventually, adversarial example-augmented) train set
@@ -581,7 +586,7 @@ class AdversarialTraining(Training):
                 logger.info("Victim finished training in round %s ", self.round)
                 self.total_flos += train_out.metrics["total_flos"]
                 self._log_debug_info()
-                wandb.log(
+                self.wandb_log(
                     {
                         "train/total_flos": self.total_flos,
                     },
@@ -698,7 +703,7 @@ class AdversarialTraining(Training):
                 )
 
                 # Log stats and a subset of examples to wandb.
-                wandb.log(
+                self.wandb_log(
                     {
                         "misc/num_selected_training_attack_data": len(
                             selected_new_adv_examples
