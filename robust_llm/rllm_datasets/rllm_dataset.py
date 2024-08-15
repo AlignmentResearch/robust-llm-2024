@@ -7,7 +7,6 @@ from typing import Any, TypeVar, overload
 
 import datasets
 import numpy as np
-import semver
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 
@@ -17,13 +16,11 @@ from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.dataset_utils import (
     EXPECTED_COLUMNS,
     cast_column_to_feature,
-    cast_features_like,
+    check_revision_is_supported,
     construct_text_and_chunked_text,
-    get_largest_version,
-    get_largest_version_below,
+    maybe_get_version,
     strip_leading_whitespace,
     tokenize_dataset,
-    valid_tag,
 )
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 
@@ -52,17 +49,6 @@ class RLLMDataset(ABC):
             IMMUTABLE, PERTURBABLE, or OVERWRITABLE.
         is_tokenized: Whether the dataset has been tokenized, i.e., whether it
             has 'input_ids' and 'attention_mask' columns.
-
-    Methods:
-        update_dataset_based_on_text: A function that updates a dataset based on a
-            (possibly updated) 'text' column. An example use of this is when we can
-            easily compute the ground truth label based on the text. This is ideal
-            to have because sometimes adversarial attacks can change the true label.
-            Not all datasets can easily define such a function though, in which case
-            the columns are not changed and we assume the attack does not change
-            anything except the text.
-        update_example_based_on_text: Like update_dataset_based_on_text, but for a
-            single example rather than a whole Dataset.
     """
 
     def __init__(
@@ -81,10 +67,13 @@ class RLLMDataset(ABC):
         """
         assert split in ("train", "validation")
         assert dataset_config.revision is not None
+        check_revision_is_supported(
+            dataset_config.dataset_type, dataset_config.revision
+        )
         self.split = split
         self.tokenizer = tokenizer
         self.dataset_type = dataset_config.dataset_type
-        self.version = self._maybe_get_version(
+        self.version = maybe_get_version(
             dataset_config.dataset_type, dataset_config.revision
         )
         self.inference_type = InferenceType(dataset_config.inference_type)
@@ -127,89 +116,6 @@ class RLLMDataset(ABC):
         assert "attention_mask" in self.ds.column_names
         assert self.tokenizer is not None
         return True
-
-    def update_dataset_based_on_text(
-        self, ds: Dataset, column_prefix: str = ""
-    ) -> Dataset:
-        """Update columns based on a text column.
-
-        This supersedes the ground_truth_label_fn method as it is more general
-        and can update multiple columns.
-
-        By default, this method does nothing, since many datasets do not need to
-        update columns based on text. Subclasses can override this method to
-        update columns based on text.
-
-        Args:
-            ds: The dataset to update.
-            column_prefix: The prefix of the columns to update. For example, if
-                column_prefix is 'attacked_', then the attacked_text column will be
-                used to (potentially) update the 'attacked_clf_label' and
-                'attacked_gen_target' columns.
-        """
-        # for-loop to avoid type issues.
-        examples = []
-        for example in ds:
-            assert isinstance(example, dict)
-            new_example = self.update_example_based_on_text(example, column_prefix)
-            examples.append(new_example)
-
-        new_ds = Dataset.from_list(examples)
-        new_ds = cast_features_like(ds, new_ds)
-        return new_ds
-
-    def update_example_based_on_text(
-        self, example: dict[str, Any], column_prefix: str = ""
-    ) -> dict[str, Any]:
-        """Update an example based on a text column.
-
-        This supersedes the ground_truth_label_fn method as it is more general
-        and can update multiple columns.
-
-        By default, this method does nothing, since many datasets do not need to
-        update examples based on text. Subclasses can override this method to
-        update examples based on text.
-
-        Args:
-            example: The example to update.
-            column_prefix: The prefix of the columns to update. For example, if
-                column_prefix is 'attacked_', then the attacked_text column will be
-                used to (potentially) update the 'attacked_clf_label' and
-                'attacked_gen_target' columns.
-        """
-        return example
-
-    def _maybe_get_version(self, dataset_type: str, revision: str) -> str:
-        """Maybe process the version given into an actual version to use.
-
-        If a valid semver version was specified, use that. Otherwise if
-        'main' was specified, use the latest version. If the string starts with
-        '<', use the latest version that is strictly less than the specified
-        version.
-
-        NOTE: We don't simply use 'main' because we want to record the version
-        used and avoid race conditions that could arise from separately loading
-        'main' and looking up the most recent version.
-
-        Args:
-            dataset_type: The name of the dataset on huggingface hub.
-            revision: The revision to use. (e.g. 'main', '1.0.0', '<1.0.0')
-        """
-        version: str | semver.Version | None
-        if revision.startswith("<"):
-            version = get_largest_version_below(dataset_type, revision[1:])
-        elif revision == "main":
-            version = get_largest_version(dataset_type)
-        elif valid_tag(revision):
-            version = revision
-        else:
-            raise ValueError(
-                f"Invalid revision: {revision}."
-                " Should be 'main' or a valid semver version."
-            )
-        if version is None:
-            raise ValueError(f"No versions found for revision {revision}")
-        return str(version)
 
     def _load_dataset(
         self,
@@ -371,11 +277,6 @@ class RLLMDataset(ABC):
             self.ds["gen_target"],
             new_fingerprint=None,  # type: ignore  # (bug in datasets?)
         )
-
-        # Maybe update the attacked columns based on the new column.
-        # E.g. if the dataset allows for recomputation of the ground truth
-        # label, use it.
-        new_ds = self.update_dataset_based_on_text(new_ds, "attacked_")
 
         # Make 'attacked_clf_label' have the same Feature as 'clf_label'
         new_ds = cast_column_to_feature(

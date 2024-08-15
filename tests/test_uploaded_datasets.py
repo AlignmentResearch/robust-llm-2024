@@ -51,8 +51,3 @@ def test_uploaded_datasets(repo_id: str):
         assert len(text) > 0
         assert len(chunked_text) > 0
         assert text == "".join(chunked_text)
-        # Make sure the clf_label is valid.
-        print("Before:", example)
-        example = dataset.update_example_based_on_text(example)
-        print("After:", example)
-        assert example["clf_label"] == clf_label

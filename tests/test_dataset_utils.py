@@ -30,10 +30,10 @@ def test_loading_largest_version_below():
         dataset_type=repo_id,
         n_train=5,
         n_val=5,
-        revision="<2.1.0",
+        revision="<2.1.1",
     )
     dataset = load_rllm_dataset(cfg, split="validation")
-    assert dataset.version == "2.0.0"
+    assert dataset.version == "2.1.0"
 
 
 def test_failing_largest_version_below():

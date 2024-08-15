@@ -8,7 +8,7 @@ def test_clean_single_example():
     HYDRA_CONFIG = "Eval/pm_gcg"
 
     MODELS = [
-        "AlignmentResearch/robust_llm_pythia-tt-14m-mz-v0",
+        "AlignmentResearch/robust_llm_pythia-14m_clf_pm_v-ian-068_s-0",
     ]
     OVERRIDE_ARGS_LIST = [
         {

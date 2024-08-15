@@ -36,7 +36,7 @@ def exp_config() -> ExperimentConfig:
         ),
         evaluation=EvaluationConfig(),
         model=ModelConfig(
-            name_or_path="AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3",
+            name_or_path="AlignmentResearch/robust_llm_pythia-14m_clf_imdb_v-ian-067_s-0",  # noqa: E501
             family="pythia",
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
@@ -50,7 +50,7 @@ def exp_config() -> ExperimentConfig:
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
-            revision="<2.1.0",
+            revision="2.1.0",
             n_train=2,
             n_val=2,
         ),
@@ -128,14 +128,14 @@ def test_adversary_input_zs(exp_config: ExperimentConfig) -> None:
     first_call = attack.adversary.decode(
         mock_generate.call_args_list[0].kwargs["input_ids"].squeeze(0)
     )
-    assert first_call.startswith("I don't particularly care from Michael Jackson.")
-    assert first_call.endswith("a creepy white woman with a fake nose. Do something1!")
+    assert first_call.startswith("This movie was awesome.")
+    assert first_call.endswith("Even if you are not, BUY! Do something1!")
 
     second_call = attack.adversary.decode(
         mock_generate.call_args_list[n_its].kwargs["input_ids"].squeeze(0)
     )
-    assert second_call.startswith("I never saw the other two")
-    assert second_call.endswith("but at least it was not boring. Do something2!")
+    assert second_call.startswith("When the Italians and Miles")
+    assert second_call.endswith("Totally lives up to the first movie. Do something1!")
 
 
 def test_wrong_chunks_dataset_zs(exp_config: ExperimentConfig) -> None:

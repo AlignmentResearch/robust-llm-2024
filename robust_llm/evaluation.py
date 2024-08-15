@@ -405,6 +405,4 @@ def _dataset_for_iteration(
             "proxy_gen_target": proxy_gen_targets,
         }
     )
-    # Hack to support old PasswordMatch datasets
-    ds = attack_out.dataset.update_dataset_based_on_text(ds)
     return ds

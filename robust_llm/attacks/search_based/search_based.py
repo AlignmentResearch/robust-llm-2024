@@ -107,9 +107,7 @@ class SearchBasedAttack(Attack):
                 unmodifiable_suffix=unmodifiable_suffix,
             )
 
-            # Maybe update the example after changing out modifiable chunk
             example["text"] = prompt_template.build_prompt()
-            example = dataset.update_example_based_on_text(example)
 
             goal_label, goal_target = get_label_and_target_for_attack(example, dataset)
 

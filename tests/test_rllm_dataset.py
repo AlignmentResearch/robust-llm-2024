@@ -18,7 +18,7 @@ def clf_dataset() -> RLLMDataset:
 
     cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
-        revision="<2.1.0",
+        revision="2.1.0",
         n_train=5,
         n_val=5,
         config_name="pos",
@@ -39,7 +39,7 @@ def gen_dataset() -> RLLMDataset:
 
     cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
-        revision="<2.1.0",
+        revision="2.1.0",
         n_train=5,
         n_val=5,
         config_name="pos",
@@ -90,32 +90,6 @@ def test_tokenization_and_subset(clf_dataset: RLLMDataset, tokenizer):
         )
 
 
-def test_update_example_based_on_text(clf_dataset: RLLMDataset):
-    """Test the update_example_based_on_text works as expected.
-
-    We use the config_name='pos' PasswordMatch dataset as a test case, since
-    all of its labels are 1 so it's easy to flip the label.
-    """
-    # Test the ground truth label function
-    example = clf_dataset.ds[0]
-    assert example["clf_label"] == 1
-    chunks = example["chunked_text"][:]  # Copy the list to avoid mutation
-    chunks[2] = "some_other_word"
-    attacked_text = "".join(chunks)
-    example["attacked_text"] = attacked_text
-    example["attacked_clf_label"] = 1
-
-    # Update on both original text and attacked_text
-    example = clf_dataset.update_example_based_on_text(example, column_prefix="")
-    example = clf_dataset.update_example_based_on_text(
-        example, column_prefix="attacked_"
-    )
-    # The label should be left as 1 for the original text and updated to 0 for
-    # the attacked text.
-    assert example["clf_label"] == 1
-    assert example["attacked_clf_label"] == 0
-
-
 def test_with_attacked_text(clf_dataset: RLLMDataset, tokenizer):
     attacked_texts = []
     for example in clf_dataset.ds:
@@ -130,9 +104,10 @@ def test_with_attacked_text(clf_dataset: RLLMDataset, tokenizer):
     assert len(attacked_dataset) == len(clf_dataset)
     # Check that the attacked dataset has the original text in it
     assert attacked_dataset.ds["text"] == clf_dataset.ds["text"]
-    # Check that the labels have been flipped properly
+    # Check that the labels are not flipped (they previously were flipped for
+    # old PasswordMatch, so we make sure this is not longer the case.)
     assert all(
-        [ex["attacked_clf_label"] == 0 for ex in attacked_dataset.ds]  # type: ignore
+        [ex["attacked_clf_label"] == 1 for ex in attacked_dataset.ds]  # type: ignore
     )
     assert all([ex["clf_label"] == 1 for ex in attacked_dataset.ds])  # type: ignore
     # Check that 'attacked_clf_label' is still a ClassLabel feature
@@ -146,7 +121,7 @@ def test_with_attacked_text(clf_dataset: RLLMDataset, tokenizer):
     adv_dataset = attacked_dataset.tokenize(tokenizer).as_adversarial_examples()
     assert len(adv_dataset) == len(clf_dataset)
     assert adv_dataset.ds["text"] == attacked_dataset.ds["attacked_text"]
-    assert all([ex["clf_label"] == 0 for ex in adv_dataset.ds])  # type: ignore
+    assert all([ex["clf_label"] == 1 for ex in adv_dataset.ds])  # type: ignore
     # Check that the 'attacked_text' and 'attacked_clf_label' columns are gone
     assert "attacked_text" not in adv_dataset.ds
     assert "attacked_clf_label" not in adv_dataset.ds

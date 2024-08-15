@@ -17,7 +17,7 @@ def rllm_dataset():
     dataset_config = DatasetConfig(
         dataset_type="AlignmentResearch/WordLength",
         config_name="pos",  # We want all the labels to be 0.
-        revision="2.1.0",
+        revision="2.2.0",
         n_train=2,
         n_val=2,
     )

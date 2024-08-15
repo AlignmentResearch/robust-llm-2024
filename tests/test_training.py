@@ -39,7 +39,7 @@ from robust_llm.utils import FakeClassifierWithPositiveList
 def test_evaluate_dataset():
     cfg = DatasetConfig(
         dataset_type="AlignmentResearch/PasswordMatch",
-        revision="<2.1.0",
+        revision="2.1.0",
         n_train=10,
         n_val=10,
     )
@@ -98,7 +98,7 @@ def test_training_pipeline_doesnt_crash():
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
-            revision="<2.1.0",
+            revision="2.1.0",
             n_train=2,
             n_val=2,
         ),
@@ -118,10 +118,8 @@ def test_adv_training_pipeline_doesnt_crash():
         ),
         model=ModelConfig(
             # We use a finetuned model so that the classification head isn't
-            # randomly initialized. It's fine to use a model that is already
-            # partially trained; we are just testing that the attack doesn't
-            # crash and need non-zero pre-attack accuracy for that purpose.
-            name_or_path="AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3",
+            # randomly initialized.
+            name_or_path="AlignmentResearch/robust_llm_pythia-14m_clf_imdb_v-ian-067_s-0",  # noqa: E501
             family="pythia",
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
@@ -132,7 +130,7 @@ def test_adv_training_pipeline_doesnt_crash():
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
-            revision="<2.1.0",
+            revision="2.1.0",
             n_train=2,
             n_val=2,
         ),
@@ -220,7 +218,7 @@ def adv_trainer() -> AdversarialTrainer:
             evaluation_attack=RandomTokenAttackConfig(initial_n_its=2),
         ),
         model=ModelConfig(
-            name_or_path="AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3",
+            name_or_path="AlignmentResearch/robust_llm_pythia-14m_clf_imdb_v-ian-067_s-0",  # noqa: E501
             family="pythia",
             inference_type="classification",
             train_minibatch_size=1,
@@ -229,7 +227,7 @@ def adv_trainer() -> AdversarialTrainer:
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
-            revision="<2.1.0",
+            revision="2.1.0",
             n_train=2,
             n_val=2,
         ),

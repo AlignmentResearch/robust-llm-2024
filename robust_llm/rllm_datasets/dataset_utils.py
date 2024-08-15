@@ -298,6 +298,39 @@ def maybe_abort_for_larger_version(repo_name: str, version: semver.Version):
             sys.exit(1)
 
 
+def maybe_get_version(dataset_type: str, revision: str) -> str:
+    """Maybe process the version given into an actual version to use.
+
+    If a valid semver version was specified, use that. Otherwise if
+    'main' was specified, use the latest version. If the string starts with
+    '<', use the latest version that is strictly less than the specified
+    version.
+
+    NOTE: We don't simply use 'main' because we want to record the version
+    used and avoid race conditions that could arise from separately loading
+    'main' and looking up the most recent version.
+
+    Args:
+        dataset_type: The name of the dataset on huggingface hub.
+        revision: The revision to use. (e.g. 'main', '1.0.0', '<1.0.0')
+    """
+    version: str | semver.Version | None
+    if revision.startswith("<"):
+        version = get_largest_version_below(dataset_type, revision[1:])
+    elif revision == "main":
+        version = get_largest_version(dataset_type)
+    elif valid_tag(revision):
+        version = revision
+    else:
+        raise ValueError(
+            f"Invalid revision: {revision}."
+            " Should be 'main' or a valid semver version."
+        )
+    if version is None:
+        raise ValueError(f"No versions found for revision {revision}")
+    return str(version)
+
+
 def extract_single_label(ds: Dataset, label: int):
     return ds.filter(lambda x: x["clf_label"] == label)
 
@@ -518,3 +551,32 @@ def strip_leading_whitespace(ds: Dataset) -> Dataset:
         feature=stripped_feature,
     )
     return ds
+
+
+DEPRECATED_VERSIONS = {
+    "AlignmentResearch/PasswordMatch": [
+        "2.0.0",
+    ],
+    "AlignmentResearch/WordLength": [
+        "2.1.0",
+        "2.0.0",
+    ],
+    "AlignmentResearch/IMDB": [
+        "2.0.0",
+    ],
+    "AlignmentResearch/EnronSpam": [
+        "2.0.0",
+    ],
+}
+
+
+def check_revision_is_supported(dataset_type: str, revision: str) -> None:
+    """Checks if the dataset version is still supported."""
+    version = maybe_get_version(dataset_type, revision)
+    CURRENT_MAJOR_VERSION = 2
+    is_old_major_version = int(version[0]) < CURRENT_MAJOR_VERSION
+    is_dep_version = version in DEPRECATED_VERSIONS.get(dataset_type, [])
+    if is_old_major_version or is_dep_version:
+        raise ValueError(
+            f"Version {version} of dataset {dataset_type} is no longer supported."
+        )

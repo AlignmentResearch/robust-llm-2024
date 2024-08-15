@@ -141,7 +141,6 @@ class TRLAttack(Attack):
                         "gen_target": batch["gen_target"],
                     }
                 )
-                batch_ds = dataset.update_dataset_based_on_text(batch_ds)
 
                 callback_input = CallbackInput(
                     input_data=attacked_texts,

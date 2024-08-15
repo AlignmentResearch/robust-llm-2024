@@ -34,9 +34,9 @@ def exp_config() -> ExperimentConfig:
         ),
         model=ModelConfig(
             # We use a finetuned model so that the classification head isn't
-            # randomly initalized. It's fine to use a model that isn't finetuned
-            # for the task, because we are only testing that the attack doesn't crash.
-            name_or_path="AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3",
+            # randomly initalized.
+            # TODO(ian): Update this to use our canonical models once trained.
+            name_or_path="AlignmentResearch/robust_llm_pythia-14m_clf_pm_v-ian-068_s-0",
             family="pythia",
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
@@ -45,7 +45,7 @@ def exp_config() -> ExperimentConfig:
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/PasswordMatch",
-            revision="<2.1.0",
+            revision="2.1.0",
             n_train=2,
             n_val=2,
         ),

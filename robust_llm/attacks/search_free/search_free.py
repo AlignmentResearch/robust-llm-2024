@@ -211,7 +211,6 @@ class SearchFreeAttack(Attack, ABC):
                 for attacked_input in attacked_inputs
             ]
         )
-        temp_attack_ds = dataset.update_dataset_based_on_text(temp_attack_ds)
 
         callback_input = CallbackInput(
             # TODO(ian): Work out where to apply the chat template.

@@ -20,24 +20,11 @@ def unprocessed_example():
     return {"text": text, "chunked_text": chunked_text, "clf_label": clf_label}
 
 
-@pytest.fixture
-def mock_dataset():
-    def mock_update_example_based_on_text(example, column_prefix=""):
-        example = example.copy()
-        example[f"{column_prefix}clf_label"] = 1 - example[f"{column_prefix}clf_label"]
-        return example
-
-    dataset = MagicMock()
-    dataset.update_example_based_on_text.side_effect = mock_update_example_based_on_text
-    return dataset
-
-
-def test_preprocess_example_overwritable(
-    unprocessed_example: dict[str, str], mock_dataset
-):
+def test_preprocess_example_overwritable(unprocessed_example: dict[str, str]):
     modifiable_chunk_spec = ModifiableChunkSpec(
         ChunkType.IMMUTABLE, ChunkType.OVERWRITABLE, ChunkType.IMMUTABLE
     )
+    mock_dataset = MagicMock()
     mock_dataset.modifiable_chunk_spec = modifiable_chunk_spec
     num_modifiable_words_per_chunk = 1
 
@@ -50,12 +37,11 @@ def test_preprocess_example_overwritable(
     assert processed_example["text"] == expected_text
 
 
-def test_preprocess_example_perturbable(
-    unprocessed_example: dict[str, str], mock_dataset
-):
+def test_preprocess_example_perturbable(unprocessed_example: dict[str, str]):
     modifiable_chunk_spec = ModifiableChunkSpec(
         ChunkType.IMMUTABLE, ChunkType.PERTURBABLE, ChunkType.IMMUTABLE
     )
+    mock_dataset = MagicMock()
     mock_dataset.modifiable_chunk_spec = modifiable_chunk_spec
 
     num_modifiable_words_per_chunk: int | None = 1

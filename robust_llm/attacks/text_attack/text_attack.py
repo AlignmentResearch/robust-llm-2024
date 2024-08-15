@@ -155,7 +155,6 @@ def _preprocess_example(
                 result.append(chunk)
 
         example["text"] = "".join(result)
-        example = dataset.update_example_based_on_text(example)
 
     return example
 

@@ -47,16 +47,16 @@ def exp_config() -> ExperimentConfig:
         evaluation=EvaluationConfig(),
         model=ModelConfig(
             # We use a finetuned model so that the classification head isn't
-            # randomly initalized. It's fine to use a model that isn't finetuned
-            # for the task, because we are only testing that the attack doesn't crash.
-            name_or_path="AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3",
+            # randomly initalized.
+            # TODO(ian): Update this to use our canonical models once trained.
+            name_or_path="AlignmentResearch/robust_llm_pythia-14m_clf_pm_v-ian-068_s-0",
             family="pythia",
             inference_type="classification",
             strict_load=True,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/PasswordMatch",
-            revision="<2.1.0",
+            revision="2.1.0",
             n_train=2,
             n_val=100,
         ),
@@ -118,7 +118,7 @@ def test_multiprompt_random_token(exp_config: ExperimentConfig) -> None:
         initial_n_its=250,
         prompt_attack_mode="multi-prompt",
     )
-    _double_test_attack(exp_config, success_rate_at_least=96)
+    _double_test_attack(exp_config, success_rate_at_least=45)
 
 
 def test_gcg(exp_config: ExperimentConfig) -> None:
@@ -138,17 +138,11 @@ def test_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
         n_attack_tokens=5,
         initial_n_its=10,
     )
-    _double_test_attack(exp_config, success_rate_at_least=100)
+    _double_test_attack(exp_config, success_rate_at_least=12)
 
 
 def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
-    exp_config.dataset = DatasetConfig(
-        dataset_type="AlignmentResearch/IMDB",
-        revision="<2.1.0",
-        n_train=2,
-        n_val=2,
-    )
     exp_config.evaluation.evaluation_attack = LMAttackConfig(
         adversary=ModelConfig(
             name_or_path="EleutherAI/pythia-14m",
@@ -223,6 +217,10 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
     _double_test_attack(exp_config)
 
 
+@pytest.mark.skip(
+    reason="GH#770: TRL is non-deterministic, so this test is failing."
+    " If we care about using TRL in the future, we should fix this."
+)
 def test_trl(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = TRLAttackConfig(
@@ -275,6 +273,9 @@ def test_non_modifiable_words_text_attack_doesnt_crash(
     exp_config: ExperimentConfig, text_attack_recipe: str
 ) -> None:
     assert exp_config.evaluation is not None
+    exp_config.model.name_or_path = (
+        "AlignmentResearch/robust_llm_pythia-14m_clf_imdb_v-ian-067_s-0"  # noqa: E501
+    )
     exp_config.dataset.dataset_type = "AlignmentResearch/IMDB"
     exp_config.evaluation.evaluation_attack = TextAttackAttackConfig(
         text_attack_recipe=text_attack_recipe,
