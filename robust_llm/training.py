@@ -139,7 +139,7 @@ class Training:
 
     @property
     def train_batch_size(self) -> int:
-        return self.victim.train_minibatch_size
+        return min(len(self.train_rllm_dataset), self.victim.train_minibatch_size)
 
     @property
     def eval_batch_size(self) -> int:
@@ -593,6 +593,8 @@ class AdversarialTraining(Training):
                     commit=False,
                 )
 
+            # HACK: Now we get the FSDP-wrapped model from the AdversarialTrainer
+            self.victim.model = adversarial_trainer.model  # type: ignore
             # Set the model to eval mode for the attacks. Model is set to train mode by
             # HF Trainer during training, otherwise we want it in eval mode.
             self.victim.eval()

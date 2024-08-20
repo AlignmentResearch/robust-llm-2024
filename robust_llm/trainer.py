@@ -189,8 +189,9 @@ class AdversarialTrainer(RLLMTrainer):
         logits = outputs["logits"]
         labels = inputs["labels"]
 
-        losses = F.cross_entropy(logits, labels, reduction="none").tolist()
-        self.computed_losses += losses
+        losses = F.cross_entropy(logits, labels, reduction="none")
+        if self.accelerator is None or self.accelerator.is_main_process:
+            self.computed_losses += losses.tolist()
         self.maybe_update_adversarial_losses()
 
         return (loss, outputs) if return_outputs else loss
