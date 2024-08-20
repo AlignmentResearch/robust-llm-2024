@@ -10,7 +10,6 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
     ModifiableChunkSpec,
 )
-from robust_llm.utils import get_randint_with_exclusions
 
 
 class ZeroShotLMAttack(SearchFreeAttack):
@@ -82,16 +81,6 @@ class ZeroShotLMAttack(SearchFreeAttack):
         """
         return self.adversary_output_templates[chunk_index].format(attack_tokens)
 
-    def get_target_label(self, chunk_label: int) -> int:
-        """Returns a target classification output for the adversary model."""
-        return (
-            get_randint_with_exclusions(
-                high=self.num_labels, exclusions=[chunk_label], rng=self.rng
-            )
-            if self.is_classification_task
-            else 0
-        )
-
     def apply_adversary_chat_template(self, text: str) -> str:
         conv = self.adversary.init_conversation()
         conv.append_user_message(text)
@@ -136,7 +125,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
         chunk_text: str,
         chunk_type: ChunkType,
         current_iteration: int,
-        chunk_label: int,
+        chunk_proxy_label: int,
         chunk_seed: int,
     ) -> tuple[list[int], dict[str, Any]]:
         """Returns the LM red-team attack tokens for the current iteration.
@@ -152,7 +141,7 @@ class ZeroShotLMAttack(SearchFreeAttack):
             chunk_text: The text of the chunk to be attacked.
             chunk_type: The type of the chunk to be attacked (not used).
             current_iteration: Used to determine the seed for adversary generation.
-            chunk_label: The label of the chunk to be attacked (for classification).
+            chunk_proxy_label: The proxy label to use as the target in the attack.
             chunk_seed: The seed for the chunk to be attacked (for generation).
 
         Returns:
@@ -160,11 +149,10 @@ class ZeroShotLMAttack(SearchFreeAttack):
         """
         assert isinstance(chunk_text, str)
         assert isinstance(chunk_type, ChunkType)
-        target_label = self.get_target_label(chunk_label)
         if self.use_raw_adversary_input:
-            adversary_input = self.adversary_input_templates[target_label]
+            adversary_input = self.adversary_input_templates[chunk_proxy_label]
         else:
-            formatted_chunk = self.adversary_input_templates[target_label].format(
+            formatted_chunk = self.adversary_input_templates[chunk_proxy_label].format(
                 chunk_text
             )
             adversary_input = self.apply_adversary_chat_template(formatted_chunk)

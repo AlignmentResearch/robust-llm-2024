@@ -8,7 +8,6 @@ from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.utils import (
     PreppedExample,
     get_chunking_for_search_based,
-    get_label_and_target_for_attack,
 )
 from robust_llm.config.attack_configs import SearchBasedAttackConfig
 from robust_llm.models.prompt_templates import PromptTemplate
@@ -67,13 +66,12 @@ class MultiPromptSearchBasedAttack(Attack):
                 after_attack=unmodifiable_suffix,
             )
 
-            goal_label, goal_target = get_label_and_target_for_attack(example, dataset)
-
             prepped_example = PreppedExample(
                 prompt_template=prompt_template,
-                clf_label=goal_label,
-                gen_target=goal_target,
+                clf_label=example["proxy_clf_label"],
+                gen_target=example["proxy_gen_target"],
             )
+
             prepped_examples.append(prepped_example)
 
         assert isinstance(self.attack_config, SearchBasedAttackConfig)

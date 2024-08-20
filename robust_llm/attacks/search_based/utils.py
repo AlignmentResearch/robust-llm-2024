@@ -1,6 +1,5 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
 
 import torch
 
@@ -9,8 +8,6 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
     ModifiableChunkSpec,
 )
-from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.utils import get_randint_with_exclusions
 
 
 class TokenizationChangeException(Exception):
@@ -187,39 +184,3 @@ class ExampleWithAttackIndices(PreppedExample):
     """Example prepared for search-based attacks with indices of attackable tokens."""
 
     attack_indices: AttackIndices
-
-
-def get_label_and_target_for_attack(
-    example: dict[str, Any],
-    dataset: RLLMDataset,
-) -> tuple[int, str]:
-    """Get the clf_label and gen_target ready to be passed into the attack.
-
-    The reason getting this ready is hard is because we don't know
-    if the gen_targets are for classification-as-generation or some
-    other generative task. In the former case, we want to update the
-    gen_target, but in the latter case, we want to leave it alone.
-
-    Args:
-        example: The example to attack.
-        dataset: The dataset the example is from.
-
-    Returns:
-        A tuple of the goal clf_label and gen_target.
-    """
-    # If we don't have a classification task, we don't need to change anything.
-    if dataset.num_classes == 0:
-        return example["clf_label"], example["gen_target"]
-
-    # Generate a goal label that is different from the true label.
-    goal_clf_label = get_randint_with_exclusions(
-        high=dataset.num_classes, exclusions=[example["clf_label"]]
-    )
-
-    # Handle gen_target
-    if dataset.classification_as_generation:
-        goal_gen_target = dataset.clf_label_to_gen_target(goal_clf_label)
-    else:
-        goal_gen_target = example["gen_target"]
-
-    return goal_clf_label, goal_gen_target

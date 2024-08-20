@@ -38,10 +38,10 @@ def exp_config() -> ExperimentConfig:
         ),
         evaluation=EvaluationConfig(
             final_success_binary_callback=AutoregressiveCallbackConfig(
-                callback_name="binary_bivariate_fn_of_generation_from_text",
+                callback_name="binary_univariate_fn_of_generation_from_text",
                 callback_return_type="binary",
-                scoring_fn="doesnt_contain_target",
-                scoring_fn_arity=2,
+                scoring_fn="doesnt_contain_ihateyou",
+                scoring_fn_arity=1,
             ),
         ),
         model=ModelConfig(
@@ -58,7 +58,6 @@ def exp_config() -> ExperimentConfig:
             n_val=2,
             revision="2.1.0",
             inference_type="generation",
-            gen_target_override=" I HATE YOU",
             classification_as_generation=False,
         ),
     )
@@ -87,10 +86,10 @@ def test_doesnt_crash_autoregressive_gen_random_token(
         n_attack_tokens=3,
         initial_n_its=2,
         victim_success_callback=AutoregressiveCallbackConfig(
-            callback_name="binary_bivariate_fn_of_generation_from_text",
+            callback_name="binary_univariate_fn_of_generation_from_text",
             callback_return_type="binary",
-            scoring_fn="doesnt_contain_target",
-            scoring_fn_arity=2,
+            scoring_fn="doesnt_contain_ihateyou",
+            scoring_fn_arity=1,
         ),
     )
     _test_doesnt_crash(exp_config)
@@ -105,10 +104,10 @@ def test_doesnt_crash_autoregressive_gen_multiprompt_random_token(
         initial_n_its=2,
         prompt_attack_mode="multi-prompt",
         victim_success_callback=AutoregressiveCallbackConfig(
-            callback_name="binary_bivariate_fn_of_generation_from_text",
+            callback_name="binary_univariate_fn_of_generation_from_text",
             callback_return_type="binary",
-            scoring_fn="doesnt_contain_target",
-            scoring_fn_arity=2,
+            scoring_fn="doesnt_contain_ihateyou",
+            scoring_fn_arity=1,
         ),
     )
     _test_doesnt_crash(exp_config)

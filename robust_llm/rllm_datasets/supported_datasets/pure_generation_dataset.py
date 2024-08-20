@@ -41,7 +41,9 @@ class PureGenerationDataset(RLLMDataset):
                     "chunked_text": ["Just riff for me:\n"],
                     "seed": seed,
                     "clf_label": 0,
+                    "proxy_clf_label": 0,
                     "gen_target": "0",
+                    "proxy_gen_target": "0",
                 }
                 for seed in seed_data
             ]

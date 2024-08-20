@@ -80,7 +80,7 @@ class RandomTokenAttack(SearchFreeAttack):
         chunk_text: str,
         chunk_type: ChunkType,
         current_iteration: int,
-        chunk_label: int,
+        chunk_proxy_label: int,
         chunk_seed: int,
     ) -> tuple[list[int], dict[str, Any]]:
         """Returns the random attack tokens for the current iteration.
@@ -97,7 +97,7 @@ class RandomTokenAttack(SearchFreeAttack):
             chunk_type: The type of the chunk to be attacked (not used).
             current_iteration: The current iteration of the attack (only used in
             the multi-prompt case).
-            chunk_label: The label of the chunk to be attacked (for classification).
+            chunk_proxy_label: The proxy label to use as the target in the attack.
             chunk_seed: The seed for the chunk to be attacked (for generation).
 
         Returns:
@@ -105,7 +105,7 @@ class RandomTokenAttack(SearchFreeAttack):
         """
         assert isinstance(chunk_text, str)
         assert isinstance(chunk_type, ChunkType)
-        assert isinstance(chunk_label, int)
+        assert isinstance(chunk_proxy_label, int)
         assert isinstance(chunk_seed, int)
         match self.prompt_attack_mode:
             case PromptAttackMode.SINGLEPROMPT:

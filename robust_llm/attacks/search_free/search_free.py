@@ -313,7 +313,7 @@ class SearchFreeAttack(Attack, ABC):
                 chunk_text=chunk_text,
                 chunk_type=chunk_type,
                 current_iteration=current_iteration,
-                chunk_label=example["clf_label"],
+                chunk_proxy_label=example["proxy_clf_label"],
                 chunk_seed=example["seed"],
                 chunk_index=chunk_count,
             )
@@ -329,7 +329,7 @@ class SearchFreeAttack(Attack, ABC):
         chunk_text: str,
         chunk_type: ChunkType,
         current_iteration: int,
-        chunk_label: int,
+        chunk_proxy_label: int,
         chunk_seed: int,
     ) -> tuple[list[int], dict[str, Any]]:
         """Returns the attack tokens for the current iteration.
@@ -339,7 +339,7 @@ class SearchFreeAttack(Attack, ABC):
             chunk_type: The type of the chunk.
             current_iteration: The current iteration of the attack (only used in
             the multi-prompt case).
-            chunk_label: The label of the chunk (for classification).
+            chunk_proxy_label: The proxy label to use as the target in the attack.
             chunk_seed: The seed for the chunk (for generation).
 
         Subclasses return:
@@ -367,7 +367,7 @@ class SearchFreeAttack(Attack, ABC):
         chunk_text: str,
         chunk_type: ChunkType,
         current_iteration: int,
-        chunk_label: int,
+        chunk_proxy_label: int,
         chunk_seed: int,
         chunk_index: int,
     ) -> tuple[str, dict[str, Any]]:
@@ -381,7 +381,7 @@ class SearchFreeAttack(Attack, ABC):
             chunk_text: The chunk text.
             chunk_type: The chunk type.
             current_iteration: The current iteration of the attack.
-            chunk_label: The label of the chunk (for classification).
+            chunk_proxy_label: The proxy label to use as the target in the attack.
             chunk_seed: The seed for the chunk (for generation).
             chunk_index: The index of the chunk in the example.
 
@@ -398,7 +398,7 @@ class SearchFreeAttack(Attack, ABC):
                     chunk_text,
                     chunk_type,
                     current_iteration,
-                    chunk_label,
+                    chunk_proxy_label,
                     chunk_seed,
                 )
                 attack_tokens = self.victim.decode(token_ids)
@@ -412,7 +412,7 @@ class SearchFreeAttack(Attack, ABC):
                     chunk_text,
                     chunk_type,
                     current_iteration,
-                    chunk_label,
+                    chunk_proxy_label,
                     chunk_seed,
                 )
                 attack_tokens = self.victim.decode(token_ids)

@@ -71,10 +71,10 @@ def mock_load_hf_model(
 @pytest.fixture
 def exp_config() -> ExperimentConfig:
     target_not_in_gen_callback = AutoregressiveCallbackConfig(
-        callback_name="binary_bivariate_fn_of_generation_from_text",
+        callback_name="binary_univariate_fn_of_generation_from_text",
         callback_return_type="binary",
-        scoring_fn="doesnt_contain_target",
-        scoring_fn_arity=2,
+        scoring_fn="doesnt_contain_ihateyou",
+        scoring_fn_arity=1,
     )
 
     config = ExperimentConfig(
@@ -97,7 +97,6 @@ def exp_config() -> ExperimentConfig:
             n_val=2,
             revision="2.1.0",
             inference_type="generation",
-            gen_target_override=" I HATE YOU",
             classification_as_generation=False,
         ),
     )

@@ -24,9 +24,11 @@ class DatasetConfig:
             using a generation model, in which case the 'gen_target' column
             represents the classification target.
         gen_target_override (Optional[str]): A string to use as the gen_target
-            everywhere, rather than the one given in the dataset. This is useful for
-            generative tasks like looking for "I HATE YOU" in the output of the model.
-            TODO(ian): Work out where to put this override, not sure if it belongs here.
+            everywhere, rather than the one given in the dataset.
+        proxy_gen_target_override (Optional[str]): A string to use as the
+            proxy_gen_target everywhere, rather than the one given in the dataset.
+            This is useful for generative tasks like targeting "I HATE YOU" in the
+            output of the model.
         strip_leading_whitespace (bool): Whether to strip leading whitespace
             from the gen_target.  This is necessary for some chat models where a
             leading space is undesirable because the chat template contains a
@@ -41,6 +43,7 @@ class DatasetConfig:
     inference_type: str = "classification"
     classification_as_generation: bool = True
     gen_target_override: Optional[str] = None
+    proxy_gen_target_override: Optional[str] = None
     strip_leading_whitespace: bool = False
 
 

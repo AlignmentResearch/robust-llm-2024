@@ -171,6 +171,10 @@ class RLLMDataset(ABC):
             assert cfg.inference_type == "generation"
             assert not cfg.classification_as_generation
             ds = ds.map(lambda x: {"gen_target": cfg.gen_target_override})
+        if cfg.proxy_gen_target_override is not None:
+            assert cfg.inference_type == "generation"
+            assert not cfg.classification_as_generation
+            ds = ds.map(lambda x: {"proxy_gen_target": cfg.proxy_gen_target_override})
         if cfg.strip_leading_whitespace:
             assert cfg.inference_type == "generation"
             ds = strip_leading_whitespace(ds)
@@ -275,6 +279,18 @@ class RLLMDataset(ABC):
         new_ds = new_ds.add_column(
             "attacked_gen_target",
             self.ds["gen_target"],
+            new_fingerprint=None,  # type: ignore  # (bug in datasets?)
+        )
+
+        # Add proxy columns.
+        new_ds = new_ds.add_column(
+            "attacked_proxy_clf_label",
+            self.ds["proxy_clf_label"],
+            new_fingerprint=None,  # type: ignore  # (bug in datasets?)
+        )
+        new_ds = new_ds.add_column(
+            "attacked_proxy_gen_target",
+            self.ds["proxy_gen_target"],
             new_fingerprint=None,  # type: ignore  # (bug in datasets?)
         )
 

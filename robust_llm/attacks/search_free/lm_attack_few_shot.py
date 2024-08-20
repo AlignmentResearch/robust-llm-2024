@@ -169,13 +169,12 @@ class FewShotLMAttack(SearchFreeAttack):
         attack_info_iters = []
         victim_successes_iters = []
         example_seed = example["seed"]
-        target_label = self.zero_shot_attack.get_target_label(example["clf_label"])
         for iteration in range(n_its):
             # Reset the seed for each iteration
             example["seed"] = hash((example_seed, iteration))
 
             iteration_text, iteration_info, iteration_success = (
-                self.run_single_iteration(target_label, example, dataset)
+                self.run_single_iteration(example["proxy_clf_label"], example, dataset)
             )
 
             attack_text_iters.append(iteration_text)
@@ -209,7 +208,7 @@ class FewShotLMAttack(SearchFreeAttack):
         chunk_text: str,
         chunk_type: ChunkType,
         current_iteration: int,
-        chunk_label: int,
+        chunk_proxy_label: int,
         chunk_seed: int,
     ) -> list[int]:  # type: ignore
         # We override attack_example instead of this method.

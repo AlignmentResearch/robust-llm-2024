@@ -93,7 +93,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         chunk_text,
         chunk_type,
         current_iteration=0,
-        chunk_label=0,
+        chunk_proxy_label=1,
         chunk_seed=0,
         chunk_index=0,
     )
@@ -104,7 +104,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         chunk_text,
         chunk_type,
         current_iteration=0,
-        chunk_label=0,
+        chunk_proxy_label=1,
         chunk_seed=1,
         chunk_index=1,
     )
@@ -116,7 +116,7 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         chunk_text,
         chunk_type,
         current_iteration=0,
-        chunk_label=0,
+        chunk_proxy_label=1,
         chunk_seed=2,
         chunk_index=2,
     )
@@ -135,7 +135,9 @@ def test_get_attacked_input(random_token_config, mocked_victim, tokenizer):
         "chunked_text": chunked_datapoint,
         "text": "".join(chunked_datapoint),
         "clf_label": 1,
+        "proxy_clf_label": 0,
         "gen_target": "POSITIVE",
+        "proxy_gen_target": "NEGATIVE",
         "seed": 0,
     }
     modifiable_chunk_spec = ModifiableChunkSpec(
