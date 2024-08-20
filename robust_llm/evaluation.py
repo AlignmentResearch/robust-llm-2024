@@ -17,7 +17,7 @@ from robust_llm.evaluation_utils import (
     AttackResults,
     assert_same_data_between_processes,
 )
-from robust_llm.logging_utils import WandbTable
+from robust_llm.logging_utils import WandbTable, wandb_log
 from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -100,7 +100,7 @@ def do_adversarial_evaluation(
             f"attack_data/example_{i}": table
             for i, table in enumerate(attack_data_tables)
         }
-        wandb.log(table_dict, commit=True)
+        wandb_log(table_dict, commit=True)
     # In case the attack changed the victim from eval() mode, we set it again here.
     victim.eval()
 
@@ -203,7 +203,7 @@ def do_adversarial_evaluation(
         )
 
     if victim.accelerator.is_main_process:
-        wandb.log(metrics, commit=True)
+        wandb_log(metrics, commit=True)
         logger.info("Adversarial evaluation metrics:")
         logger.info(metrics)
         wandb_table = (
@@ -303,7 +303,7 @@ def _log_examples_to_wandb(
             + [other_attack_info[key][post_attack_idx] for key in other_attack_info]
         )
 
-    wandb.log({"adversarial_eval/examples": table}, commit=False)
+    wandb_log({"adversarial_eval/examples": table}, commit=False)
 
 
 def compute_robustness_metric_iterations(

@@ -71,8 +71,7 @@ class LoggingCounter:
         return self._datapoint_count
 
     def _log_to_wandb(self, commit: bool = False) -> None:
-        assert wandb.run is not None
-        wandb.log(
+        wandb_log(
             {
                 f"{self._name}_step_count": self._step_count,
                 f"{self._name}_datapoint_count": self._datapoint_count,
@@ -156,7 +155,7 @@ def log_dataset_to_wandb(
     ):
         dataset_table.add_data(text, label)
 
-    wandb.log({dataset_name: dataset_table}, commit=False)
+    wandb_log({dataset_name: dataset_table}, commit=False)
 
 
 def log_config_to_wandb(config: ExperimentConfig) -> None:
@@ -271,10 +270,8 @@ class LoggingContext:
 
         We use `commit=False` to avoid incrementing the step counter.
         """
-        if self.is_main_process:
-            model_info_dict = {"model_family": model_family, "model_size": model_size}
-            assert wandb.run is not None
-            wandb.log(model_info_dict, commit=False)
+        model_info_dict = {"model_family": model_family, "model_size": model_size}
+        wandb_log(model_info_dict, commit=False)
 
     @staticmethod
     def wandb_cleanup() -> None:
@@ -312,6 +309,8 @@ class WandbTable:
         return self._table
 
     def add_data(self, data: Dict[str, Any]) -> None:
+        if not should_log():
+            return
         data = {k: v for k, v in data.items() if isinstance(v, (int, float, str))}
         if self._table is None:
             self._table = wandb.Table(columns=list(data.keys()))
@@ -319,11 +318,13 @@ class WandbTable:
         self.table.add_data(*data.values())
 
     def save(self, commit: bool = False) -> None:
+        if not should_log():
+            return
         assert not self.logged, (
             "Table has already been logged. "
             "Wandb cannot handle multiple logs of the same table in one run."
         )
-        wandb.log({self.name: self.table}, commit=commit)
+        wandb_log({self.name: self.table}, commit=commit)
         self.logged = True
 
 
@@ -338,3 +339,8 @@ def should_log():
         return dist.get_rank() == 0
     else:
         return True
+
+
+def wandb_log(d: dict, commit: bool) -> None:
+    if should_log():
+        wandb.log(d, commit=commit)

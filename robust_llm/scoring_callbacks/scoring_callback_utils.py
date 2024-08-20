@@ -8,7 +8,7 @@ import torch
 import wandb
 from typing_extensions import override
 
-from robust_llm.logging_utils import should_log
+from robust_llm.logging_utils import should_log, wandb_log
 from robust_llm.models.model_utils import (
     AutoregressiveOutput,
     classification_successes_from_logits,
@@ -78,7 +78,7 @@ class BinaryCallbackOutput(CallbackOutput):
                     if key in keys_to_use:
                         row.append(value[i])
                 table.add_data(*row)
-            wandb.log({table_name: table}, commit=commit)
+            wandb_log({table_name: table}, commit=commit)
 
 
 @dataclass(kw_only=True)

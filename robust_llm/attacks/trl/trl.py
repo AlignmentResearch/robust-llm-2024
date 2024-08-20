@@ -18,7 +18,7 @@ from robust_llm.attacks.trl.utils import (
     prepare_prompts,
 )
 from robust_llm.config.attack_configs import TRLAttackConfig
-from robust_llm.logging_utils import WandbTable
+from robust_llm.logging_utils import WandbTable, wandb_log
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ModifiableChunkSpec
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -204,7 +204,7 @@ class TRLAttack(Attack):
                     for key, value in train_stats.items()
                 }
 
-                wandb.log(prepended_train_stats, commit=True)
+                wandb_log(prepended_train_stats, commit=True)
 
                 prepended_train_stats["attack_step_count"] = (
                     self.logging_counter.step_count

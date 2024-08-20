@@ -9,7 +9,7 @@ from tdigest import TDigest
 from robust_llm import logger
 from robust_llm.config.defense_configs import PerplexityDefenseConfig
 from robust_llm.defenses.defense import FilteringDefendedModel
-from robust_llm.logging_utils import WandbTable
+from robust_llm.logging_utils import WandbTable, wandb_log
 from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import InferenceType, build_dataloader
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -347,7 +347,7 @@ class PerplexityDefendedModel(FilteringDefendedModel):
                 "defense/max_perplexity_pre_attack": self.max_perplexity,
                 "defense/min_perplexity_pre_attack": self.min_perplexity,
             }
-            wandb.log(
+            wandb_log(
                 defense_dict,
                 commit=False,
             )

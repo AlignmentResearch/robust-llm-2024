@@ -10,7 +10,7 @@ import numpy as np
 
 from robust_llm import logger
 from robust_llm.callbacks import CustomLoggingWandbCallback
-from robust_llm.logging_utils import log_dataset_to_wandb
+from robust_llm.logging_utils import log_dataset_to_wandb, wandb_log
 from robust_llm.rllm_datasets.dataset_utils import cast_and_concatenate
 from robust_llm.utils import nested_list_to_tuple
 
@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
 import torch.nn.functional as F
 import torch.utils.data
-import wandb
 from datasets import Dataset
 from transformers import (
     Trainer,
@@ -355,7 +354,7 @@ class AdversarialTrainerLoggingCallback(TrainerCallback):
             train_ds = self.training.trainer.train_dataset
             dataset_name = f"augmented_train_set_start_round_{current_round}"
             log_dataset_to_wandb(train_ds, dataset_name)
-            wandb.log(
+            wandb_log(
                 {"misc/augmented_train_set_size": train_ds.num_rows},  # noqa: E501
                 commit=False,
             )
