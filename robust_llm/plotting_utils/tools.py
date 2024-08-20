@@ -395,6 +395,7 @@ def get_metrics_adv_training(
     filters=None,
     check_num_runs=None,
     check_num_data_per_run=None,
+    verbose=False,
 ) -> pd.DataFrame:
     if filters is None:
         filters = {}
@@ -402,6 +403,8 @@ def get_metrics_adv_training(
     filters["group"] = group
 
     runs = API.runs(path=PROJECT_NAME, filters=filters)
+    if verbose:
+        print(f"Found {len(runs)} runs")
     if check_num_runs is not None:
         if type(check_num_runs) is int:
             assert len(runs) == check_num_runs
@@ -413,6 +416,8 @@ def get_metrics_adv_training(
     res = []
     for run in runs:
         history = run.history(keys=metrics)
+        if verbose:
+            print(f"Run {run.id} has {len(history)} data points")
 
         if check_num_data_per_run is not None:
             assert len(history) == check_num_data_per_run
@@ -426,6 +431,7 @@ def get_metrics_adv_training(
         for key in summary_keys:
             history[key.replace(".", "_")] = _get_value_iterative(run.summary, key)
         history["run_id"] = run.id
+        history["run_state"] = run.state
 
         # Hack: create 'round' column based on increasing steps.
         history = history.sort_values(by="_step")
