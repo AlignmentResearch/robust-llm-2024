@@ -79,6 +79,7 @@ def test_evaluate_dataset():
     assert actual == expected
 
 
+@pytest.mark.multigpu
 def test_training_pipeline_doesnt_crash():
     config = ExperimentConfig(
         experiment_type="training",
@@ -107,6 +108,7 @@ def test_training_pipeline_doesnt_crash():
     run_training_pipeline(config)
 
 
+@pytest.mark.multigpu
 def test_adv_training_pipeline_doesnt_crash():
     config = ExperimentConfig(
         experiment_type="training",

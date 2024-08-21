@@ -88,22 +88,15 @@ jobs:
     steps:
       - checkout
       - prepare-virtualenv
-      - run:
-          name: Show num vCPUs & processes
-          command: |
-            # See https://discuss.circleci.com/t/environment-variable-set-to-the-number-of-available-cpus/32670/3
-            # for explanation of the weird expression below. -- Aaron
-            NUM_CPUS=$(($(cat /sys/fs/cgroup/cpu/cpu.shares) / 1024))
-            NUM_PROCS=$((NUM_CPUS / 2))
-            echo ${NUM_CPUS} vCPUs, ${NUM_PROCS} processes
-            # Save environment variable for next step
-            echo "export NUM_PROCS=${NUM_PROCS}" >> $BASH_ENV
       - memory-monitor
       - run:
           name: Run tests
           command: |
             # Ensure that the script fails if any command fails
             set -euo pipefail
+            # Here we split tests evenly by time across the parallel executors,
+            # which requires some tedious parsing to get FULLTESTPATHS, the
+            # subset of tests to run in this executor.
 
             # List all test functions in the specified directory
             TESTFUNCTIONS=$(pytest --collect-only -q | grep '::' | grep -v '<Module')
@@ -180,6 +173,28 @@ jobs:
       - store-test-output
       - store-memory-monitor
 
+  pytest-accelerate:
+    executor: python-executor
+    resource_class: alignmentresearch/far-2gpu-14cpu-60g
+    # Unlike the `pytest` job, we don't use `parallelism` here since we don't
+    # want to reserve lots of GPUs on the FAR cluster simultaneously, and the
+    # FAR GPU resource classes only allow one concurrent instance anyway:
+    # https://github.com/AlignmentResearch/flamingo/blob/e9b3bed7d02e3154dbc591820ab64f37e53f14ee/admin/main/circleci/README.md#gpu-enabled-classes
+    steps:
+      - checkout
+      - prepare-virtualenv
+      - memory-monitor
+      - run:
+          name: Run accelerate tests
+          command: |
+            mkdir -p /tmp/test-reports
+            ./tests/run_tests_with_accelerate.py --coverage -m multigpu --junitxml=/tmp/test-reports/junit-process-\$RANK.xml --durations=500 -vv
+          environment:
+            WANDB_MODE: offline
+      - codecov/upload
+      - store-test-output
+      - store-memory-monitor
+
   lint:
     executor: python-executor
     steps:
@@ -221,4 +236,5 @@ workflows:
   tests:
     jobs:
       - pytest
+      - pytest-accelerate
       - lint

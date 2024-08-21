@@ -76,6 +76,7 @@ def test_doesnt_crash_gen_as_clf_random_token(exp_config: ExperimentConfig) -> N
     _test_doesnt_crash(exp_config)
 
 
+@pytest.mark.multigpu
 def test_doesnt_crash_gen_as_clf_multiprompt_random_token(
     exp_config: ExperimentConfig,
 ) -> None:

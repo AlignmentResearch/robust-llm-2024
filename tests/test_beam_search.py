@@ -42,39 +42,42 @@ def _get_runner(
     return runner
 
 
-ACCELERATOR = Accelerator(cpu=True)
-
-WRAPPED_MODELS = {
-    "gpt2": GPT2Model(
-        FakeModelForSequenceClassification(),  # type: ignore
-        AutoTokenizer.from_pretrained("gpt2"),
-        accelerator=ACCELERATOR,
-        inference_type=InferenceType("classification"),
-        train_minibatch_size=2,
-        eval_minibatch_size=2,
-        generation_config=None,
-        family="gpt2",
-    ),
-    "pythia": GPTNeoXModel(
-        FakeModelForSequenceClassification(),  # type: ignore
-        AutoTokenizer.from_pretrained("EleutherAI/pythia-70m-deduped"),
-        accelerator=ACCELERATOR,
-        inference_type=InferenceType("classification"),
-        train_minibatch_size=2,
-        eval_minibatch_size=2,
-        generation_config=None,
-        family="pythia",
-    ),
+MODEL_SPECS = {
+    # (class, family, name)
+    (GPT2Model, "gpt2", "gpt2"),
+    (GPTNeoXModel, "pythia", "EleutherAI/pythia-70m-deduped"),
 }
+MODEL_KEYS = [family for _, family, _ in MODEL_SPECS]
+
+
+# Though this could make sense as a global variable, we don't want to initialize
+# Accelerator(use_cpu=True) globally because it can mess up GPU tests. Even if
+# no tests in this file run, this file may get executed in pytest's collection
+# phase and cause GPU tests to unexpectedly be run on the CPU.
+@pytest.fixture(scope="module")
+def wrapped_models() -> dict[str, WrappedModel]:
+    accelerator = Accelerator(cpu=False)
+    return {
+        family: cls(
+            FakeModelForSequenceClassification(),  # type: ignore
+            AutoTokenizer.from_pretrained(name),
+            accelerator=accelerator,
+            inference_type=InferenceType("classification"),
+            train_minibatch_size=2,
+            eval_minibatch_size=2,
+            generation_config=None,
+            family=family,
+        )
+        for cls, family, name in MODEL_SPECS
+    }
 
 
 def get_beam_search_runner(
-    model_name: str,
+    wrapped_model: WrappedModel,
     before_attack_text: str = "some before text",
     after_attack_text: str = "some after text",
     beam_search_width: int = 5,
 ) -> BeamSearchRunner:
-    wrapped_model = WRAPPED_MODELS[model_name]
     return _get_runner(
         before_attack_text=before_attack_text,
         after_attack_text=after_attack_text,
@@ -83,24 +86,24 @@ def get_beam_search_runner(
     )
 
 
-@pytest.fixture(params=WRAPPED_MODELS.keys())
-def beam_search_runner(request) -> BeamSearchRunner:
-    return get_beam_search_runner(request.param)
+@pytest.fixture(params=MODEL_KEYS)
+def beam_search_runner(request, wrapped_models) -> BeamSearchRunner:
+    return get_beam_search_runner(wrapped_models[request.param])
 
 
-@pytest.mark.parametrize("model_name", WRAPPED_MODELS.keys())
+@pytest.mark.parametrize("model_name", MODEL_KEYS)
 @pytest.mark.parametrize("beam_search_width", [5, 13])
-def test_n_best_candidates_to_keep(model_name: str, beam_search_width: int) -> None:
+def test_n_best_candidates_to_keep(
+    wrapped_models, model_name: str, beam_search_width: int
+) -> None:
     runner = get_beam_search_runner(
-        model_name=model_name, beam_search_width=beam_search_width
+        wrapped_models[model_name], beam_search_width=beam_search_width
     )
     assert runner.n_best_candidates_to_keep == beam_search_width
 
 
 @given(initial_text=st.text())
 @pytest.mark.parametrize("num_initial_candidates", [1, 5])
-# We use a deadline of 1000ms because the default of 200ms was too short, as was
-# a deadline of 500ms.
 @settings(
     suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture],
     deadline=1000,

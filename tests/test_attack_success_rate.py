@@ -102,6 +102,7 @@ def _double_test_attack(
     )
 
 
+@pytest.mark.multigpu  # Used as a test of multi-GPU classification eval
 def test_random_token(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(

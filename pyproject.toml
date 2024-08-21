@@ -98,3 +98,8 @@ pythonVersion = "3.10"
 [tool.mypy]
 ignore_missing_imports = true
 python_version = "3.10"
+
+[tool.pytest.ini_options]
+markers = [
+    "multigpu: marks tests that we also want to run with multiple GPUs",
+]

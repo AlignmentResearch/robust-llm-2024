@@ -40,6 +40,7 @@ def broadcast_list_of_bools(
 def broadcast_list_of_floats(
     data: list[float] | None, accelerator: Accelerator
 ) -> list[float]:
+    """Broadcasts floats, rounding to 32-bit precision."""
     # If we're not using distributed training, we don't need to do anything.
     if not dist.is_initialized():
         assert isinstance(data, list)
@@ -91,7 +92,10 @@ def broadcast_tensor(
     data_dtype = broadcast_dtype(data, accelerator)
 
     # Finally, broadcast the data itself.
-    if not accelerator.is_main_process:
+    if accelerator.is_main_process:
+        assert data is not None
+        data = data.to(accelerator.device)
+    else:
         data = torch.empty(*shape.tolist(), dtype=data_dtype, device=accelerator.device)
     dist.broadcast(data, src=0)
     assert isinstance(data, torch.Tensor)

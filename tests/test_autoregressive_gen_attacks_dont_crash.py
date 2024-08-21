@@ -113,6 +113,7 @@ def test_doesnt_crash_autoregressive_gen_multiprompt_random_token(
     _test_doesnt_crash(exp_config)
 
 
+@pytest.mark.multigpu
 def test_doesnt_crash_autoregressive_gen_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = GCGAttackConfig(

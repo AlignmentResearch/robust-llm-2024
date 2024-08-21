@@ -94,7 +94,7 @@ def do_adversarial_evaluation(
     attacked_dataset = attack_out.dataset
     # Only save attack data if we're in the evaluation pipeline - we don't care
     # about computing the robustness metric in adv training.
-    if should_commit:
+    if should_commit and victim.accelerator.is_main_process:
         attack_data_tables = attack_out.attack_data.to_wandb_tables()
         table_dict = {
             f"attack_data/example_{i}": table
