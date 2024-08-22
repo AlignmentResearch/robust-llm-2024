@@ -48,7 +48,7 @@ class EnvironmentConfig:
     logging_level: int = logging.INFO
     logging_filename: str = "robust_llm.log"
     allow_checkpointing: bool = True
-    deterministic: bool = False
+    deterministic: bool = True
     cublas_config: str = ":4096:8"
 
 
