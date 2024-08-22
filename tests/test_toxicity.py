@@ -46,6 +46,10 @@ class MagicWrappedModel(WrappedModel):
         self.accelerator.gather_for_metrics = lambda data: data
         self.generation_config = None
 
+    @property
+    def num_processes(self):
+        return 1
+
     def generate(
         self,
         input_ids: torch.Tensor,

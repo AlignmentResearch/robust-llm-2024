@@ -68,7 +68,19 @@ class CachingWrappedModel(WrappedModel):
         # 4.42.0 (see https://github.com/huggingface/transformers/issues/31943)
         if "attention_mask" not in inputs:
             inputs["attention_mask"] = self._compute_attn_mask(inputs)
-        return self._wrapped_model.forward(**inputs)
+
+        with self._wrapped_model.dont_count_flops():
+            out = self._wrapped_model.forward(**inputs)
+
+        if self.accelerator is not None:
+            input_ids = self.accelerator.gather_for_metrics(input_ids)
+        if (
+            self._wrapped_model.accelerator is None
+            or self._wrapped_model.accelerator.is_main_process
+        ):
+            self._wrapped_model.update_flop_count({"input_ids": input_ids})
+
+        return out
 
     def _compute_attn_mask(self, inputs: dict) -> torch.Tensor:
         """Return an attention mask for the given inputs.

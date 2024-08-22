@@ -375,20 +375,20 @@ class AdversarialTrainingState:
         adversarial_dataset: Dataset,
         training_attack_rng: Optional[random.Random],
         validation_attack_rng: Optional[random.Random],
-        total_flos: float = 0.0,
+        total_flops: float = 0.0,
     ) -> None:
         self.rng = rng
         self.current_round = current_round
         self.adversarial_dataset = adversarial_dataset
         self.training_attack_rng = training_attack_rng
         self.validation_attack_rng = validation_attack_rng
-        self.total_flos = total_flos
+        self.total_flops = total_flops
 
     def to_dict(self) -> dict:
         return {
             "rng": self.rng.bit_generator.state,
             "current_round": self.current_round,
-            "total_flos": self.total_flos,
+            "total_flops": self.total_flops,
             "training_attack_rng": (
                 self.training_attack_rng.getstate()
                 if self.training_attack_rng is not None
@@ -418,7 +418,7 @@ class AdversarialTrainingState:
             rng = np.random.default_rng()
             rng.bit_generator.state = state["rng"]
             current_round = state["current_round"]
-            total_flos = state["total_flos"]
+            total_flops = state["total_flops"]
             if state["training_attack_rng"] is not None:
                 training_attack_rng = random.Random()
                 training_attack_rng.setstate(
@@ -438,7 +438,7 @@ class AdversarialTrainingState:
         )
         return cls(
             current_round=current_round,
-            total_flos=total_flos,
+            total_flops=total_flops,
             rng=rng,
             adversarial_dataset=adversarial_dataset,
             training_attack_rng=training_attack_rng,
@@ -489,7 +489,7 @@ class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
         output_dir = os.path.join(run_dir, checkpoint_folder)
         adv_state = AdversarialTrainingState(
             current_round=self.training.round,
-            total_flos=state.total_flos,
+            total_flops=self.training.total_flops,
             rng=self.training.trainer.rng,
             adversarial_dataset=self.training.trainer.adversarial_dataset,
             training_attack_rng=getattr(self.training.training_attack, "rng"),

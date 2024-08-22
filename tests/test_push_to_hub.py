@@ -13,7 +13,12 @@ from robust_llm.models.model_utils import InferenceType
 
 
 class DummyModel(MagicMock):
-    pass
+
+    def modules(self):
+        return [MagicMock()]
+
+    def num_parameters(self):
+        return 0
 
 
 class DummyTokenizer(MagicMock):

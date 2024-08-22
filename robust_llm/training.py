@@ -43,6 +43,7 @@ from robust_llm.logging_utils import (
 )
 from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import InferenceType
+from robust_llm.models.wrapped_model import FlopCount
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.scoring_callbacks import (
     BinaryCallback,
@@ -137,13 +138,21 @@ class Training:
             report_to=self.report_to,
         )
 
+        logger.debug("Training arguments: %s", self.training_arguments)
+
     @property
     def train_batch_size(self) -> int:
-        return min(len(self.train_rllm_dataset), self.victim.train_minibatch_size)
+        return min(
+            len(self.train_rllm_dataset) // self.victim.num_processes,
+            self.victim.train_minibatch_size,
+        )
 
     @property
     def eval_batch_size(self) -> int:
-        return self.victim.eval_minibatch_size
+        return min(
+            len(self.eval_rllm_dataset) // self.victim.num_processes,
+            self.victim.eval_minibatch_size,
+        )
 
     @property
     def gradient_accumulation_steps(self) -> int:
@@ -366,7 +375,9 @@ class AdversarialTraining(Training):
 
         self.rng = np.random.default_rng(self.config.seed)
         self.round = 0
-        self.total_flos = 0.0
+        self.total_flops = 0.0
+        self.n_forward_calls = 0
+        self.n_backward_calls = 0
         self.training_attack = None
         self.validation_attack = None
         self.training_iterations = self.training_attack_config.initial_n_its
@@ -584,11 +595,16 @@ class AdversarialTraining(Training):
                     )
                 )
                 logger.info("Victim finished training in round %s ", self.round)
-                self.total_flos += train_out.metrics["total_flos"]
+                # Note that HF uses "flos" for FLOPs
+                logger.debug(
+                    "FLOPs for training in this round: %.2E",
+                    train_out.metrics["total_flos"],
+                )
+                self.total_flops += train_out.metrics["total_flos"]
                 self._log_debug_info()
                 wandb_log(
                     {
-                        "train/total_flos": self.total_flos,
+                        "train/total_flops": self.total_flops,
                     },
                     commit=False,
                 )
@@ -663,10 +679,10 @@ class AdversarialTraining(Training):
                 )
                 break
 
-            if self.total_flos > self.stopping_flops:
+            if self.total_flops > self.stopping_flops:
                 logger.info(
                     f"Stopping adversarial training at round {round} because total"
-                    f"FLOPs {self.total_flos:.2E} is above the stopping "
+                    f"FLOPs {self.total_flops:.2E} is above the stopping "
                     f"threshold {self.stopping_flops:.2E}"
                 )
                 break
@@ -684,12 +700,14 @@ class AdversarialTraining(Training):
                     generator=self.rng,
                 )
                 # NOTE: .get_attacked_dataset should relabel the examples
-                attack_out = self.training_attack.get_attacked_dataset(
-                    input_rllm_dataset,
-                    n_its=self.training_iterations,
-                    resume_from_checkpoint=False,
-                )
+                with self.victim.flop_count_context() as flop_counter:
+                    attack_out = self.training_attack.get_attacked_dataset(
+                        input_rllm_dataset,
+                        n_its=self.training_iterations,
+                        resume_from_checkpoint=False,
+                    )
                 attacked_dataset = attack_out.dataset
+                self.update_flops(flop_counter)
 
                 new_adv_examples = attacked_dataset.as_adversarial_examples()
                 logger.info(
@@ -742,6 +760,23 @@ class AdversarialTraining(Training):
             )
 
         table.save()
+
+    def update_flops(self, flop_count: FlopCount):
+        if (
+            self.victim.accelerator is not None
+            and not self.victim.accelerator.is_main_process
+        ):
+            return
+        logger.debug("FLOPs for attacking in this round: %.2E", flop_count.flops)
+        logger.debug("Forward calls: %s", flop_count.forward_calls)
+        logger.debug("Backward calls: %s", flop_count.backward_calls)
+        self.total_flops += flop_count.flops
+        self.n_forward_calls += flop_count.forward_calls
+        self.n_backward_calls += flop_count.backward_calls
+        logger.debug(
+            "Last 10 input shapes: %s",
+            self.victim.input_shapes[-10:],
+        )
 
     def maybe_update_iterations_and_examples(
         self, new_adv_examples: RLLMDataset, n_its: int

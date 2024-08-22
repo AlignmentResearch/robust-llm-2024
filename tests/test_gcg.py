@@ -30,10 +30,17 @@ def fake_prepare(*args):
     return args
 
 
+def fake_reduce(tensor: torch.Tensor, reduction: str):
+    assert reduction == "sum"
+    return tensor
+
+
 ACCELERATOR = MagicMock()
 ACCELERATOR.device = "cpu"
 ACCELERATOR.gather_for_metrics = lambda x: x
 ACCELERATOR.prepare.side_effect = fake_prepare
+ACCELERATOR.reduce = fake_reduce
+ACCELERATOR.num_processes = 1
 
 
 def gpt2_gcg_runner(before_attack_text: str, after_attack_text: str) -> GCGRunner:

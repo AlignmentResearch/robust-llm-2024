@@ -96,6 +96,10 @@ class MagicWrappedModel(WrappedModel):
     ) -> PreTrainedTokenizerBase:
         return tokenizer
 
+    @property
+    def num_processes(self):
+        return 1
+
 
 @pytest.fixture
 def mock_openai_no_refusal():

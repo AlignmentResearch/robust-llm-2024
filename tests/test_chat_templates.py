@@ -23,8 +23,16 @@ NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT = NAME_AND_TEMPLATE + [
 ]
 
 
+@pytest.fixture
+def mock_model():
+    model = MagicMock()
+    model.modules.return_value = [MagicMock()]
+    model.num_parameters.return_value = 0
+    return model
+
+
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
-def test_wrap_attack_chunks(model_name: str, model_family: str):
+def test_wrap_attack_chunks(mock_model, model_name: str, model_family: str):
     chunks = AttackChunks(
         unmodifiable_prefix="Unmodifiable prefix. ",
         modifiable_infix="Modifiable infix. ",
@@ -32,7 +40,7 @@ def test_wrap_attack_chunks(model_name: str, model_family: str):
     )
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
-        model=MagicMock(),
+        model=mock_model,
         right_tokenizer=MagicMock(),
         accelerator=None,
         inference_type=InferenceType.GENERATION,
@@ -60,7 +68,7 @@ def test_wrap_attack_chunks(model_name: str, model_family: str):
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
-def test_build_prompt(model_name: str, model_family: str):
+def test_build_prompt(mock_model, model_name: str, model_family: str):
     chunks = AttackChunks(
         unmodifiable_prefix="Unmodifiable prefix. ",
         modifiable_infix="Modifiable infix. ",
@@ -68,7 +76,7 @@ def test_build_prompt(model_name: str, model_family: str):
     )
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
-        model=MagicMock(),
+        model=mock_model,
         right_tokenizer=MagicMock(),
         accelerator=None,
         inference_type=InferenceType.GENERATION,
@@ -90,10 +98,10 @@ def test_build_prompt(model_name: str, model_family: str):
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
-def test_repeated_role_raises_error(model_name: str, model_family: str):
+def test_repeated_role_raises_error(mock_model, model_name: str, model_family: str):
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
-        model=MagicMock(),
+        model=mock_model,
         right_tokenizer=MagicMock(),
         accelerator=None,
         inference_type=InferenceType.GENERATION,
@@ -117,10 +125,10 @@ def test_repeated_role_raises_error(model_name: str, model_family: str):
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
-def test_multi_round_chat_template(model_name: str, model_family: str):
+def test_multi_round_chat_template(mock_model, model_name: str, model_family: str):
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
-        model=MagicMock(),
+        model=mock_model,
         right_tokenizer=MagicMock(),
         accelerator=None,
         inference_type=InferenceType.GENERATION,
@@ -161,10 +169,10 @@ def test_multi_round_chat_template(model_name: str, model_family: str):
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
-def test_full_chat_template(model_name: str, model_family: str):
+def test_full_chat_template(mock_model, model_name: str, model_family: str):
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
-        model=MagicMock(),
+        model=mock_model,
         right_tokenizer=MagicMock(),
         accelerator=None,
         inference_type=InferenceType.GENERATION,
@@ -198,10 +206,12 @@ def test_full_chat_template(model_name: str, model_family: str):
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
-def test_user_template_with_system_prompt(model_name: str, model_family: str):
+def test_user_template_with_system_prompt(
+    mock_model, model_name: str, model_family: str
+):
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
-        model=MagicMock(),
+        model=mock_model,
         right_tokenizer=MagicMock(),
         accelerator=None,
         inference_type=InferenceType.GENERATION,
@@ -233,10 +243,12 @@ def test_user_template_with_system_prompt(model_name: str, model_family: str):
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT)
-def test_user_template_without_system_prompt(model_name: str, model_family: str):
+def test_user_template_without_system_prompt(
+    mock_model, model_name: str, model_family: str
+):
     model_constructor = WrappedChatModel._registry[model_family]
     model = model_constructor(
-        model=MagicMock(),
+        model=mock_model,
         right_tokenizer=MagicMock(),
         accelerator=None,
         inference_type=InferenceType.GENERATION,

@@ -153,7 +153,7 @@ class FakeModelForSequenceClassification:
     def num_labels(self) -> int:
         return 2
 
-    def num_parameters(self) -> int:
+    def num_parameters(self, exclude_embeddings: bool = True) -> int:
         return 0
 
     @property
@@ -189,6 +189,22 @@ class FakeModelForSequenceClassification:
         self, input_ids: torch.Tensor, *args, **kwargs
     ) -> dict[str, torch.Tensor]:
         return self.forward(input_ids, *args, **kwargs)
+
+    def estimate_tokens(self, input_dict: dict[str, Any]) -> int:
+        return 1
+
+    def register_forward_hook(self, hook: Any) -> None:
+        pass
+
+    def register_full_backward_hook(self, hook: Any) -> None:
+        pass
+
+    def modules(self):
+        return [self, self]
+
+    @property
+    def num_processes(self):
+        return 1
 
 
 def equal_ignore_padding(x: torch.Tensor, y: torch.Tensor, pad_token_id: int) -> bool:

@@ -9,9 +9,10 @@ import traceback
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
-from typing import Optional, TypeVar
+from typing import Any, Optional, TypeVar, Union
 
 import torch
 import torch.distributed
@@ -27,6 +28,7 @@ from transformers import (
 )
 from transformers.modeling_outputs import ModelOutput
 
+from robust_llm import logger
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import (
     AutoregressiveOutput,
@@ -48,6 +50,28 @@ from robust_llm.models.prompt_templates import (
 from robust_llm.utils import is_correctly_padded
 
 Prompt = TypeVar("Prompt", str, list[str])
+
+
+class FlopCount:
+
+    def __init__(self, flops, forward_calls, backward_calls):
+        self.start_flops = flops
+        self.end_flops = flops
+        self.flops = 0
+        self.start_forward_calls = forward_calls
+        self.end_forward_calls = forward_calls
+        self.forward_calls = 0
+        self.start_backward_calls = backward_calls
+        self.end_backward_calls = backward_calls
+        self.backward_calls = 0
+
+    def update(self, flops: int, forward_calls: int, backward_calls: int):
+        self.end_flops = flops
+        self.flops = self.end_flops - self.start_flops
+        self.end_forward_calls = forward_calls
+        self.forward_calls = self.end_forward_calls - self.start_forward_calls
+        self.end_backward_calls = backward_calls
+        self.backward_calls = self.end_backward_calls - self.start_backward_calls
 
 
 class WrappedModel(ABC):
@@ -111,8 +135,47 @@ class WrappedModel(ABC):
         self.generation_config = generation_config
         self.system_prompt = system_prompt
         self.seed = seed
+        self.flop_count = 0
+        self.n_forward_calls = 0
+        self.n_backward_calls = 0
+        self.input_shapes: list[tuple] = []
+        self.register_hooks()
+        self._skip_hooks = False
 
         self.post_init()
+
+    @property
+    def num_processes(self) -> int:
+        return self.accelerator.num_processes if self.accelerator is not None else 1
+
+    def get_minibatch_size(
+        self, input_ids: torch.Tensor, batch_size: int | None
+    ) -> int:
+        """Returns the minibatch size to use for the given input_ids."""
+        batch_size = batch_size or self.eval_minibatch_size
+        batch_dim = input_ids.shape[0]
+        return min(batch_size, batch_dim // self.num_processes)
+
+    def register_hooks(self):
+        """Registers hooks to track FLOPs during forward and backward passes.
+
+        We have to loop through the modules to find the right module to register
+        the forward hook where we can access the input IDs. We can't just register
+        the forward hook on the model itself because then the input is empty.
+        """
+        module = None
+        forward_done = False
+        for module in self.model.modules():
+            if isinstance(module, FSDP) or isinstance(
+                module, transformers.PreTrainedModel
+            ):
+                continue
+            if not forward_done:
+                module.register_forward_hook(self.forward_hook)
+                forward_done = True
+        assert module is not None
+        assert forward_done, "Could not find a module to register a forward hook on."
+        module.register_full_backward_hook(self.backward_hook)
 
     def post_init(self) -> None:
         """Runs any model-specific set-up required.
@@ -121,9 +184,109 @@ class WrappedModel(ABC):
         every time, which results in having a lot of boilerplate code.
         """
 
+    def forward_hook(self, module, inputs, outputs):
+        """Hook to track FLOPs during forward pass."""
+        if self._skip_hooks:
+            return
+        if self.accelerator is not None:
+            # We must gather_for_metrics on all processes to remove dummy inputs
+            # due to batching/wrapping and to avoid hanging.
+            inputs = self.accelerator.gather_for_metrics(inputs)
+            if not self.accelerator.is_main_process:
+                return
+        if not inputs:
+            # TODO: why does this happen for TRL?
+            logger.warning(
+                "No inputs found in forward hook (this is expected for TRL)."
+            )
+            return
+        self.n_forward_calls += 1
+        self.input_shapes.append(inputs[0].shape)
+        self._input_dict = {"input_ids": inputs[0]}
+        self.update_flop_count(
+            input_dict=self._input_dict,
+            backward=False,
+        )
+
+    def backward_hook(self, module, grad_input, grad_output):
+        """Hook to track FLOPs during backward pass."""
+        if self._skip_hooks:
+            return
+        if self.accelerator is not None and not self.accelerator.is_main_process:
+            return
+        self.n_backward_calls += 1
+        self.update_flop_count(
+            input_dict=self._input_dict,
+            backward=True,
+        )
+
+    def compute_flops(
+        self,
+        input_dict: dict[str, Union[torch.Tensor, Any]],
+        backward: bool = False,
+    ) -> int:
+        """Estimate FLOPs to forward/backward pass through the model.
+
+        Based on PreTrainedModel.floating_point_ops().
+        Apparently comes from this paper: https://arxiv.org/pdf/2001.08361.pdf
+        """
+        flops = (
+            (4 if backward else 2)
+            * self.model.estimate_tokens(input_dict)
+            * self.n_params
+        )
+        return flops
+
+    def update_flop_count(
+        self,
+        input_dict: dict[str, Union[torch.Tensor, Any]],
+        backward: bool = False,
+    ):
+        """Update the FLOP count based on the input.
+
+        N.B. should gather_for_metrics before calling this function.
+        """
+        assert self.accelerator is None or self.accelerator.is_main_process
+        self.flop_count += self.compute_flops(
+            input_dict=input_dict,
+            backward=backward,
+        )
+
     @property
     def n_params(self) -> int:
         return self._n_params
+
+    @contextmanager
+    def flop_count_context(self):
+        """Tracks FLOP count changes.
+
+        Use `with model.flop_count_context() as flop_count`, then access
+        `flop_count.flops` after the `with` block.
+        """
+        out = None  # Initialize out with a default value
+        try:
+            out = FlopCount(
+                flops=self.flop_count,
+                forward_calls=self.n_forward_calls,
+                backward_calls=self.n_backward_calls,
+            )
+            yield out
+        finally:
+            if out is not None:  # Check if out was successfully created
+                out.update(
+                    flops=self.flop_count,
+                    forward_calls=self.n_forward_calls,
+                    backward_calls=self.n_backward_calls,
+                )
+
+    @contextmanager
+    def dont_count_flops(self):
+        """Context manager to temporarily disable FLOP counting."""
+        try:
+            self._skip_hooks = True
+            yield
+        finally:
+            self._skip_hooks = False
 
     def push_to_hub(
         self,
@@ -295,7 +458,7 @@ class WrappedModel(ABC):
             A SequenceClassifierOutput object, which has a 'logits' attribute.
         """
 
-        minibatch_size = minibatch_size or self.eval_minibatch_size
+        minibatch_size = self.get_minibatch_size(input_ids, minibatch_size)
 
         dataloader = build_dataloader(
             input_ids=input_ids,
@@ -377,7 +540,7 @@ class WrappedModel(ABC):
             A SequenceClassifierOutput object, which has a 'logits' attribute.
         """
 
-        minibatch_size = minibatch_size or self.eval_minibatch_size
+        minibatch_size = self.get_minibatch_size(input_ids, minibatch_size)
 
         dataloader = build_dataloader(
             input_ids=input_ids,
@@ -460,7 +623,7 @@ class WrappedModel(ABC):
                     "It seems like your inputs are not correctly left-padded."
                 )
 
-        minibatch_size = minibatch_size or self.eval_minibatch_size
+        minibatch_size = self.get_minibatch_size(input_ids, minibatch_size)
 
         dataloader = build_dataloader(
             input_ids=input_ids,
@@ -555,7 +718,7 @@ class WrappedModel(ABC):
         # get_caching_model_with_example), so we need to handle that case.
         # TODO (ian): Work out where to move things to the right device.
         inputs = dict_to_device(inputs, self.model.device)
-        return self.model.forward(**inputs)
+        return self.model(**inputs)
 
     def _to_transformers_generation_config(
         self, gen_config: GenerationConfig
