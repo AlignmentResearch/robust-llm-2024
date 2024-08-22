@@ -632,6 +632,7 @@ class AdversarialTraining(Training):
 
             # Perform adversarial evaluation every round
             victim_log_counter = self.victim_training_logging_counter
+            compute_robustness_metric = self.evaluation_config.compute_robustness_metric
             round_metrics = do_adversarial_evaluation(
                 victim=self.victim,
                 dataset=self.eval_rllm_dataset["validation"],
@@ -646,6 +647,7 @@ class AdversarialTraining(Training):
                 wandb_table=table,
                 # We don't use checkpointing of attacks during adversarial training
                 resume_from_checkpoint=False,
+                compute_robustness_metric=compute_robustness_metric,
             )
 
             if (

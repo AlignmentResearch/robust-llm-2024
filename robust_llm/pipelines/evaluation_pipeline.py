@@ -94,6 +94,7 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
         global_step_count=global_step_count,
         global_datapoint_count=global_datapoint_count,
         resume_from_checkpoint=args.environment.allow_checkpointing,
+        compute_robustness_metric=args.evaluation.compute_robustness_metric,
     )
 
     logging_context.cleanup()

@@ -37,6 +37,7 @@ def do_adversarial_evaluation(
     global_datapoint_count: int,
     wandb_table: Optional[WandbTable] = None,
     resume_from_checkpoint: bool = True,
+    compute_robustness_metric: bool = True,
 ) -> dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
     wandb_table_exists = wandb_table is not None
@@ -126,24 +127,11 @@ def do_adversarial_evaluation(
     pa_successes = post_attack_out.successes
     logger.info(f"Attack success rate: {pa_successes.count(False) / len(pa_successes)}")
 
-    # TODO(ian): Don't redundantly compute this and the ASR.
-    # TODO(ian): Remove the try: except by making it work for all attacks.
-    time_start = time.perf_counter()
-    try:
-        robustness_metric = compute_robustness_metric_iterations(
-            attack_out=attack_out,
-            success_callback=final_success_binary_callback,
-            model=victim,
-        )
-    except Exception as e:
-        logger.error(
-            "Error computing robustness metric, might not be"
-            f" implemented for this attack yet: {e}"
-        )
-        robustness_metric = None
-    time_end = time.perf_counter()
-    logger.info(
-        f"Time taken for robustness metric computation: {time_end - time_start:.2f}s"
+    robustness_metric = maybe_compute_robustness_metric(
+        compute_robustness_metric=compute_robustness_metric,
+        attack_out=attack_out,
+        success_callback=final_success_binary_callback,
+        model=victim,
     )
 
     post_attack_out.maybe_log_info("post_attack_callback", commit=should_commit)
@@ -372,6 +360,36 @@ def compute_robustness_metric_iterations(
             return iteration + 1
     # Explicitly return None if we never reach the threshold
     return None
+
+
+def maybe_compute_robustness_metric(
+    compute_robustness_metric: bool,
+    attack_out: AttackOutput,
+    success_callback: BinaryCallback,
+    model: WrappedModel,
+) -> int | None:
+    if not compute_robustness_metric:
+        return None
+    # TODO(ian): Don't redundantly compute this and the ASR.
+    # TODO(ian): Remove the try: except by making it work for all attacks.
+    time_start = time.perf_counter()
+    try:
+        robustness_metric = compute_robustness_metric_iterations(
+            attack_out=attack_out,
+            success_callback=success_callback,
+            model=model,
+        )
+    except Exception as e:
+        logger.error(
+            "Error computing robustness metric, might not be"
+            f" implemented for this attack yet: {e}"
+        )
+        robustness_metric = None
+    time_end = time.perf_counter()
+    logger.info(
+        f"Time taken for robustness metric computation: {time_end - time_start:.2f}s"
+    )
+    return robustness_metric
 
 
 def _compute_clf_asr_from_logits(logits: list[list[float]], labels: list[int]):

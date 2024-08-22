@@ -210,6 +210,7 @@ class EvaluationConfig:
             ScoringCallback to use for final evaluation. Should refer to a
             BinaryCallback, because we need discrete success/failure for each
             attacked input.
+        compute_robustness_metric (bool): Whether to compute the robustness metric.
     """
 
     evaluation_attack: AttackConfig = MISSING
@@ -219,6 +220,7 @@ class EvaluationConfig:
             callback_name="successes_from_text", callback_return_type="binary"
         )
     )
+    compute_robustness_metric: bool = True
 
 
 @dataclass
