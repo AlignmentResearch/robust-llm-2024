@@ -49,19 +49,19 @@ class Conversation:
     """A template for generating chat prompts.
 
     Attributes:
-        prompt_prefix (str): The prefix for the entire prompt.
-        system_prefix (str): The prefix for the system prompt.
-        system_suffix (str): The suffix for the system prompt.
-        user_prefix (str): The prefix for the user input.
-        user_suffix (str): The suffix for the user input, including the prefix
+        prompt_prefix: The prefix for the entire prompt.
+        system_prefix: The prefix for the system prompt.
+        system_suffix: The suffix for the system prompt.
+        user_prefix: The prefix for the user input.
+        user_suffix: The suffix for the user input, including the prefix
             for the assistant response.
-        assistant_prefix (str): The prefix for the assistant response.
-        assistant_suffix (str): The suffix for the assistant response.
-        system_prompt (str): The system prompt to include in the prompt.
-        repeat_prompt_prefix (bool): Whether to repeat the prompt prefix for
+        assistant_prefix: The prefix for the assistant response.
+        assistant_suffix: The suffix for the assistant response.
+        system_prompt: The system prompt to include in the prompt.
+        repeat_prompt_prefix: Whether to repeat the prompt prefix for
             each user/assistant interaction. Defaults to False, i.e. the prompt
             prefix is only included once at the very start.
-        require_leading_whitespace (bool): Whether to require leading whitespace
+        require_leading_whitespace: Whether to require leading whitespace
             in the assistant response. Defaults to False.
         special_strings (list[str]): A list of special strings that act as delimiters
             for different components of the chat. These are used to clean the prompt

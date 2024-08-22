@@ -17,7 +17,7 @@ class AttackConfig:
     Configs used in attack setup.
 
     Attributes:
-        seed (int): Random seed for the attack.
+        seed: Random seed for the attack.
         train_frequency (Optional[int]):
             If the attack needs training, how often to train it,
             counted in number of victim adversarial training rounds.
@@ -26,15 +26,15 @@ class AttackConfig:
         log_frequency (Optional[int]):
             If the attack needs training, how often to log training progress.
             If None, no training progress is logged. Must be positive or None.
-        victim_inference_batch_size (int):
+        victim_inference_batch_size:
             Batch size to use for victim model inference.
-        save_prefix (str):
+        save_prefix:
             Prefix to use for saving attack states.
-        save_steps (int):
+        save_steps:
             How often to save attack states.
-        save_total_limit (int):
+        save_total_limit:
             Maximum number of attack states to keep at the same time.
-        initial_n_its (int):
+        initial_n_its:
             The number of iterations to run the attack.
     """
 
@@ -76,14 +76,14 @@ class TextAttackAttackConfig(AttackConfig):
     Options specific for TextAttack attacks.
 
     Attributes:
-        text_attack_recipe (str): The TextAttack recipe to use (e.g. textfooler).
-        query_budget (int): Query budget per example.
-        num_modifiable_words_per_chunk (Optional[int]): If set to an integer value, the
+        text_attack_recipe: The TextAttack recipe to use (e.g. textfooler).
+        query_budget: Query budget per example.
+        num_modifiable_words_per_chunk: If set to an integer value, the
             attack will replace all content of each modifiable chunk with
             `num_modifiable_words_per_chunk` placeholder words which can be then
             modified by the attack. Otherwise, content is not modified at the start and
             the attack performs modifications on the original text.
-        silent (bool): If silent, TextAttack will only print errors.
+        silent: If silent, TextAttack will only print errors.
     """
 
     text_attack_recipe: str = MISSING
@@ -102,12 +102,12 @@ class SearchFreeAttackConfig(AttackConfig):
     """Options specific for search-free attacks.
 
     Attributes:
-        victim_success_callback (CallbackConfig): Config for the
+        victim_success_callback: Config for the
             ScoringCallback to use to compute whether an attack was successful by
             computing whether the victim got the right answer. Should refer to a
             BinaryCallback, because we need discrete success/failure for each
             attacked input.
-        prompt_attack_mode (PromptAttackMode): The mode to use for prompt
+        prompt_attack_mode: The mode to use for prompt
             attacks. "single-prompt" for attacking one prompt at a time,
             "multi-prompt" for attacking multiple prompts at once. Defaults to
             "single-prompt".
@@ -132,7 +132,7 @@ class RandomTokenAttackConfig(SearchFreeAttackConfig):
     """Options specific for RandomToken attacks.
 
     Attributes:
-        n_attack_tokens (int): The number of tokens to generate.
+        n_attack_tokens: The number of tokens to generate.
     """
 
     n_attack_tokens: int = 10
@@ -175,7 +175,7 @@ class LMAttackConfig(SearchFreeAttackConfig):
         use_raw_adversary_input: If True, we will skip trying to insert the original
             data and the chat template. This should only be set when called from a
             few-shot attack.
-        victim_success_callback (CallbackConfig): Config for the
+        victim_success_callback: Config for the
             ScoringCallback to use to compute whether an attack was successful by
             computing whether the victim got the right answer. Should refer to a
             BinaryCallback, because we need discrete success/failure for each
@@ -205,8 +205,8 @@ class FewShotLMAttackConfig(LMAttackConfig):
     """Options specific for Stochastic Few Shot LM red-team attacks.
 
     Attributes:
-        n_turns (int): The number of turns to run the chat with the adversary.
-        few_shot_score_template (str): The template to use for reporting the attack
+        n_turns: The number of turns to run the chat with the adversary.
+        few_shot_score_template: The template to use for reporting the attack
             results from previous turns. Must contain {response} and {success}
             placeholders.
         initial_adversary_prefix: Prefix to use for the first turn of the attack.
@@ -233,29 +233,29 @@ class TRLAttackConfig(AttackConfig):
     """Options specific for TRL attacks.
 
     Attributes:
-        batch_size (int):
+        batch_size:
             The TRL batch size (how many examples are passed
             to a single call of PPO's "step" function).
-        mini_batch_size (int):
+        mini_batch_size:
             The TRL minibatch size (how many examples to load
             onto the gpu at once).
-        gradient_accumulation_steps (int):
+        gradient_accumulation_steps:
             The TRL gradient accumulation steps (how many minibatches
             to accumulate before taking a single gradient update step).
-        learning_rate (float):
+        learning_rate:
             The learning rate to use for TRL.
-        ppo_epochs (int):
+        ppo_epochs:
             The number of ppo epochs to run TRL on the provided dataset.
-        adversary (ModelConfig):
+        adversary:
             The model to use as the adversary.
-        min_length (int):
+        min_length:
             The minimum number of tokens to generate.
             If -1, there is no minimum length.
             Name and convention copied from trl code.
-        max_new_tokens (int):
+        max_new_tokens:
             The maximum number of tokens to generate.
             Name copied from trl code.
-        rewards_from_victim_callback (CallbackConfig):
+        rewards_from_victim_callback:
             The config of the ScoringCallback to use to compute rewards for the
             inputs. Must take text as input, and return floats that can be used
             as rewards for the inputs. Should probably be "losses_from_text".
@@ -263,9 +263,9 @@ class TRLAttackConfig(AttackConfig):
             `reward_type`. The other `reward_type`s can be implemented as
             ScoringCallbacks.
             TODO(GH#406): Add the other reward types as ScoringCallbacks.
-        model_name_to_save (str):
+        model_name_to_save:
             The name to use for saving the model.
-        model_save_path_prefix (Optional[str]): Where to save the final
+        model_save_path_prefix: Where to save the final
             checkpoint. If None, the model is not saved.
             Otherwise, the model is saved to a location starting with the
             specified prefix.
@@ -333,7 +333,7 @@ class GCGAttackConfig(SearchBasedAttackConfig):
     """Required options with defaults for the GCG attack.
 
     Args:
-        differentiable_embeds_callback (CallbackConfig): The config of the
+        differentiable_embeds_callback: The config of the
             ScoringCallback to use to compute gradients for generating candidates.
             Must take embeddings as input, and must be differentiable with respect
             to the embeddings.
@@ -361,7 +361,7 @@ class MultipromptGCGAttackConfig(SearchBasedAttackConfig):
     """Required options with defaults for the multi-prompt GCG attack.
 
     Args:
-        differentiable_embeds_callback (CallbackConfig): The config of the
+        differentiable_embeds_callback: The config of the
             ScoringCallback to use to compute gradients for generating candidates.
             Must take embeddings as input, and must be differentiable with respect
             to the embeddings.

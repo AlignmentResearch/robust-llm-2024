@@ -286,7 +286,7 @@ def is_correctly_padded(mask: torch.Tensor, padding_side: str) -> bool:
     [0, 0, ..., 0, 1, 1, ..., 1].
     Args:
         mask (torch.Tensor): Must be 1D or 2D. Can contain True/False or 1/0.
-        padding_side (str): Either "right" or "left".
+        padding_side: Either "right" or "left".
 
     Returns:
         bool: Whether the mask is of the correct form.

@@ -91,7 +91,7 @@ def load_hf_model(
     Args:
         name_or_path: The name or path of the model.
         revision: The revision of the model.
-        inference_type (InferenceType): The type of inference the model is used for.
+        inference_type: The type of inference the model is used for.
         strict_load: Whether to enforce that no weights are ignored or randomly
             initialized while loading.
         torch_dtype: Data type of the model.

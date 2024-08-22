@@ -18,8 +18,8 @@ class CachingWrappedModel(WrappedModel):
     TODO(GH#401): Make this work better for multi-prompt attacks.
 
     Attributes:
-    _wrapped_model (WrappedModel): The original model that this class wraps.
-    cache (dict[tuple[int], PastKeyValues]): The dictionary keys are tuples of
+    _wrapped_model: The original model that this class wraps.
+    cache: The dictionary keys are tuples of
         token IDs representing input sequences, and the dictionary values are
         PastKeyValues objects that contain the cached key-value pairs for these
         sequences.
