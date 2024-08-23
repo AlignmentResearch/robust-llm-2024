@@ -173,7 +173,7 @@ jobs:
       - store-test-output
       - store-memory-monitor
 
-  pytest-accelerate:
+  pytest-multigpu:
     executor: python-executor
     resource_class: alignmentresearch/far-2gpu-14cpu-60g
     # Unlike the `pytest` job, we don't use `parallelism` here since we don't
@@ -185,10 +185,19 @@ jobs:
       - prepare-virtualenv
       - memory-monitor
       - run:
-          name: Run accelerate tests
+          name: Run multigpu tests
           command: |
             mkdir -p /tmp/test-reports
-            ./tests/run_tests_with_accelerate.py --coverage -m multigpu --junitxml=/tmp/test-reports/junit-process-\$RANK.xml --durations=500 -vv
+            # --exitfirst: Although we'd prefer to see all test results,
+            # sometimes only one process will fail a test (without printing any
+            # output since pytest defers output until all tests are done) and
+            # move on to the next test. Then the processes are out of sync and
+            # hang until CI times out. Failing on the first test exits quicker
+            # than hanging and prints the error.
+            # Reducing the NCCL timeout instead of using --exitfirst fixes the
+            # hanging but still does not print the error, since it kills both
+            # processes before all tests are done.
+            ./tests/run_tests_with_accelerate.py --coverage -m multigpu --junitxml=/tmp/test-reports/junit-process-\$RANK.xml --durations=500 -vv --exitfirst
           environment:
             WANDB_MODE: offline
       - codecov/upload
@@ -236,5 +245,5 @@ workflows:
   tests:
     jobs:
       - pytest
-      - pytest-accelerate
+      - pytest-multigpu
       - lint
