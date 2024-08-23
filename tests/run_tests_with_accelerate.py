@@ -34,6 +34,9 @@ def main() -> None:
         description=__doc__,
         # There's no simple, concise way to handle passing args to three different
         # programs. We'll document here how the parsing works.
+        #
+        # The color-stripping sed command is from
+        # https://superuser.com/a/380778/2132114.
         epilog=r"""
 Unknown arguments listed after the flag `--accelerate_args` are passed to
 accelerate, and other extra arguments are passed to pytest. Therefore a command
@@ -54,8 +57,7 @@ sync.
 Per-process logs are written to /tmp/accelerate_tests_output/process-$RANK.log
 in case it's useful for debugging. Color codes are included, so view the logs
 with something like `less -R`, or strip the colors with
-    sed -e 's/\x1b\[[0-9;]*m//g'
-(from https://superuser.com/a/380778/2132114).""",
+    sed -e 's/\x1b\[[0-9;]*m//g'""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         # Don't allow flag abbreviations since its behavior with
         # parse_known_args() can be confusing.
@@ -103,7 +105,9 @@ with something like `less -R`, or strip the colors with
     log_dir.mkdir(parents=True, exist_ok=True)
     pytest_args_str = " ".join(shlex.quote(arg) for arg in pytest_args)
     pytest_command = (
-        f'pytest {pytest_args_str} 2>&1 | tee "{args.log_dir}/process-$RANK.log"'
+        # -i makes tee ignore SIGINT and stay open so that whatever trace pytest
+        # prints upon SIGINT is captured.
+        f'pytest {pytest_args_str} 2>&1 | tee -i "{args.log_dir}/process-$RANK.log"'
     )
     if args.coverage:
         # We need --parallel-mode (or equivalently, setting parallel=True in
