@@ -4,6 +4,7 @@ Starting with Gemma.
 TODO(GH#628): Add tests for more models.
 """
 
+from functools import cache
 from typing import Optional
 from unittest.mock import patch
 
@@ -25,6 +26,7 @@ from robust_llm.models.model_utils import InferenceType
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 
 
+@cache
 def gemma_1p1_config():
     config = AutoConfig.from_pretrained("google/gemma-1.1-2b-it")
     config.intermediate_size = 20
@@ -33,6 +35,7 @@ def gemma_1p1_config():
     return config
 
 
+@cache
 def gemma_2_config():
     config = AutoConfig.from_pretrained("google/gemma-2-9b-it")
     config.intermediate_size = 20
@@ -41,11 +44,15 @@ def gemma_2_config():
     return config
 
 
-# We have to use the real model names so that the tokenizer is loaded properly.
-CONFIGS = {
-    "google/gemma-1.1-2b-it": gemma_1p1_config(),
-    "google/gemma-2-9b-it": gemma_2_config(),
-}
+@cache
+def model_configs() -> dict[str, AutoConfig]:
+    # We make this a cached function rather than a global variable because if it
+    # were global, we'd call the gemma config functions and make slow network
+    # requests during pytest collection even if no tests in this file run.
+    return {
+        "google/gemma-1.1-2b-it": gemma_1p1_config(),
+        "google/gemma-2-9b-it": gemma_2_config(),
+    }
 
 
 def mock_load_hf_model(
@@ -63,7 +70,7 @@ def mock_load_hf_model(
     loading a model from Hugging Face. Instead we just use a randomly
     initialized small model by getting a config.
     """
-    config = CONFIGS[name_or_path]
+    config = model_configs()[name_or_path]
     print("USING MOCK LOAD HF MODEL")
     return AutoModelForCausalLM.from_config(config)
 
