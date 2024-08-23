@@ -253,6 +253,8 @@ class SearchBasedRunner(abc.ABC):
             use_chat_template=add_special_and_chat,
         )
         input_ids = encoded["input_ids"]
+        if isinstance(input_ids, torch.Tensor):
+            input_ids = input_ids.to(device=self.victim.device)
         return input_ids  # type: ignore  # mypy thinks it's EncodingFast | Any
 
     def _decode_tokens(
