@@ -139,10 +139,14 @@ class TrainingConfig:
             consider are "constant", "constant_with_warmup", and "cosine".
             Full list here:
             At https://github.com/huggingface/transformers/blob/main/src/transformers/trainer_utils.py#L410
+        warmup_ratio: Ratio of total training steps to use for learning rate
+            warmup (when applicable to the LR scheduler).
         optimizer: The optimizer to use in training.
         gradient_checkpointing: Whether to use gradient checkpointing.
             This is a technique to reduce memory usage at the cost of some additional
             computation during backpropagation.
+        group_by_length: Whether to group examples in batches by length, to
+            speed up training by reducing padding.
         eval_steps: Number of update steps between two
             evaluations. Will default to the same value as logging_steps if not set.
             Should be an integer or a float in range [0,1). If smaller than 1, will
@@ -179,8 +183,10 @@ class TrainingConfig:
     num_train_epochs: int = 3
     learning_rate: float = 5e-5
     lr_scheduler_type: str = "linear"
+    warmup_ratio: float = 0
     optimizer: str = "adamw_torch"
     gradient_checkpointing: bool = False
+    group_by_length: bool = False
     eval_steps: Optional[int] = None
     logging_steps: int = 500
     save_strategy: str = "steps"

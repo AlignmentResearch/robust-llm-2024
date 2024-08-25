@@ -1,3 +1,5 @@
 name_or_path: "EleutherAI/pythia-2.8b"
 family: "pythia"
-train_minibatch_size: 64
+train_minibatch_size: 4
+eval_minibatch_size: 16
+gradient_accumulation_steps: 2

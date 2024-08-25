@@ -1,3 +1,5 @@
 name_or_path: "EleutherAI/pythia-70m"
 family: "pythia"
-train_minibatch_size: 128
+# We're capping the training batch size to 8 for consistency across model sizes.
+train_minibatch_size: 8
+eval_minibatch_size: 256

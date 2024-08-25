@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+- /dataset: IMDB/stable
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
+- /model: Default/clf/imdb/pythia-12b-s0
+- /environment: DEFAULT
+- _self_
+
+dataset:
+  n_val: 30
+
+model:
+  eval_minibatch_size: 1
+
+experiment_name: ian_000
+run_name: rt_12b_1a6k
+experiment_type: "evaluation"

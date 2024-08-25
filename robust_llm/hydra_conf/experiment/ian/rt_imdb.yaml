@@ -1,0 +1,12 @@
+# @package _global_
+defaults:
+- /dataset: IMDB/stable
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
+- _self_
+
+dataset:
+  n_train: 0
+  n_val: 200
+
+experiment_type: "evaluation"

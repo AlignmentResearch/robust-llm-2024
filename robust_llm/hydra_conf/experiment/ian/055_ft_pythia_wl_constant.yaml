@@ -1,0 +1,5 @@
+# @package _global_
+defaults:
+- /experiment/Training/standard-ft-constant
+- /dataset: WordLength/stable
+- _self_

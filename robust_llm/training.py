@@ -117,9 +117,11 @@ class Training:
             num_train_epochs=self.config.num_train_epochs,
             learning_rate=self.config.learning_rate,
             lr_scheduler_type=self.config.lr_scheduler_type,
+            warmup_ratio=self.config.warmup_ratio,
             per_device_train_batch_size=self.train_batch_size,
             per_device_eval_batch_size=self.eval_batch_size,
             gradient_accumulation_steps=self.gradient_accumulation_steps,
+            group_by_length=self.config.group_by_length,
             optim=self.config.optimizer,
             gradient_checkpointing=self.config.gradient_checkpointing,
             # Using non-reentrant checkpointing avoids a warning and

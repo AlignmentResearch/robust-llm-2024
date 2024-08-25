@@ -1,0 +1,2 @@
+strict_load: true
+inference_type: "classification"

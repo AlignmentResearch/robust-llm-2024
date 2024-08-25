@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-- /dataset: PasswordMatch/compatibility
+- /dataset: PasswordMatch/stable
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: RANDOM_TOKEN
 - /model: EleutherAI/pythia-14m
@@ -11,11 +11,8 @@ dataset:
   n_val: 30
 
 model:
-  name_or_path: "AlignmentResearch/robust_llm_pythia-tt-14m-mz-ada-v3"
+  name_or_path: "AlignmentResearch/robust_llm_pythia-14m_clf_pm_v-ian-080_s-0"
   strict_load: true
-
-environment:
-  device: "mps"
 
 experiment_name: ian_000
 run_name: attack_data_saving_test_14m_rt

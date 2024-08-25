@@ -1,0 +1,5 @@
+# @package _global_
+defaults:
+- /experiment/Training/standard-ft
+- /dataset: Harmless/stable
+- _self_

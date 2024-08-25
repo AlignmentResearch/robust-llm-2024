@@ -18,7 +18,10 @@ fsdp_config:
   fsdp_use_orig_params: true
 machine_rank: 0
 main_training_function: main
-mixed_precision: "no"
+# We default to using mixed precision but this has only been validated with
+# pythia models, which were trained with mixed precision fp16.
+# This can be set to "no" to disable mixed precision.
+mixed_precision: "fp16"
 num_machines: 1
 # We overwrite this with a CLI argument
 num_processes: 1

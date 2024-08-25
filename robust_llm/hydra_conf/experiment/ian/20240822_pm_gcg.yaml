@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+- /dataset: PasswordMatch/stable
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: GCG
+- /environment: DEFAULT
+- _self_
+
+dataset:
+  n_val: 10
+
+experiment_name: ian_000
+run_name: attack_data_saving_test_1b
+experiment_type: "evaluation"
