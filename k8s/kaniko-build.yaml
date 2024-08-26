@@ -1,4 +1,6 @@
 ---
+# Run Kaniko using `kubectl create -f k8s/kaniko-build.yaml`.
+# See README.md for more information.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -12,19 +14,17 @@ spec:
     metadata:
       name: kaniko
     spec:
-      priorityClassName: normal-batch
+      priorityClassName: cpu-normal-batch
       containers:
         - name: kaniko
-          image: gcr.io/kaniko-project/executor:latest
-          args:
-            - --dockerfile=Dockerfile
-            - "--context=git://github.com/AlignmentResearch/robust-llm.git#refs/heads/$(BRANCH_NAME)"
-            - --git=recurse-submodules=true
-            - --cache=true
-            - --cache-repo=ghcr.io/alignmentresearch/robust-llm/cache
-            - "--destination=ghcr.io/alignmentresearch/robust-llm:$(BRANCH_NAME)"
-            - --destination=ghcr.io/alignmentresearch/robust-llm:latest
-            - --verbosity=debug
+          # executor:debug image is needed to run `$(date ...)` in a subshell.
+          # executor:latest does not have a shell to save space.
+          image: gcr.io/kaniko-project/executor:debug
+          command: ["/busybox/sh", "-c"]
+          args: ["/kaniko/executor --dockerfile=Dockerfile --verbosity=debug \
+                 --context=git://github.com/AlignmentResearch/robust-llm.git#refs/heads/$(BRANCH_NAME) \
+                 --git=recurse-submodules=true --cache=true --cache-repo=ghcr.io/alignmentresearch/robust-llm/cache \
+                 --destination=ghcr.io/alignmentresearch/robust-llm:$(date +'%Y-%m-%d-%H-%M-%S')-$(BRANCH_NAME)"]
           volumeMounts:
             - name: docker
               mountPath: /kaniko/.docker

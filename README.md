@@ -292,6 +292,10 @@ kubectl create -f k8s/kaniko-build.yaml
 
 If you wish to build a Docker image from a different branch, you should edit the `BRANCH_NAME` value in `k8s/kaniko-build.yaml` and then run the command above. More details can be found in the Flamingo wiki article on Kaniko, and the Kaniko docs themselves.
 
+Kaniko will push the Docker image to a tag formed of a timestamp followed by the branch name `YYYY-MM-DD-hh-mm-ss-<BRANCH_NAME>`. To make this the new default Docker image:
+  1. Update `DEFAULT_CONTAINER_TAG` in [batch_job_utils.py](https://github.com/AlignmentResearch/robust-llm/blob/main/robust_llm/batch_job_utils.py). We specify the fully qualified tag in the code to enable replicating old experiments, avoid disrupting existing experiments (that might depend on a specific experiment), and to ensure new experiments pull the latest container.
+  2. Update the `latest` tag by running `docker pull ghcr.io/alignmentresearch/robust-llm:$TAG && docker tag ghcr.io/alignmentresearch/robust-llm:$TAG ghcr.io/alignmentresearch/robust-llm:latest && docker push ghcr.io/alignmentresearch/robust-llm:latest`. The `latest` tag should not be used for experiments, but may be used for interactive development.
+
 ## Working in a devbox
 The most convenient way to create a devbox is to run `make devbox` which will use `k8s/auto-devbox.yaml` and you can pass various arguments to this, e.g. CPU, GPU and MEMORY (see the Makefile).
 
