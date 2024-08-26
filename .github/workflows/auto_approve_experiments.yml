@@ -21,7 +21,7 @@ jobs:
           echo "Changed files: $CHANGED_FILES"
           ALLOWED=true
           for FILE in $CHANGED_FILES; do
-            if [[ ! "$FILE" =~ ^(experiments/|robust_llm/hydra_conf/experiment/|robust_llm/plotting_utils/experiments/) ]]; then
+            if [[ ! "$FILE" =~ ^(experiments/|scripts/|robust_llm/hydra_conf/experiment/|robust_llm/plotting_utils/experiments/) ]]; then
               ALLOWED=false
               break
             fi
