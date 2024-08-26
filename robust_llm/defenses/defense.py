@@ -82,6 +82,18 @@ class DefendedModel(WrappedModel, ABC):
     def n_params(self):
         return self._underlying_model.n_params
 
+    @property
+    def flop_count(self):
+        return self._underlying_model.flop_count
+
+    @property
+    def n_forward_calls(self):
+        return self._underlying_model.n_forward_calls
+
+    @property
+    def n_backward_calls(self):
+        return self._underlying_model.n_backward_calls
+
     @classmethod
     def load_tokenizer(
         cls,

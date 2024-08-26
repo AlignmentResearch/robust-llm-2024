@@ -22,6 +22,7 @@ from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.scoring_callbacks import BinaryCallback, CallbackInput
+from robust_llm.scoring_callbacks.scoring_callback_utils import BinaryCallbackOutput
 
 
 def do_adversarial_evaluation(
@@ -58,20 +59,12 @@ def do_adversarial_evaluation(
     model_size = victim.n_params
     model_family = victim.family
 
-    callback_input = CallbackInput(
-        # TODO(ian): Work out where to apply chat template.
-        input_data=victim.maybe_apply_user_template(dataset.ds["text"]),
-        clf_label_data=dataset.ds["clf_label"],
-        gen_target_data=dataset.ds["gen_target"],
+    pre_attack_out = pre_attack_evaluation(
+        victim=victim,
+        dataset=dataset,
+        final_success_binary_callback=final_success_binary_callback,
+        should_commit=should_commit,
     )
-    time_start = time.perf_counter()
-    pre_attack_out = final_success_binary_callback(
-        victim,
-        callback_input,
-    )
-    time_end = time.perf_counter()
-    logger.info(f"Time taken for pre-attack evaluation: {time_end - time_start:.2f}s")
-    pre_attack_out.maybe_log_info("pre_attack_callback", commit=should_commit)
     pre_attack_successes = pre_attack_out.successes
 
     # Reduce the dataset to only the examples that the model got correct, since
@@ -81,51 +74,27 @@ def do_adversarial_evaluation(
         raise ValueError("No examples to attack in adversarial evaluation!")
     dataset_to_attack = dataset.get_subset(indices_to_attack)
 
-    time_start = time.perf_counter()
-    attack_out = attack.get_attacked_dataset(
-        dataset=dataset_to_attack,
-        n_its=attack.attack_config.initial_n_its,
-        # Only resume from checkpoint if we're in the evaluation pipeline as otherwise
-        # we will be incorrectly reusing data in the case of adversarial training.
+    attack_out, attack_flops = attack_dataset(
+        victim=victim,
+        dataset_to_attack=dataset_to_attack,
+        attack=attack,
         resume_from_checkpoint=resume_from_checkpoint,
     )
-    time_end = time.perf_counter()
-    logger.info(f"Time taken for attack: {time_end - time_start:.2f}s")
-
     attacked_dataset = attack_out.dataset
-    # Only save attack data if we're in the evaluation pipeline - we don't care
-    # about computing the robustness metric in adv training.
-    if should_commit and victim.accelerator.is_main_process:
-        attack_data_tables = attack_out.attack_data.to_wandb_tables()
-        table_dict = {
-            f"attack_data/example_{i}": table
-            for i, table in enumerate(attack_data_tables)
-        }
-        wandb_log(table_dict, commit=True)
+    maybe_save_attack_data(victim, attack_out, should_commit)
     # In case the attack changed the victim from eval() mode, we set it again here.
     victim.eval()
 
     # We use dataset_to_attack so that we use the same examples as in attacked_dataset
     original_input_data = victim.maybe_apply_user_template(dataset_to_attack.ds["text"])
 
-    callback_input = CallbackInput(
-        # NOTE: We don't apply the chat template here because we assume that the
-        # attack already did that.
-        # TODO(ian): Work out where to apply chat template.
-        input_data=attacked_dataset.ds["attacked_text"],
+    post_attack_out = post_attack_evaluation(
+        victim=victim,
+        attacked_dataset=attacked_dataset,
+        final_success_binary_callback=final_success_binary_callback,
         original_input_data=original_input_data,
-        clf_label_data=attacked_dataset.ds["attacked_clf_label"],
-        gen_target_data=attacked_dataset.ds["attacked_gen_target"],
+        should_commit=should_commit,
     )
-    time_start = time.perf_counter()
-    post_attack_out = final_success_binary_callback(
-        victim,
-        callback_input,
-    )
-    time_end = time.perf_counter()
-    logger.info(f"Time taken for post-attack callback: {time_end - time_start:.2f}s")
-    pa_successes = post_attack_out.successes
-    logger.info(f"Attack success rate: {pa_successes.count(False) / len(pa_successes)}")
 
     robustness_metric = maybe_compute_robustness_metric(
         compute_robustness_metric=compute_robustness_metric,
@@ -134,8 +103,11 @@ def do_adversarial_evaluation(
         model=victim,
     )
 
-    post_attack_out.maybe_log_info("post_attack_callback", commit=should_commit)
     post_attack_successes = post_attack_out.successes
+    attack_success_rate = post_attack_successes.count(False) / len(
+        post_attack_successes
+    )
+    logger.info(f"Attack success rate: {attack_success_rate}")
 
     attack_results = AttackResults(
         pre_attack_successes=pre_attack_successes,
@@ -171,6 +143,8 @@ def do_adversarial_evaluation(
     metrics["global_datapoint_count"] = global_datapoint_count
     metrics["model_size"] = model_size
     metrics["model_family"] = model_family
+    metrics["attack_flops"] = attack_flops
+    metrics["flops_per_iteration"] = attack_flops / attack.attack_config.initial_n_its
 
     if (
         num_examples_to_log_detailed_info is not None
@@ -190,19 +164,102 @@ def do_adversarial_evaluation(
             **attack_out.per_example_info,
         )
 
-    if victim.accelerator.is_main_process:
-        wandb_log(metrics, commit=True)
-        logger.info("Adversarial evaluation metrics:")
-        logger.info(metrics)
-        wandb_table = (
-            WandbTable("adversarial_eval/table") if wandb_table is None else wandb_table
-        )
-        wandb_table.add_data(metrics)
-        if not wandb_table_exists:
-            # If the wandb table already exists, we don't take responsibility for saving
-            wandb_table.save()
+    maybe_log_adversarial_eval_table(
+        victim=victim,
+        metrics=metrics,
+        wandb_table=wandb_table,
+        wandb_table_exists=wandb_table_exists,
+    )
 
     return metrics
+
+
+def pre_attack_evaluation(
+    victim: WrappedModel,
+    dataset: RLLMDataset,
+    final_success_binary_callback: BinaryCallback,
+    should_commit: bool,
+) -> BinaryCallbackOutput:
+    callback_input = CallbackInput(
+        # TODO(ian): Work out where to apply chat template.
+        input_data=victim.maybe_apply_user_template(dataset.ds["text"]),
+        clf_label_data=dataset.ds["clf_label"],
+        gen_target_data=dataset.ds["gen_target"],
+    )
+    time_start = time.perf_counter()
+    pre_attack_out = final_success_binary_callback(
+        victim,
+        callback_input,
+    )
+    time_end = time.perf_counter()
+    logger.info(f"Time taken for pre-attack evaluation: {time_end - time_start:.2f}s")
+    pre_attack_out.maybe_log_info("pre_attack_callback", commit=should_commit)
+    return pre_attack_out
+
+
+def attack_dataset(
+    victim: WrappedModel,
+    dataset_to_attack: RLLMDataset,
+    attack: Attack,
+    resume_from_checkpoint: bool,
+) -> tuple[AttackOutput, int]:
+    time_start = time.perf_counter()
+    with victim.flop_count_context() as attack_flops:
+        attack_out = attack.get_attacked_dataset(
+            dataset=dataset_to_attack,
+            n_its=attack.attack_config.initial_n_its,
+            # Only resume from checkpoint if we're in the evaluation pipeline as
+            # otherwise we will be incorrectly reusing data in the case of adversarial
+            # training.
+            resume_from_checkpoint=resume_from_checkpoint,
+        )
+    time_end = time.perf_counter()
+    logger.info(f"Time taken for attack: {time_end - time_start:.2f}s")
+    return attack_out, attack_flops.flops
+
+
+def maybe_save_attack_data(
+    victim: WrappedModel,
+    attack_out: AttackOutput,
+    should_commit: bool,
+):
+    assert victim.accelerator is not None
+    # Only save attack data if we're in the evaluation pipeline - we don't care
+    # about computing the robustness metric in adv training.
+    if should_commit and victim.accelerator.is_main_process:
+        attack_data_tables = attack_out.attack_data.to_wandb_tables()
+        table_dict = {
+            f"attack_data/example_{i}": table
+            for i, table in enumerate(attack_data_tables)
+        }
+        wandb_log(table_dict, commit=True)
+
+
+def post_attack_evaluation(
+    victim: WrappedModel,
+    attacked_dataset: RLLMDataset,
+    final_success_binary_callback: BinaryCallback,
+    original_input_data: Sequence[str],
+    should_commit: bool,
+) -> BinaryCallbackOutput:
+    callback_input = CallbackInput(
+        # NOTE: We don't apply the chat template here because we assume that the
+        # attack already did that.
+        # TODO(ian): Work out where to apply chat template.
+        input_data=attacked_dataset.ds["attacked_text"],
+        original_input_data=original_input_data,
+        clf_label_data=attacked_dataset.ds["attacked_clf_label"],
+        gen_target_data=attacked_dataset.ds["attacked_gen_target"],
+    )
+    time_start = time.perf_counter()
+    post_attack_out = final_success_binary_callback(
+        victim,
+        callback_input,
+    )
+    time_end = time.perf_counter()
+    logger.info(f"Time taken for post-attack callback: {time_end - time_start:.2f}s")
+    post_attack_out.maybe_log_info("post_attack_callback", commit=should_commit)
+    return post_attack_out
 
 
 def _maybe_record_defense_specific_metrics(
@@ -390,6 +447,26 @@ def maybe_compute_robustness_metric(
         f"Time taken for robustness metric computation: {time_end - time_start:.2f}s"
     )
     return robustness_metric
+
+
+def maybe_log_adversarial_eval_table(
+    victim: WrappedModel,
+    metrics: dict[str, Any],
+    wandb_table: Optional[WandbTable] = None,
+    wandb_table_exists: bool = False,
+):
+    assert victim.accelerator is not None
+    if victim.accelerator.is_main_process:
+        wandb_log(metrics, commit=True)
+        logger.info("Adversarial evaluation metrics:")
+        logger.info(metrics)
+        wandb_table = (
+            WandbTable("adversarial_eval/table") if wandb_table is None else wandb_table
+        )
+        wandb_table.add_data(metrics)
+        if not wandb_table_exists:
+            # If the wandb table already exists, we don't take responsibility for saving
+            wandb_table.save()
 
 
 def _compute_clf_asr_from_logits(logits: list[list[float]], labels: list[int]):
