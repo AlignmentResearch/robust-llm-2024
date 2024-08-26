@@ -1,6 +1,7 @@
 import abc
 import json
 import os
+import random
 import shutil
 from dataclasses import asdict, dataclass, field
 from enum import Enum
@@ -24,6 +25,7 @@ class AttackState:
     """State used for checkpointing attacks.
 
     Attributes:
+        rng_state: State of the random number generator.
         example_index: Index of the current example being attacked.
         attacked_texts: List of final attacked texts for each example.
         all_iteration_texts: List of attacked texts for each iteration on each
@@ -31,6 +33,7 @@ class AttackState:
         attacks_info: Dictionary of additional information about the attack.
     """
 
+    rng_state: tuple[Any, ...]
     example_index: int = 0
     attacked_texts: list[str] = field(default_factory=list)
     all_iteration_texts: list[list[str]] = field(default_factory=list)
@@ -140,8 +143,9 @@ class Attack(abc.ABC):
         self.attack_config = attack_config
         self.victim = victim
         self.run_name = run_name
+        self.rng = random.Random(attack_config.seed)
         self.logging_name = logging_name
-        self.attack_state = AttackState()
+        self.attack_state = AttackState(rng_state=self.rng.getstate())
         save_limit_gt_0 = self.attack_config.save_total_limit > 0
         run_name_not_default = self.run_name != "default-run"
         self.can_checkpoint = (

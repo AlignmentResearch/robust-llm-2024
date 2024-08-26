@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import torch
 
-from robust_llm.models.prompt_templates import PromptTemplate
+from robust_llm.models.prompt_templates import AttackChunks, PromptTemplate
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
     ModifiableChunkSpec,
@@ -139,7 +139,7 @@ def create_onehot_embedding(
 
 def get_chunking_for_search_based(
     text_chunked: Sequence[str], modifiable_chunk_spec: ModifiableChunkSpec
-) -> tuple[str, str, str]:
+) -> AttackChunks:
     """Returns the unmodifiable prefix, the modifiable infix, & the unmodifiable suffix.
 
     GCG needs exactly three chunks, so we guarantee this here as long as
@@ -157,7 +157,11 @@ def get_chunking_for_search_based(
     if infix_chunk_type == ChunkType.OVERWRITABLE:
         modifiable_infix = ""
 
-    return unmodifiable_prefix, modifiable_infix, unmodifiable_suffix
+    return AttackChunks(
+        unmodifiable_prefix=unmodifiable_prefix,
+        modifiable_infix=modifiable_infix,
+        unmodifiable_suffix=unmodifiable_suffix,
+    )
 
 
 @dataclass

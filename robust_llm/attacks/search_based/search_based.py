@@ -51,7 +51,7 @@ class SearchBasedAttack(Attack):
         super().__init__(
             attack_config, victim=victim, run_name=run_name, logging_name=logging_name
         )
-        self.attack_state = SearchBasedAttackState()
+        self.attack_state = SearchBasedAttackState(rng_state=self.rng.getstate())
 
     @override
     def get_attacked_dataset(
@@ -78,6 +78,7 @@ class SearchBasedAttack(Attack):
             logits_cache = self.attack_state.logits_cache
             attacked_input_texts = self.attack_state.attacked_texts
             starting_index = self.attack_state.example_index + 1
+            self.rng.setstate(self.attack_state.rng_state)
         else:
             # Reset the state if not resuming from checkpoint
             all_filtered_out_counts = []
@@ -85,7 +86,7 @@ class SearchBasedAttack(Attack):
             logits_cache = []
             attacked_input_texts = []
 
-            self.attack_state = SearchBasedAttackState()
+            self.attack_state = SearchBasedAttackState(rng_state=self.rng.getstate())
             starting_index = 0
 
         for example_index in tqdm(
@@ -94,16 +95,15 @@ class SearchBasedAttack(Attack):
             example = dataset.ds[example_index]
             assert isinstance(example, dict)  # for type checking
 
-            unmodifiable_prefix, modifiable_infix, unmodifiable_suffix = (
-                get_chunking_for_search_based(
-                    example["chunked_text"], dataset.modifiable_chunk_spec
-                )
+            attack_chunks = get_chunking_for_search_based(
+                example["chunked_text"], dataset.modifiable_chunk_spec
             )
 
             prompt_template = self.victim.chunks_to_prompt_template(
-                unmodifiable_prefix=unmodifiable_prefix,
-                modifiable_infix=modifiable_infix,
-                unmodifiable_suffix=unmodifiable_suffix,
+                chunks=attack_chunks,
+                perturb_min=self.attack_config.perturb_position_min,
+                perturb_max=self.attack_config.perturb_position_max,
+                rng=self.rng,
             )
 
             example["text"] = prompt_template.build_prompt()
@@ -148,6 +148,7 @@ class SearchBasedAttack(Attack):
                 all_iteration_texts=all_iteration_texts,
                 logits_cache=logits_cache,
                 all_filtered_out_counts=all_filtered_out_counts,
+                rng_state=self.rng.getstate(),
             )
 
             if resume_from_checkpoint:

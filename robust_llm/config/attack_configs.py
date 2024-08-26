@@ -36,6 +36,14 @@ class AttackConfig:
             Maximum number of attack states to keep at the same time.
         initial_n_its:
             The number of iterations to run the attack.
+        perturb_position_min:
+            The earliest position in a perturbable chunk in which to insert
+            the attack tokens, expressed as a fraction of the perturbable chunk length.
+            [0, 1]-valued float.
+        perturb_position_max:
+            The latest position in a perturbable chunk in which to insert
+            the attack tokens, expressed as a fraction of the perturbable chunk length.
+            [0, 1]-valued float.
     """
 
     seed: int = 0
@@ -46,6 +54,8 @@ class AttackConfig:
     save_steps: int = 100
     save_total_limit: int = 1
     initial_n_its: int = 1
+    perturb_position_min: float = 1.0
+    perturb_position_max: float = 1.0
 
     def __post_init__(self):
         if self.train_frequency is not None and self.train_frequency <= 0:
@@ -53,6 +63,8 @@ class AttackConfig:
 
         if self.log_frequency is not None and self.log_frequency <= 0:
             raise ValueError("log_frequency must be positive or None.")
+
+        assert 0 <= self.perturb_position_min <= self.perturb_position_max <= 1.0
 
 
 @dataclass

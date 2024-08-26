@@ -1,3 +1,4 @@
+import random
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
@@ -37,10 +38,35 @@ class AttackChunks:
     modifiable_infix: str
     unmodifiable_suffix: str
 
-    def get_prompt_template(self):
+    def get_prompt_template(
+        self, perturb_min: float, perturb_max: float, rng: random.Random
+    ) -> PromptTemplate:
+        """Split the chunks into before/after attack and return a prompt template.
+
+        Args:
+            perturb_min ([0, 1]): The earliest fraction of the infix at which to attack.
+            perturb_max ([0, 1]): The latest fraction of the infix at which to attack.
+            rng: A random number generator.
+
+        Returns:
+            PromptTemplate: The prompt template for the attack.
+
+        A few remarks:
+        - If perturb_min and perturb_max are sufficiently close as to correspond to the
+            same position, the attack position will be deterministic.
+        - If perturb_min is 1, then this will be a suffix attack.
+        - If perturb_max is 0, then this will be a prefix attack.
+        """
+        assert 0 <= perturb_min <= perturb_max <= 1
+        perturb_length = len(self.modifiable_infix)
+        perturb_min_position = int(perturb_length * perturb_min)
+        perturb_max_position = int(perturb_length * perturb_max)
+        perturb_position = rng.randint(perturb_min_position, perturb_max_position)
         return PromptTemplate(
-            before_attack=self.unmodifiable_prefix + self.modifiable_infix,
-            after_attack=self.unmodifiable_suffix,
+            before_attack=self.unmodifiable_prefix
+            + self.modifiable_infix[:perturb_position],
+            after_attack=self.modifiable_infix[perturb_position:]
+            + self.unmodifiable_suffix,
         )
 
 
@@ -106,12 +132,12 @@ class Conversation:
             return ""
         return f"{self.system_prefix}{self.system_prompt}{self.system_suffix}"
 
-    def wrap_attack_chunks(self, chunks: AttackChunks):
+    def wrap_prompt_template(self, prompt_template: PromptTemplate):
         before_attack = self.prompt_prefix + self.get_system_message()
         before_attack += self.user_prefix
-        before_attack += f"{chunks.unmodifiable_prefix}{chunks.modifiable_infix}"
+        before_attack += prompt_template.before_attack
         after_attack = (
-            f"{chunks.unmodifiable_suffix}{self.user_suffix}{self.assistant_prefix}"
+            f"{prompt_template.after_attack}{self.user_suffix}{self.assistant_prefix}"
         )
         return PromptTemplate(
             before_attack=before_attack,

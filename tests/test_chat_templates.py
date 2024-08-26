@@ -1,3 +1,4 @@
+import random
 from unittest.mock import MagicMock
 
 import pytest
@@ -32,7 +33,7 @@ def mock_model():
 
 
 @pytest.mark.parametrize("model_name, model_family", NAME_AND_TEMPLATE)
-def test_wrap_attack_chunks(mock_model, model_name: str, model_family: str):
+def test_wrap_prompt_template(mock_model, model_name: str, model_family: str):
     chunks = AttackChunks(
         unmodifiable_prefix="Unmodifiable prefix. ",
         modifiable_infix="Modifiable infix. ",
@@ -56,7 +57,10 @@ def test_wrap_attack_chunks(mock_model, model_name: str, model_family: str):
         "Unmodifiable prefix. Modifiable infix. Unmodifiable suffix."
     )
     conv.append_assistant_message("")
-    prompt_template = conv.wrap_attack_chunks(chunks)
+    base_template = chunks.get_prompt_template(
+        perturb_min=1.0, perturb_max=1.0, rng=random.Random(0)
+    )
+    prompt_template = conv.wrap_prompt_template(base_template)
     assert prompt_template.before_attack.endswith(
         "Unmodifiable prefix. Modifiable infix. "
     )
@@ -88,7 +92,10 @@ def test_build_prompt(mock_model, model_name: str, model_family: str):
     )
     assert isinstance(model, WrappedChatModel)
     conv = model.init_conversation()
-    prompt_template = conv.wrap_attack_chunks(chunks)
+    base_template = chunks.get_prompt_template(
+        perturb_min=1.0, perturb_max=1.0, rng=random.Random(0)
+    )
+    prompt_template = conv.wrap_prompt_template(base_template)
     conv.append_user_message(
         "Unmodifiable prefix. Modifiable infix. Attack text. Unmodifiable suffix."
     )

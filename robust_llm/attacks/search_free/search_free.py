@@ -1,4 +1,3 @@
-import random
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Sequence
@@ -19,6 +18,7 @@ from robust_llm.attacks.attack import (
 )
 from robust_llm.config.attack_configs import AttackConfig, SearchFreeAttackConfig
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
+from robust_llm.models.prompt_templates import AttackChunks
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
@@ -69,9 +69,8 @@ class SearchFreeAttack(Attack, ABC):
         super().__init__(
             attack_config, victim=victim, run_name=run_name, logging_name=logging_name
         )
-        self.attack_state = SearchFreeAttackState()
+        self.attack_state = SearchFreeAttackState(rng_state=self.rng.getstate())
         assert isinstance(attack_config, SearchFreeAttackConfig)
-        self.rng = random.Random(attack_config.seed)
         self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
         cb_config = attack_config.victim_success_callback
         self.victim_success_callback = build_scoring_callback(cb_config)
@@ -92,6 +91,7 @@ class SearchFreeAttack(Attack, ABC):
             all_success_indices = self.attack_state.success_indices
             per_example_info = self.attack_state.attacks_info
             starting_index = self.attack_state.example_index + 1
+            self.rng.setstate(self.attack_state.rng_state)
         else:
             # Reset the state if not resuming from checkpoint
             attacked_texts = []
@@ -99,7 +99,7 @@ class SearchFreeAttack(Attack, ABC):
             all_success_indices = []
             logits_cache = []
             per_example_info = {}
-            self.attack_state = SearchFreeAttackState()
+            self.attack_state = SearchFreeAttackState(rng_state=self.rng.getstate())
             starting_index = 0
 
         for example_index in tqdm(
@@ -142,6 +142,7 @@ class SearchFreeAttack(Attack, ABC):
                 logits_cache=logits_cache,
                 success_indices=all_success_indices,
                 attacks_info=per_example_info,
+                rng_state=self.rng.getstate(),
             )
             if resume_from_checkpoint:
                 self.maybe_save_state()
@@ -394,6 +395,12 @@ class SearchFreeAttack(Attack, ABC):
                 return chunk_text, {}
 
             case ChunkType.PERTURBABLE:
+                attack_triple = AttackChunks("", chunk_text, "")
+                template = attack_triple.get_prompt_template(
+                    perturb_min=self.attack_config.perturb_position_min,
+                    perturb_max=self.attack_config.perturb_position_max,
+                    rng=self.rng,
+                )
                 token_ids, info = self._get_attack_tokens(
                     chunk_text,
                     chunk_type,
@@ -405,7 +412,10 @@ class SearchFreeAttack(Attack, ABC):
                 attack_tokens = self.post_process_attack_string(
                     attack_tokens, chunk_index
                 )
-                return chunk_text + attack_tokens, info
+                return (
+                    template.before_attack + attack_tokens + template.after_attack,
+                    info,
+                )
 
             case ChunkType.OVERWRITABLE:
                 token_ids, info = self._get_attack_tokens(

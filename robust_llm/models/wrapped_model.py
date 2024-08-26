@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import random
 import shutil
 import tempfile
 import time
@@ -1061,18 +1062,18 @@ class WrappedModel(ABC):
 
     def chunks_to_prompt_template(
         self,
-        unmodifiable_prefix: str,
-        modifiable_infix: str,
-        unmodifiable_suffix: str,
+        chunks: AttackChunks,
+        perturb_min: float,
+        perturb_max: float,
+        rng: random.Random,
     ) -> PromptTemplate:
-        """Returns a PromptTemplate for the given text chunks."""
-        chunks = AttackChunks(
-            unmodifiable_prefix=unmodifiable_prefix,
-            modifiable_infix=modifiable_infix,
-            unmodifiable_suffix=unmodifiable_suffix,
-        )
+        """Returns a PromptTemplate for the given text chunks.
+
+        Handles chat formatting and selecting the position for the attack tokens.
+        """
+        base_template = chunks.get_prompt_template(perturb_min, perturb_max, rng)
         conv = self.init_conversation()
-        return conv.wrap_attack_chunks(chunks)
+        return conv.wrap_prompt_template(base_template)
 
     def maybe_apply_user_template(self, text: Prompt) -> Prompt:
         """If working with a chat model, return text with chat template applied.

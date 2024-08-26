@@ -10,8 +10,6 @@ from robust_llm.attacks.search_based.utils import (
     get_chunking_for_search_based,
 )
 from robust_llm.config.attack_configs import SearchBasedAttackConfig
-from robust_llm.models.prompt_templates import PromptTemplate
-from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 
@@ -52,18 +50,15 @@ class MultiPromptSearchBasedAttack(Attack):
         for example in dataset.ds:
             assert isinstance(example, dict)
 
-            unmodifiable_prefix, modifiable_infix, unmodifiable_suffix = (
-                get_chunking_for_search_based(
-                    example["chunked_text"], dataset.modifiable_chunk_spec
-                )
+            attack_chunks = get_chunking_for_search_based(
+                example["chunked_text"], dataset.modifiable_chunk_spec
             )
-            infix_chunk_type = dataset.modifiable_chunk_spec.get_modifiable_chunk()
-            if infix_chunk_type == ChunkType.OVERWRITABLE:
-                modifiable_infix = ""
 
-            prompt_template = PromptTemplate(
-                before_attack=unmodifiable_prefix + modifiable_infix,
-                after_attack=unmodifiable_suffix,
+            prompt_template = self.victim.chunks_to_prompt_template(
+                attack_chunks,
+                perturb_min=self.attack_config.perturb_position_min,
+                perturb_max=self.attack_config.perturb_position_max,
+                rng=self.rng,
             )
 
             prepped_example = PreppedExample(
