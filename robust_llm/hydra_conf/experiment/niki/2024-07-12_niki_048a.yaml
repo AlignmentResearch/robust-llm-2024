@@ -1,6 +1,7 @@
 # @package _global_
 defaults:
-- /dataset: EnronSpam/compatibility
+- /model: pythia
+- /dataset: PasswordMatch/compatibility
 - /evaluation: DEFAULT
 - /attack@evaluation.evaluation_attack: gcg-10-its
 - _self_

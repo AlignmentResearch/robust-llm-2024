@@ -1,5 +1,5 @@
 # @package _global_
 defaults:
 - niki/2024-05-12_adv_gcg_base
-- /dataset: WordLength/compatibility
+- /dataset: IMDB/compatibility
 - _self_

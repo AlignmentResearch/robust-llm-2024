@@ -1,8 +1,9 @@
 # @package _global_
 defaults:
-- /dataset: EnronSpam/compatibility
+- /model: EleutherAI/pythia
+- /dataset: WordLength/compatibility
 - /evaluation: DEFAULT
-- /attack@evaluation.evaluation_attack: gcg-10-its
+- /attack@evaluation.evaluation_attack: gcg-30-its
 - _self_
 
 experiment_type: "evaluation"

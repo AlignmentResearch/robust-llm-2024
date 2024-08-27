@@ -18,7 +18,6 @@ OVERRIDE_ARGS_LIST = [
         "model.name_or_path": base_model_name,
         "training.force_name_to_save": f"{target_model_name}-s-{seed}",
         "training.seed": seed,
-        "training.batch_size": 2,
         "model.train_minibatch_size": 2,
     }
     for (base_model_name, target_model_name) in PYTHIA_NAMES_AND_FINETUNED_TARGET_NAMES

@@ -8,15 +8,10 @@ EXPERIMENT_NAME = os.path.basename(__file__).replace(".py", "")
 HYDRA_CONFIG = "niki/2024-07-12_niki_048a"
 
 BASE_MODEL_NAMES_AND_MAX_PARALLEL = [
-    ("EleutherAI/pythia-14m", 4),
-    ("EleutherAI/pythia-31m", 3),
     ("EleutherAI/pythia-70m", 2),
-    ("EleutherAI/pythia-160m", 2),
-    ("EleutherAI/pythia-410m", 1),
-    ("EleutherAI/pythia-1b", 1),
 ]
-SEEDS = list(range(3))
-ADV_TRAINING_ROUNDS = list(range(10))
+SEEDS = [1]
+ADV_TRAINING_ROUNDS = [8, 9]
 project_prefix = "AlignmentResearch/robust_llm"
 experiment_prefix = "niki-045"
 
