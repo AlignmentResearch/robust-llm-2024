@@ -1,8 +1,9 @@
 # TODO (ian): Make this more restrictive
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Iterator, Sequence, cast
+from typing import Any, Callable, Iterator, cast
 
 import torch
 import wandb

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import torch.distributed as dist
 import wandb
@@ -308,7 +308,7 @@ class WandbTable:
         assert isinstance(self._table, wandb.Table)
         return self._table
 
-    def add_data(self, data: Dict[str, Any]) -> None:
+    def add_data(self, data: dict[str, Any]) -> None:
         if not should_log():
             return
         data = {
