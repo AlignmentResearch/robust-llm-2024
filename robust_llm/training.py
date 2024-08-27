@@ -241,11 +241,13 @@ class Training:
         checkpoint = self.get_last_checkpoint()
         if checkpoint is not None:
             logger.info(f"Resuming from checkpoint: {checkpoint}")
-        trainer.train(
-            resume_from_checkpoint=(
-                checkpoint if self.environment_config.allow_checkpointing else False
+        with self.victim.dont_count_flops():
+            # We rely on HF to count FLOPs during training
+            trainer.train(
+                resume_from_checkpoint=(
+                    checkpoint if self.environment_config.allow_checkpointing else False
+                )
             )
-        )
 
         self.maybe_save_model_to_path_or_hf(
             path_prefix_or_hf=self.config.model_save_path_prefix_or_hf
@@ -588,14 +590,16 @@ class AdversarialTraining(Training):
                 logger.info("Victim started training in round %s", self.round)
                 self._log_debug_info()
 
-                train_out = adversarial_trainer.train(
-                    resume_from_checkpoint=(
-                        checkpoint
-                        if self.environment_config.allow_checkpointing
-                        and (self.round == starting_round)
-                        else False
+                with self.victim.dont_count_flops():
+                    # We rely on HF to count FLOPs during training
+                    train_out = adversarial_trainer.train(
+                        resume_from_checkpoint=(
+                            checkpoint
+                            if self.environment_config.allow_checkpointing
+                            and (self.round == starting_round)
+                            else False
+                        )
                     )
-                )
                 logger.info("Victim finished training in round %s ", self.round)
                 # Note that HF uses "flos" for FLOPs
                 logger.debug(
