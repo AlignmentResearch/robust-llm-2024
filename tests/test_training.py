@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import random
 from typing import cast
 from unittest.mock import MagicMock
@@ -21,6 +23,7 @@ from robust_llm.config.configs import (
     TrainingConfig,
 )
 from robust_llm.config.model_configs import ModelConfig
+from robust_llm.mocks import FakeClassifierWithPositiveList
 from robust_llm.models import GPTNeoXModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
@@ -33,7 +36,6 @@ from robust_llm.training import (
     _evaluate_dataset,
     _get_updated_attack_iterations,
 )
-from robust_llm.utils import FakeClassifierWithPositiveList
 
 
 def test_evaluate_dataset():

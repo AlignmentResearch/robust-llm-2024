@@ -1,21 +1,16 @@
 from __future__ import annotations
 
-import abc
 import os
 import random
 import uuid
-from argparse import Namespace
 from collections.abc import Iterator, Sequence
 from dataclasses import fields
 from datetime import datetime
 from functools import cached_property
-from typing import Any, Optional, Protocol, Sized
+from typing import Optional, Sized
 
 import torch
 import torch.utils.data
-from torch.nn.parameter import Parameter
-from transformers import PretrainedConfig, PreTrainedTokenizerBase
-from transformers.modeling_outputs import SequenceClassifierOutput
 
 
 def nested_list_to_tuple(nested_list: list) -> tuple:
@@ -28,54 +23,6 @@ def nested_list_to_tuple(nested_list: list) -> tuple:
 def maybe_make_deterministic(mode: bool, cublas_config: str) -> None:
     torch.use_deterministic_algorithms(mode)
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = cublas_config
-
-
-class LanguageModel(Protocol):
-    """Protocol for a language model.
-
-    This is used to unify:
-    1) the defence pipeline's `DefendedModel` class
-    2) HuggingFace's `transformers.PreTrainedModel` class.
-    """
-
-    @abc.abstractmethod
-    def __call__(self, **inputs) -> Any:
-        """Run the inputs through self.model, with required safety considerations."""
-
-    @property
-    @abc.abstractmethod
-    def config(self) -> PretrainedConfig:
-        pass
-
-    @abc.abstractmethod
-    def to(self, *args, **kwargs) -> LanguageModel:
-        pass
-
-    @abc.abstractmethod
-    def forward(self, **inputs):
-        pass
-
-    @abc.abstractmethod
-    def train(self) -> LanguageModel:
-        pass
-
-    @abc.abstractmethod
-    def eval(self) -> LanguageModel:
-        pass
-
-    @property
-    @abc.abstractmethod
-    def device(self) -> torch.device:
-        pass
-
-    @property
-    @abc.abstractmethod
-    def training(self) -> bool:
-        pass
-
-    @abc.abstractmethod
-    def parameters(self) -> Iterator[Parameter]:
-        pass
 
 
 def write_lines_to_file(lines: list[str], file_path: str) -> None:
@@ -136,110 +83,6 @@ def get_randint_with_exclusions(
             raise ValueError("Too many iterations!")
 
     return value
-
-
-class FakeModelForSequenceClassification:
-    """Fake model class used in tests."""
-
-    @property
-    def name_or_path(self) -> str:
-        return "fake-model/fake-model-for-sequence-classification"
-
-    @property
-    def device(self) -> torch.device:
-        return torch.device("cpu")
-
-    @property
-    def num_labels(self) -> int:
-        return 2
-
-    def num_parameters(self, exclude_embeddings: bool = True) -> int:
-        return 0
-
-    @property
-    def config(self):
-        return Namespace(
-            pad_token_id=1,
-            eos_token_id=2,
-            task_specific_params={},
-            id2label={0: "LABEL_0", 1: "LABEL_1"},
-        )
-
-    def can_generate(self) -> bool:
-        return False
-
-    def eval(self) -> FakeModelForSequenceClassification:
-        return self
-
-    def to(self, *args, **kwargs) -> FakeModelForSequenceClassification:
-        return self
-
-    def forward(
-        self, input_ids: torch.Tensor, *args, **kwargs
-    ) -> SequenceClassifierOutput:
-        """Mimicks a sequence classification model.
-
-        Returns logits of the shape [batch_size, num_labels].
-        """
-        return SequenceClassifierOutput(
-            logits=torch.rand(input_ids.shape[0], self.num_labels),  # type: ignore
-        )
-
-    def __call__(
-        self, input_ids: torch.Tensor, *args, **kwargs
-    ) -> dict[str, torch.Tensor]:
-        return self.forward(input_ids, *args, **kwargs)
-
-    def estimate_tokens(self, input_dict: dict[str, Any]) -> int:
-        return 1
-
-    def register_forward_hook(self, hook: Any) -> None:
-        pass
-
-    def register_full_backward_hook(self, hook: Any) -> None:
-        pass
-
-    def modules(self):
-        return [self, self]
-
-    @property
-    def num_processes(self):
-        return 1
-
-
-def equal_ignore_padding(x: torch.Tensor, y: torch.Tensor, pad_token_id: int) -> bool:
-    """Checks if two 1D tensors are equal, ignoring padding at the end."""
-    while len(x) > 0 and x[-1] == pad_token_id:
-        x = x[:-1]
-    while len(y) > 0 and y[-1] == pad_token_id:
-        y = y[:-1]
-    return x.equal(y.to(x.device))
-
-
-class FakeClassifierWithPositiveList(FakeModelForSequenceClassification):
-    """Fake classification model with a pre-defined list of positive examples."""
-
-    def __init__(
-        self, tokenizer: PreTrainedTokenizerBase, positives: Sequence[torch.Tensor]
-    ):
-        self.tokenizer = tokenizer
-        self.positives = positives
-
-    def forward(
-        self, input_ids: torch.Tensor, *args, **kwargs
-    ) -> SequenceClassifierOutput:
-        logits = []
-        pad_token_id = self.tokenizer.pad_token_id
-        assert pad_token_id is not None
-        for x in input_ids:
-            logits.append(
-                [0.0, 1.0]
-                if any(
-                    [equal_ignore_padding(x, y, pad_token_id) for y in self.positives]
-                )
-                else [1.0, 0.0]
-            )
-        return SequenceClassifierOutput(logits=torch.tensor(logits))  # type: ignore
 
 
 class BalancedSampler(torch.utils.data.Sampler[int]):

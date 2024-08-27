@@ -9,9 +9,9 @@ from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.runners.beam_search_runner import BeamSearchRunner
 from robust_llm.attacks.search_based.utils import PreppedExample, PromptTemplate
 from robust_llm.config import BeamSearchAttackConfig
+from robust_llm.mocks import FakeModelForSequenceClassification
 from robust_llm.models import GPT2Model, GPTNeoXModel, WrappedModel
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.utils import FakeModelForSequenceClassification
 
 
 def _get_runner(

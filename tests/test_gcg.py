@@ -16,9 +16,9 @@ from robust_llm.attacks.search_based.utils import (
     TokenizationChangeException,
 )
 from robust_llm.config import GCGAttackConfig
+from robust_llm.mocks import FakeModelForSequenceClassification
 from robust_llm.models import GPT2Model, GPTNeoXModel
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.utils import FakeModelForSequenceClassification
 
 
 # We use a MagicMock for the accelerator because using a real Accelerator
