@@ -161,6 +161,7 @@ class AdversarialTrainer(RLLMTrainer):
         self.adversarial_losses: dict[int, float] = {}
         # Store computed losses across batches
         self.computed_losses: list[float] = []
+        self.in_eval_loop = False
 
     def maybe_update_adversarial_losses(self):
         """Update the adversarial losses if all losses have been computed."""
@@ -178,6 +179,8 @@ class AdversarialTrainer(RLLMTrainer):
     @override
     def compute_loss(self, model, inputs, return_outputs=False):
         """Overrides HF Trainer.compute_loss to track attack successes."""
+        if self.in_eval_loop:
+            return super().compute_loss(model, inputs, return_outputs)
         assert self.label_smoother is None
         outputs = model(**inputs)
         assert isinstance(outputs, dict)
@@ -188,6 +191,9 @@ class AdversarialTrainer(RLLMTrainer):
         loss = outputs["loss"]
         logits = outputs["logits"]
         labels = inputs["labels"]
+
+        if self.accelerator is not None:
+            logits, labels = self.accelerator.gather_for_metrics((logits, labels))
 
         losses = F.cross_entropy(logits, labels, reduction="none")
         if self.accelerator is None or self.accelerator.is_main_process:
@@ -496,3 +502,31 @@ class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
             validation_attack_rng=getattr(self.training.validation_attack, "rng"),
         )
         adv_state.save(output_dir)
+
+
+class EvaluationLoopCallback(TrainerCallback):
+    """Callback to record whether we are in an evaluation loop"""
+
+    def __init__(self, training: AdversarialTraining) -> None:
+        super().__init__()
+        assert isinstance(training.trainer, AdversarialTrainer)
+        self.trainer = training.trainer
+
+    def on_evaluate(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ):
+        self.trainer.in_eval_loop = False
+
+    def on_step_end(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ):
+        if control.should_evaluate:
+            self.trainer.in_eval_loop = True

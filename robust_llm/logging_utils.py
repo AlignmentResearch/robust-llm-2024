@@ -311,7 +311,11 @@ class WandbTable:
     def add_data(self, data: Dict[str, Any]) -> None:
         if not should_log():
             return
-        data = {k: v for k, v in data.items() if isinstance(v, (int, float, str))}
+        data = {
+            k: v
+            for k, v in data.items()
+            if isinstance(v, (int, float, str)) or v is None
+        }
         if self._table is None:
             self._table = wandb.Table(columns=list(data.keys()))
         assert self.table.columns == list(data.keys())

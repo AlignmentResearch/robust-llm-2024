@@ -57,6 +57,7 @@ from robust_llm.trainer import (
     AdversarialTrainerLoggingCallback,
     AdversarialTrainingState,
     AdversarialTrainingStateCallback,
+    EvaluationLoopCallback,
     RLLMTrainer,
 )
 
@@ -523,6 +524,7 @@ class AdversarialTraining(Training):
         self.trainer.add_callback(AdversarialTrainingStateCallback(self))
         self.trainer.add_callback(AdversarialTrainerLoggingCallback(self))
         self.trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
+        self.trainer.add_callback(EvaluationLoopCallback(self))
 
         return self.trainer
 
