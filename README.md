@@ -139,7 +139,7 @@ uses Hydra's [package override](https://hydra.cc/docs/1.3/advanced/overriding_pa
 syntax.
 
 ##### `/model: EleutherAI/pythia-14m`
-Analogous to the `/dataset` line: look in `/model` and use `EleutherAI/pythia-14m`.
+Analogous to the `/dataset` line: look in `/model` and use `EleutherAI/pythia-14m`. Note that the directory structure and names are generally chosen to mirror the names used on [HuggingFace](https://huggingface.co/EleutherAI/pythia-14m).
 
 ##### `_self_`
 This line is important as it tells Hydra that the stuff that comes after the [Defaults List](https://hydra.cc/docs/1.3/advanced/defaults_list/) should override the stuff _in_ the defaults list.
