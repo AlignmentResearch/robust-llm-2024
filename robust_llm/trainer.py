@@ -121,6 +121,7 @@ class RLLMTrainer(Trainer):
 
 
 class AdversarialTrainer(RLLMTrainer):
+    # train_dataset is the attribute used by the HuggingFace Trainer
     train_dataset: Dataset
 
     def __init__(
@@ -145,11 +146,11 @@ class AdversarialTrainer(RLLMTrainer):
         # Remove it so that it's possible to merge datasets later on.
         if "text_chunked" in self.train_dataset.features:
             self.train_dataset = self.train_dataset.remove_columns("text_chunked")
-
+        # We store all the clean data for sampling purposes
         self.regular_dataset = self.train_dataset
 
-        # Will be set in add_new_adversarial_examples.
-        # TODO (ian): avoid statefulness if possible
+        # We incrementally build up a bank of adversarial examples
+        # cf. add_new_adversarial_examples.
         self.adversarial_dataset = Dataset.from_dict(
             {f: [] for f in self.train_dataset.features},
             features=self.train_dataset.features,
@@ -202,17 +203,6 @@ class AdversarialTrainer(RLLMTrainer):
 
         return (loss, outputs) if return_outputs else loss
 
-    @override
-    def get_train_dataloader(self):
-        # This method is called at the start of each training loop, when
-        # my_trainer.train() is called. In turn, the train_dataloader it returns
-        # is called at the start of each training epoch
-        # https://github.com/huggingface/transformers/blob/5a4f340df74b42b594aedf60199eea95cdb9bed0/src/transformers/trainer.py#L812
-
-        self.train_dataset, self.adversarial_indices = self.get_augmented_training_set()
-        train_dataloader = super().get_train_dataloader()
-        return train_dataloader
-
     def _get_train_sampler(self) -> Optional[torch.utils.data.Sampler]:
         use_balanced_sampling = self.use_balanced_sampling
         if use_balanced_sampling and len(self.adversarial_dataset) == 0:
@@ -233,18 +223,16 @@ class AdversarialTrainer(RLLMTrainer):
         else:
             return super()._get_train_sampler()
 
-    def get_augmented_training_set(self) -> tuple[Dataset, list[int]]:
-        """Return the training set with adversarial examples added.
+    def update_augmented_training_set(self) -> None:
+        """Resample the training set from clean/attacked.
 
-        If no adversarial examples have been added, this will return the
-        regular training set.
+        If no adversarial examples have been added, the augmented dataset
+        will just be the regular training set.
 
         When adding the adversarial examples, we have to use a custom
         concatenate function here to make sure the features line up (since
         otherwise we'd have a mismatch between ClassLabel and Value(int)).
         """
-        if len(self.adversarial_dataset) == 0:
-            return self.regular_dataset, []
 
         n_train = min(
             len(self.regular_dataset) + len(self.adversarial_dataset),
@@ -268,7 +256,13 @@ class AdversarialTrainer(RLLMTrainer):
             adv_data,
         )
         assert len(train_dataset_plus_adv_examples) == n_train
-        return train_dataset_plus_adv_examples, adv_indices.tolist()
+        logger.debug(
+            "Updating augmented training set from {} to {} examples".format(
+                len(self.train_dataset), len(train_dataset_plus_adv_examples)
+            )
+        )
+        self.train_dataset = train_dataset_plus_adv_examples
+        self.adversarial_indices = adv_indices.tolist()
 
     def _get_adv_indices(self, n_adv: int) -> np.ndarray:
         """Get indices of adversarial examples to use for training.
@@ -289,6 +283,8 @@ class AdversarialTrainer(RLLMTrainer):
             adv_indices: Indices of adversarial examples to use for training.
         """
         n = len(self.adversarial_dataset)
+        if n == 0:
+            return np.array([], dtype=int)
         time_ranks = np.arange(n)
         losses = [self.adversarial_losses.get(i, float("inf")) for i in range(n)]
         loss_ranks = np.argsort(losses)
@@ -336,6 +332,7 @@ class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
         **kwargs,
     ) -> None:
         assert isinstance(self.training.trainer, AdversarialTrainer)
+        self.training.trainer.update_augmented_training_set()
         self.training.eval_rllm_dataset["augmented_train_set"] = (  # type: ignore  # noqa: E501
             self.training.trainer.train_dataset
         )

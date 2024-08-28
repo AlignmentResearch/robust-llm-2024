@@ -273,23 +273,11 @@ def adv_trainer() -> AdversarialTrainer:
     return trainer
 
 
-def test_get_train_dataloader(adv_trainer: AdversarialTrainer):
-    assert adv_trainer.eval_dataset is not None
-    val_set = adv_trainer.eval_dataset["validation"]
-    assert isinstance(val_set, Dataset)
-
-    assert adv_trainer.train_dataset.num_rows == 2
-    adv_trainer.add_new_adversarial_examples(val_set)
-    dataloader = adv_trainer.get_train_dataloader()
-    assert adv_trainer.train_dataset.num_rows == 4
-    assert len(dataloader) == 4
-
-
 def test_empty_adversarial_dataset(adv_trainer: AdversarialTrainer):
-    result_dataset, result_indices = adv_trainer.get_augmented_training_set()
+    adv_trainer.update_augmented_training_set()
 
-    assert result_dataset == adv_trainer.regular_dataset
-    assert result_indices == []
+    assert adv_trainer.train_dataset.data == adv_trainer.regular_dataset.data
+    assert adv_trainer.adversarial_indices == []
 
 
 def test_weight_adv_examples_by_loss(adv_trainer: AdversarialTrainer):
@@ -302,9 +290,9 @@ def test_weight_adv_examples_by_loss(adv_trainer: AdversarialTrainer):
     adv_trainer.sampling_decay = 1.0
     adv_trainer.add_new_adversarial_examples(val_set)
     adv_trainer.adversarial_losses = {0: 0.0, 1: float("inf")}
-    result_dataset, result_indices = adv_trainer.get_augmented_training_set()
-    assert result_indices == [1]
-    assert len(result_dataset) == 3
+    adv_trainer.update_augmented_training_set()
+    assert adv_trainer.adversarial_indices == [1]
+    assert len(adv_trainer.train_dataset) == 3
 
 
 def test_weight_adv_examples_by_recency(adv_trainer: AdversarialTrainer):
@@ -316,9 +304,9 @@ def test_weight_adv_examples_by_recency(adv_trainer: AdversarialTrainer):
     adv_trainer.loss_rank_weight = 0.0
     adv_trainer.sampling_decay = 22
     adv_trainer.add_new_adversarial_examples(val_set)
-    result_dataset, result_indices = adv_trainer.get_augmented_training_set()
-    assert result_indices == [1]
-    assert len(result_dataset) == 3
+    adv_trainer.update_augmented_training_set()
+    assert adv_trainer.adversarial_indices == [1]
+    assert len(adv_trainer.train_dataset) == 3
 
 
 def test_equal_weight_adv_examples(adv_trainer: AdversarialTrainer):
@@ -330,9 +318,9 @@ def test_equal_weight_adv_examples(adv_trainer: AdversarialTrainer):
     adv_trainer.loss_rank_weight = 0.0
     adv_trainer.sampling_decay = 0.0
     adv_trainer.add_new_adversarial_examples(val_set)
-    result_dataset, result_indices = adv_trainer.get_augmented_training_set()
-    assert result_indices == [0]
-    assert len(result_dataset) == 3
+    adv_trainer.update_augmented_training_set()
+    assert adv_trainer.adversarial_indices == [0]
+    assert len(adv_trainer.train_dataset) == 3
 
 
 def test_compute_loss(adv_trainer: AdversarialTrainer):

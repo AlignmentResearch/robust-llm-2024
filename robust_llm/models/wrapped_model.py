@@ -417,6 +417,14 @@ class WrappedModel(ABC):
 
         train_mb_size = int(config.train_minibatch_size * config.minibatch_multiplier)
         eval_mb_size = int(config.eval_minibatch_size * config.minibatch_multiplier)
+        assert train_mb_size > 0, (
+            f"{config.train_minibatch_size=} times "
+            f"{config.minibatch_multiplier=} rounds to 0"
+        )
+        assert eval_mb_size > 0, (
+            f"{config.eval_minibatch_size=} times "
+            f"{config.minibatch_multiplier=} rounds to 0"
+        )
         # Loads the tokenizer with right padding. We'll load the tokenizer
         # with left padding lazily if we need it.
         right_tokenizer = subcls.load_tokenizer(config)
