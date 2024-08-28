@@ -3,15 +3,18 @@
 
 import dataclasses
 import functools
+import random
 import shlex
 import subprocess
 import sys
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, TypeVar, Union
 
 import hydra
+import wandb
 from git.repo import Repo
 from hydra.core.config_store import ConfigStore
 from hydra.errors import HydraException
@@ -19,6 +22,8 @@ from names_generator import generate_name
 
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.utils import ask_for_confirmation
+
+T = TypeVar("T")
 
 JOB_TEMPLATE_PATH = Path(__file__).parent.parent / "k8s" / "batch_job.yaml"
 with JOB_TEMPLATE_PATH.open() as f:
@@ -28,6 +33,104 @@ with JOB_TEMPLATE_PATH.open() as f:
 # new version of the canonical Docker image. (Avoid reusing tags as
 # older versions of that image may be cached on K8s nodes.)
 DEFAULT_CONTAINER_TAG = "2024-08-07-backoff"
+
+
+def run_multiple(
+    experiment_name: str,
+    hydra_config: str,
+    override_args_list: Sequence[dict],
+    n_max_parallel: int | list[int] = 1,
+    script_path: str = "robust_llm",
+    container_tag: str = DEFAULT_CONTAINER_TAG,
+    cpu: int | list[int] = 4,
+    memory: str | list[str] = "20G",
+    gpu: int | list[int] = 1,
+    priority: str | list[str] = "normal-batch",
+    cluster: str | Sequence[str | None] | None = None,
+    only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
+    dry_run: bool = False,
+    skip_git_checks: bool = False,
+    unique_identifier: str | None = None,
+) -> None:
+    """Run an experiment containing multiple runs and multiple k8s jobs.
+
+    Potentially, several runs can be fit into a single k8s job and share a GPU.
+
+    Args:
+        experiment_name: descriptive name of the experiment, used to set wandb group.
+        hydra_config: hydra config name.
+        override_args_list: list of dictionaries with override arguments for each run.
+        n_max_parallel: Entry i of the list (or the global value if an int is passed)
+            is the maximum number of runs that can be fit together in the
+            container that includes a run corresponding to `override_args_list[i]`.
+            By default, every run will be allocated a separate container.
+        script_path: path of the Python script to run.
+        container_tag: Docker container tag to use.
+        cpu: number of cpu cores per container (can set globally or one per run).
+        memory: memory per container (can set globally or one per run).
+        gpu: GPUs per container (can set globally or one per run).
+        priority: K8s priority (can set globally or one per run).
+        cluster: K8s cluster to use (can set globally or one per run). As of
+            2024/08/24, options are "a6k" and "h100".
+        only_jobs_with_starting_indices: if not None, only jobs with starting indices
+            contained in this list will be launched. Useful for rerunning a small subset
+            of jobs from an experiment (for example, if a few jobs failed).
+        dry_run: if True, only print the k8s job yaml files without launching them.
+        skip_git_checks: if True, skip the remote push and the check for dirty git repo.
+        unique_identifier: A unique identifier to append to the k8s job names
+            to avoid name conflicts. If None, a random identifier will be generated.
+    """
+
+    n_max_parallel = ensure_list(n_max_parallel, len(override_args_list))
+    cpu = ensure_list(cpu, len(override_args_list))
+    memory = ensure_list(memory, len(override_args_list))
+    gpu = ensure_list(gpu, len(override_args_list))
+    priority = ensure_list(priority, len(override_args_list))
+
+    cluster_list = fill_cluster_list(
+        ensure_list(
+            cluster,  # type: ignore # TODO(ian): Fix typing here
+            len(override_args_list),
+        ),
+    )
+
+    unique_identifier = unique_identifier or generate_chars(length=4)
+
+    hyphened_name = experiment_name.replace("_", "-")
+    runs = [
+        (
+            FlamingoRun(
+                base_command=(
+                    "accelerate launch --config_file=accelerate_config.yaml"
+                    f" --num_processes={gpu[i]}"
+                    if gpu[i] > 1
+                    else "python"
+                ),
+                script_path=script_path,
+                hydra_config=hydra_config,
+                experiment_name=experiment_name,
+                unique_identifier=unique_identifier,
+                run_name=f"{hyphened_name}-{zero_pad(i)}",
+                override_args=override_args,
+                n_max_parallel=n_max_parallel[i],
+                CONTAINER_TAG=container_tag,
+                CPU=cpu[i],
+                MEMORY=memory[i],
+                GPU=gpu[i],
+                PRIORITY=priority[i],
+                CLUSTER=cluster_list[i],
+            )
+        )
+        for (i, override_args) in enumerate(override_args_list)
+    ]
+
+    launch_jobs(
+        runs,
+        experiment_name=experiment_name,
+        only_jobs_with_starting_indices=only_jobs_with_starting_indices,
+        dry_run=dry_run,
+        skip_git_checks=skip_git_checks,
+    )
 
 
 @functools.cache
@@ -46,7 +149,11 @@ class FlamingoRun:
     base_command: str
     script_path: str
     hydra_config: str
+    experiment_name: str
+    unique_identifier: str
+    run_name: str
     override_args: dict
+    CLUSTER: str
     n_max_parallel: int = 1
     CONTAINER_TAG: str = DEFAULT_CONTAINER_TAG
     COMMIT_HASH: str = dataclasses.field(default_factory=git_latest_commit)
@@ -87,6 +194,7 @@ class FlamingoRun:
                 "hydra_config",
                 "override_args",
                 "n_max_parallel",
+                "run_name",
             ]
         }
 
@@ -117,21 +225,26 @@ def create_job_for_multiple_runs(
     wandb_mode: str,
 ) -> str:
     # K8s job/pod names should be short for readability (hence cutting the name).
+    unique_identifier = runs[0].unique_identifier
+    assert all(run.unique_identifier == unique_identifier for run in runs)
+    exp_name_prefix = get_exp_name_prefix(name)
+    k8s_name_prefix = f"rllm-{exp_name_prefix}-{unique_identifier}"
     k8s_job_name = (
-        f"rllm-{name[:16]}-{index}"
+        f"{k8s_name_prefix}-{zero_pad(index)}"
         if len(runs) == 1
-        else f"rllm-{name[:16]}-{index}-{index+len(runs)-1}"
+        else f"{k8s_name_prefix}-{zero_pad(index)}-{zero_pad(index+len(runs)-1)}"
     )
     k8s_job_name = k8s_job_name.lower()  # K8s requires lowercase names
 
     single_commands = []
-    for i, run in enumerate(runs):
+    for run in runs:
         aux_args = _prepare_override_args(run.override_args)
         split_command = [
             *run.base_command.split(" "),
             run.script_path,
             f"+experiment={run.hydra_config}",
-            f"run_name={name}-{index+i}",
+            f"experiment_name={run.experiment_name}",
+            f"run_name={run.run_name}",
             *aux_args,
         ]
         single_commands.append(shlex.join(split_command))
@@ -178,10 +291,10 @@ def create_jobs(
     wandb_mode: str = "online",
     experiment_name: Optional[str] = None,
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
-) -> tuple[Sequence[str], str]:
+) -> tuple[dict[str, list[str]], str]:
     launch_id = generate_name(style="hyphen")
 
-    jobs = []
+    jobs_by_cluster = defaultdict(list)
     name = (experiment_name or generate_name(style="hyphen")).replace("_", "-")
 
     runs_by_containers = organize_by_containers(runs)
@@ -194,14 +307,15 @@ def create_jobs(
             only_jobs_with_starting_indices is None
             or index in only_jobs_with_starting_indices
         ):
-            jobs.append(
+            cluster = runs[0].CLUSTER
+            jobs_by_cluster[cluster].append(
                 create_job_for_multiple_runs(
                     runs, name, index, launch_id, project, entity, wandb_mode
                 )
             )
         index += len(runs)
 
-    return jobs, launch_id
+    return jobs_by_cluster, launch_id
 
 
 def launch_jobs(
@@ -212,7 +326,7 @@ def launch_jobs(
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     dry_run: bool = False,
     skip_git_checks: bool = False,
-) -> tuple[str, str]:
+) -> tuple[dict[str, str], str]:
     """Launch k8s jobs for the given runs.
 
     Args:
@@ -228,7 +342,8 @@ def launch_jobs(
             This is useful when running unit tests.
 
     Returns:
-        pair of strings -- yaml file with k8s jobs definitions, and the launch_id.
+        Tuple containing a dict mapping cluster names to yaml files with k8s
+        jobs definitions, and the launch_id.
     """
     repo = git_repo()
     if not skip_git_checks:
@@ -243,122 +358,121 @@ def launch_jobs(
                 print("Aborting")
                 sys.exit(1)
 
-    jobs, launch_id = create_jobs(
-        runs,
+    filtered_runs = get_unfinished_runs(runs, experiment_name)
+    jobs_by_cluster, launch_id = create_jobs(
+        filtered_runs,
         project=project,
         entity=entity,
         experiment_name=experiment_name,
         only_jobs_with_starting_indices=only_jobs_with_starting_indices,
     )
-    yamls_for_all_jobs = "\n\n---\n\n".join(jobs)
+    yamls_by_cluster = {
+        cluster: "\n\n---\n\n".join(jobs) for cluster, jobs in jobs_by_cluster.items()
+    }
 
-    print(yamls_for_all_jobs)
+    for cluster, yamls in yamls_by_cluster.items():
+        print(f"========\nJobs for cluster {cluster}:\n========\n{yamls}")
 
-    if not dry_run:
-        print(f"Launching jobs with launch_id={launch_id}...")
-        subprocess.run(
-            ["kubectl", "create", "-f", "-"],
-            check=True,
-            input=yamls_for_all_jobs.encode(),
-        )
-        print(
-            "Jobs launched. To delete them run:\n"
-            f"kubectl delete jobs -l launch-id={launch_id}",
-        )
-
-    return yamls_for_all_jobs, launch_id
-
-
-def run_multiple(
-    experiment_name: str,
-    hydra_config: str,
-    override_args_list: Sequence[dict],
-    n_max_parallel: int | Sequence[int] = 1,
-    script_path: str = "robust_llm",
-    container_tag: str = DEFAULT_CONTAINER_TAG,
-    cpu: int | Sequence[int] = 4,
-    memory: str | Sequence[str] = "20G",
-    gpu: int | Sequence[int] = 1,
-    priority: str | Sequence[str] = "normal-batch",
-    only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
-    dry_run: bool = False,
-    skip_git_checks: bool = False,
-) -> None:
-    """Run an experiment containing multiple runs and multiple k8s jobs.
-
-    Potentially, several runs can be fit into a single k8s job and share a GPU.
-
-    Args:
-        experiment_name: descriptive name of the experiment, used to set wandb group.
-        hydra_config: hydra config name.
-        override_args_list: list of dictionaries with override arguments for each run.
-        n_max_parallel: Entry i of the list (or the global value if an int is passed)
-            is the maximum number of runs that can be fit together in the
-            container that includes a run corresponding to `override_args_list[i]`.
-            By default, every run will be allocated a separate container.
-        script_path: path of the Python script to run.
-        container_tag: Docker container tag to use.
-        cpu: number of cpu cores per container (can set globally or one per run).
-        memory: memory per container (can set globally or one per run).
-        gpu: GPUs per container (can set globally or one per run).
-        priority: K8s priority (can set globally or one per run).
-        only_jobs_with_starting_indices: if not None, only jobs with starting indices
-            contained in this list will be launched. Useful for rerunning a small subset
-            of jobs from an experiment (for example, if a few jobs failed).
-        dry_run: if True, only print the k8s job yaml files without launching them.
-        skip_git_checks: if True, skip the remote push and the check for dirty git repo.
-    """
-    if isinstance(n_max_parallel, int):
-        n_max_parallel = [n_max_parallel] * len(override_args_list)
-    else:
-        assert len(n_max_parallel) == len(override_args_list)
-    if isinstance(cpu, int):
-        cpu = [cpu] * len(override_args_list)
-    else:
-        assert len(cpu) == len(override_args_list)
-    if isinstance(memory, str):
-        memory = [memory] * len(override_args_list)
-    else:
-        assert len(memory) == len(override_args_list)
-    if isinstance(gpu, int):
-        gpu = [gpu] * len(override_args_list)
-    else:
-        assert len(gpu) == len(override_args_list)
-    if isinstance(priority, str):
-        priority = [priority] * len(override_args_list)
-    else:
-        assert len(priority) == len(override_args_list)
-
-    runs = [
-        (
-            FlamingoRun(
-                base_command=(
-                    "accelerate launch --config_file=accelerate_config.yaml"
-                    f" --num_processes={gpu[i]}"
-                    if gpu[i] > 1
-                    else "python"
-                ),
-                script_path=script_path,
-                hydra_config=hydra_config,
-                override_args={
-                    "experiment_name": experiment_name,
-                    **override_args,
-                },
-                n_max_parallel=n_max_parallel[i],
-                CONTAINER_TAG=container_tag,
-                CPU=cpu[i],
-                MEMORY=memory[i],
-                GPU=gpu[i],
-                PRIORITY=priority[i],
+        if not dry_run:
+            print(f"Launching jobs with launch_id={launch_id}...")
+            subprocess.run(
+                ["kubectl", "--context", cluster, "create", "-f", "-"],
+                check=True,
+                input=yamls.encode(),
             )
-        )
-        for (i, override_args) in enumerate(override_args_list)
-    ]
+            print(
+                "Jobs launched. To delete them run:\n"
+                f"kubectl --context {cluster} delete jobs -l launch-id={launch_id}"
+            )
 
-    launch_jobs(
-        runs,
-        experiment_name=experiment_name,
-        only_jobs_with_starting_indices=only_jobs_with_starting_indices,
-        dry_run=dry_run,
-        skip_git_checks=skip_git_checks,
+    joined_runs = "\n".join(run.run_name for run in filtered_runs)
+    print(f"========\nWandb run IDs:\n{joined_runs}\n========\n")
+    return yamls_by_cluster, launch_id
+
+
+def ensure_list(list_or_element: T | list[T], length: int) -> list[T]:
+    """Take a list or a single element and return a list of the length."""
+    if not isinstance(list_or_element, list):
+        list_or_element = [list_or_element] * length
+
+    assert len(list_or_element) == length
+    return list_or_element
+
+
+def fill_cluster_list(cluster: list[str | None]) -> list[str]:
+    """Put the current k8s context in place of None in the cluster list."""
+    if all(isinstance(c, str) for c in cluster):
+        return cluster  # type: ignore  # (we just checked that all are strings)
+    current_context = get_current_k8s_context()
+    return [current_context if c is None else c for c in cluster]
+
+
+def zero_pad(number: int | str, length: int = 4) -> str:
+    """Pad a number with zeros to the given length."""
+    if isinstance(number, str):
+        try:
+            number = int(number)
+        except ValueError:
+            raise ValueError(f"Expected an integer or integer string, got '{number}'.")
+    return str(number).zfill(length)
+
+
+def get_wandb_running_finished_runs(experiment_name: str) -> list[str]:
+    """Get a list of run names that are 'running' or 'finished' on wandb."""
+    runs = wandb_api().runs(
+        path="farai/robust-llm",
+        filters={"group": experiment_name},
     )
+    return [run.name for run in runs if run.state in ["finished", "running"]]
+
+
+@functools.cache
+def wandb_api() -> wandb.Api:
+    return wandb.Api()
+
+
+def generate_chars(length: int = 4, seed: int | None = None) -> str:
+    """Generate a random character string."""
+    if seed is not None:
+        random.seed(seed)
+    # just use lower-case letters
+    return "".join(random.choices("abcdefghijklmnopqrstuvwxyz", k=length))
+
+
+def get_exp_name_prefix(name: str, n: int = 10) -> str:
+    """Try using just the first two parts of the experiment name as the prefix.
+
+    If that doesn't work, use the first n chars. For example:
+    - "ian-043-gen-pm-ihateyou-gcg-qwen-base" -> "ian-043"
+    - "iansexperimentnumber1" -> "iansexperi"
+    """
+
+    try:
+        return "-".join(name.split("-")[:2])
+    except IndexError:
+        return name[:n]
+
+
+def get_current_k8s_context() -> str:
+    """Get the current k8s context."""
+    context = subprocess.run(
+        ["kubectl", "config", "current-context"],
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    return context
+
+
+def get_unfinished_runs(
+    runs: Sequence[FlamingoRun], experiment_name: str | None
+) -> Sequence[FlamingoRun]:
+    # If experiment_name is None, there's no need to filter out completed runs because
+    # we haven't provided a wandb group to filter on.
+    if experiment_name is None:
+        return runs
+
+    # Skip runs that are already finished or still in progress.
+    wandb_runs = get_wandb_running_finished_runs(experiment_name)
+    runs = [run for run in runs if run.run_name not in wandb_runs]
+    return runs

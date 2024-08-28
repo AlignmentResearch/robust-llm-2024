@@ -1,9 +1,13 @@
+from unittest.mock import patch
+
 import pytest
 
 from robust_llm.batch_job_utils import run_multiple
 
 
-def test_clean_single_example():
+# We have to mock the wandb function because it's not available in the test environment.
+@patch("robust_llm.batch_job_utils.get_wandb_running_finished_runs", return_value=[])
+def test_clean_single_example(mock_get_wandb_running_finished_runs):
     EXPERIMENT_NAME = "typo_example"
     HYDRA_CONFIG = "Eval/pm_gcg"
 
@@ -22,12 +26,16 @@ def test_clean_single_example():
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         memory="50G",
+        cluster="a6k",
         dry_run=True,
         skip_git_checks=True,
     )
+    mock_get_wandb_running_finished_runs.assert_called_once_with("typo_example")
 
 
-def test_clean_list_example():
+# We have to mock the wandb function because it's not available in the test environment.
+@patch("robust_llm.batch_job_utils.get_wandb_running_finished_runs", return_value=[])
+def test_clean_list_example(mock_get_wandb_running_finished_runs):
     EXPERIMENT_NAME = "typo_example"
     HYDRA_CONFIG = "Eval/pm_gcg"
 
@@ -47,10 +55,13 @@ def test_clean_list_example():
         HYDRA_CONFIG,
         OVERRIDE_ARGS_LIST,
         memory="50G",
+        cluster="h100",
         dry_run=True,
         skip_git_checks=True,
         gpu=[1, 2],
     )
+
+    mock_get_wandb_running_finished_runs.assert_called_once_with("typo_example")
 
 
 def test_wrong_gpu_list_length():
@@ -99,6 +110,7 @@ def test_typo_example():
             HYDRA_CONFIG,
             OVERRIDE_ARGS_LIST,
             memory="50G",
+            cluster="a6k",
             dry_run=True,
             skip_git_checks=True,
         )

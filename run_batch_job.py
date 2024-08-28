@@ -7,17 +7,20 @@ from robust_llm.batch_job_utils import FlamingoRun, launch_jobs
 
 def main(args):
     override_args = {}
-    if args.experiment_name is not None:
-        override_args["experiment_name"] = args.experiment_name
+    assert args.experiment_name is not None
     if args.job_type is not None:
         override_args["job_type"] = args.job_type
 
     run = FlamingoRun(
         base_command="python",
+        experiment_name=args.experiment_name,
+        unique_identifier=args.unique_identifier,
         script_path=args.script_path,
         hydra_config=args.hydra_config,
         override_args=override_args,
+        run_name=args.run_name,
         CONTAINER_TAG=args.container_tag,
+        CLUSTER=args.cluster,
         CPU=args.cpu,
         MEMORY=args.memory,
         GPU=args.gpu,
@@ -42,6 +45,19 @@ def parse_args() -> argparse.Namespace:
         required=True,
     )
     parser.add_argument("--experiment_name", type=str, help="experiment_name for wandb")
+    parser.add_argument("--run_name", type=str, help="run_name for wandb")
+    parser.add_argument(
+        "--cluster",
+        type=str,
+        help="cluster to run on, default a6k",
+        default="a6k",
+    )
+    parser.add_argument(
+        "--unique_identifier",
+        type=str,
+        help="string to be included in k8s job names",
+        default="aaaa",
+    )
     parser.add_argument("--job_type", type=str, help="job_type for wandb")
     parser.add_argument(
         "--container_tag",
