@@ -255,7 +255,7 @@ def launch_jobs(
     print(yamls_for_all_jobs)
 
     if not dry_run:
-        print("Launching jobs with launch_id=%s...", launch_id)
+        print(f"Launching jobs with launch_id={launch_id}...")
         subprocess.run(
             ["kubectl", "create", "-f", "-"],
             check=True,
@@ -263,8 +263,7 @@ def launch_jobs(
         )
         print(
             "Jobs launched. To delete them run:\n"
-            "kubectl delete jobs -l launch-id=%s",
-            launch_id,
+            f"kubectl delete jobs -l launch-id={launch_id}",
         )
 
     return yamls_for_all_jobs, launch_id
