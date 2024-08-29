@@ -139,7 +139,7 @@ uses Hydra's [package override](https://hydra.cc/docs/1.3/advanced/overriding_pa
 syntax.
 
 ##### `/model: EleutherAI/pythia-14m`
-Analogous to the `/dataset` line: look in `/model` and use `EleutherAI/pythia-14m`. Note that the directory structure and names are generally chosen to mirror the names used on [HuggingFace](https://huggingface.co/EleutherAI/pythia-14m).
+Analogous to the `/dataset` line: look in `/model` and use `EleutherAI/pythia-14m`.
 
 ##### `_self_`
 This line is important as it tells Hydra that the stuff that comes after the [Defaults List](https://hydra.cc/docs/1.3/advanced/defaults_list/) should override the stuff _in_ the defaults list.
@@ -243,6 +243,19 @@ adversarial_training_state
 All of these are handled directly by HuggingFace's Trainer class except for the last which is used to record project-specific state such as adversarial training round and attack RNG state.
 
 If a new run is started with the same name, then we will try to find the last checkpoint in `trainer/run_name` to resume.
+
+## Models
+We currently support the following model families:
+- [Gemma](https://huggingface.co/collections/google/gemma-2-release-667d6600fd5220e7b967f315)
+- [Pythia](https://huggingface.co/collections/EleutherAI/pythia-scaling-suite-64fb5dfa8c21ebb3db7ad2e1)
+- [Llama2](https://huggingface.co/collections/meta-llama/llama-2-family-661da1f90a9d678b6f55773b)
+- [Llama3](https://huggingface.co/collections/meta-llama/meta-llama-3-66214712577ca38149ebb2b6)
+- [Qwen1.5](https://huggingface.co/collections/Qwen/qwen15-65c0a2f577b1ecb76d786524)
+- [Qwen2](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f).
+
+You can find the relevant configs nested in robust_llm/hydra_conf/model/meta-llama/Llama-2-7b-chat-hf.yaml for example.
+
+Note that the directory structure and names are generally chosen to mirror the names used on [HuggingFace](https://huggingface.co/meta-llama/Llama-2-7b-chat-hf).
 
 ## Datasets
 
