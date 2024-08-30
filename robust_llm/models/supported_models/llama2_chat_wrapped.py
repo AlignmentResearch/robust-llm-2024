@@ -39,6 +39,7 @@ class Llama2ChatModel(WrappedChatModel):
 
     @override
     def init_conversation(self) -> Conversation:
+        """Llama2-specific conversation template."""
         return Conversation(
             prompt_prefix="<s>[INST] ",
             system_prefix="<<SYS>>\n",

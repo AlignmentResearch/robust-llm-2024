@@ -41,6 +41,7 @@ class GPTNeoXChatModel(WrappedChatModel):
 
     @override
     def init_conversation(self) -> Conversation:
+        """Pythia/NeoX-specific conversation template."""
         return Conversation(
             prompt_prefix="",
             system_prefix="<|im_start|>system\n",

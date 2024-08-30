@@ -51,6 +51,7 @@ class GemmaChatModel(WrappedChatModel):
 
     @override
     def init_conversation(self) -> Conversation:
+        """Gemma-specific conversation template."""
         return Conversation(
             prompt_prefix="<bos>",
             system_prefix="",

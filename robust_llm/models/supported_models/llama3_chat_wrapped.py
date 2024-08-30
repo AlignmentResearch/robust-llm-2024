@@ -37,6 +37,7 @@ class Llama3ChatModel(WrappedChatModel):
 
     @override
     def init_conversation(self) -> Conversation:
+        """Llama3-specific conversation template."""
         return Conversation(
             prompt_prefix="<|begin_of_text|>",
             system_prefix="<|start_header_id|>system<|end_header_id|>\n\n",

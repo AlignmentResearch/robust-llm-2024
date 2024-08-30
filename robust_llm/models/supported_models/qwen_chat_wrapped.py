@@ -47,6 +47,7 @@ class QwenChatModel(WrappedChatModel):
 
     @override
     def init_conversation(self) -> Conversation:
+        """Qwen-specific conversation template."""
         return Conversation(
             prompt_prefix="",
             system_prefix="<|im_start|>system\n",
