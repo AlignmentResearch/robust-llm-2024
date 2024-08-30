@@ -10,6 +10,7 @@ from omegaconf import DictConfig, OmegaConf
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
+from robust_llm.pipelines.utils import safe_run_pipeline
 
 cs = ConfigStore.instance()
 cs.store(name="base_config", node=ExperimentConfig)
@@ -29,7 +30,7 @@ def main(args: DictConfig) -> None:
 
     # Run the relevant pipeline
     run_pipeline = EXPERIMENT_TYPE_TO_PIPELINE[cfg.experiment_type]
-    run_pipeline(cfg)
+    safe_run_pipeline(run_pipeline, cfg)
 
 
 if __name__ == "__main__":

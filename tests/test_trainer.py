@@ -29,7 +29,7 @@ def test_basic_constructor():
         accelerator=None,
         inference_type=InferenceType("classification"),
         train_minibatch_size=2,
-        eval_minibatch_size=2,
+        eval_minibatch_size=1,
         generation_config=None,
         family="pythia",
     )

@@ -415,15 +415,22 @@ class WrappedModel(ABC):
         except KeyError:
             raise ValueError(f"Unsupported model family: {config.family}")
 
-        train_mb_size = int(config.train_minibatch_size * config.minibatch_multiplier)
-        eval_mb_size = int(config.eval_minibatch_size * config.minibatch_multiplier)
+        train_mb_size = int(
+            config.train_minibatch_size * config.env_minibatch_multiplier
+        )
+        eval_mb_size = int(
+            config.train_minibatch_size
+            * config.eval_minibatch_multiplier
+            * config.env_minibatch_multiplier
+        )
         assert train_mb_size > 0, (
             f"{config.train_minibatch_size=} times "
-            f"{config.minibatch_multiplier=} rounds to 0"
+            f"{config.env_minibatch_multiplier=} rounds to 0"
         )
         assert eval_mb_size > 0, (
-            f"{config.eval_minibatch_size=} times "
-            f"{config.minibatch_multiplier=} rounds to 0"
+            f"{config.train_minibatch_size=} times "
+            f"{config.eval_minibatch_multiplier=} times "
+            f"{config.env_minibatch_multiplier=} rounds to 0"
         )
         # Loads the tokenizer with right padding. We'll load the tokenizer
         # with left padding lazily if we need it.

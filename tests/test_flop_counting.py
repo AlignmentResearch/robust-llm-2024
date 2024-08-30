@@ -17,8 +17,8 @@ def model_config():
         revision="main",
         inference_type="generation",
         train_minibatch_size=2,
-        eval_minibatch_size=3,
-        minibatch_multiplier=1,
+        eval_minibatch_multiplier=2,
+        env_minibatch_multiplier=1,
     )
 
 

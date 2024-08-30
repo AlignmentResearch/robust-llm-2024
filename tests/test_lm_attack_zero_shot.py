@@ -42,7 +42,7 @@ def exp_config() -> ExperimentConfig:
             # so interpolation doesn't happen.
             inference_type="classification",
             train_minibatch_size=2,
-            eval_minibatch_size=3,
+            eval_minibatch_multiplier=2,
             generation_config=GenerationConfig(
                 max_new_tokens=10,
                 do_sample=True,
@@ -68,7 +68,7 @@ def test_adversary_input_zs(exp_config: ExperimentConfig) -> None:
             inference_type=InferenceType.GENERATION.value,
             strict_load=True,
             train_minibatch_size=2,
-            eval_minibatch_size=3,
+            eval_minibatch_multiplier=2,
             generation_config=GenerationConfig(
                 min_new_tokens=10,
                 max_new_tokens=20,
@@ -147,7 +147,7 @@ def test_wrong_chunks_dataset_zs(exp_config: ExperimentConfig) -> None:
             inference_type=InferenceType.GENERATION.value,
             strict_load=True,
             train_minibatch_size=2,
-            eval_minibatch_size=3,
+            eval_minibatch_multiplier=2,
             generation_config=GenerationConfig(
                 min_new_tokens=10,
                 max_new_tokens=20,

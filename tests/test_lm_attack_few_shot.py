@@ -77,7 +77,7 @@ def exp_config() -> ExperimentConfig:
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
             inference_type="generation",
-            eval_minibatch_size=2,
+            eval_minibatch_multiplier=1,
             generation_config=GenerationConfig(
                 max_new_tokens=10,
                 do_sample=True,

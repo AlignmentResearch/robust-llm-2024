@@ -1,5 +1,9 @@
 """Common building blocks for pipelines."""
 
+from typing import Callable
+
+from accelerate import find_executable_batch_size
+
 from robust_llm import logger
 from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
@@ -30,3 +34,15 @@ def prepare_attack(
         victim=victim,
         run_name=args.run_name,
     )
+
+
+def safe_run_pipeline(pipeline: Callable, args: ExperimentConfig) -> None:
+    starting_batch_size = args.model.train_minibatch_size
+
+    @find_executable_batch_size(starting_batch_size=starting_batch_size)
+    def run_pipeline_with_batch_size(batch_size: int) -> None:
+        logger.info(f"Calling {pipeline.__name__} with batch size {batch_size}")
+        args.model.train_minibatch_size = batch_size
+        pipeline(args)
+
+    run_pipeline_with_batch_size()  # type: ignore[reportCallIssue]

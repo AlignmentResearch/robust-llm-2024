@@ -15,8 +15,8 @@ def model_config_factory():
         revision="main",
         inference_type="classification",
         train_minibatch_size=2,
-        eval_minibatch_size=3,
-        minibatch_multiplier=1,
+        eval_minibatch_multiplier=2,
+        env_minibatch_multiplier=1,
     )
 
 
@@ -86,8 +86,8 @@ def test_llama():
         revision="main",
         inference_type="generation",
         train_minibatch_size=2,
-        eval_minibatch_size=3,
-        minibatch_multiplier=1,
+        eval_minibatch_multiplier=2,
+        env_minibatch_multiplier=1,
     )
     wrapped_model = WrappedModel.from_config(cfg, accelerator=None)
     assert isinstance(wrapped_model.model, LlamaForCausalLM)
@@ -101,8 +101,8 @@ def test_determinism_single_batch():
         revision="main",
         inference_type="generation",
         train_minibatch_size=2,
-        eval_minibatch_size=3,
-        minibatch_multiplier=1,
+        eval_minibatch_multiplier=2,
+        env_minibatch_multiplier=1,
         seed=42,
         generation_config=GenerationConfig(
             max_new_tokens=50, do_sample=True, temperature=10.0
@@ -132,8 +132,8 @@ def test_determinism_batched():
         revision="main",
         inference_type="generation",
         train_minibatch_size=2,
-        eval_minibatch_size=3,
-        minibatch_multiplier=1,
+        eval_minibatch_multiplier=2,
+        env_minibatch_multiplier=1,
         seed=42,
         generation_config=GenerationConfig(
             max_new_tokens=50, do_sample=True, temperature=10.0
@@ -175,8 +175,8 @@ def test_generate_equivalence():
         revision="main",
         inference_type="generation",
         train_minibatch_size=2,
-        eval_minibatch_size=3,
-        minibatch_multiplier=1,
+        eval_minibatch_multiplier=2,
+        env_minibatch_multiplier=1,
         seed=42,
         generation_config=GenerationConfig(
             max_new_tokens=50, do_sample=True, temperature=10.0

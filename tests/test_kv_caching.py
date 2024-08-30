@@ -22,8 +22,8 @@ def models() -> tuple[WrappedModel, CachingWrappedModel]:
         family="gpt2",
         inference_type="classification",
         train_minibatch_size=2,
-        eval_minibatch_size=3,
-        minibatch_multiplier=1,
+        eval_minibatch_multiplier=2,
+        env_minibatch_multiplier=1,
     )
     wrapped_model = WrappedModel.from_config(model_config, accelerator=None)
     return wrapped_model, CachingWrappedModel(wrapped_model)

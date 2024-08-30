@@ -64,7 +64,7 @@ def test_evaluate_dataset():
         accelerator=accelerator,
         inference_type=InferenceType("classification"),
         train_minibatch_size=2,
-        eval_minibatch_size=2,
+        eval_minibatch_size=1,
         generation_config=None,
         family="gpt_neox",
     )
@@ -96,8 +96,8 @@ def test_training_pipeline_doesnt_crash():
             # so interpolation doesn't happen.
             inference_type="classification",
             train_minibatch_size=2,
-            eval_minibatch_size=3,
-            minibatch_multiplier=1,
+            eval_minibatch_multiplier=2,
+            env_minibatch_multiplier=1,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
@@ -129,8 +129,8 @@ def test_adv_training_pipeline_doesnt_crash():
             # so interpolation doesn't happen.
             inference_type="classification",
             train_minibatch_size=2,
-            eval_minibatch_size=3,
-            minibatch_multiplier=1,
+            eval_minibatch_multiplier=2,
+            env_minibatch_multiplier=1,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
@@ -226,8 +226,8 @@ def adv_trainer() -> AdversarialTrainer:
             family="pythia",
             inference_type="classification",
             train_minibatch_size=1,
-            eval_minibatch_size=1,
-            minibatch_multiplier=1,
+            eval_minibatch_multiplier=1,
+            env_minibatch_multiplier=1,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",

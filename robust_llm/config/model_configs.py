@@ -68,13 +68,13 @@ class ModelConfig:
         we may have to initialize a new classification head)
     train_minibatch_size: The minibatch size to use for training. Defaults to
         small value of 16.
-    eval_minibatch_size: The minibatch size to use for evaluation.
-        Defaults to twice the training minibatch size (since for evaluation we
-        don't need to store gradients).
+    eval_minibatch_multiplier: The minibatch size to use for evaluation as a multiple
+        of that used for training. Defaults to twice the training minibatch size
+        (since for evaluation we don't need to store gradients).
     gradient_accumulation_steps: Number of minibatches to accumulate gradients
         over. This is useful when we have to use very small minibatches due to
         limited VRAM, but want to simulate a larger batch size.
-    minibatch_multiplier: Multiplier for the minibatch size. This should usually
+    env_minibatch_multiplier: Multiplier for the minibatch size. This should usually
         be set by interpolation from the EnvironmentConfig rather in each model
         config directly.
     generation_config: The config to use for text generation.
@@ -104,10 +104,9 @@ class ModelConfig:
     inference_type: str = "${dataset.inference_type}"
     strict_load: bool = False
     train_minibatch_size: int = 16
-    # This is variable interpolation plus a custom resolver (see above).
-    eval_minibatch_size: int = SI("${mult: 2, ${model.train_minibatch_size}}")
+    eval_minibatch_multiplier: float = 2
     gradient_accumulation_steps: int = 1
-    minibatch_multiplier: float = SI("${environment.minibatch_multiplier}")
+    env_minibatch_multiplier: float = SI("${environment.minibatch_multiplier}")
     generation_config: Optional[GenerationConfig] = None
     dtype: str = "float32"
     attention_implementation: Optional[str] = None
