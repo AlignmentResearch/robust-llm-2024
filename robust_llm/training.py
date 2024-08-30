@@ -1,13 +1,11 @@
 import dataclasses
 import glob
 import os
-import warnings
 from pathlib import Path
 from typing import Optional
 
 import evaluate
 import numpy as np
-import torch
 import transformers
 import wandb
 import wandb.util
@@ -30,6 +28,7 @@ from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import CustomLoggingWandbCallback
 from robust_llm.config.configs import (
     AttackConfig,
+    AttackScheduleConfig,
     EnvironmentConfig,
     EvaluationConfig,
     TrainingConfig,
@@ -45,11 +44,7 @@ from robust_llm.models import WrappedModel
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import FlopCount
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
-from robust_llm.scoring_callbacks import (
-    BinaryCallback,
-    CallbackInput,
-    build_binary_scoring_callback,
-)
+from robust_llm.scoring_callbacks import build_binary_scoring_callback
 from robust_llm.trainer import (
     ADV_FILES,
     AdversarialTrainer,
@@ -341,6 +336,33 @@ class Training:
         return f"trainer/{self.run_name}_{self.model_name_to_save}"
 
 
+@dataclasses.dataclass
+class AttackSchedule:
+    config: AttackScheduleConfig
+    num_rounds: int
+
+    def __post_init__(self):
+        if self.config.end is not None and self.config.rate is not None:
+            self.start = self.config.end - int(self.config.rate * (self.num_rounds - 1))
+            self.end = self.config.end
+            self.rate = self.config.rate
+        elif self.config.start is not None and self.config.rate is not None:
+            self.end = self.config.start + int(self.config.rate * (self.num_rounds - 1))
+            self.start = self.config.start
+            self.rate = self.config.rate
+        elif self.config.start is not None and self.config.end is not None:
+            self.rate = (self.config.end - self.config.start) / (self.num_rounds - 1)
+            self.start = self.config.start
+            self.end = self.config.end
+        else:
+            raise ValueError("Exactly two of start, end, and rate must be specified.")
+
+    def __getitem__(self, i: int) -> int:
+        if i < 0 or i >= self.num_rounds:
+            raise IndexError(f"Index {i} out of bounds for {self.num_rounds} rounds")
+        return self.start + int(i * self.rate)
+
+
 @dataclasses.dataclass(kw_only=True)
 # TODO: make sure kw_only is not breaking anything.
 # I put it there because of this:
@@ -358,10 +380,13 @@ class AdversarialTraining(Training):
             NOTE: The first round doesn't include adversarial examples.
         validation_attack_config:
             Config for the attack to use in validation.
+        validation_iterations:
+            Number of iterations to use in the validation attack.
     """
 
     config: TrainingConfig
     validation_attack_config: AttackConfig
+    validation_iterations: int
 
     def __post_init__(self):
         super().__post_init__()
@@ -385,7 +410,10 @@ class AdversarialTraining(Training):
         self.n_backward_calls = 0
         self.training_attack = None
         self.validation_attack = None
-        self.training_iterations = self.training_attack_config.initial_n_its
+        self.attack_schedule = AttackSchedule(
+            self.adversarial_config.attack_schedule,
+            self.num_adversarial_training_rounds,
+        )
 
     @property
     def checkpoint_files(self) -> tuple[str, ...]:
@@ -454,10 +482,6 @@ class AdversarialTraining(Training):
         return self.adversarial_config.num_examples_to_log_to_wandb_each_round
 
     @property
-    def only_add_successful_adversarial_examples(self) -> bool:
-        return self.adversarial_config.only_add_successful_adversarial_examples
-
-    @property
     def loss_rank_weight(self) -> float:
         return self.adversarial_config.loss_rank_weight
 
@@ -478,16 +502,8 @@ class AdversarialTraining(Training):
         return self.adversarial_config.stopping_attack_success_rate
 
     @property
-    def target_adversarial_success_rate(self) -> Optional[float]:
+    def target_asr(self) -> Optional[float]:
         return self.adversarial_config.target_adversarial_success_rate
-
-    @property
-    def min_attack_iterations(self) -> int:
-        return self.adversarial_config.min_attack_iterations
-
-    @property
-    def max_attack_iterations(self) -> int:
-        return self.adversarial_config.max_attack_iterations
 
     @property
     def stopping_flops(self) -> float:
@@ -570,6 +586,7 @@ class AdversarialTraining(Training):
         # Run the adversarial training loop
         table = WandbTable("adversarial_eval/table")
         for self.round in range(starting_round, self.num_adversarial_training_rounds):
+            n_its = self.attack_schedule[self.round]
             logger.info("Adversarial training round %s started ", self.round)
             self._log_debug_info()
 
@@ -663,6 +680,7 @@ class AdversarialTraining(Training):
                 victim=self.victim,
                 dataset=self.eval_rllm_dataset["validation"],
                 attack=self.validation_attack,
+                n_its=self.validation_iterations,
                 final_success_binary_callback=self.victim_success_binary_callback,
                 num_examples_to_log_detailed_info=self.evaluation_config.num_examples_to_log_detailed_info,  # noqa: E501
                 adv_training_round=self.round,
@@ -713,7 +731,7 @@ class AdversarialTraining(Training):
                 with self.victim.flop_count_context() as flop_counter:
                     attack_out = self.training_attack.get_attacked_dataset(
                         input_rllm_dataset,
-                        n_its=self.training_iterations,
+                        n_its=n_its,
                         resume_from_checkpoint=False,
                     )
                 attacked_dataset = attack_out.dataset
@@ -728,19 +746,12 @@ class AdversarialTraining(Training):
                     "The first few new adversarial examples are:\n%s",
                     new_adv_examples.ds["text"][:3],
                 )
-                selected_new_adv_examples, self.training_iterations = (
-                    self.maybe_update_iterations_and_examples(
-                        new_adv_examples, self.training_iterations
-                    )
-                )
 
                 # Log stats and a subset of examples to wandb.
                 wandb_log(
                     {
-                        "misc/num_selected_training_attack_data": len(
-                            selected_new_adv_examples
-                        ),
-                        "train/n_its": self.training_iterations,
+                        "misc/num_selected_training_attack_data": len(new_adv_examples),
+                        "train/n_its": n_its,
                     },
                     commit=False,
                 )
@@ -750,7 +761,7 @@ class AdversarialTraining(Training):
                     max_n_examples=self.num_examples_to_log_to_wandb_each_round,
                 )
                 log_dataset_to_wandb(
-                    dataset=selected_new_adv_examples.ds,
+                    dataset=new_adv_examples.ds,
                     dataset_name=f"data/selected_new_adv_examples_r_{self.round}",
                     max_n_examples=self.num_examples_to_log_to_wandb_each_round,
                 )
@@ -758,7 +769,7 @@ class AdversarialTraining(Training):
                 # Report new adversarial examples to the trainer so that they can be
                 # later used for training.
                 adversarial_trainer.add_new_adversarial_examples(
-                    selected_new_adv_examples.for_hf_trainer()
+                    new_adv_examples.for_hf_trainer()
                 )
 
             logger.info("Adversarial training round %s finished", self.round)
@@ -788,33 +799,6 @@ class AdversarialTraining(Training):
             self.victim.input_shapes[-10:],
         )
 
-    def maybe_update_iterations_and_examples(
-        self, new_adv_examples: RLLMDataset, n_its: int
-    ) -> tuple[RLLMDataset, int]:
-        if (not self.only_add_successful_adversarial_examples) and (
-            self.target_adversarial_success_rate is None
-        ):
-            return new_adv_examples, n_its
-
-        victim_successes = _evaluate_dataset(
-            dataset=new_adv_examples,
-            victim=self.victim,
-            victim_success_binary_callback=self.victim_success_binary_callback,  # noqa: E501
-        )
-        if self.only_add_successful_adversarial_examples:
-            new_adv_examples = _get_only_successful_examples(
-                new_adv_examples, victim_successes
-            )
-        if self.target_adversarial_success_rate is not None:
-            n_its = _get_updated_attack_iterations(
-                n_its,
-                victim_successes,
-                self.min_attack_iterations,
-                self.max_attack_iterations,
-                self.target_adversarial_success_rate,
-            )
-        return new_adv_examples, n_its
-
     def _log_debug_info(self):
         logger.debug(
             "Current logging counts: %s",
@@ -842,67 +826,3 @@ def _maybe_train_attack(
                 "Training the %s attack on round %s", train_or_validation, round
             )
             attack.train(dataset=dataset)
-
-
-@torch.no_grad()
-def _evaluate_dataset(
-    dataset: RLLMDataset,
-    victim: WrappedModel,
-    victim_success_binary_callback: BinaryCallback,
-) -> list[bool]:
-    """Returns a dataset with only the examples that the model got wrong.
-
-    Args:
-        dataset: The dataset to filter.
-        victim: The model to evaluate.
-        victim_success_binary_callback: The callback to use for evaluating the model.
-    """
-    victim.eval()
-
-    callback_input = CallbackInput(
-        input_data=dataset.ds["text"],
-        clf_label_data=dataset.ds["clf_label"],
-        gen_target_data=dataset.ds["gen_target"],
-    )
-    victim_out = victim_success_binary_callback(
-        victim,
-        callback_input,
-    )
-    victim_successes = victim_out.successes
-    return victim_successes
-
-
-def _get_only_successful_examples(
-    new_adv_examples: RLLMDataset, victim_successes: list[bool]
-):
-    subset_indices = [i for i, success in enumerate(victim_successes) if not success]
-
-    if len(subset_indices) == 0:
-        warnings.warn("Got empty dataset after filtering; all preds were correct.")
-    logger.debug(
-        f"Keeping {len(subset_indices)} successful new adversarial examples from "
-        f"{len(new_adv_examples)}"
-    )
-    return new_adv_examples.get_subset(subset_indices)
-
-
-def _get_updated_attack_iterations(
-    old_its: int,
-    victim_successes: list[bool],
-    min_attack_iterations: int,
-    max_attack_iterations: int,
-    target_adversarial_success_rate: float,
-):
-    attack_success_rate = 1 - sum(victim_successes) / len(victim_successes)
-    new_its = (
-        int(old_its * (target_adversarial_success_rate / attack_success_rate))
-        if attack_success_rate > 0
-        else max_attack_iterations
-    )
-    new_its = max(min(new_its, max_attack_iterations), min_attack_iterations)
-    logger.debug(
-        f"Updated attack iterations to {new_its} based on success rate "
-        f"{attack_success_rate:.2f} and target rate "
-        f"{target_adversarial_success_rate:.2f}"
-    )
-    return new_its

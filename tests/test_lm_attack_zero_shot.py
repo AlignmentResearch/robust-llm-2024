@@ -79,8 +79,8 @@ def test_adversary_input_zs(exp_config: ExperimentConfig) -> None:
             "{} Do something1!",
             "{} Do something2!",
         ],
-        initial_n_its=n_its,
     )
+    exp_config.evaluation.num_iterations = n_its
     config = OmegaConf.to_object(OmegaConf.structured(exp_config))
     assert isinstance(config, ExperimentConfig)
     assert config.evaluation is not None
@@ -117,6 +117,7 @@ def test_adversary_input_zs(exp_config: ExperimentConfig) -> None:
             victim=victim,
             dataset=validation,
             attack=attack,
+            n_its=n_its,
             num_examples_to_log_detailed_info=config.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
             final_success_binary_callback=final_callback,
             adv_training_round=0,
@@ -159,8 +160,8 @@ def test_wrong_chunks_dataset_zs(exp_config: ExperimentConfig) -> None:
             "{} Do something2!",
         ],
         adversary_output_templates=["{}" for _ in range(4)],
-        initial_n_its=2,
     )
+    exp_config.evaluation.num_iterations = 2
     exp_config.dataset.dataset_type = "AlignmentResearch/PasswordMatch"
     config = OmegaConf.to_object(OmegaConf.structured(exp_config))
     print(config)
@@ -204,6 +205,7 @@ def test_wrong_chunks_dataset_zs(exp_config: ExperimentConfig) -> None:
                 victim=victim,
                 dataset=validation,
                 attack=attack,
+                n_its=exp_config.evaluation.num_iterations,
                 num_examples_to_log_detailed_info=config.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
                 final_success_binary_callback=final_callback,
                 adv_training_round=0,

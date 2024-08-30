@@ -2,6 +2,5 @@ defaults:
 - BEAM_SEARCH
 - _self_
 
-initial_n_its: 10
 forward_pass_batch_size: 64
 n_candidates_per_it: 128

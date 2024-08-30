@@ -90,9 +90,9 @@ def exp_config() -> ExperimentConfig:
             test_mode=True,
         ),
         evaluation=EvaluationConfig(
+            num_iterations=2,
             evaluation_attack=GCGAttackConfig(
                 n_attack_tokens=2,
-                initial_n_its=2,
                 n_candidates_per_it=128,
             ),
             final_success_binary_callback=target_not_in_gen_callback,

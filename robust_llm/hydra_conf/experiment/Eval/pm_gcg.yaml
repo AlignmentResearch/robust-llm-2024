@@ -12,6 +12,9 @@ environment:
 dataset:
   n_val: 10
 
+evaluation:
+  num_iterations: 30
+
 experiment_name: ???
 run_name: ???
 experiment_type: "evaluation"

@@ -25,7 +25,6 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
 def random_token_config():
     return RandomTokenAttackConfig(
         n_attack_tokens=3,
-        initial_n_its=100,
         save_total_limit=0,
     )
 

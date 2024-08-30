@@ -29,8 +29,8 @@ def exp_config() -> ExperimentConfig:
         evaluation=EvaluationConfig(
             evaluation_attack=RandomTokenAttackConfig(
                 n_attack_tokens=3,
-                initial_n_its=2,
-            )
+            ),
+            num_iterations=2,
         ),
         model=ModelConfig(
             # We use a finetuned model so that the classification head isn't

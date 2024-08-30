@@ -80,6 +80,7 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
         training = AdversarialTraining(
             **base_training_args,
             validation_attack_config=args.evaluation.evaluation_attack,
+            validation_iterations=args.evaluation.num_iterations,
         )
     else:
         training = Training(**base_training_args)

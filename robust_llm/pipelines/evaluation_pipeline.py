@@ -84,6 +84,7 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
         victim=victim,
         dataset=validation,
         attack=attack,
+        n_its=args.evaluation.num_iterations,
         final_success_binary_callback=final_callback,
         num_examples_to_log_detailed_info=args.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
         # In evaluation pipeline, we do not have adversarial training, so these are 0

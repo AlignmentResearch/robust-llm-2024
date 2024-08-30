@@ -9,6 +9,9 @@ defaults:
 dataset:
   n_val: 100
 
+evaluation:
+  num_iterations: 30
+
 model:
   name_or_path: AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3
 

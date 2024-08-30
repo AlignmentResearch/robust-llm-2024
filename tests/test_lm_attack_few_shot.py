@@ -46,10 +46,10 @@ def exp_config() -> ExperimentConfig:
         ),
         evaluation=EvaluationConfig(
             final_success_binary_callback=final_cb,
+            num_iterations=2,
             evaluation_attack=FewShotLMAttackConfig(
                 seed=0,
                 n_turns=2,
-                initial_n_its=2,
                 adversary=ModelConfig(
                     name_or_path="Felladrin/Pythia-31M-Chat-v1",
                     family="pythia-chat",
@@ -150,6 +150,7 @@ def test_few_shot_calls(exp_config: ExperimentConfig) -> None:
             victim=victim,
             dataset=validation,
             attack=attack,
+            n_its=exp_config.evaluation.num_iterations,
             num_examples_to_log_detailed_info=exp_config.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
             final_success_binary_callback=final_callback,
             adv_training_round=0,

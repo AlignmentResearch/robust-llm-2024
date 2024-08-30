@@ -84,7 +84,6 @@ def test_doesnt_crash_autoregressive_gen_random_token(
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=3,
-        initial_n_its=2,
         victim_success_callback=AutoregressiveCallbackConfig(
             callback_name="binary_univariate_fn_of_generation_from_text",
             callback_return_type="binary",
@@ -92,6 +91,7 @@ def test_doesnt_crash_autoregressive_gen_random_token(
             scoring_fn_arity=1,
         ),
     )
+    exp_config.evaluation.num_iterations = 2
     _test_doesnt_crash(exp_config)
 
 
@@ -101,7 +101,6 @@ def test_doesnt_crash_autoregressive_gen_multiprompt_random_token(
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=3,
-        initial_n_its=2,
         prompt_attack_mode="multi-prompt",
         victim_success_callback=AutoregressiveCallbackConfig(
             callback_name="binary_univariate_fn_of_generation_from_text",
@@ -110,6 +109,7 @@ def test_doesnt_crash_autoregressive_gen_multiprompt_random_token(
             scoring_fn_arity=1,
         ),
     )
+    exp_config.evaluation.num_iterations = 2
     _test_doesnt_crash(exp_config)
 
 
@@ -118,9 +118,9 @@ def test_doesnt_crash_autoregressive_gen_gcg(exp_config: ExperimentConfig) -> No
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = GCGAttackConfig(
         n_attack_tokens=2,
-        initial_n_its=2,
         n_candidates_per_it=16,
     )
+    exp_config.evaluation.num_iterations = 2
 
     _test_doesnt_crash(exp_config)
 
@@ -131,8 +131,8 @@ def test_doesnt_crash_autoregressive_gen_multiprompt_gcg(
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
         n_attack_tokens=3,
-        initial_n_its=2,
     )
+    exp_config.evaluation.num_iterations = 2
     _test_doesnt_crash(exp_config)
 
 

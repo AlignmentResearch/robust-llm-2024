@@ -10,6 +10,9 @@ defaults:
 dataset:
   n_val: 100
 
+evaluation:
+  num_iterations: 30
+
 model:
   generation_config:
     max_new_tokens: 50

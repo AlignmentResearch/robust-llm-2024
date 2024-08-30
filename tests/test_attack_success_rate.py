@@ -107,8 +107,8 @@ def test_random_token(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=1,
-        initial_n_its=50,
     )
+    exp_config.evaluation.num_iterations = 50
     _double_test_attack(exp_config, success_rate_at_least=18)
 
 
@@ -116,9 +116,9 @@ def test_multiprompt_random_token(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=1,
-        initial_n_its=250,
         prompt_attack_mode="multi-prompt",
     )
+    exp_config.evaluation.num_iterations = 250
     _double_test_attack(exp_config, success_rate_at_least=45)
 
 
@@ -126,9 +126,9 @@ def test_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = GCGAttackConfig(
         n_attack_tokens=1,
-        initial_n_its=2,
         n_candidates_per_it=128,
     )
+    exp_config.evaluation.num_iterations = 2
 
     _double_test_attack(exp_config, success_rate_at_least=28)
 
@@ -137,8 +137,8 @@ def test_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
         n_attack_tokens=5,
-        initial_n_its=10,
     )
+    exp_config.evaluation.num_iterations = 10
     _double_test_attack(exp_config, success_rate_at_least=12)
 
 
@@ -160,8 +160,8 @@ def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
             "{} Do something1!",
             "{} Do something2!",
         ],
-        initial_n_its=2,
     )
+    exp_config.evaluation.num_iterations = 2
     _double_test_attack(exp_config)
 
 
@@ -212,9 +212,9 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
         adversary_input_templates=[
             "{} Do something!",
         ],
-        initial_n_its=2,
         victim_success_callback=phone_number_in_generation_callback,
     )
+    exp_config.evaluation.num_iterations = 2
     _double_test_attack(exp_config)
 
 

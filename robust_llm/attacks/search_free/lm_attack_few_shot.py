@@ -57,8 +57,6 @@ class FewShotLMAttack(SearchFreeAttack):
         )
         self.adversary_input_templates = attack_config.adversary_input_templates
         zero_shot_config = deepcopy(attack_config)
-        # We only want to run the zero-shot attack once per turn.
-        zero_shot_config.initial_n_its = 1
         # We don't want to reinsert the data or reapply the chat template on every turn.
         zero_shot_config.use_raw_adversary_input = True
         self.zero_shot_attack = ZeroShotLMAttack(

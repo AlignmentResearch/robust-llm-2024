@@ -53,6 +53,29 @@ class EnvironmentConfig:
 
 
 @dataclass
+class AttackScheduleConfig:
+    """Linear schedule for increasing attack iterations during training."""
+
+    start: int | None = None
+    end: int | None = None
+    rate: float | None = None
+
+    def __post_init__(self):
+        assert (
+            sum(
+                [
+                    self.start is None,
+                    self.end is None,
+                    self.rate is None,
+                ]
+            )
+            == 1
+        ), "Exactly two of start, end, and rate must be specified."
+        assert self.start is None or self.start >= 1, "iterations must be >= 1."
+        assert self.end is None or self.end >= 1, "iterations must be >= 1."
+
+
+@dataclass
 class AdversarialTrainingConfig:
     """
     Configs used in adversarial training.
@@ -62,9 +85,6 @@ class AdversarialTrainingConfig:
             generate each round for training.
         num_examples_to_log_to_wandb_each_round: The number of adversarial
             examples to log to wandb each round.
-        only_add_successful_adversarial_examples:
-            Whether to add only successful adversarial examples to training set;
-            otherwise, add all trials, successful or not.
         loss_rank_weight:
             The weight to give to the rank of the loss when ranking adversarial
             examples for training. Should be [0, 1] as we allocate the rest of the
@@ -92,17 +112,15 @@ class AdversarialTrainingConfig:
             The attack success rate on adversarial examples to target during
             adversarial training by modulating the iterations of the attack.
             If None, the attack will run for a fixed number of iterations.
-        min_attack_iterations:
-            The minimum number of iterations to run the attack for.
-        max_attack_iterations:
-            The maximum number of iterations to run the attack for.
+        attack_schedule:
+            The linear schedule for increasing the number of attack iterations during
+            adversarial training.
         stopping_flops:
             The number of FLOPs to use as a stopping criterion for adversarial training.
     """
 
     num_examples_to_generate_each_round: int = 500
     num_examples_to_log_to_wandb_each_round: int = 10
-    only_add_successful_adversarial_examples: bool = False
     loss_rank_weight: float = 0.0
     num_adversarial_training_rounds: int = 3
     skip_first_training_round: bool = False
@@ -113,16 +131,12 @@ class AdversarialTrainingConfig:
     adv_sampling_decay: float = 0.0
     stopping_attack_success_rate: float = 0.0
     target_adversarial_success_rate: Optional[float] = None
-    min_attack_iterations: int = 1
-    max_attack_iterations: int = SI(
-        "${mult: 10, ${training.adversarial.training_attack.initial_n_its}}"
+    attack_schedule: AttackScheduleConfig = field(
+        default_factory=lambda: AttackScheduleConfig(start=1, end=10)
     )
     stopping_flops: float = float("inf")
 
     def __post_init__(self):
-        assert (
-            self.min_attack_iterations > 0
-        ), "Minimum number of iterations must be positive."
         assert 0 <= self.loss_rank_weight <= 1, "loss_rank_weight should be in [0, 1]."
 
 
@@ -209,6 +223,7 @@ class EvaluationConfig:
 
     Attributes:
         evaluation_attack: Config for the attack to use in evaluation.
+        num_iterations: Number of iterations to run the attack for.
         num_examples_to_log_detailed_info: Number of adversarial
             examples for which we want to log detailed info, such as the original and
             attacked text, attack results and debug info. If None, do not log anything.
@@ -220,6 +235,7 @@ class EvaluationConfig:
     """
 
     evaluation_attack: AttackConfig = MISSING
+    num_iterations: int = 30
     num_examples_to_log_detailed_info: Optional[int] = 10
     final_success_binary_callback: CallbackConfig = field(
         default_factory=lambda: CallbackConfig(

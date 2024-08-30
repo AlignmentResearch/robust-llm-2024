@@ -35,7 +35,7 @@ def _get_runner(
         victim=victim,
         prepped_examples=prepped_examples,
         random_seed=0,
-        n_its=config.initial_n_its,
+        n_its=2,
         config=config,
     )
     assert isinstance(runner, BeamSearchRunner)

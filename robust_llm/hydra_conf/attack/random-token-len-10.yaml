@@ -2,4 +2,3 @@ defaults:
   - RANDOM_TOKEN
 
 n_attack_tokens: 10
-initial_n_its: 10

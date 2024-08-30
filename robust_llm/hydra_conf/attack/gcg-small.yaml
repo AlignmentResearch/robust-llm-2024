@@ -1,7 +1,6 @@
 defaults:
 - GCG
 
-initial_n_its: 3
 n_attack_tokens: 3
 n_candidates_per_it: 16
 top_k: 8

@@ -2,12 +2,15 @@
 defaults:
   - /dataset: IMDB/main
   - /evaluation: DEFAULT
-  - /attack@evaluation.evaluation_attack: random-token-len-10-iter-10
+  - /attack@evaluation.evaluation_attack: random-token-len-10
   - /model: EleutherAI/pythia-14m
   - _self_
 
 dataset:
   n_val: 100
+
+evaluation:
+  num_iterations: 10
 
 model:
   name_or_path: AlignmentResearch/robust_llm_pythia-imdb-14m-mz-ada-v3

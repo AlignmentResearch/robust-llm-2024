@@ -19,6 +19,9 @@ defaults:
 dataset:
   n_val: 200
 
+evaluation:
+  num_iterations: 30
+
 experiment_name: ???
 run_name: ???
 experiment_type: "evaluation"

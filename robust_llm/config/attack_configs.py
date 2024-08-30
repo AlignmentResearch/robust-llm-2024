@@ -34,8 +34,6 @@ class AttackConfig:
             How often to save attack states.
         save_total_limit:
             Maximum number of attack states to keep at the same time.
-        initial_n_its:
-            The number of iterations to run the attack.
         perturb_position_min:
             The earliest position in a perturbable chunk in which to insert
             the attack tokens, expressed as a fraction of the perturbable chunk length.
@@ -53,7 +51,6 @@ class AttackConfig:
     save_prefix: str = "attack_states"
     save_steps: int = 100
     save_total_limit: int = 1
-    initial_n_its: int = 1
     perturb_position_min: float = 1.0
     perturb_position_max: float = 1.0
 
@@ -76,9 +73,6 @@ class IdentityAttackConfig(AttackConfig):
     """
 
     def __post_init__(self):
-        assert (
-            self.initial_n_its == 1
-        ), "The IdentityAttack does not use `n_its`, so it should not be modified"
         super().__post_init__()
 
 
@@ -106,7 +100,6 @@ class TextAttackAttackConfig(AttackConfig):
     def __post_init__(self):
         super().__post_init__()
         assert self.text_attack_recipe in TEXT_ATTACK_ATTACK_TYPES
-        assert self.initial_n_its == 1
 
 
 @dataclass
@@ -136,7 +129,6 @@ class SearchFreeAttackConfig(AttackConfig):
 
     def __post_init__(self):
         super().__post_init__()
-        assert self.initial_n_its > 0
 
 
 @dataclass
@@ -308,9 +300,6 @@ class TRLAttackConfig(AttackConfig):
         assert (
             self.batch_size == self.mini_batch_size * self.gradient_accumulation_steps
         )
-        assert (
-            self.initial_n_its == 1
-        ), "The TRLAttack does not use `n_its`, please modify `ppo_epochs` instead"
 
 
 @dataclass
@@ -422,14 +411,14 @@ cs.store(group="attack", name="IDENTITY", node=IdentityAttackConfig)
 cs.store(
     group="attack",
     name="RANDOM_TOKEN",
-    node=RandomTokenAttackConfig(initial_n_its=1280),
+    node=RandomTokenAttackConfig,
 )
 cs.store(group="attack", name="TRL", node=TRLAttackConfig)
-cs.store(group="attack", name="GCG", node=GCGAttackConfig(initial_n_its=10))
+cs.store(group="attack", name="GCG", node=GCGAttackConfig)
 cs.store(
     group="attack",
     name="MULTIPROMPT_GCG",
-    node=MultipromptGCGAttackConfig(initial_n_its=10),
+    node=MultipromptGCGAttackConfig,
 )
 cs.store(group="attack", name="BEAM_SEARCH", node=BeamSearchAttackConfig)
 cs.store(group="attack", name="ZERO_SHOT_LM", node=LMAttackConfig)

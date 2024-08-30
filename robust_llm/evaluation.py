@@ -29,6 +29,7 @@ def do_adversarial_evaluation(
     victim: WrappedModel,
     dataset: RLLMDataset,
     attack: Attack,
+    n_its: int,
     final_success_binary_callback: BinaryCallback,
     num_examples_to_log_detailed_info: Optional[int],
     adv_training_round: int,
@@ -78,6 +79,7 @@ def do_adversarial_evaluation(
         victim=victim,
         dataset_to_attack=dataset_to_attack,
         attack=attack,
+        n_its=n_its,
         resume_from_checkpoint=resume_from_checkpoint,
     )
     attacked_dataset = attack_out.dataset
@@ -144,7 +146,7 @@ def do_adversarial_evaluation(
     metrics["model_size"] = model_size
     metrics["model_family"] = model_family
     metrics["attack_flops"] = attack_flops
-    metrics["flops_per_iteration"] = attack_flops / attack.attack_config.initial_n_its
+    metrics["flops_per_iteration"] = attack_flops / n_its
 
     if (
         num_examples_to_log_detailed_info is not None
@@ -201,13 +203,14 @@ def attack_dataset(
     victim: WrappedModel,
     dataset_to_attack: RLLMDataset,
     attack: Attack,
+    n_its: int,
     resume_from_checkpoint: bool,
 ) -> tuple[AttackOutput, int]:
     time_start = time.perf_counter()
     with victim.flop_count_context() as attack_flops:
         attack_out = attack.get_attacked_dataset(
             dataset=dataset_to_attack,
-            n_its=attack.attack_config.initial_n_its,
+            n_its=n_its,
             # Only resume from checkpoint if we're in the evaluation pipeline as
             # otherwise we will be incorrectly reusing data in the case of adversarial
             # training.

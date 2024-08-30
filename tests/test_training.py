@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import random
-from typing import cast
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 import torch
-from accelerate import Accelerator
 from datasets import Dataset
 from omegaconf import OmegaConf
-from transformers import AutoTokenizer, GPTNeoXPreTrainedModel
 
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
-from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.config.configs import (
     AdversarialTrainingConfig,
     DatasetConfig,
@@ -23,62 +19,11 @@ from robust_llm.config.configs import (
     TrainingConfig,
 )
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.mocks import FakeClassifierWithPositiveList
-from robust_llm.models import GPTNeoXModel
-from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
-from robust_llm.scoring_callbacks import build_binary_scoring_callback
 from robust_llm.trainer import AdversarialTrainer, AdversarialTrainingState
-from robust_llm.training import (
-    AdversarialTraining,
-    _evaluate_dataset,
-    _get_updated_attack_iterations,
-)
-
-
-def test_evaluate_dataset():
-    cfg = DatasetConfig(
-        dataset_type="AlignmentResearch/PasswordMatch",
-        revision="2.1.0",
-        n_train=10,
-        n_val=10,
-    )
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    train = load_rllm_dataset(cfg, split="train").tokenize(tokenizer)
-
-    # assume all are marked positive
-    positives = tokenizer.__call__(
-        train.ds["text"],
-        padding=True,
-        return_tensors="pt",
-        add_special_tokens=False,
-    ).input_ids
-    accelerator = Accelerator()
-    model = FakeClassifierWithPositiveList(tokenizer=tokenizer, positives=positives)
-    # We fake the type with 'cast' because we are using a FakeClassifierWithPositiveList
-    victim = GPTNeoXModel(
-        cast(GPTNeoXPreTrainedModel, model),
-        tokenizer,
-        accelerator=accelerator,
-        inference_type=InferenceType("classification"),
-        train_minibatch_size=2,
-        eval_minibatch_size=1,
-        generation_config=None,
-        family="gpt_neox",
-    )
-    expected = [d["clf_label"] == 1 for d in train.ds]  # type: ignore
-    scoring_callback_config = CallbackConfig(
-        callback_name="successes_from_text", callback_return_type="binary"
-    )
-    callback = build_binary_scoring_callback(scoring_callback_config)
-    actual = _evaluate_dataset(
-        dataset=train,
-        victim=victim,
-        victim_success_binary_callback=callback,
-    )
-    assert actual == expected
+from robust_llm.training import AdversarialTraining
 
 
 @pytest.mark.multigpu
@@ -118,7 +63,8 @@ def test_adv_training_pipeline_doesnt_crash():
             test_mode=True,
         ),
         evaluation=EvaluationConfig(
-            evaluation_attack=RandomTokenAttackConfig(initial_n_its=2),
+            num_iterations=2,
+            evaluation_attack=RandomTokenAttackConfig(),
         ),
         model=ModelConfig(
             # We use a finetuned model so that the classification head isn't
@@ -143,42 +89,13 @@ def test_adv_training_pipeline_doesnt_crash():
             adversarial=AdversarialTrainingConfig(
                 num_examples_to_generate_each_round=2,
                 num_adversarial_training_rounds=2,
-                training_attack=RandomTokenAttackConfig(initial_n_its=2),
+                training_attack=RandomTokenAttackConfig(),
             ),
         ),
     )
     interpolated = OmegaConf.to_object(OmegaConf.structured(config))
     assert isinstance(interpolated, ExperimentConfig)
     run_training_pipeline(interpolated)
-
-
-@pytest.mark.parametrize(
-    "min_its, max_its, target, expected",
-    [
-        (1, 100, 0.5, 8),
-        (1, 100, 0.75, 12),
-        (1, 100, 0.125, 2),
-        (1, 10, 0.75, 10),
-        (1, 100, 0, 1),
-        (4, 100, 0.125, 4),
-    ],
-)
-def test_attack_modulation(
-    min_its: int,
-    max_its: int,
-    target: float,
-    expected: int,
-):
-    attack_config = RandomTokenAttackConfig(initial_n_its=4)
-    victim_successes = [True, True, True, False]  # ASR 25%
-    new_its = _get_updated_attack_iterations(
-        old_its=attack_config.initial_n_its,
-        victim_successes=victim_successes,
-        min_attack_iterations=min_its,
-        max_attack_iterations=max_its,
-        target_adversarial_success_rate=target,
-    )
-    assert new_its == expected
 
 
 def test_adv_training_state():
@@ -219,7 +136,8 @@ def adv_trainer() -> AdversarialTrainer:
             test_mode=True,
         ),
         evaluation=EvaluationConfig(
-            evaluation_attack=RandomTokenAttackConfig(initial_n_its=2),
+            num_iterations=2,
+            evaluation_attack=RandomTokenAttackConfig(),
         ),
         model=ModelConfig(
             name_or_path="AlignmentResearch/robust_llm_pythia-14m_clf_imdb_v-ian-067_s-0",  # noqa: E501
@@ -240,7 +158,7 @@ def adv_trainer() -> AdversarialTrainer:
             adversarial=AdversarialTrainingConfig(
                 num_examples_to_generate_each_round=2,
                 num_adversarial_training_rounds=2,
-                training_attack=RandomTokenAttackConfig(initial_n_its=2),
+                training_attack=RandomTokenAttackConfig(),
                 max_augmented_data_size=4,
             ),
         ),
@@ -268,6 +186,7 @@ def adv_trainer() -> AdversarialTrainer:
         evaluation_config=args.evaluation,
         run_name=args.run_name,
         validation_attack_config=args.evaluation.evaluation_attack,
+        validation_iterations=args.evaluation.num_iterations,
     )
     trainer = training.setup_trainer()
     return trainer
