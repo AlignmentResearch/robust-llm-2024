@@ -594,6 +594,8 @@ class AdversarialTraining(Training):
 
                 with self.victim.dont_count_flops():
                     # We rely on HF to count FLOPs during training
+
+                    adversarial_trainer.update_augmented_training_set()
                     train_out = adversarial_trainer.train(
                         resume_from_checkpoint=(
                             checkpoint

@@ -332,7 +332,6 @@ class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
         **kwargs,
     ) -> None:
         assert isinstance(self.training.trainer, AdversarialTrainer)
-        self.training.trainer.update_augmented_training_set()
         self.training.eval_rllm_dataset["augmented_train_set"] = (  # type: ignore  # noqa: E501
             self.training.trainer.train_dataset
         )
