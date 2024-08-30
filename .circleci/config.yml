@@ -188,16 +188,49 @@ jobs:
           name: Run multigpu tests
           command: |
             mkdir -p /tmp/test-reports
-            # --exitfirst: Although we'd prefer to see all test results,
-            # sometimes only one process will fail a test (without printing any
-            # output since pytest defers output until all tests are done) and
-            # move on to the next test. Then the processes are out of sync and
-            # hang until CI times out. Failing on the first test exits quicker
-            # than hanging and prints the error.
-            # Reducing the NCCL timeout instead of using --exitfirst fixes the
-            # hanging but still does not print the error, since it kills both
-            # processes before all tests are done.
-            ./tests/run_tests_with_accelerate.py --coverage -m multigpu --junitxml=/tmp/test-reports/junit-process-\$RANK.xml --durations=500 -vv --exitfirst
+
+            # Put error message of known flakes here.
+            FLAKE_ERROR_MESSAGES=(
+              # GH#826
+              "FileNotFoundError: \[Errno 2\] No such file or directory: '/home/circleci/\.cache/huggingface/"
+            )
+            FLAKE_ERROR_REGEX=$(printf "%s\|" "${FLAKE_ERROR_MESSAGES[@]}")  # Join array elements with "\|"
+            FLAKE_ERROR_REGEX=${FLAKE_ERROR_REGEX%\\|}  # Remove the trailing "\|"
+            FLAKE_ERROR_REGEX="\($FLAKE_ERROR_REGEX\)"
+
+            CYAN="\033[0;36m"
+            RED="\033[0;31m"
+            NO_COLOR="\033[0m"
+            MAX_RETRIES=3
+            for ((i = 0; i < MAX_RETRIES; i++)); do
+              echo -e "${CYAN}----- Attempt $((i + 1)) -----${NO_COLOR}"
+
+              LATEST_EXIT_CODE=0
+              # --exitfirst: Although we'd prefer to see all test results,
+              # sometimes only one process will fail a test (without printing
+              # any output since pytest defers output until all tests are done)
+              # and move on to the next test. Then the processes are out of sync
+              # and hang until CI times out. Failing on the first test exits
+              # quicker than hanging and prints the error.
+              # Reducing the NCCL timeout instead of using --exitfirst fixes the
+              # hanging but still does not print the error, since it kills both
+              # processes before all tests are done.
+              # || LATEST_EXIT_CODE=$?: Gets exit code upon failure but also
+              # makes the overall exit code 0, which we want because otherwise
+              # CI will immediately fail this step due to running with bash -e,
+              # skipping our flake retry logic.
+              ./tests/run_tests_with_accelerate.py --coverage -m multigpu --junitxml=/tmp/test-reports/junit-process-\$RANK.xml --durations=500 -vv --exitfirst || LATEST_EXIT_CODE=$?
+
+              if [ "$LATEST_EXIT_CODE" -eq 0 ]; then
+                exit 0
+              elif grep --quiet "$FLAKE_ERROR_REGEX" /tmp/accelerate_tests_output/* ; then
+                echo -e "${RED}Flaked with exit code $LATEST_EXIT_CODE${NO_COLOR}\n\n"
+              else
+                exit "$LATEST_EXIT_CODE"
+              fi
+            done
+            echo "All retry attempts exhausted. Exiting with last exit code"
+            exit "$LATEST_EXIT_CODE"
           environment:
             WANDB_MODE: offline
       - codecov/upload
