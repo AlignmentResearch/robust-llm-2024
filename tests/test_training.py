@@ -193,7 +193,7 @@ def adv_trainer() -> AdversarialTrainer:
 
 
 def test_empty_adversarial_dataset(adv_trainer: AdversarialTrainer):
-    adv_trainer.update_augmented_training_set()
+    adv_trainer.update_augmented_training_set(False, 0)
 
     assert adv_trainer.train_dataset.data == adv_trainer.regular_dataset.data
     assert adv_trainer.adversarial_indices == []
@@ -209,7 +209,7 @@ def test_weight_adv_examples_by_loss(adv_trainer: AdversarialTrainer):
     adv_trainer.sampling_decay = 1.0
     adv_trainer.add_new_adversarial_examples(val_set)
     adv_trainer.adversarial_losses = {0: 0.0, 1: float("inf")}
-    adv_trainer.update_augmented_training_set()
+    adv_trainer.update_augmented_training_set(False, 0)
     assert adv_trainer.adversarial_indices == [1]
     assert len(adv_trainer.train_dataset) == 3
 
@@ -223,7 +223,7 @@ def test_weight_adv_examples_by_recency(adv_trainer: AdversarialTrainer):
     adv_trainer.loss_rank_weight = 0.0
     adv_trainer.sampling_decay = 22
     adv_trainer.add_new_adversarial_examples(val_set)
-    adv_trainer.update_augmented_training_set()
+    adv_trainer.update_augmented_training_set(False, 0)
     assert adv_trainer.adversarial_indices == [1]
     assert len(adv_trainer.train_dataset) == 3
 
@@ -237,7 +237,7 @@ def test_equal_weight_adv_examples(adv_trainer: AdversarialTrainer):
     adv_trainer.loss_rank_weight = 0.0
     adv_trainer.sampling_decay = 0.0
     adv_trainer.add_new_adversarial_examples(val_set)
-    adv_trainer.update_augmented_training_set()
+    adv_trainer.update_augmented_training_set(False, 0)
     assert adv_trainer.adversarial_indices == [0]
     assert len(adv_trainer.train_dataset) == 3
 

@@ -333,12 +333,14 @@ class WandbTable:
 
 
 def should_log():
-    """Returns whether logging should be done from this process.
+    """Returns whether WandB logging should be done from this process.
 
     Logging should be done if either:
     - We are doing multiprocessing and this is the main process.
     - We are not doing multiprocessing.
     """
+    if not wandb.run:
+        return False
     if dist.is_initialized():
         return dist.get_rank() == 0
     else:

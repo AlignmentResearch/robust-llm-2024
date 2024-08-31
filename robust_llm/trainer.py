@@ -223,7 +223,9 @@ class AdversarialTrainer(RLLMTrainer):
         else:
             return super()._get_train_sampler()
 
-    def update_augmented_training_set(self) -> None:
+    def update_augmented_training_set(
+        self, log_full_datasets_to_wandb: bool, round: int | None = None
+    ) -> None:
         """Resample the training set from clean/attacked.
 
         If no adversarial examples have been added, the augmented dataset
@@ -256,13 +258,22 @@ class AdversarialTrainer(RLLMTrainer):
             adv_data,
         )
         assert len(train_dataset_plus_adv_examples) == n_train
-        logger.debug(
-            "Updating augmented training set from {} to {} examples".format(
-                len(self.train_dataset), len(train_dataset_plus_adv_examples)
-            )
-        )
         self.train_dataset = train_dataset_plus_adv_examples
         self.adversarial_indices = adv_indices.tolist()
+
+        logger.debug(
+            "Updating augmented training set to {} examples".format(
+                len(self.train_dataset)
+            )
+        )
+        wandb_log(
+            {"train/n_train": n_train, "train/n_adv": n_adv, "train/n_clean": n_clean},
+            commit=False,
+        )
+        if log_full_datasets_to_wandb:
+            assert round is not None
+            dataset_name = f"augmented_train_set_start_round_{round}"
+            log_dataset_to_wandb(self.train_dataset, dataset_name)
 
     def _get_adv_indices(self, n_adv: int) -> np.ndarray:
         """Get indices of adversarial examples to use for training.
@@ -335,32 +346,6 @@ class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
         self.training.eval_rllm_dataset["augmented_train_set"] = (  # type: ignore  # noqa: E501
             self.training.trainer.train_dataset
         )
-
-
-class AdversarialTrainerLoggingCallback(TrainerCallback):
-    def __init__(self, training: AdversarialTraining) -> None:
-        super().__init__()
-        self.training = training
-
-    @override
-    def on_train_begin(  # type: ignore[misc]
-        self,
-        args: TrainingArguments,
-        state: TrainerState,
-        control: TrainerControl,
-        **kwargs,
-    ) -> None:
-        if self.training.config.log_full_datasets_to_wandb:
-            assert isinstance(self.training.trainer, AdversarialTrainer)
-
-            current_round = self.training.round
-            train_ds = self.training.trainer.train_dataset
-            dataset_name = f"augmented_train_set_start_round_{current_round}"
-            log_dataset_to_wandb(train_ds, dataset_name)
-            wandb_log(
-                {"misc/augmented_train_set_size": train_ds.num_rows},  # noqa: E501
-                commit=False,
-            )
 
 
 class AdversarialTrainingState:

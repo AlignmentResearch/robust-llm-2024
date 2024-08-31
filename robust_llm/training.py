@@ -49,7 +49,6 @@ from robust_llm.trainer import (
     ADV_FILES,
     AdversarialTrainer,
     AdversarialTrainerDatasetManagementCallback,
-    AdversarialTrainerLoggingCallback,
     AdversarialTrainingState,
     AdversarialTrainingStateCallback,
     EvaluationLoopCallback,
@@ -538,7 +537,6 @@ class AdversarialTraining(Training):
             _name="victim_training",
         )
         self.trainer.add_callback(AdversarialTrainingStateCallback(self))
-        self.trainer.add_callback(AdversarialTrainerLoggingCallback(self))
         self.trainer.add_callback(AdversarialTrainerDatasetManagementCallback(self))
         self.trainer.add_callback(EvaluationLoopCallback(self))
 
@@ -612,7 +610,9 @@ class AdversarialTraining(Training):
                 with self.victim.dont_count_flops():
                     # We rely on HF to count FLOPs during training
 
-                    adversarial_trainer.update_augmented_training_set()
+                    adversarial_trainer.update_augmented_training_set(
+                        self.config.log_full_datasets_to_wandb, self.round
+                    )
                     train_out = adversarial_trainer.train(
                         resume_from_checkpoint=(
                             checkpoint
