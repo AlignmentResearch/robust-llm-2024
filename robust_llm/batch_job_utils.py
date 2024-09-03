@@ -253,7 +253,10 @@ def create_job_for_multiple_runs(
     concat_commands = "\\0".join(single_commands)
     num_jobs = len(single_commands)
     # Uses GNU parallel to run all jobs simultaneously
-    command = f'echo -ne "{concat_commands}" | parallel --null --jobs {num_jobs}'
+    command = (
+        f'echo -ne "{concat_commands}"'
+        f" | parallel --line-buffer --null --jobs {num_jobs}"
+    )
 
     # Currently, we keep too much info in the FlamingoRun, including info that should be
     # shared across all runs. Hence, we check below that it is indeed the same.
