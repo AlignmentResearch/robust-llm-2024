@@ -124,7 +124,8 @@ class CachingWrappedModel(WrappedModel):
         assert input_ids.shape[0] == 1, "Only one input sequence at a time (for now)."
         assert self._wrapped_model.right_tokenizer.pad_token_id not in input_ids
 
-        outputs = self._wrapped_model(input_ids=input_ids, use_cache=True)
+        with self._wrapped_model.dont_count_flops():
+            outputs = self._wrapped_model(input_ids=input_ids, use_cache=True)
         kv_cache = outputs.past_key_values
         # We access the first element of the batch, which is the only one.
         self.cache[tuple(input_ids[0].tolist())] = kv_cache
