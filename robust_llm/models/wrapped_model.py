@@ -155,7 +155,8 @@ class WrappedModel(ABC):
         """Returns the minibatch size to use for the given input_ids."""
         batch_size = batch_size or self.eval_minibatch_size
         batch_dim = input_ids.shape[0]
-        return min(batch_size, batch_dim // self.num_processes)
+        # Ensure mb_size>=1 even if there are more batches than processes
+        return min(batch_size, max(1, batch_dim // self.num_processes))
 
     def register_hooks(self):
         """Registers hooks to track FLOPs during forward and backward passes.
