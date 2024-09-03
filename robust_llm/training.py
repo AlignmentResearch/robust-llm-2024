@@ -78,13 +78,13 @@ class Training:
     trainer: Optional[RLLMTrainer] = None
 
     @property
-    def report_to(self) -> None | str | list[str]:
+    def report_to(self) -> str | list[str]:
         # report_to defaults to "all", which sets up several callbacks, including
         # a WandbCallback which increments the wandb internal step whenever
         # it logs. While this does not strictly break our logging setup,
         # it makes it harder to debug logging and makes the wandb plots with
         # wandb internal step on the horizontal axis less easily interpretable.
-        # Thus, we set it to "none" here.
+        # Thus, we set it to ["none"] here.
         return ["none"]
 
     def __post_init__(self):

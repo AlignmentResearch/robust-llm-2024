@@ -3,6 +3,6 @@ defaults:
 - AdvTraining/tiny_adv_training_base
 - /dataset: IMDB/main
 - /model: EleutherAI/pythia-14m
-- /attack@training.adversarial.training_attack: random-token-1280-its
-- /attack@evaluation.evaluation_attack: random-token-1280-its
+- /attack@training.adversarial.training_attack: random-token-len-10
+- /attack@evaluation.evaluation_attack: random-token-len-10
 - _self_
