@@ -10,9 +10,9 @@ defaults:
 dataset:
   n_val: 30
 
-model:
-  name_or_path: "AlignmentResearch/robust_llm_pythia-14m_clf_pm_v-ian-080_s-0"
-  strict_load: true
+# model:
+#   name_or_path: "AlignmentResearch/robust_llm_pythia-14m_clf_pm_v-ian-080_s-0"
+#   strict_load: true
 
 experiment_name: ian_000
 run_name: attack_data_saving_test_14m_rt

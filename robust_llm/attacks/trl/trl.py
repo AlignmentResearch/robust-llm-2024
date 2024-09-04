@@ -10,7 +10,7 @@ from trl import PPOTrainer
 from typing_extensions import override
 
 from robust_llm import logger
-from robust_llm.attacks.attack import Attack, AttackData, AttackOutput
+from robust_llm.attacks.attack import Attack, AttackOutput
 from robust_llm.attacks.trl.utils import (
     check_for_not_finite,
     make_ppo_trainer,
@@ -243,7 +243,7 @@ class TRLAttack(Attack):
         attacked_dataset = dataset.with_attacked_text(attacked_texts)
         attack_out = AttackOutput(
             dataset=attacked_dataset,
-            attack_data=AttackData(),
+            attack_data=None,
         )
         return attack_out
 

@@ -1,25 +1,22 @@
 import re
-from copy import deepcopy
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import seaborn as sns
-import wandb
 
 from robust_llm.file_utils import compute_repo_path
-from robust_llm.plotting_utils.constants import (
+from robust_llm.wandb_utils.constants import (
     FINAL_PYTHIA_CHECKPOINT,
     METRICS,
     MODEL_NAMES,
     MODEL_SIZES,
-    PROJECT_NAME,
     SUMMARY_KEYS,
 )
-
-wandb.login()
-API = wandb.Api(timeout=60)
+from robust_llm.wandb_utils.wandb_api_tools import (
+    get_metrics_adv_training,
+    get_metrics_single_step,
+)
 
 
 def extract_size_from_model_name(name: str | None) -> int | None:
@@ -383,91 +380,12 @@ def draw_scatter_with_color_from_metric(
     plt.show()
 
 
-def _extract_adv_round(revision):
-    # adv-training-round-0
-    return int(revision.split("-")[-1])
-
-
-def get_metrics_adv_training(
-    group,
-    metrics,
-    summary_keys,
-    filters=None,
-    check_num_runs=None,
-    check_num_data_per_run=None,
-    verbose=False,
-) -> pd.DataFrame:
-    if filters is None:
-        filters = {}
-    filters = deepcopy(filters)
-    filters["group"] = group
-
-    runs = API.runs(path=PROJECT_NAME, filters=filters)
-    if verbose:
-        print(f"Found {len(runs)} runs")
-    if check_num_runs is not None:
-        if type(check_num_runs) is int:
-            assert len(runs) == check_num_runs
-        elif type(check_num_runs) is list:
-            assert check_num_runs[0] <= len(runs) <= check_num_runs[1]
-        else:
-            assert False, "bad check_num_runs!"
-
-    res = []
-    for run in runs:
-        history = run.history(keys=metrics)
-        if verbose:
-            print(f"Run {run.id} has {len(history)} data points")
-
-        if check_num_data_per_run is not None:
-            assert len(history) == check_num_data_per_run
-
-        if len(history) == 0:
-            continue
-
-        if history is None:
-            continue
-
-        for key in summary_keys:
-            history[key.replace(".", "_")] = _get_value_iterative(run.summary, key)
-        history["run_id"] = run.id
-        history["run_state"] = run.state
-
-        # Hack: create 'round' column based on increasing steps.
-        history = history.sort_values(by="_step")
-
-        if "revision" in history:
-            history["adv_training_round"] = [
-                _extract_adv_round(name) for name in history["revision"]
-            ]
-        else:
-            history["adv_training_round"] = np.arange(len(history))
-
-        res.append(history)
-
-    if len(res) == 0:
-        return pd.DataFrame()
-    res = pd.concat(res, ignore_index=True)
-
-    return res
-
-
 def get_discrete_palette_for_values(values):
     values = sorted(set(values))
     return {
         v: sns.color_palette("viridis", n_colors=len(values))[i]
         for i, v in enumerate(values)
     }
-
-
-def _get_value_iterative(d: dict, key: str):
-    for k in key.split("."):
-        if k not in d:
-            return None
-        d = d[k]
-        if d is None:
-            return None
-    return d
 
 
 def _get_num_params_from_name(name: str) -> int:
@@ -497,38 +415,3 @@ def postprocess_data(df):
         df["num_params"] = df["model_size"]
 
     df["pretraining_fraction"] = df["name_or_path"].map(_get_pretraining_fraction)
-
-
-def get_metrics_single_step(
-    group, metrics, summary_keys, filters=None, check_num_runs=None
-):
-    print("getting metrics for", group)
-
-    if filters is None:
-        filters = {}
-    filters = deepcopy(filters)
-    filters["group"] = group
-    filters["state"] = "finished"
-
-    runs = API.runs(path=PROJECT_NAME, filters=filters)
-    if check_num_runs is not None:
-        if type(check_num_runs) is int:
-            assert len(runs) == check_num_runs
-        elif type(check_num_runs) is list:
-            assert check_num_runs[0] <= len(runs) <= check_num_runs[1]
-        else:
-            assert False, "bad check_num_runs!"
-
-    res = []
-    for run in runs:
-        history = run.history(keys=metrics)
-        if history is None or len(history) == 0:
-            continue
-        for key in summary_keys:
-            history[key.split(".")[-1]] = _get_value_iterative(run.summary, key)
-        assert len(history) == 1, "Expected 1 step, got {}".format(len(history))
-        res.append(history)
-
-    res = pd.concat(res, ignore_index=True)
-
-    return res

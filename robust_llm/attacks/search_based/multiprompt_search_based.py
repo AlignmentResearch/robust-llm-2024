@@ -3,7 +3,7 @@ from typing import Any
 import numpy as np
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack, AttackData, AttackOutput
+from robust_llm.attacks.attack import Attack, AttackOutput
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.utils import (
     PreppedExample,
@@ -88,7 +88,7 @@ class MultiPromptSearchBasedAttack(Attack):
         info_dict = _create_info_dict(all_filtered_out_counts)
         attack_out = AttackOutput(
             dataset=attacked_dataset,
-            attack_data=AttackData(),
+            attack_data=None,
             global_info=info_dict,
         )
 

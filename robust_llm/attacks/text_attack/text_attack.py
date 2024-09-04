@@ -30,7 +30,7 @@ from textattack.transformations import (
 from transformers import PreTrainedTokenizerBase
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack, AttackData, AttackOutput
+from robust_llm.attacks.attack import Attack, AttackOutput
 from robust_llm.config.attack_configs import TextAttackAttackConfig
 from robust_llm.defenses.defense import DefendedModel
 from robust_llm.models import WrappedModel
@@ -284,7 +284,7 @@ class TextAttackAttack(Attack):
         global_info = self._get_info_dict(attack_results)
         attack_out = AttackOutput(
             dataset=attacked_dataset,
-            attack_data=AttackData(),
+            attack_data=None,
             global_info=global_info,
         )
 

@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
+import pandas as pd
 import wandb
 from typing_extensions import override
 
@@ -46,6 +47,11 @@ class AttackData:
 
     Includes the attack strings. This is used after the fact to compute
     robustness metrics.
+
+    NOTE: iteration_texts and logits are stored per-example. In other words,
+    the shape of iteration_texts should be (n_examples, n_iterations), and
+    the shape of logits should be (n_examples, n_iterations, n_classes).
+
     TODO(ian): Add attributes and come up with a more informative name.
     """
 
@@ -73,6 +79,29 @@ class AttackData:
             tables.append(table)
         return tables
 
+    @classmethod
+    def from_dfs(cls, dfs_dict: dict[int, pd.DataFrame]) -> "AttackData":
+        """Constructs an AttackData object from a dictionary of DataFrames.
+
+        Args:
+            dfs_dict: A dictionary of DataFrames, where the keys are indices
+                from the original dataset and the DataFrames have columns
+                "iteration_texts" and "logits".
+        """
+        iteration_texts = []
+        logits = []
+        for example_ix, example_df in dfs_dict.items():
+            iteration_texts.append(example_df["iteration_texts"].tolist())
+            if "logits" in example_df.columns:
+                logits.append(example_df["logits"].tolist())
+        if logits == []:
+            out_logits = None
+        else:
+            out_logits = logits
+
+        assert out_logits is None or len(out_logits) == len(iteration_texts)
+        return cls(iteration_texts=iteration_texts, logits=out_logits)
+
 
 @dataclass
 class AttackOutput:
@@ -93,7 +122,7 @@ class AttackOutput:
     """
 
     dataset: RLLMDataset
-    attack_data: AttackData
+    attack_data: AttackData | None
     global_info: dict[str, Any] = field(default_factory=dict)
     per_example_info: dict[str, list[Any]] = field(default_factory=dict)
 
@@ -295,7 +324,7 @@ class IdentityAttack(Attack):
         )
         attack_out = AttackOutput(
             dataset=dataset,
-            attack_data=AttackData(),
+            attack_data=None,
         )
         return attack_out
 
