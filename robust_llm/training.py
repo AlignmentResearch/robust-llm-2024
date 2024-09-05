@@ -757,11 +757,6 @@ class AdversarialTraining(Training):
                 )
                 log_dataset_to_wandb(
                     dataset=new_adv_examples.ds,
-                    dataset_name=f"data/all_new_adv_examples_r_{self.round}",
-                    max_n_examples=self.num_examples_to_log_to_wandb_each_round,
-                )
-                log_dataset_to_wandb(
-                    dataset=new_adv_examples.ds,
                     dataset_name=f"data/selected_new_adv_examples_r_{self.round}",
                     max_n_examples=self.num_examples_to_log_to_wandb_each_round,
                 )
