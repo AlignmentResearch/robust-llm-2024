@@ -164,6 +164,10 @@ class AdversarialTrainer(RLLMTrainer):
         self.computed_losses: list[float] = []
         self.in_eval_loop = False
 
+        # This is for the initial step, where we just want to get the model
+        # prepared.
+        self.do_dummy_train_step = False
+
     def maybe_update_adversarial_losses(self):
         """Update the adversarial losses if all losses have been computed."""
         if len(self.computed_losses) < len(self.train_dataset):
@@ -180,6 +184,10 @@ class AdversarialTrainer(RLLMTrainer):
     @override
     def compute_loss(self, model, inputs, return_outputs=False):
         """Overrides HF Trainer.compute_loss to track attack successes."""
+        # HACK: For the initial step, we return a dummy loss of 0
+        if self.do_dummy_train_step:
+            return torch.tensor(0.0, device=self.model.device, requires_grad=True)
+
         if self.in_eval_loop:
             return super().compute_loss(model, inputs, return_outputs)
         assert self.label_smoother is None

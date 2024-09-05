@@ -602,7 +602,21 @@ class AdversarialTraining(Training):
             # on the (eventually, adversarial example-augmented) train set
             # Note that the first round is just normal training on the train set
             if self.round == 0 and self.skip_first_training_round:
-                logger.info("Skipping first round of training...")
+                logger.info("Skipping first round of training... (doing dummy step)")
+
+                # HACK: To make sure the model is wrapped with FSDP properly, we run a
+                # dummy train loop on a single datapoint. This works by setting the
+                # loss to 0 for this step.
+                train_dataset_temp = adversarial_trainer.train_dataset
+                adversarial_trainer.train_dataset = train_dataset_temp.select(range(1))
+                adversarial_trainer.do_dummy_train_step = True
+                # If we're in round 0 and we're skipping the first round, we can't have
+                # a checkpoint to resume from (since those are saved by .train)
+                assert checkpoint is None or checkpoint is False
+                adversarial_trainer.train(resume_from_checkpoint=False)
+                adversarial_trainer.train_dataset = train_dataset_temp
+                adversarial_trainer.do_dummy_train_step = False
+
             else:
                 logger.info("Victim started training in round %s", self.round)
                 self._log_debug_info()
@@ -613,7 +627,13 @@ class AdversarialTraining(Training):
                     adversarial_trainer.update_augmented_training_set(
                         self.config.log_full_datasets_to_wandb, self.round
                     )
+
                     train_out = adversarial_trainer.train(
+                        # We resume from checkpoint only if:
+                        # 1. We allow checkpointing, and
+                        # 2. there is an existing checkpoint, and
+                        # 3. We haven't already resumed from a checkpoint in this
+                        #    experiment run.
                         resume_from_checkpoint=(
                             checkpoint
                             if self.environment_config.allow_checkpointing
@@ -621,6 +641,7 @@ class AdversarialTraining(Training):
                             else False
                         )
                     )
+
                 logger.info("Victim finished training in round %s ", self.round)
                 # Note that HF uses "flos" for FLOPs
                 logger.debug(
