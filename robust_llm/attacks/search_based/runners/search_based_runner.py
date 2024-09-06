@@ -297,13 +297,14 @@ class SearchBasedRunner(abc.ABC):
         attack_start = before_attack_tokens.shape[1]
         attack_end = self.n_attack_tokens + attack_start
 
-        after_attack_tokens = self._get_tokens(
-            example.prompt_template.after_attack, return_tensors="pt"
+        full_prompt = example.prompt_template.build_prompt(
+            attack_text=attack_text,
+            target=example.gen_target,
         )
-        target_start = attack_end + after_attack_tokens.shape[1]
-
+        full_tokens = self._get_tokens(full_prompt, return_tensors="pt")
+        target_end = full_tokens.shape[1]
         target_tokens = self._get_tokens(example.gen_target, return_tensors="pt")
-        target_end = target_start + target_tokens.shape[1]
+        target_start = target_end - target_tokens.shape[1]
 
         attack_indices = AttackIndices(
             attack_start=attack_start,
@@ -313,13 +314,7 @@ class SearchBasedRunner(abc.ABC):
         )
 
         # Check that the attack indices actually line up.
-        full_prompt = example.prompt_template.build_prompt(
-            attack_text=attack_text,
-            target=example.gen_target,
-        )
-        full_tokens = self._get_tokens(full_prompt, return_tensors="pt")
         attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
-
         attack_indices.assert_attack_and_target_tokens_validity(
             full_tokens, attack_tokens, target_tokens
         )

@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+- /model: EleutherAI/pythia-1b
+- /dataset: IMDB/main
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: gcg-30-its
+- _self_
+
+dataset:
+  n_train: 0
+  n_val: 200
+
+experiment_type: "evaluation"
+
+evaluation:
+  evaluation_attack:
+    perturb_position_min: 0.0
+    perturb_position_max: 0.0
