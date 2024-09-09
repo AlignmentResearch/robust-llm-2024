@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import time
 import warnings
 from typing import TYPE_CHECKING, Any, Optional, Union
 
@@ -356,6 +357,66 @@ class AdversarialTrainerDatasetManagementCallback(TrainerCallback):
         )
 
 
+class AdversarialTrainerLoggingCallback(TrainerCallback):
+    def __init__(self, training: AdversarialTraining) -> None:
+        super().__init__()
+        self.training = training
+        self.save_start_time = time.time()
+
+    @override
+    def on_step_end(  # type: ignore[misc]
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ) -> None:
+        if control.should_save:
+            self.save_start_time = time.time()
+
+    @override
+    def on_epoch_end(  # type: ignore[misc]
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ):
+        if control.should_save:
+            self.save_start_time = time.time()
+
+    @override
+    def on_save(  # type: ignore[misc]
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ) -> None:
+        time_to_save = time.time() - self.save_start_time
+        logger.info(f"Saved checkpoint in {time_to_save:.1f} seconds.")
+
+    @override
+    def on_train_begin(  # type: ignore[misc]
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        **kwargs,
+    ) -> None:
+        if self.training.config.log_full_datasets_to_wandb:
+            assert isinstance(self.training.trainer, AdversarialTrainer)
+
+            current_round = self.training.round
+            train_ds = self.training.trainer.train_dataset
+            dataset_name = f"augmented_train_set_start_round_{current_round}"
+            log_dataset_to_wandb(train_ds, dataset_name)
+            wandb_log(
+                {"misc/augmented_train_set_size": train_ds.num_rows},  # noqa: E501
+                commit=False,
+            )
+
+
 class AdversarialTrainingState:
     """State for adversarial training, including the current round and RNG states.
 
@@ -397,12 +458,18 @@ class AdversarialTrainingState:
         }
 
     def save(self, checkpoint_dir: str) -> None:
+        start_time = time.time()
         json.dump(
             obj=self.to_dict(),
             fp=open(os.path.join(checkpoint_dir, ADV_STATE_NAME), "w"),
         )
         self.adversarial_dataset.save_to_disk(
             os.path.join(checkpoint_dir, ADV_DATA_NAME)
+        )
+        end_time = time.time()
+        logger.info(
+            f"Saved adversarial training state to {checkpoint_dir} in "
+            f"{end_time - start_time:.1f} seconds."
         )
 
     @classmethod

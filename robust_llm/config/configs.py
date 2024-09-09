@@ -180,12 +180,13 @@ class TrainingConfig:
             save_total_limit checkpoints are saved, the oldest ones are deleted.
         log_full_datasets_to_wandb: Whether to log full datasets to wandb. Off
             by default, as it takes a lot of space.
-        model_save_path_prefix_or_hf: Where to save the final
-            checkpoint. If None, the model is not saved. If "hf", the model is saved to
-            HuggingFace. Otherwise, the model is saved to a location starting with the
-            specified prefix.
-        force_name_to_save: If set, the model will be saved with this
-            name. Otherwise, the name will be automatically generated.
+        save_prefix: The parent directory to use for saving checkpoints.
+        save_name: The name to use for saving checkpoints. If None, the name will be
+            automatically generated.
+        save_to: Where to save the model after running the trainer. Possible values are:
+            - "hf": Save to the huggingface hub.
+            - "disk": Save to disk.
+            - None, the model will not be saved.
         seed: seed to use for training. It will be set at the beginning of huggingface
             Trainer's training. In particular, it may affect random initialization
             (if any).
@@ -207,8 +208,9 @@ class TrainingConfig:
     save_steps: int = 500
     save_total_limit: int = 1
     log_full_datasets_to_wandb: bool = False
-    model_save_path_prefix_or_hf: Optional[str] = SHARED_DATA_DIR
-    force_name_to_save: Optional[str] = None
+    save_prefix: str = SHARED_DATA_DIR
+    save_name: Optional[str] = None
+    save_to: str | None = "hf"
     seed: int = 0
     upload_retries: int = 3
     upload_cooldown: float = 5

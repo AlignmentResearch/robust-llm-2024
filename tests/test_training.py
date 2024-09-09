@@ -50,7 +50,7 @@ def test_training_pipeline_doesnt_crash():
             n_train=2,
             n_val=2,
         ),
-        training=TrainingConfig(model_save_path_prefix_or_hf=None),
+        training=TrainingConfig(save_prefix="test_training_pipeline", save_to=None),
     )
     run_training_pipeline(config)
 
@@ -85,7 +85,8 @@ def test_adv_training_pipeline_doesnt_crash():
             n_val=2,
         ),
         training=TrainingConfig(
-            model_save_path_prefix_or_hf=None,
+            save_prefix="test_adv_training_pipeline",
+            save_to=None,
             adversarial=AdversarialTrainingConfig(
                 num_examples_to_generate_each_round=2,
                 num_adversarial_training_rounds=2,
@@ -134,6 +135,7 @@ def adv_trainer() -> AdversarialTrainer:
         experiment_type="training",
         environment=EnvironmentConfig(
             test_mode=True,
+            allow_checkpointing=False,
         ),
         evaluation=EvaluationConfig(
             num_iterations=2,
@@ -154,7 +156,7 @@ def adv_trainer() -> AdversarialTrainer:
             n_val=2,
         ),
         training=TrainingConfig(
-            model_save_path_prefix_or_hf=None,
+            save_prefix="adv_trainer_test",
             adversarial=AdversarialTrainingConfig(
                 num_examples_to_generate_each_round=2,
                 num_adversarial_training_rounds=2,
@@ -175,17 +177,17 @@ def adv_trainer() -> AdversarialTrainer:
     )
     train_set = untokenized_train_set.tokenize(victim.right_tokenizer)
     val_set = untokenized_val_set.tokenize(victim.right_tokenizer)
-    model_name_to_save = "dummy"
     training = AdversarialTraining(
         config=args.training,
         train_rllm_dataset=train_set,
         eval_rllm_dataset={"validation": val_set},
         victim=victim,
-        model_name_to_save=model_name_to_save,
+        model_name="dummy",
         environment_config=args.environment,
         evaluation_config=args.evaluation,
         run_name=args.run_name,
         validation_attack_config=args.evaluation.evaluation_attack,
+        hash="dummy_adv_training",
         validation_iterations=args.evaluation.num_iterations,
     )
     trainer = training.setup_trainer()

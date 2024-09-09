@@ -14,10 +14,12 @@ from transformers import EvalPrediction, TrainingArguments
 from transformers.trainer import (
     CONFIG_NAME,
     OPTIMIZER_NAME,
+    SAFE_WEIGHTS_INDEX_NAME,
     SAFE_WEIGHTS_NAME,
     SCHEDULER_NAME,
     TRAINER_STATE_NAME,
     TRAINING_ARGS_NAME,
+    WEIGHTS_INDEX_NAME,
     WEIGHTS_NAME,
 )
 from typing_extensions import override
@@ -64,14 +66,22 @@ CORE_CHECKPOINT_FILES = (
     TRAINING_ARGS_NAME,
 )
 
+WEIGHT_FILES = (
+    WEIGHTS_NAME,
+    WEIGHTS_INDEX_NAME,
+    SAFE_WEIGHTS_NAME,
+    SAFE_WEIGHTS_INDEX_NAME,
+)
+
 
 @dataclasses.dataclass
 class Training:
+    hash: str
     config: TrainingConfig
     train_rllm_dataset: RLLMDataset
     eval_rllm_dataset: dict[str, RLLMDataset]
     victim: WrappedModel
-    model_name_to_save: str  # Used for saving the model to disk/hf
+    model_name: str  # Used for saving the model to disk/hf
     environment_config: EnvironmentConfig
     evaluation_config: EvaluationConfig
     run_name: str
@@ -88,6 +98,11 @@ class Training:
         return ["none"]
 
     def __post_init__(self):
+        if self.config.save_name is None:
+            self.model_name_to_save = self.model_name.replace("/", "_")
+        else:
+            self.model_name_to_save = self.config.save_name
+
         metrics = [evaluate.load("accuracy")]
 
         num_classes = self.train_rllm_dataset.num_classes
@@ -195,16 +210,6 @@ class Training:
 
         return self.trainer
 
-    @property
-    def checkpoint_files(self) -> tuple[str, ...]:
-        return CORE_CHECKPOINT_FILES + (
-            (
-                SAFE_WEIGHTS_NAME
-                if self.training_arguments.save_safetensors
-                else WEIGHTS_NAME
-            ),
-        )
-
     def get_last_checkpoint(self) -> str | None:
         """Get the directory path to the most recent completed checkpoint.
 
@@ -220,7 +225,8 @@ class Training:
             for f in os.scandir(self.output_dir)
             if f.is_dir()
             and f.name.startswith("checkpoint")
-            and all([sub_f in os.listdir(f) for sub_f in self.checkpoint_files])
+            and all([sub_f in os.listdir(f) for sub_f in CORE_CHECKPOINT_FILES])
+            and any([sub_f in os.listdir(f) for sub_f in WEIGHT_FILES])
         ]
         if len(checkpoints) == 0:
             return None
@@ -245,7 +251,8 @@ class Training:
             )
 
         self.maybe_save_model_to_path_or_hf(
-            path_prefix_or_hf=self.config.model_save_path_prefix_or_hf
+            save_prefix=self.config.save_prefix,
+            save_to=self.config.save_to,
         )
 
     def compute_metrics(self, eval_preds: EvalPrediction) -> dict:
@@ -285,7 +292,10 @@ class Training:
         log_dataset_to_wandb(validation_dataset, "validation_dataset")
 
     def maybe_save_model_to_path_or_hf(
-        self, path_prefix_or_hf: Optional[str], adv_tr_round: Optional[int] = None
+        self,
+        save_prefix: str,
+        save_to: str | None,
+        adv_tr_round: Optional[int] = None,
     ) -> None:
         assert self.trainer is not None
 
@@ -295,13 +305,11 @@ class Training:
         adv_tr_round_str = (
             f"adv-training-round-{adv_tr_round}" if adv_tr_round is not None else None
         )
-
-        if path_prefix_or_hf is None:
+        if save_to is None:
             logger.info(
                 "Not saving the model/tokenizer since no save path was specified"
             )
-
-        elif path_prefix_or_hf == "hf":
+        elif save_to == "hf":
             assert self.trainer.args.hub_model_id is not None
             # This is a hack to make sure we have the properly FSDP-wrapped
             # version of the model for saving. Without this, only the inner
@@ -321,18 +329,26 @@ class Training:
             if wandb.run is not None:
                 wandb.run.summary["saved_hf_name"] = hf_name
 
-        else:
+        elif save_to == "disk":
             adv_suffix = adv_tr_round_str or ""
             model_dir = self.model_name_to_save + adv_suffix
-            output_dir = Path(path_prefix_or_hf) / "models" / model_dir
+            output_dir = Path(save_prefix) / "models" / model_dir
             if wandb.run is not None:
                 wandb.run.summary["saved_dir"] = str(output_dir)
             logger.info("Saving the model/tokenizer to %s", output_dir)
             self.victim.save_local(output_dir=output_dir)
+        else:
+            raise ValueError(f"Invalid save_to value: {save_to}")
 
     @property
     def output_dir(self) -> str:
-        return f"trainer/{self.run_name}_{self.model_name_to_save}"
+        return str(
+            Path(self.config.save_prefix)
+            / "trainer"
+            / self.run_name
+            / self.model_name_to_save
+            / self.hash
+        )
 
 
 @dataclasses.dataclass
@@ -414,20 +430,6 @@ class AdversarialTraining(Training):
             self.num_adversarial_training_rounds,
         )
 
-    @property
-    def checkpoint_files(self) -> tuple[str, ...]:
-        return (
-            CORE_CHECKPOINT_FILES
-            + (
-                (
-                    SAFE_WEIGHTS_NAME
-                    if self.training_arguments.save_safetensors
-                    else WEIGHTS_NAME
-                ),
-            )
-            + ADV_FILES
-        )
-
     def get_last_checkpoint(self) -> str | None:
         """Get the directory path to the most recent completed checkpoint.
 
@@ -442,7 +444,9 @@ class AdversarialTraining(Training):
             f
             for f in glob.iglob(f"{self.output_dir}/round-*/checkpoint-*")
             if os.path.isdir(f)
-            and all([sub_f in os.listdir(f) for sub_f in self.checkpoint_files])
+            and all([sub_f in os.listdir(f) for sub_f in CORE_CHECKPOINT_FILES])
+            and any([sub_f in os.listdir(f) for sub_f in WEIGHT_FILES])
+            and all([sub_f in os.listdir(f) for sub_f in ADV_FILES])
         ]
         if len(checkpoints) == 0:
             return None
@@ -792,7 +796,8 @@ class AdversarialTraining(Training):
             self._log_debug_info()
 
             self.maybe_save_model_to_path_or_hf(
-                path_prefix_or_hf=self.config.model_save_path_prefix_or_hf,
+                save_prefix=self.config.save_prefix,
+                save_to=self.config.save_to,
                 adv_tr_round=self.round,
             )
 

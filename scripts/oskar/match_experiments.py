@@ -51,13 +51,14 @@ def search_wandb_runs(df):
                 continue
             assert run.metadata is not None
             assert run.summary is not None
-            force_name_to_save = (
-                run.summary.get("experiment_yaml", {})
-                .get("training", {})
-                .get("force_name_to_save")
+            training_config = run.summary.get("experiment_yaml", {}).get("training", {})
+            name_to_save = training_config.get(
+                # Parameter changed from force_name_to_save to save_name
+                "force_name_to_save",
+                training_config.get("save_name"),
             )
-            if force_name_to_save:
-                model_name = "AlignmentResearch/robust_llm_" + force_name_to_save
+            if name_to_save:
+                model_name = "AlignmentResearch/robust_llm_" + name_to_save
                 if model_name in group["model_name"].values:
                     gpu_type = run.metadata.get("gpu", "Unknown")
                     gpu_count = run.metadata.get("gpu_count", "Unknown")

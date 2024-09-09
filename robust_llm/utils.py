@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import random
-import uuid
 from collections.abc import Iterator, Sequence
 from dataclasses import fields
 from datetime import datetime
@@ -11,6 +12,14 @@ from typing import Optional, Sized
 
 import torch
 import torch.utils.data
+
+
+def deterministic_hash(obj: object) -> str:
+    json_str = json.dumps(str(obj), sort_keys=True)
+    encoded_string = json_str.encode()
+    hash_object = hashlib.sha256(encoded_string)
+    hash_hex = hash_object.hexdigest()
+    return hash_hex
 
 
 def nested_list_to_tuple(nested_list: list) -> tuple:
@@ -49,14 +58,6 @@ def div_maybe_nan(a: int, b: int) -> float:
     if b == 0:
         return float("nan")
     return a / b
-
-
-def make_unique_name_to_save(base_name_or_path: str) -> str:
-    """Get a unique name used for saving the model."""
-    base_processed = base_name_or_path.replace("/", "_")
-    # Create a long random id.
-    id = uuid.uuid1().hex
-    return f"{id}_from_{base_processed}"
 
 
 def get_readable_timestamp() -> str:

@@ -5,7 +5,7 @@ defaults:
 
 training:
   force_name_to_save: "niki-test-saving-every-adv-round"
-  model_save_path_prefix_or_hf: "hf"
+  save_to: "hf"
   adversarial:
     num_examples_to_generate_each_round: 1
 

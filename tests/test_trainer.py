@@ -38,7 +38,7 @@ def test_basic_constructor():
     validation = load_rllm_dataset(dataset_cfg, split="validation").tokenize(tokenizer)
 
     config = TrainingConfig(
-        model_save_path_prefix_or_hf="test-save-path",
+        save_prefix="test-save-path",
     )
 
     Training(
@@ -46,10 +46,11 @@ def test_basic_constructor():
         train_rllm_dataset=train,
         eval_rllm_dataset={"validation": validation},
         victim=wrapped_model,
-        model_name_to_save="test_model",
-        environment_config=EnvironmentConfig(),
+        model_name="test_model",
+        environment_config=EnvironmentConfig(allow_checkpointing=False),
         evaluation_config=EvaluationConfig(),
         run_name="test_run",
+        hash="test_basic_constructor",
     )
 
 

@@ -12,7 +12,7 @@ from robust_llm.logging_utils import LoggingContext
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training import AdversarialTraining, Training
-from robust_llm.utils import make_unique_name_to_save, maybe_make_deterministic
+from robust_llm.utils import deterministic_hash, maybe_make_deterministic
 
 
 def run_training_pipeline(args: ExperimentConfig) -> None:
@@ -52,9 +52,6 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
     train_set = untokenized_train_set.tokenize(victim.right_tokenizer)
     val_set = untokenized_val_set.tokenize(victim.right_tokenizer)
 
-    model_name_to_save = args.training.force_name_to_save or make_unique_name_to_save(
-        args.model.name_or_path
-    )
     # NOTE: the "validation" dataset is one of what will be
     # several datasets that we perform model evaluation on,
     # hence "eval_dataset" is a dict[str, Dataset], not a Dataset.
@@ -65,10 +62,11 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
             "validation": val_set,
         },
         "victim": victim,
-        "model_name_to_save": model_name_to_save,
+        "model_name": args.model.name_or_path,
         "environment_config": args.environment,
         "evaluation_config": args.evaluation,
         "run_name": args.run_name,
+        "hash": deterministic_hash(args),
     }
 
     # Set up the training environment
