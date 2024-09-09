@@ -88,6 +88,10 @@ jobs:
     steps:
       - checkout
       - prepare-virtualenv
+      - run:
+          name: Login to Weights & Biases
+          command: |
+            wandb login $WANDB_API_KEY
       - memory-monitor
       - run:
           name: Run tests
@@ -167,8 +171,6 @@ jobs:
 
             # Run pytest with the split test functions
             pytest --cov=robust_llm --cov=tests --junitxml=/tmp/test-reports/junit.xml --durations=500 -vv $(echo "$FULLTESTPATHS" | tr '\n' ' ')
-          environment:
-            WANDB_MODE: offline
       - codecov/upload
       - store-test-output
       - store-memory-monitor

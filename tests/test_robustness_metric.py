@@ -187,7 +187,6 @@ def test_compute_aib_with_different_proportion(mock_attack_output):
     assert pytest.approx(results.aib_per_decile[8], 0.01) == 8.0 / 3
 
 
-@pytest.mark.skip(reason="TODO #848: Give circleci a wandb api key")
 def test_recompute_ifs_metric():
     # TODO (Oskar): Implement the same for the AIB metric
     group_name = "ian_103a_gcg_pythia_helpful"
