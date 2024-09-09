@@ -1,5 +1,6 @@
 import dataclasses
 import glob
+import math
 import os
 from pathlib import Path
 from typing import Optional
@@ -9,6 +10,7 @@ import numpy as np
 import transformers
 import wandb
 import wandb.util
+from accelerate import Accelerator
 from datasets import Dataset
 from transformers import EvalPrediction, TrainingArguments
 from transformers.trainer import (
@@ -430,6 +432,44 @@ class AdversarialTraining(Training):
             self.num_adversarial_training_rounds,
         )
 
+    def get_total_training_steps(self) -> int:
+        num_processes = Accelerator().num_processes
+        assert self.config.adversarial is not None
+        num_training_steps = 0
+        n_train = min(
+            len(self.train_rllm_dataset),
+            self.config.adversarial.max_augmented_data_size,
+        )
+        for round in range(self.config.adversarial.num_adversarial_training_rounds):
+            num_datapoints = n_train * self.config.num_train_epochs
+            len_dataloader = math.ceil(
+                num_datapoints
+                / (self.training_arguments.train_batch_size * num_processes)
+            )
+            num_training_steps += max(
+                len_dataloader // self.training_arguments.gradient_accumulation_steps,
+                1,
+            )
+            n_train = min(
+                n_train + self.config.adversarial.num_examples_to_generate_each_round,
+                self.config.adversarial.max_augmented_data_size,
+            )
+        return num_training_steps
+
+    @property
+    def checkpoint_files(self) -> tuple[str, ...]:
+        return (
+            CORE_CHECKPOINT_FILES
+            + (
+                (
+                    SAFE_WEIGHTS_NAME
+                    if self.training_arguments.save_safetensors
+                    else WEIGHTS_NAME
+                ),
+            )
+            + ADV_FILES
+        )
+
     def get_last_checkpoint(self) -> str | None:
         """Get the directory path to the most recent completed checkpoint.
 
@@ -531,7 +571,9 @@ class AdversarialTraining(Training):
             ),
             compute_metrics=self.compute_metrics,
             tokenizer=self.victim.right_tokenizer,
+            num_training_steps=self.get_total_training_steps(),
         )
+        wandb_log({"num_training_steps": self.trainer.num_training_steps}, commit=False)
         # Since we didn't pass an accelerator when constructing the WrappedModel,
         # we need to add it here. We do not need to 'prepare' the model with the
         # accelerator because the Trainer handles that.
@@ -657,6 +699,9 @@ class AdversarialTraining(Training):
                 wandb_log(
                     {
                         "train/total_flops": self.total_flops,
+                        "train/learning_rate": adversarial_trainer.get_learning_rates()[
+                            0
+                        ],
                     },
                     commit=False,
                 )

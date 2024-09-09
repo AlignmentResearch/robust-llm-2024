@@ -28,6 +28,7 @@ from transformers import (
     TrainerState,
     TrainingArguments,
 )
+from transformers.optimization import get_scheduler
 from transformers.trainer import PREFIX_CHECKPOINT_DIR, TRAINING_ARGS_NAME, TrainOutput
 from typing_extensions import override
 
@@ -132,8 +133,10 @@ class AdversarialTrainer(RLLMTrainer):
         max_augmented_data_size: int,
         loss_rank_weight: float,
         sampling_decay: float,
+        num_training_steps: int,
         **trainer_kwargs,
     ):
+        self._lr_scheduler = None
         super().__init__(**trainer_kwargs)
 
         self.use_balanced_sampling = use_balanced_sampling
@@ -141,6 +144,7 @@ class AdversarialTrainer(RLLMTrainer):
         self.max_augmented_data_size = max_augmented_data_size
         self.loss_rank_weight = loss_rank_weight
         self.sampling_decay = sampling_decay
+        self.num_training_steps = num_training_steps
         self.rng = np.random.default_rng(seed=self.args.seed)
 
         # text_chunked is not needed for training.
@@ -168,6 +172,48 @@ class AdversarialTrainer(RLLMTrainer):
         # This is for the initial step, where we just want to get the model
         # prepared.
         self.do_dummy_train_step = False
+
+    @property
+    def lr_scheduler(self):
+        return self._lr_scheduler
+
+    @lr_scheduler.setter
+    def lr_scheduler(self, lr_scheduler):
+        """Set the learning rate scheduler and store it for continuity."""
+        if lr_scheduler is not None and self._lr_scheduler is None:
+            self._lr_scheduler = lr_scheduler
+
+    @property
+    def _created_lr_scheduler(self):
+        return self._lr_scheduler is not None
+
+    @_created_lr_scheduler.setter
+    def _created_lr_scheduler(self, value):
+        pass
+
+    @override  # type: ignore[misc]
+    def create_scheduler(
+        self,
+        num_training_steps: int,
+        optimizer: torch.optim.Optimizer | None = None,
+    ):
+        """Overrides HF Trainer.create_scheduler to ensure learning rate continuity.
+
+        N.B. do not use `num_training_steps` from the arguments!
+        """
+        if optimizer is None:
+            assert isinstance(self.optimizer, torch.optim.Optimizer)
+            optimizer = self.optimizer
+        assert isinstance(optimizer, torch.optim.Optimizer)
+        assert isinstance(self.args.lr_scheduler_kwargs, (dict, type(None)))
+        self.lr_scheduler = get_scheduler(
+            self.args.lr_scheduler_type,
+            optimizer=optimizer,
+            num_warmup_steps=self.args.get_warmup_steps(self.num_training_steps),
+            num_training_steps=self.num_training_steps,
+            scheduler_specific_kwargs=self.args.lr_scheduler_kwargs,
+        )
+        return self.lr_scheduler
 
     def maybe_update_adversarial_losses(self):
         """Update the adversarial losses if all losses have been computed."""
