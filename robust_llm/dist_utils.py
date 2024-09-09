@@ -18,6 +18,14 @@ INT_TO_DTYPE = {
 DTYPE_TO_INT = {v: k for k, v in INT_TO_DTYPE.items()}
 
 
+def is_main_process():
+    """Find out if we are the main process without relying on a Accelerator object."""
+    if dist.is_initialized():
+        return dist.get_rank() == 0
+    else:
+        return True
+
+
 def broadcast_list_of_bools(
     data: list[bool] | None, accelerator: Accelerator
 ) -> list[bool]:
@@ -50,6 +58,27 @@ def broadcast_list_of_floats(
         assert all(isinstance(x, float) for x in data)
         tensor_input_data = torch.tensor(
             data, dtype=torch.float32, device=accelerator.device
+        )
+    else:
+        tensor_input_data = None
+    tensor_data = broadcast_tensor(tensor_input_data, accelerator)
+    return tensor_data.tolist()
+
+
+def broadcast_list_of_ints(
+    data: list[int] | None,
+    accelerator: Accelerator,
+) -> list[int]:
+    """Broadcasts ints, rounding to 32-bit precision."""
+    # If we're not using distributed training, we don't need to do anything.
+    if not dist.is_initialized():
+        assert isinstance(data, list)
+        return data
+    if accelerator.is_main_process:
+        assert data is not None
+        assert all(isinstance(x, int) for x in data)
+        tensor_input_data = torch.tensor(
+            data, dtype=torch.int32, device=accelerator.device
         )
     else:
         tensor_input_data = None

@@ -81,7 +81,7 @@ def test_adv_training_pipeline_doesnt_crash():
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
             revision="2.1.0",
-            n_train=2,
+            n_train=5,
             n_val=2,
         ),
         training=TrainingConfig(
@@ -89,7 +89,7 @@ def test_adv_training_pipeline_doesnt_crash():
             save_to=None,
             adversarial=AdversarialTrainingConfig(
                 num_examples_to_generate_each_round=2,
-                num_adversarial_training_rounds=2,
+                num_adversarial_training_rounds=4,
                 training_attack=RandomTokenAttackConfig(),
             ),
         ),

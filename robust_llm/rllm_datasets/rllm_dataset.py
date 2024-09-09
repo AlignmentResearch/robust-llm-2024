@@ -7,11 +7,13 @@ from typing import Any, TypeVar, overload
 
 import datasets
 import numpy as np
+from accelerate import Accelerator
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 
 from robust_llm import logger
 from robust_llm.config.configs import DatasetConfig
+from robust_llm.dist_utils import broadcast_list_of_ints, is_main_process
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.dataset_utils import (
     EXPECTED_COLUMNS,
@@ -227,6 +229,11 @@ class RLLMDataset(ABC):
             # We use slice splits to load a subset of the dataset.
             # https://huggingface.co/docs/datasets/en/loading#slice-splits
             split=f"{split}[:{n_examples}]",
+            # By setting 'reuse_cache_if_exists' instead of
+            # 'reuse_dataset_if_exists', we avoid `datasets` reusing cached
+            # operations between processes, which was hiding a bug in
+            # get_random_subset.
+            download_mode="reuse_cache_if_exists",
         )
         assert isinstance(ds, Dataset)
         if len(ds) == 0:
@@ -246,8 +253,18 @@ class RLLMDataset(ABC):
         assert (seed is None) != (
             generator is None
         ), "Exactly one of {seed, generator} must be provided"
-        new_ds = self.ds.shuffle(seed=seed, generator=generator).select(range(n))
-        return self.with_new_ds(new_ds)
+        # When using multiple GPUs, we want to choose the same subset across
+        # processes, so we use RNG from the main process.
+        indices = []
+        if is_main_process():
+            if seed is not None:
+                generator = np.random.default_rng(seed)
+            assert generator is not None
+            indices = generator.choice(len(self.ds), n, replace=False).tolist()
+        # Create a temporary accelerator for broadcasting
+        accelerator = Accelerator()
+        indices = broadcast_list_of_ints(indices, accelerator)
+        return self.get_subset(indices)
 
     def get_subset(self: D, indices: Iterable[Any]) -> D:
         """Return an RLLMDataset with a subset of the original dataset.

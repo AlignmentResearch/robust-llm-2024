@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-import torch.distributed as dist
 import wandb
 import yaml
 from datasets import Dataset
@@ -14,6 +13,7 @@ from omegaconf import OmegaConf
 
 from robust_llm import logger
 from robust_llm.config.configs import ExperimentConfig
+from robust_llm.dist_utils import is_main_process
 
 LOGGING_LEVELS = {
     logging.DEBUG,
@@ -341,10 +341,7 @@ def should_log():
     """
     if not wandb.run:
         return False
-    if dist.is_initialized():
-        return dist.get_rank() == 0
-    else:
-        return True
+    return is_main_process()
 
 
 def wandb_log(d: dict, commit: bool) -> None:
