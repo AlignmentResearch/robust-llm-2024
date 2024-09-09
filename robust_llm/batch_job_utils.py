@@ -350,8 +350,6 @@ def launch_jobs(
     """
     repo = git_repo()
     if not skip_git_checks:
-        # Push to git as we want to run the code with the current commit.
-        repo.remote("origin").push(repo.active_branch.name).raise_if_error()
         # Check if repo is dirty.
         if repo.is_dirty(untracked_files=True):
             should_continue = ask_for_confirmation(
@@ -360,6 +358,9 @@ def launch_jobs(
             if not should_continue:
                 print("Aborting")
                 sys.exit(1)
+
+        # Push to git as we want to run the code with the current commit.
+        repo.remote("origin").push(repo.active_branch.name).raise_if_error()
 
     filtered_runs = get_unfinished_runs(runs, experiment_name)
     jobs_by_cluster, launch_id = create_jobs(

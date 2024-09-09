@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+- /dataset: EnronSpam/stable
+- /evaluation: DEFAULT
+- /environment: no-checkpointing
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
+- _self_
+
+dataset:
+  n_train: 0
+  n_val: 500
+
+evaluation:
+  num_iterations: 12800
+
+experiment_type: "evaluation"

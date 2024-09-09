@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+- /dataset: Wordlength/stable
+- /evaluation: DEFAULT
+- /environment: no-checkpointing
+- /attack@evaluation.evaluation_attack: GCG
+- _self_
+
+dataset:
+  n_train: 0
+  n_val: 500
+
+evaluation:
+  num_iterations: 100
+
+experiment_type: "evaluation"

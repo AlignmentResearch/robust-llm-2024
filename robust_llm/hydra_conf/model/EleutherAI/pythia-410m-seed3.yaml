@@ -1,0 +1,8 @@
+
+defaults:
+- /model/EleutherAI/pythia-410m@_here_
+- _self_
+
+name_or_path: "EleutherAI/pythia-410m-seed3"
+# 'main' is empty for these models, 143k steps is the last checkpoint.
+revision: "step143000"

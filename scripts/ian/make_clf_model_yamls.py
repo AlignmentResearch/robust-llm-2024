@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from robust_llm.file_utils import compute_repo_path
+
 model_sizes = ["14m", "31m", "70m", "160m", "410m", "1b", "1.4b", "2.8b", "6.9b", "12b"]
 seeds = range(5)  # 0 to 4
 dataset_version_combos = [
@@ -22,8 +24,9 @@ name_or_path: "AlignmentResearch/robust_llm_pythia-{size}_clf_{dataset}_v-ian-{v
 
 
 def create_yaml_file(size, dataset, version, seed):
+    repo_path = compute_repo_path()
     filename = Path(
-        f"/Users/ian/code/farai/robust-llm/robust_llm/hydra_conf/model/Default/clf/{dataset}/pythia-{size}-s{seed}.yaml"  # noqa: E501
+        f"{repo_path}/robust_llm/hydra_conf/model/Default/clf/{dataset}/pythia-{size}-s{seed}.yaml"  # noqa: E501
     )
     filename.parent.mkdir(parents=True, exist_ok=True)
     content = template.format(size=size, dataset=dataset, version=version, seed=seed)

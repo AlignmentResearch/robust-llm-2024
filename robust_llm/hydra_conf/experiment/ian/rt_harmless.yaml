@@ -9,4 +9,7 @@ dataset:
   n_train: 0
   n_val: 200
 
+evaluation:
+  num_iterations: 1280
+
 experiment_type: "evaluation"
