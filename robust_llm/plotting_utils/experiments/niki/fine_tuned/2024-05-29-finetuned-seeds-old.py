@@ -1,3 +1,4 @@
+from robust_llm.plotting_utils.style import set_plot_style
 from robust_llm.plotting_utils.tools import make_finetuned_plot
 
 metrics = [
@@ -5,6 +6,8 @@ metrics = [
 ]
 
 save_dir = "old"
+
+set_plot_style("paper")
 
 # PasswordMatch GCG
 make_finetuned_plot(

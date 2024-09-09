@@ -5,6 +5,8 @@ METRICS = [
 SUMMARY_KEYS = [
     "experiment_yaml.model.name_or_path",
     "experiment_yaml.training.seed",
+    "experiment_yaml.training.adversarial.num_examples_to_generate_each_round",
+    "experiment_yaml.dataset.n_train",
     "model_size",
 ]
 

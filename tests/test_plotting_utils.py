@@ -18,7 +18,7 @@ from robust_llm.wandb_utils.constants import FINAL_PYTHIA_CHECKPOINT
 def sample_data():
     return pd.DataFrame(
         {
-            "name_or_path": ["pythia-14m", "pythia-6.9b"],
+            "model_name_or_path": ["pythia-14m", "pythia-6.9b"],
             "revision": ["adv-training-round-0", "adv-training-round-1"],
             "metric_1": [0.1, 0.2],
             "metric_2": [0.3, 0.4],
@@ -65,7 +65,7 @@ def test_prepare_adv_training_data(mock_runs, sample_data):
     mock_run.history.return_value = sample_data
     mock_runs.return_value = [mock_run]
 
-    result = prepare_adv_training_data("test_name", ["summary_key"], ["metric_1"])
+    result = prepare_adv_training_data(("test_name",), ["summary_key"], ["metric_1"])
     assert not result.empty
     assert "metric_1" in result.columns
 

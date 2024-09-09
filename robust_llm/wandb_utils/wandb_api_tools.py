@@ -190,7 +190,13 @@ def get_metrics_adv_training(
             continue
 
         for key in summary_keys:
-            history[key.replace(".", "_")] = _get_value_iterative(run.summary, key)
+            # First, replace '.' with '_' in the key
+            # Next, delete the "experiment_yaml_" prefix if present
+            new_key = key.replace(".", "_")
+            if new_key.startswith("experiment_yaml_"):
+                new_key = new_key[len("experiment_yaml_") :]
+            history[new_key] = _get_value_iterative(run.summary, key)
+
         history["run_id"] = run.id
         history["run_state"] = run.state
 
