@@ -462,6 +462,18 @@ class SearchBasedRunner(abc.ABC):
         if not torch.equal(candidate_by_replacement, candidate_from_text):
             return False
 
+        reencoded_candidate_attack_tokens = self._get_tokens(
+            candidate_attack_text, return_tensors="pt"
+        )
+
+        # Check that the new attack tokens are robust to retokenization
+        # NOTE: This is *not* a weaker check that then previous one, because
+        # tokenizers can be affected by the previous tokens even when they
+        # really shouldn't be.
+        # (e.g. 'text -> 't | ext but ;'text -> ; | ' | text )
+        if not torch.equal(reencoded_candidate_attack_tokens, candidate_attack_tokens):
+            return False
+
         # Check that the non-attack parts of the prompt are the same
         if not torch.equal(
             reference_tokens[0, : indices.attack_start],
@@ -534,7 +546,7 @@ class SearchBasedRunner(abc.ABC):
             dim=1,
         )
         if combined_embeddings.shape != full_prompt_embeddings.shape:
-            logger.debug(
+            logger.warning(
                 "Crashing on example:\n"
                 "prompt_template={prompt_template}".format(
                     prompt_template=self.example.prompt_template

@@ -123,9 +123,18 @@ class GCGRunner(SearchBasedRunner):
         attack_onehot.requires_grad_()
         attack_embeddings = attack_onehot @ embed_weights
 
-        combined_embeddings = self._get_combined_embeddings(
-            full_prompt_embeddings, attack_embeddings
-        )
+        try:
+            combined_embeddings = self._get_combined_embeddings(
+                full_prompt_embeddings, attack_embeddings
+            )
+        except ValueError as e:
+            raise ValueError(
+                f"Error combining embeddings for attack text '{attack_text}', "
+                f"prompt template '{prompt_template}', and "
+                f"full prompt '{full_prompt}'. "
+                f"{e}"
+            )
+
         return full_prompt_tokens, combined_embeddings, attack_onehot
 
     def _get_replacement_candidates_from_gradients(
