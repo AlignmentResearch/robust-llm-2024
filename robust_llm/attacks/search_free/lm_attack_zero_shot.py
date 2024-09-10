@@ -21,8 +21,6 @@ class ZeroShotLMAttack(SearchFreeAttack):
     victim.
     """
 
-    REQUIRES_TRAINING = False
-
     def __init__(
         self,
         attack_config: LMAttackConfig,

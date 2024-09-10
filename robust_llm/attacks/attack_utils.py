@@ -7,7 +7,6 @@ from robust_llm.attacks.search_free.lm_attack_few_shot import FewShotLMAttack
 from robust_llm.attacks.search_free.lm_attack_zero_shot import ZeroShotLMAttack
 from robust_llm.attacks.search_free.random_token import RandomTokenAttack
 from robust_llm.attacks.text_attack.text_attack import TextAttackAttack
-from robust_llm.attacks.trl.trl import TRLAttack
 from robust_llm.config.attack_configs import (
     BeamSearchAttackConfig,
     FewShotLMAttackConfig,
@@ -17,7 +16,6 @@ from robust_llm.config.attack_configs import (
     MultipromptGCGAttackConfig,
     RandomTokenAttackConfig,
     TextAttackAttackConfig,
-    TRLAttackConfig,
 )
 from robust_llm.config.configs import AttackConfig
 from robust_llm.models import WrappedModel
@@ -80,14 +78,6 @@ def create_attack(
         # Word-swapping attacks
         case TextAttackAttackConfig():
             return TextAttackAttack(
-                attack_config=attack_config,
-                victim=victim,
-                run_name=run_name,
-                logging_name=logging_name,
-            )
-        # RL-based attacks
-        case TRLAttackConfig():
-            return TRLAttack(
                 attack_config=attack_config,
                 victim=victim,
                 run_name=run_name,

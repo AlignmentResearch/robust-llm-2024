@@ -13,7 +13,6 @@ from typing_extensions import override
 
 from robust_llm import logger
 from robust_llm.config.configs import AttackConfig
-from robust_llm.logging_utils import LoggingCounter
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
@@ -141,15 +140,12 @@ class Attack(abc.ABC):
 
     Attributes:
         CAN_CHECKPOINT: Whether the attack type supports checkpointing.
-        REQUIRES_TRAINING: Whether the attack needs to be trained before it can be
-            effectively used.
         attack_config: Configuration for the attack.
         logging_name: Name of the attack, for the purposes of logging. Possible
             examples include "training_attack" or "validation_attack".
     """
 
     CAN_CHECKPOINT: bool
-    REQUIRES_TRAINING: bool
 
     def __init__(
         self,
@@ -181,10 +177,6 @@ class Attack(abc.ABC):
             save_limit_gt_0 and run_name_not_default and self.CAN_CHECKPOINT
         )
 
-        if self.REQUIRES_TRAINING and self.attack_config.log_frequency is not None:
-            assert logging_name is not None
-            self.logging_counter = LoggingCounter(_name=logging_name)
-
     @abc.abstractmethod
     def get_attacked_dataset(
         self,
@@ -209,18 +201,6 @@ class Attack(abc.ABC):
                 `info_dict` is a dictionary of additional information (e.g.
                     metrics) about the attack.
         """
-
-    def train(self, dataset: RLLMDataset) -> None:
-        """Trains the attack on the given dataset.
-
-        This method need only be overridden (and called)
-        when `REQUIRES_TRAINING` is True.
-
-        Args:
-            dataset: Dataset of examples to train the attack on.
-                Requires `text`, `text_chunked`, and `label` columns.
-        """
-        raise NotImplementedError
 
     def states_directory(self) -> str:
         return os.path.join(self.attack_config.save_prefix, self.run_name)
@@ -310,7 +290,6 @@ class IdentityAttack(Attack):
     """
 
     CAN_CHECKPOINT = False
-    REQUIRES_TRAINING = False
 
     @override
     def get_attacked_dataset(

@@ -39,7 +39,6 @@ class SearchBasedAttack(Attack):
     """
 
     CAN_CHECKPOINT = True
-    REQUIRES_TRAINING = False
 
     def __init__(
         self,

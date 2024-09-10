@@ -12,7 +12,6 @@ from robust_llm.config import (
     ModelConfig,
     RandomTokenAttackConfig,
     TextAttackAttackConfig,
-    TRLAttackConfig,
 )
 from robust_llm.config.attack_configs import (
     GCGAttackConfig,
@@ -215,33 +214,6 @@ def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
         victim_success_callback=phone_number_in_generation_callback,
     )
     exp_config.evaluation.num_iterations = 2
-    _double_test_attack(exp_config)
-
-
-@pytest.mark.skip(
-    reason="GH#770: TRL is non-deterministic, so this test is failing."
-    " If we care about using TRL in the future, we should fix this."
-)
-def test_trl(exp_config: ExperimentConfig) -> None:
-    assert exp_config.evaluation is not None
-    exp_config.evaluation.evaluation_attack = TRLAttackConfig(
-        batch_size=2,
-        mini_batch_size=2,
-        gradient_accumulation_steps=1,
-        ppo_epochs=1,
-        max_new_tokens=2,
-        model_save_path_prefix=None,
-        adversary=ModelConfig(
-            name_or_path="EleutherAI/pythia-14m",
-            family="pythia",
-            # Our inference type for the adversary is different because
-            # we need a ForCausalLMWithValueHead model
-            inference_type="trl",
-            strict_load=False,
-        ),
-    )
-    exp_config.dataset.n_val = 2
-
     _double_test_attack(exp_config)
 
 

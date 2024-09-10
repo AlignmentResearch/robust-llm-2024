@@ -20,8 +20,6 @@ class RandomTokenAttack(SearchFreeAttack):
     of replacing it if the chunk is PERTURBABLE.
     """
 
-    REQUIRES_TRAINING = False
-
     def __init__(
         self,
         attack_config: RandomTokenAttackConfig,

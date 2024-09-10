@@ -19,7 +19,6 @@ dependencies = [
     # v5.0.0 of conllu is not available on PyPI, can remove pin once fixed:
     # https://github.com/EmilStenstrom/conllu/issues/96
     "conllu==4.5.3",
-    "trl==0.8.3",
     "wandb==0.16.6",
     "semver==3.0.2",
     "detoxify==0.5.2",
@@ -87,7 +86,7 @@ namespaces = false
 profile = "black"
 # Necessary because of directories with
 # packages with the same name
-known_third_party = ["datasets", "trl", "wandb"]
+known_third_party = ["datasets", "wandb"]
 
 [tool.pyright]
 venvPath = "."

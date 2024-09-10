@@ -53,15 +53,13 @@ class ModelConfig:
     """Config used for models.
 
     This includes the main (victim) model, as well as decoders for perplexity
-    defenses and adversaries for TRL.
+    defenses.
     name_or_path: Either HF name or path to model checkpoint.
     family: Which model family to load (e.g. "pythia"). MODEL_FAMILIES lists valid
         values.
     revision: The huggingface revision of the model.
     inference_type: The type of inference the model is used for:
-        ('classification', 'generation', or 'trl').
-        The reason 'trl' is a separate category is that we need to load a
-        model with a value head rather than a regular generation model.
+        ('classification' or 'generation').
     strict_load: Whether to enforce that no weights are ignored or randomly
         initialized while loading. Recommended to be True for evaluation (where the
         model should already be set up for the task) and False for training (where

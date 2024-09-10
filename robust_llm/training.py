@@ -27,7 +27,6 @@ from transformers.trainer import (
 from typing_extensions import override
 
 from robust_llm import logger
-from robust_llm.attacks.attack import Attack
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.callbacks import CustomLoggingWandbCallback
 from robust_llm.config.configs import (
@@ -614,11 +613,6 @@ class AdversarialTraining(Training):
                 self.log_datasets()
 
         checkpoint = self.get_last_checkpoint()
-        if checkpoint is not None and self.training_attack.REQUIRES_TRAINING:
-            logger.warning(
-                "Resumption not yet supported for attacks that require training. "
-            )
-            checkpoint = None
         if checkpoint is not None:
             logger.info(f"Loading adversarial state from {checkpoint}")
             state = AdversarialTrainingState.load(checkpoint)
@@ -711,37 +705,6 @@ class AdversarialTraining(Training):
             # Set the model to eval mode for the attacks. Model is set to train mode by
             # HF Trainer during training, otherwise we want it in eval mode.
             self.victim.eval()
-
-            # Train the train/validation attacks if they need training.
-            logger.info(
-                "Adversary (training_attack) started training in round %s ", self.round
-            )
-            self._log_debug_info()
-            _maybe_train_attack(
-                attack=self.training_attack,
-                dataset=self.train_rllm_dataset,
-                train_or_validation="train",
-                round=self.round,
-            )
-            logger.info(
-                "Adversary (training_attack) finished training in round %s ", self.round
-            )
-            self._log_debug_info()
-
-            logger.info(
-                "Adversary (validation_attack) started training in round %s", self.round
-            )
-            self._log_debug_info()
-            _maybe_train_attack(
-                attack=self.validation_attack,
-                dataset=self.eval_rllm_dataset["validation"],
-                train_or_validation="validation",
-                round=self.round,
-            )
-            logger.info(
-                "Adversary (validation_attack) finished training in round %s ",
-                self.round,
-            )
 
             # Perform adversarial evaluation every round
             victim_log_counter = self.victim_training_logging_counter
@@ -870,25 +833,3 @@ class AdversarialTraining(Training):
             "Current logging counts: %s",
             self.victim_training_logging_counter._parent,
         )
-
-
-def _maybe_train_attack(
-    attack: Attack,
-    dataset: RLLMDataset,
-    train_or_validation: str,
-    round: int,
-) -> None:
-    assert train_or_validation in ["train", "validation"]
-    if attack.REQUIRES_TRAINING:
-        train_this_round = False
-        train_frequency = attack.attack_config.train_frequency
-        if train_frequency is None and round == 0:
-            train_this_round = True
-        elif train_frequency is not None and round % train_frequency == 0:
-            train_this_round = True
-
-        if train_this_round:
-            logger.info(
-                "Training the %s attack on round %s", train_or_validation, round
-            )
-            attack.train(dataset=dataset)

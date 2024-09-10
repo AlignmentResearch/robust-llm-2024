@@ -29,7 +29,6 @@ from transformers import (
 )
 from transformers.modeling_outputs import ModelOutput
 
-from robust_llm import logger
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import (
     AutoregressiveOutput,
@@ -37,7 +36,6 @@ from robust_llm.models.model_utils import (
     SuppressPadTokenWarning,
     build_dataloader,
     dict_to_device,
-    get_num_parameters,
     load_hf_model,
     maybe_no_grad,
     prepare_model_with_accelerate,
@@ -102,7 +100,7 @@ class WrappedModel(ABC):
                 left-padded version will be loaded if needed.)
             accelerator: The accelerator to use.
             inference_type: The type of inference this model is for ('generation'
-                or 'classification' or 'trl')
+                or 'classification')
             train_minibatch_size: The minibatch size to use for training.
             eval_minibatch_size: The minibatch size to use for evaluation.
             gradient_accumulation_steps: The number of minibatches to accumulate
@@ -120,7 +118,7 @@ class WrappedModel(ABC):
         # because the model will be sharded across devices.
         # NOTE: If we switch to loading directly to devices, we'll need to change how we
         # compute the number of parameters.
-        self._n_params = get_num_parameters(model)
+        self._n_params = model.num_parameters()
         self.family = family
         self.accelerator = accelerator
         if self.accelerator is not None:
@@ -196,12 +194,6 @@ class WrappedModel(ABC):
             inputs = self.accelerator.gather_for_metrics(inputs)
             if not self.accelerator.is_main_process:
                 return
-        if not inputs:
-            # TODO: why does this happen for TRL?
-            logger.warning(
-                "No inputs found in forward hook (this is expected for TRL)."
-            )
-            return
         self.n_forward_calls += 1
         self.input_shapes.append(inputs[0].shape)
         self._input_dict = {"input_ids": inputs[0]}

@@ -6,7 +6,6 @@ from omegaconf import MISSING
 
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.config.callback_configs import CallbackConfig
-from robust_llm.config.constants import SHARED_DATA_DIR
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.model_utils import InferenceType
 
@@ -233,76 +232,6 @@ class FewShotLMAttackConfig(LMAttackConfig):
 
 
 @dataclass
-class TRLAttackConfig(AttackConfig):
-    """Options specific for TRL attacks.
-
-    Attributes:
-        batch_size:
-            The TRL batch size (how many examples are passed
-            to a single call of PPO's "step" function).
-        mini_batch_size:
-            The TRL minibatch size (how many examples to load
-            onto the gpu at once).
-        gradient_accumulation_steps:
-            The TRL gradient accumulation steps (how many minibatches
-            to accumulate before taking a single gradient update step).
-        learning_rate:
-            The learning rate to use for TRL.
-        ppo_epochs:
-            The number of ppo epochs to run TRL on the provided dataset.
-        adversary:
-            The model to use as the adversary.
-        min_length:
-            The minimum number of tokens to generate.
-            If -1, there is no minimum length.
-            Name and convention copied from trl code.
-        max_new_tokens:
-            The maximum number of tokens to generate.
-            Name copied from trl code.
-        rewards_from_victim_callback:
-            The config of the ScoringCallback to use to compute rewards for the
-            inputs. Must take text as input, and return floats that can be used
-            as rewards for the inputs. Should probably be "losses_from_text".
-            which is equivalent to the old "minus_correct_logprob"
-            `reward_type`. The other `reward_type`s can be implemented as
-            ScoringCallbacks.
-            TODO(GH#406): Add the other reward types as ScoringCallbacks.
-        model_name_to_save:
-            The name to use for saving the model.
-        model_save_path_prefix: Where to save the final
-            checkpoint. If None, the model is not saved.
-            Otherwise, the model is saved to a location starting with the
-            specified prefix.
-    """
-
-    batch_size: int = 128
-    mini_batch_size: int = 128
-    gradient_accumulation_steps: int = 1
-    learning_rate: float = 1.41e-5
-    ppo_epochs: int = 10
-
-    adversary: ModelConfig = MISSING
-
-    min_length: int = -1
-    max_new_tokens: int = 3
-
-    rewards_from_victim_callback: CallbackConfig = field(
-        default_factory=lambda: CallbackConfig(
-            callback_name="losses_from_text", callback_return_type="tensor"
-        )
-    )
-
-    model_name_to_save: str = "trl"
-    model_save_path_prefix: Optional[str] = SHARED_DATA_DIR
-
-    def __post_init__(self):
-        super().__post_init__()
-        assert (
-            self.batch_size == self.mini_batch_size * self.gradient_accumulation_steps
-        )
-
-
-@dataclass
 class SearchBasedAttackConfig(AttackConfig):
     """
     Required options with defaults for search based attacks.
@@ -413,7 +342,6 @@ cs.store(
     name="RANDOM_TOKEN",
     node=RandomTokenAttackConfig,
 )
-cs.store(group="attack", name="TRL", node=TRLAttackConfig)
 cs.store(group="attack", name="GCG", node=GCGAttackConfig)
 cs.store(
     group="attack",

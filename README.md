@@ -151,14 +151,14 @@ This line overrides whatever value `dataset.n_val` had before (which was `0`, fr
 #### Examples of different kinds of configs
 - See `robust_llm/hydra_conf/Eval/_template.yaml` for a template for `evaluation` experiments that explains some of what's going on
     - See also `_template.yaml` under `AdvTraining`, `Training`, and `DefendedEval`.
-- See `random-token-n-its-1280` and `trl-stronger-adversary` in `robust_llm/hydra_conf/attack` for examples of extending/overriding the `AttackConfig` defaults.
+- See `random-token-n-its-1280` and `gcg-standard` in `robust_llm/hydra_conf/attack` for examples of extending/overriding the `AttackConfig` defaults.
 - See `robust_llm/hydra_conf/experiment/ian/20240429_pm_random-token-fted.yaml` for an example of extending a generic experiment `yaml` for a specific experiment.
 - See the scripts in `experiments/_example` for examples of how these configs could be used for real experiments.
 
 #### Other gotchas
 - On the command line or in a Python experiment script:
     - When we want to override a default value with a _config_ (like `ModelConfig`), not just a _value_ (like `model_family`), if the default value comes from the `dataclass` and was not set using the [Defaults List](https://hydra.cc/docs/advanced/defaults_list/), then we have to [prepend a `+`](https://hydra.cc/docs/1.2/advanced/override_grammar/basic/#modifying-the-defaults-list) to the override string to add it to the Defaults List.
-    - An example of this is given in `experiments/_example/example_003_Eval_imdb_trl-different-adversaries.py`.
+    - An example of this is given in `experiments/_example/example_004_Eval_pm_random-token_and_gcg.py`.
 
 ### Running a single batch job
 

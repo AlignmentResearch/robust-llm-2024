@@ -2,7 +2,6 @@
 
 from accelerate import Accelerator
 
-from robust_llm import logger
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.defenses import make_defended_model
 from robust_llm.evaluation import do_adversarial_evaluation
@@ -45,18 +44,8 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
         training=False,
     )
 
-    if attack.REQUIRES_TRAINING:
-        assert validation is not None
-        logger.info("Training attack before evaluation")
-        # We train the attack on the *validation* dataset here.
-        # In the future, we might want to (also or only) train on a
-        # different dataset, such as the train dataset.
-        attack.train(dataset=validation)
-        global_step_count = attack.logging_counter.root.step_count
-        global_datapoint_count = attack.logging_counter.root.datapoint_count
-    else:
-        global_step_count = 0
-        global_datapoint_count = 0
+    global_step_count = 0
+    global_datapoint_count = 0
 
     if args.defense is not None:
         # TODO (GH#322): Propagate RLLMDataset into defenses.

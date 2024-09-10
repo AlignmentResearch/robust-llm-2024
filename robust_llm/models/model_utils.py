@@ -18,7 +18,6 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizerBase,
 )
-from trl import AutoModelForCausalLMWithValueHead
 
 if TYPE_CHECKING:
     from robust_llm.models import WrappedModel
@@ -34,13 +33,10 @@ class InferenceType(Enum):
     """The type of inference the model is used for.
 
     This is used to determine the type of model to load from HuggingFace.
-    The reason TRL models are a separate category is that we need to load a
-    model with a value head.
     """
 
     CLASSIFICATION = "classification"
     GENERATION = "generation"
-    TRL = "trl"
 
 
 @dataclass(frozen=True)
@@ -129,20 +125,6 @@ def load_hf_model(
                     torch_dtype=torch_dtype,
                     attn_implementation=attention_implementation,
                 )
-        case InferenceType.TRL:
-            # We can't use output_loading_info=True because it's not supported
-            # for TRL models. This means strict_load must be False.
-            if strict_load:
-                raise ValueError(
-                    "strict_load must be False for TRL models because"
-                    " `output_loading_info` is not supported."
-                )
-            model = AutoModelForCausalLMWithValueHead.from_pretrained(
-                name_or_path,
-                revision=revision,
-                torch_dtype=torch_dtype,
-                attn_implementation=attention_implementation,
-            )
 
     # Optionally, check that there are no weights skipped or randomly initialized.
     if strict_load:
@@ -503,17 +485,3 @@ def remove_padding_tokens(
         The list of texts with padding tokens removed.
     """
     return [text.replace(tokenizer.pad_token, "") for text in texts]
-
-
-def get_num_parameters(model: PreTrainedModel) -> int:
-    """Get the number of parameters in a model.
-
-    Needed because TRL models don't have num_parameters attribute.
-    """
-    try:
-        return model.num_parameters()
-    except AttributeError:
-        try:
-            return sum(p.numel() for p in model.parameters())
-        except Exception as e:
-            raise ValueError(f"Could not get num parameters for {type(model)}") from e

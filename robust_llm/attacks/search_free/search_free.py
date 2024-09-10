@@ -54,7 +54,6 @@ class SearchFreeAttack(Attack, ABC):
     """
 
     CAN_CHECKPOINT = True
-    REQUIRES_TRAINING = False
     victim: WrappedModel
     prompt_attack_mode: PromptAttackMode
     victim_success_callback: BinaryCallback | TensorCallback

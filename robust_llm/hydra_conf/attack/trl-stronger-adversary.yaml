@@ -1,6 +1,0 @@
-defaults:
-- TRL
-- /model@adversary: EleutherAI/pythia-31m
-
-adversary:
-  inference_type: "trl"

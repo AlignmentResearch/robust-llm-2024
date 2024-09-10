@@ -9,7 +9,7 @@ defaults:
 - /evaluation: DEFAULT
 # This line says to take a config from `/attack` (which points to
 # `hydra_config/attack`) and place it at `evaluation.evaluation_attack`.
-# So if we wanted to use TRL, we would put trl in place of ???
+# So if we wanted to use GCG, we would put gcg-standard in place of ???
 - /attack@evaluation.evaluation_attack: ???
 - /defense: ???
 # If the defense needs a decoder, this is how it can be specified.

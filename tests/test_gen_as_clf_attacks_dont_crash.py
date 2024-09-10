@@ -9,7 +9,6 @@ from robust_llm.config import (
     ExperimentConfig,
     ModelConfig,
     RandomTokenAttackConfig,
-    TRLAttackConfig,
 )
 from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAttackConfig
 from robust_llm.config.configs import EvaluationConfig
@@ -106,26 +105,4 @@ def test_doesnt_crash_gen_as_clf_multiprompt_gcg(exp_config: ExperimentConfig) -
         n_attack_tokens=3,
     )
     exp_config.evaluation.num_iterations = 2
-    _test_doesnt_crash(exp_config)
-
-
-def test_doesnt_crash_gen_as_clf_trl(exp_config: ExperimentConfig) -> None:
-    assert exp_config.evaluation is not None
-    exp_config.evaluation.evaluation_attack = TRLAttackConfig(
-        batch_size=2,
-        mini_batch_size=2,
-        gradient_accumulation_steps=1,
-        ppo_epochs=1,
-        max_new_tokens=2,
-        model_save_path_prefix=None,
-        adversary=ModelConfig(
-            name_or_path="EleutherAI/pythia-14m",
-            family="pythia",
-            # Our inference type for the adversary is different because
-            # we need a ForCausalLMWithValueHead model
-            inference_type="trl",
-            strict_load=False,
-        ),
-    )
-
     _test_doesnt_crash(exp_config)

@@ -163,7 +163,6 @@ class TextAttackAttack(Attack):
     """Attack using the TextAttack library."""
 
     CAN_CHECKPOINT = False
-    REQUIRES_TRAINING = False
 
     def __init__(
         self,
