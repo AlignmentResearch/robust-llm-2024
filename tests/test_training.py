@@ -245,6 +245,10 @@ def test_equal_weight_adv_examples(adv_trainer: AdversarialTrainer):
 
 
 def test_compute_loss(adv_trainer: AdversarialTrainer):
+    # Fixes Accelerator state being shared across tests, which results in
+    # gather_for_metrics issues inside the compute_loss method.
+    adv_trainer.accelerator.gradient_state.active_dataloader = None
+
     adv_trainer.adversarial_indices = [1, 2, 0]
     adv_trainer.train_dataset = Dataset.from_dict(
         {

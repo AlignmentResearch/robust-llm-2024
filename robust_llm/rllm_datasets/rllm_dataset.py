@@ -229,10 +229,11 @@ class RLLMDataset(ABC):
             # We use slice splits to load a subset of the dataset.
             # https://huggingface.co/docs/datasets/en/loading#slice-splits
             split=f"{split}[:{n_examples}]",
-            # By setting 'reuse_cache_if_exists' instead of
-            # 'reuse_dataset_if_exists', we avoid `datasets` reusing cached
-            # operations between processes, which was hiding a bug in
-            # get_random_subset.
+            # We set 'reuse_cache_if_exists' to reuse the downloaded file from
+            # HFHub for unit tests, but *not* reuse cached dataset operations.
+            # Ideally we'd use 'force_redownload' to make sure every run happens
+            # under the same conditions (no cache), but this is a compromise for
+            # unit test speed.
             download_mode="reuse_cache_if_exists",
         )
         assert isinstance(ds, Dataset)
