@@ -420,7 +420,7 @@ class SearchBasedRunner(abc.ABC):
         filtered_candidates = []
         for attack_text, candidate in text_replacement_pairs:
             if not self._should_keep_candidate(attack_text, candidate):
-                logger.debug(f"Filtered out candidate {attack_text}")
+                logger.debug(f"Filtered out {candidate=} on {attack_text=}")
                 continue
 
             filtered_candidates.append((attack_text, candidate))
