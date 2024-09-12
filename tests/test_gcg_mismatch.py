@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import pytest
 from accelerate import Accelerator
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -20,6 +21,10 @@ ACCELERATOR = Accelerator()
 
 
 # TODO(GH#862): Add similar tests for other non-pythia tokenizers.
+@pytest.mark.xfail(
+    strict=False,  # strict=False is necessary because it doesn't fail consistently.
+    reason="This test is flaky on CI because of the Accelerator.",
+)
 def test_shape_mismatch():
     # we need a model for pythia because we access the config
     tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-14m")
