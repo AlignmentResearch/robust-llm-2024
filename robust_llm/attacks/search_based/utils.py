@@ -1,7 +1,9 @@
+import copy
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 import torch
+from typing_extensions import overload
 
 from robust_llm.models.prompt_templates import AttackChunks, PromptTemplate
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
@@ -30,23 +32,56 @@ class ReplacementCandidate:
     attack_position: int
     token_id: int
 
+    @overload
     def compute_tokens_after_replacement(
-        self, attack_tokens: torch.Tensor
-    ) -> torch.Tensor:
+        self,
+        attack_tokens: torch.Tensor | list[list[int]],
+        tensors: None,
+    ) -> list[list[int]]: ...
+
+    @overload
+    def compute_tokens_after_replacement(
+        self,
+        attack_tokens: torch.Tensor | list[list[int]],
+        tensors: str = "pt",
+    ) -> torch.Tensor: ...
+
+    def compute_tokens_after_replacement(
+        self,
+        attack_tokens: torch.Tensor | list[list[int]],
+        tensors: str | None = "pt",
+    ) -> torch.Tensor | list[list[int]]:
         """Make the replacement in a given sequence of attack tokens.
+
+        N.B. Assumes that the attack tokens are a single example, i.e., batch size 1.
 
         Args:
             attack_tokens: The tokens to replace, of shape [1, n_attack_tokens]
+            tensors: Whether to accept/return PyTorch tensors or lists.
 
         Returns:
             The attack tokens with replacement, also of shape [1, n_attack_tokens]
         """
-        assert attack_tokens.dim() == 2, "Expected 2D tensor"
-        assert attack_tokens.shape[0] == 1, "Expected batch size of 1"
 
-        full_attack_tokens = attack_tokens.clone()
-        full_attack_tokens[0, self.attack_position] = self.token_id
-        return full_attack_tokens
+        if tensors == "pt":
+            if not isinstance(attack_tokens, torch.Tensor):
+                raise ValueError("Expected PyTorch tensor with tensors='pt'")
+            assert attack_tokens.dim() == 2, "Expected 2D tensor"
+            assert attack_tokens.shape[0] == 1, "Expected batch size of 1"
+
+            full_attack_tokens_tensor = attack_tokens.clone()
+            full_attack_tokens_tensor[0, self.attack_position] = self.token_id
+            return full_attack_tokens_tensor
+
+        elif tensors is None:
+            if not isinstance(attack_tokens, list):
+                raise ValueError("Expected list with tensors=None")
+            assert len(attack_tokens) == 1, "Expected batch size of 1"
+            full_attack_tokens_list = copy.deepcopy(attack_tokens)
+            full_attack_tokens_list[0][self.attack_position] = self.token_id
+            return full_attack_tokens_list
+        else:
+            raise ValueError(f"Invalid value for tensors: {tensors}")
 
 
 @dataclass

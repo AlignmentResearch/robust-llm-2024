@@ -1,6 +1,8 @@
 import abc
+import copy
 import random
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any, Literal, overload
 
 import torch
@@ -17,6 +19,112 @@ from robust_llm.attacks.search_based.utils import (
 from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.models import WrappedModel
 from robust_llm.scoring_callbacks import CallbackInput, build_tensor_scoring_callback
+
+
+@dataclass(frozen=True)
+class ReencodedReplacementCandidate:
+    """A single candidate replacement with tokenization checks.
+
+    We consider replacing a single token in the attack, decoding and reencoding the
+    prompt, and checking if the tokenization changes. If it doesn't, we consider the
+    candidate as a valid replacement.
+
+    Attributes:
+        text_replacement_pair: The attack text and the replacement candidate.
+        attack_tokens: The attack token ids after the replacement.
+        attack_text: The attack text after the replacement (from decoding
+            `attack_tokens`).
+        reencoded_attack_tokens: The attack token ids after decoding and
+            re-encoding.
+        tokens_by_replacement: The token ids of the full prompt by directly
+            replacing the candidate attack token
+        tokens_from_text: The token ids of the prompt after the replacement and
+            re-tokenization.
+    """
+
+    text_replacement_pair: tuple[str, ReplacementCandidate]
+    attack_tokens: list[int]
+    attack_text: str
+    reencoded_attack_tokens: list[int]
+    tokens_by_replacement: list[int]
+    tokens_from_text: list[int]
+
+    def does_by_placement_match_from_text(self) -> bool:
+        """Check that the two ways of building the new prompt match"""
+        match = self.tokens_by_replacement == self.tokens_from_text
+        if not match:
+            logger.debug(
+                f"Filtered out {self}"
+                "because candidate_by_replacement != candidate_from_text"
+            )
+        return match
+
+    def does_reencoded_match_candidate(self) -> bool:
+        """Check that the new attack tokens are robust to retokenization.
+
+        NOTE: This is *not* a weaker check that then previous one, because
+        tokenizers can be affected by the previous tokens even when they
+        really shouldn't be.
+        (e.g. 'text -> 't | ext but ;'text -> ; | ' | text )
+        """
+        match = self.reencoded_attack_tokens == self.attack_tokens
+        if not match:
+            logger.debug(
+                f"Filtered out {self}"
+                "because reencoded_cand_attack_tokens != candidate_attack_tokens"
+            )
+        return match
+
+    def is_pre_attack_unchanged(
+        self, reference_tokens: list[int], indices: AttackIndices
+    ) -> bool:
+        """Check that the prompt before the attack is unchanged"""
+        match = (
+            reference_tokens[: indices.attack_start]
+            == self.tokens_by_replacement[: indices.attack_start]
+        )
+        if not match:
+            logger.debug(
+                f"Filtered out {self.attack_text=}"
+                "because reference_tokens[: indices.attack_start] != "
+                "candidate_by_replacement[: indices.attack_start]"
+            )
+        return match
+
+    def is_post_attack_unchanged(
+        self, reference_tokens: list[int], indices: AttackIndices
+    ) -> bool:
+        """Check that the prompt after the attack is unchanged"""
+        match = (
+            reference_tokens[indices.attack_end :]
+            == self.tokens_by_replacement[indices.attack_end :]
+        )
+        if not match:
+            logger.debug(
+                f"Filtered out {self.attack_text=}"
+                "because reference_tokens[indices.attack_end :] != "
+                "candidate_by_replacement[indices.attack_end :]"
+            )
+        return match
+
+    def is_replacement_changed(self, reference_tokens: list[int]) -> bool:
+        """Check that the new prompt is not identical to the old one"""
+        is_novel = reference_tokens != self.tokens_by_replacement
+        if not is_novel:
+            logger.debug(
+                f"Filtered out {self.attack_text=}"
+                "because reencoded_cand_attack_tokens != candidate_attack_tokens"
+            )
+        return is_novel
+
+    def is_valid(self, reference_tokens: list[int], indices: AttackIndices) -> bool:
+        return (
+            self.does_by_placement_match_from_text()
+            and self.does_reencoded_match_candidate()
+            and self.is_pre_attack_unchanged(reference_tokens, indices)
+            and self.is_post_attack_unchanged(reference_tokens, indices)
+            and self.is_replacement_changed(reference_tokens)
+        )
 
 
 class SearchBasedRunner(abc.ABC):
@@ -389,6 +497,74 @@ class SearchBasedRunner(abc.ABC):
 
         return evaluated_candidates, {"logits": cb_out.info["logits"]}
 
+    def prep_candidates_using_batched_tokenization(
+        self,
+        text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
+        reference_tokens: list[int],
+        reference_attack_tokens: list[list[int]],
+    ) -> list[ReencodedReplacementCandidate]:
+        """Prepares the candidates using batched tokenization.
+
+        Attributes:
+            text_replacement_pairs: A list of (attack_text, replacement) pairs to
+                prepare.
+            reference_tokens: The token ids of a valid full prompt, used to check
+                for tokenization changes.
+            reference_attack_tokens: The token ids of a valid attack string. This
+                is a sub-list of reference_tokens.
+        """
+        template = self.example.prompt_template
+        indices = self.attack_indices
+
+        # Perform the replacements and get the new attack tokens.
+        candidate_attack_tokens_list = [
+            candidate.compute_tokens_after_replacement(
+                reference_attack_tokens, tensors=None
+            )[0]
+            for _, candidate in text_replacement_pairs
+        ]
+
+        # Decode and re-encode to check for tokenization differences.
+        candidate_attack_text_list = self.victim.batch_decode(
+            candidate_attack_tokens_list
+        )
+        reencoded_cand_attack_tokens_list = self._get_tokens(
+            candidate_attack_text_list, return_tensors=None
+        )
+
+        # candidate_by_replacement_list holds the new prompt tokens created
+        # *by replacement* of a single attack token in the tokenized prompt with the
+        # candidate token.
+        candidate_by_replacement_list = [
+            copy.deepcopy(reference_tokens) for _ in range(len(text_replacement_pairs))
+        ]
+        for i, candidate_attack_tokens in enumerate(candidate_attack_tokens_list):
+            candidate_by_replacement_list[i][
+                indices.attack_start : indices.attack_end
+            ] = candidate_attack_tokens
+
+        candidate_text_list = [
+            template.build_prompt(attack_text=candidate_attack_text)
+            for candidate_attack_text in candidate_attack_text_list
+        ]
+
+        # candidate_from_text_list holds the new prompt tokens created by detokenizing
+        # the new attack, adding it to the prompt, and tokenizing the whole thing.
+        candidate_from_text_list = self._get_tokens(
+            candidate_text_list, return_tensors=None
+        )
+        return [
+            ReencodedReplacementCandidate(
+                text_replacement_pair=text_replacement_pairs[i],
+                attack_tokens=candidate_attack_tokens_list[i],
+                attack_text=candidate_attack_text_list[i],
+                reencoded_attack_tokens=reencoded_cand_attack_tokens_list[i],
+                tokens_by_replacement=candidate_by_replacement_list[i],
+                tokens_from_text=candidate_from_text_list[i],
+            )
+            for i in range(len(text_replacement_pairs))
+        ]
+
     def _filter_candidates(
         self,
         text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
@@ -406,24 +582,34 @@ class SearchBasedRunner(abc.ABC):
 
         Args:
             text_replacement_pairs: A list of (attack_text, replacement) pairs
-                to filter. The attack text is the text to replace, and the
+                to filter. The attack text is the current text to replace, and the
                 replacement is the token to replace it with.
 
         Returns:
             A list of the candidates that didn't result in a change in tokenization
                 and that changed the attack text
         """
+        assert len(text_replacement_pairs) > 0
+        indices = self.attack_indices
+        template = self.example.prompt_template
 
-        # The following code is written in a way so that we process whole lists, hence
-        # tokenization (which is most costly) can be batched.
+        # The reference only needs to be computed once as it's the same for all
+        # candidates.
+        current_attack_text = text_replacement_pairs[0][0]
+        reference_prompt = template.build_prompt(attack_text=current_attack_text)
+        reference_tokens = self._get_tokens(reference_prompt, return_tensors=None)[0]
+        reference_attack_tokens = self._get_tokens(
+            current_attack_text, return_tensors=None
+        )
 
-        filtered_candidates = []
-        for attack_text, candidate in text_replacement_pairs:
-            if not self._should_keep_candidate(attack_text, candidate):
-                logger.debug(f"Filtered out {candidate=} on {attack_text=}")
-                continue
-
-            filtered_candidates.append((attack_text, candidate))
+        candidate_replacements = self.prep_candidates_using_batched_tokenization(
+            text_replacement_pairs, reference_tokens, reference_attack_tokens
+        )
+        filtered_candidates = [
+            cand.text_replacement_pair
+            for cand in candidate_replacements
+            if cand.is_valid(reference_tokens, indices)
+        ]
 
         logger.debug(
             f"Filtered from {len(text_replacement_pairs)} to {len(filtered_candidates)}"
@@ -432,67 +618,6 @@ class SearchBasedRunner(abc.ABC):
             logger.warning("All candidates were filtered out!")
 
         return filtered_candidates
-
-    def _should_keep_candidate(
-        self,
-        attack_text: str,
-        candidate: ReplacementCandidate,
-    ) -> bool:
-        """Filter out candidates that would change tokenization."""
-        template = self.example.prompt_template
-        indices = self.attack_indices
-        reference_prompt = template.build_prompt(attack_text=attack_text)
-        reference_tokens = self._get_tokens(reference_prompt, return_tensors="pt")
-        reference_attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
-
-        candidate_attack_tokens = candidate.compute_tokens_after_replacement(
-            reference_attack_tokens
-        )
-        candidate_attack_text = self.victim.batch_decode(candidate_attack_tokens)[0]
-
-        candidate_by_replacement = reference_tokens.clone()
-        candidate_by_replacement[0, indices.attack_start : indices.attack_end] = (
-            candidate_attack_tokens
-        )
-
-        candidate_text = template.build_prompt(attack_text=candidate_attack_text)
-        candidate_from_text = self._get_tokens(candidate_text, return_tensors="pt")
-
-        # Check that the two ways of building the new prompt match
-        if not torch.equal(candidate_by_replacement, candidate_from_text):
-            return False
-
-        reencoded_candidate_attack_tokens = self._get_tokens(
-            candidate_attack_text, return_tensors="pt"
-        )
-
-        # Check that the new attack tokens are robust to retokenization
-        # NOTE: This is *not* a weaker check that then previous one, because
-        # tokenizers can be affected by the previous tokens even when they
-        # really shouldn't be.
-        # (e.g. 'text -> 't | ext but ;'text -> ; | ' | text )
-        if not torch.equal(reencoded_candidate_attack_tokens, candidate_attack_tokens):
-            return False
-
-        # Check that the non-attack parts of the prompt are the same
-        if not torch.equal(
-            reference_tokens[0, : indices.attack_start],
-            candidate_by_replacement[0, : indices.attack_start],
-        ):
-            return False
-
-        if not torch.equal(
-            reference_tokens[0, indices.attack_end :],
-            candidate_by_replacement[0, indices.attack_end :],
-        ):
-            return False
-
-        # Check that the new prompt is not identical to the old one
-        if torch.equal(reference_tokens, candidate_by_replacement):
-            return False
-
-        # If all checks pass, use the candidate
-        return True
 
     def _tokenization_changed(
         self,

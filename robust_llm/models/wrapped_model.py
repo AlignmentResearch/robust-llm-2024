@@ -952,7 +952,7 @@ class WrappedModel(ABC):
 
     def batch_decode(
         self,
-        token_ids: torch.Tensor | list[torch.Tensor],
+        token_ids: torch.Tensor | list[torch.Tensor] | list[list[int]],
         skip_special_tokens: bool = True,
     ) -> list[str]:
         """Decodes the token ids into a list of strings.
