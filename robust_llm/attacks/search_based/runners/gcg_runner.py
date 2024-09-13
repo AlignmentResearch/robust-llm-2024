@@ -134,7 +134,6 @@ class GCGRunner(SearchBasedRunner):
                 f"full prompt '{full_prompt}'. "
                 f"{e}"
             )
-
         return full_prompt_tokens, combined_embeddings, attack_onehot
 
     def _get_replacement_candidates_from_gradients(

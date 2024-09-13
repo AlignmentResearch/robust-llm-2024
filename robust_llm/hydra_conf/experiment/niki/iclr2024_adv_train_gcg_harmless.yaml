@@ -1,0 +1,19 @@
+# @package _global_
+defaults:
+- /experiment/AdvTraining/standard-adv-training
+- /dataset: Harmless/stable
+- /attack@training.adversarial.training_attack: GCG
+- /attack@evaluation.evaluation_attack: GCG
+- _self_
+
+environment:
+  deterministic: true
+
+training:
+  adversarial:
+    attack_schedule:
+      start: 8
+      end: 64
+
+evaluation:
+  num_iterations: 2

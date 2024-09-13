@@ -310,6 +310,13 @@ def create_jobs(
             only_jobs_with_starting_indices is None
             or index in only_jobs_with_starting_indices
         ):
+            # Check that there are actually runs to run
+            if len(runs) == 0:
+                raise ValueError(
+                    "No runs passed the filters. Have you checked "
+                    "wandb to see if the run already exists?"
+                )
+
             cluster = runs[0].CLUSTER
             jobs_by_cluster[cluster].append(
                 create_job_for_multiple_runs(

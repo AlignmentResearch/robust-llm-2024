@@ -1,0 +1,19 @@
+# @package _global_
+defaults:
+- /experiment/AdvTraining/standard-adv-training
+- /dataset: WordLength/stable
+- /attack@training.adversarial.training_attack: RANDOM_TOKEN
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
+- _self_
+
+environment:
+  deterministic: true
+
+training:
+  adversarial:
+    attack_schedule:
+      start: 1024
+      end: 2048
+
+evaluation:
+  num_iterations: 256

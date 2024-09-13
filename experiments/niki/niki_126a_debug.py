@@ -14,6 +14,9 @@ OVERRIDE_ARGS_LIST = [
     {
         "model.name_or_path": base_model_name,
     },
+    {
+        "model.name_or_path": base_model_name,
+    },
 ]
 N_MAX_PARALLEL = [n_max_parallel for _ in OVERRIDE_ARGS_LIST]
 
