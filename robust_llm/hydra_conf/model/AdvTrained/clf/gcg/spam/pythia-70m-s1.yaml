@@ -1,0 +1,7 @@
+
+defaults:
+- /model/EleutherAI/pythia-70m@_here_
+- /model/Default/clf/base@_here_
+- _self_
+
+name_or_path: "AlignmentResearch/robust_llm__clf_spam_pythia-70m_s-1_adv_tr_gcg_t-1"
