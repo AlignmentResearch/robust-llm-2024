@@ -1,7 +1,6 @@
 import abc
 import json
 import os
-import random
 import shutil
 from dataclasses import asdict, dataclass, field
 from enum import Enum
@@ -13,6 +12,7 @@ from typing_extensions import override
 
 from robust_llm import logger
 from robust_llm.config.configs import AttackConfig
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
@@ -33,7 +33,7 @@ class AttackState:
         attacks_info: Dictionary of additional information about the attack.
     """
 
-    rng_state: tuple[Any, ...]
+    rng_state: dict[str, Any]
     example_index: int = 0
     attacked_texts: list[str] = field(default_factory=list)
     all_iteration_texts: list[list[str]] = field(default_factory=list)
@@ -168,7 +168,7 @@ class Attack(abc.ABC):
         self.attack_config = attack_config
         self.victim = victim
         self.run_name = run_name
-        self.rng = random.Random(attack_config.seed)
+        self.rng = DistributedRNG(attack_config.seed, victim.accelerator)
         self.logging_name = logging_name
         self.attack_state = AttackState(rng_state=self.rng.getstate())
         save_limit_gt_0 = self.attack_config.save_total_limit > 0

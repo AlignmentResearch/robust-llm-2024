@@ -6,14 +6,13 @@ from collections.abc import Iterable, Sequence
 from typing import Any, TypeVar, overload
 
 import datasets
-import numpy as np
 from accelerate import Accelerator
 from datasets import Dataset
 from transformers import PreTrainedTokenizerBase
 
 from robust_llm import logger
 from robust_llm.config.configs import DatasetConfig
-from robust_llm.dist_utils import broadcast_list_of_ints, is_main_process
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.dataset_utils import (
     EXPECTED_COLUMNS,
@@ -248,7 +247,8 @@ class RLLMDataset(ABC):
         self: D,
         n: int,
         seed: int | None = None,
-        generator: np.random.Generator | None = None,
+        accelerator: Accelerator | None = None,
+        generator: DistributedRNG | None = None,
     ) -> D:
         """Return an RLLMDataset with a random subset of the original dataset."""
         assert (seed is None) != (
@@ -256,15 +256,10 @@ class RLLMDataset(ABC):
         ), "Exactly one of {seed, generator} must be provided"
         # When using multiple GPUs, we want to choose the same subset across
         # processes, so we use RNG from the main process.
-        indices = []
-        if is_main_process():
-            if seed is not None:
-                generator = np.random.default_rng(seed)
-            assert generator is not None
-            indices = generator.choice(len(self.ds), n, replace=False).tolist()
-        # Create a temporary accelerator for broadcasting
-        accelerator = Accelerator()
-        indices = broadcast_list_of_ints(indices, accelerator)
+        if seed is not None:
+            generator = DistributedRNG(seed, accelerator=accelerator)
+        assert generator is not None
+        indices = generator.choice(len(self.ds), n, replace=False)
         return self.get_subset(indices)
 
     def get_subset(self: D, indices: Iterable[Any]) -> D:

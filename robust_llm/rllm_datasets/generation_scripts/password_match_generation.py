@@ -5,7 +5,6 @@ from pathlib import Path
 import datasets
 import numpy as np
 from datasets import Dataset
-from numpy.random import Generator
 from tqdm import tqdm
 
 from robust_llm.rllm_datasets.dataset_utils import RLLMExample, cast_column_to_feature
@@ -81,7 +80,7 @@ def construct_password_match(
 
 
 def _generate_examples_for_word(
-    word: str, words: Sequence[str], rng: Generator
+    word: str, words: Sequence[str], rng: np.random.Generator
 ) -> tuple[RLLMExample, RLLMExample]:
     other_word = _select_different_word(word, words, rng)
     examples = _generate_examples_with_both_words(word, other_word)
@@ -125,7 +124,7 @@ def _get_words(word_path: str | Path = WORD_PATH) -> list[str]:
 
 
 def _select_different_word(
-    word: str, words: Sequence[str], rng: Generator, n_attempts: int = 1000
+    word: str, words: Sequence[str], rng: np.random.Generator, n_attempts: int = 1000
 ) -> str:
     """Select a different word than the given one from the list of words.
 

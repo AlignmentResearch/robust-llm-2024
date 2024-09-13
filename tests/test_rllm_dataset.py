@@ -1,8 +1,8 @@
-import numpy as np
 import pytest
 from datasets import ClassLabel
 
 from robust_llm.config.configs import DatasetConfig
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
@@ -74,19 +74,19 @@ def test_tokenization_and_subset(clf_dataset: RLLMDataset, tokenizer):
 
     # Check that the tokenized dataset has the right keys
     assert {"input_ids", "attention_mask"} <= set(tokenized_dataset.ds[0].keys())
-    smaller_dataset = tokenized_dataset.get_random_subset(2, seed=42)
+    smaller_dataset = tokenized_dataset.get_random_subset(2, seed=42, accelerator=None)
     assert len(smaller_dataset) == 2
     assert smaller_dataset.is_tokenized
 
     smallest_dataset = tokenized_dataset.get_random_subset(
-        1, generator=np.random.default_rng(42)
+        1, generator=DistributedRNG(42, accelerator=None)
     )
     assert len(smallest_dataset) == 1
     assert smallest_dataset.is_tokenized
 
     with pytest.raises(AssertionError):
         tokenized_dataset.get_random_subset(
-            2, seed=42, generator=np.random.default_rng(42)
+            2, seed=42, generator=DistributedRNG(42, accelerator=None)
         )
 
 

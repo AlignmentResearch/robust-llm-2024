@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import random
 from collections.abc import Iterator, Sequence
 from dataclasses import fields
 from datetime import datetime
@@ -12,6 +11,8 @@ from typing import Optional, Sized
 
 import torch
 import torch.utils.data
+
+from robust_llm.dist_utils import DistributedRNG
 
 
 def deterministic_hash(obj: object) -> str:
@@ -65,20 +66,19 @@ def get_readable_timestamp() -> str:
 
 
 def get_randint_with_exclusions(
-    high: int, exclusions: Sequence[int], rng: Optional[random.Random] = None
+    high: int, exclusions: Sequence[int], rng: DistributedRNG
 ) -> int:
     """Get a random integer from [0, `high`), excluding the integers in `exclusions`."""
     assert len(exclusions) < high, "Too many excluded values!"
     MAX_NUM_ITERS = 1000
 
     value: Optional[int] = None
-    randint_fn = rng.randint if rng else random.randint
 
     # Replaced a previous implementation where we explicitly create a set of allowed
     # values. It was super slow when `high` was large and `exclusions` was small.
     iter = 0
     while value is None or value in exclusions:
-        value = randint_fn(0, high - 1)
+        value = rng.randint(0, high - 1)
         iter += 1
         if iter > MAX_NUM_ITERS:
             raise ValueError("Too many iterations!")

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-import random
 import shutil
 import tempfile
 import time
@@ -30,6 +29,7 @@ from transformers import (
 from transformers.modeling_outputs import ModelOutput
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models.model_utils import (
     AutoregressiveOutput,
     InferenceType,
@@ -1073,7 +1073,7 @@ class WrappedModel(ABC):
         chunks: AttackChunks,
         perturb_min: float,
         perturb_max: float,
-        rng: random.Random,
+        rng: DistributedRNG,
     ) -> PromptTemplate:
         """Returns a PromptTemplate for the given text chunks.
 

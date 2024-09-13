@@ -1,6 +1,5 @@
 import abc
 import copy
-import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, overload
@@ -17,6 +16,7 @@ from robust_llm.attacks.search_based.utils import (
     create_onehot_embedding,
 )
 from robust_llm.config.callback_configs import CallbackConfig
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models import WrappedModel
 from robust_llm.scoring_callbacks import CallbackInput, build_tensor_scoring_callback
 
@@ -170,7 +170,7 @@ class SearchBasedRunner(abc.ABC):
         self.n_candidates_per_it = n_candidates_per_it
         self.n_its = n_its
         self.n_attack_tokens = n_attack_tokens
-        self.candidate_sample_rng = random.Random(random_seed)
+        self.candidate_sample_rng = DistributedRNG(random_seed, victim.accelerator)
 
         assert len(prepped_examples) == 1, "only one prompt/target pair supported"
         self.example = prepped_examples[0]

@@ -1,12 +1,11 @@
-import random
-
 import pytest
 
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models.prompt_templates import AttackChunks
 
 
 def test_chunks_to_prompt_template_prefix():
-    rng = random.Random(0)
+    rng = DistributedRNG(0, None)
     chunks = AttackChunks(
         unmodifiable_prefix="unmodifiable_prefix",
         modifiable_infix="modifiable_infix",
@@ -18,7 +17,7 @@ def test_chunks_to_prompt_template_prefix():
 
 
 def test_chunks_to_prompt_template_suffix():
-    rng = random.Random(0)
+    rng = DistributedRNG(0, None)
     chunks = AttackChunks(
         unmodifiable_prefix="unmodifiable_prefix",
         modifiable_infix="modifiable_infix",
@@ -30,7 +29,7 @@ def test_chunks_to_prompt_template_suffix():
 
 
 def test_chunks_to_prompt_template_suffix_75_percent():
-    rng = random.Random(0)
+    rng = DistributedRNG(0, None)
     chunks = AttackChunks(
         unmodifiable_prefix="unmodifiable_prefix",
         modifiable_infix="modifiable_infix",
@@ -45,7 +44,7 @@ def test_chunks_to_prompt_template_suffix_75_percent():
     ["perturb_min", "perturb_max"], [(0.5, 0.4), (-0.1, 0.0), (0.0, 1.1)]
 )
 def test_chunks_to_prompt_template_raises(perturb_min: float, perturb_max: float):
-    rng = random.Random(0)
+    rng = DistributedRNG(0, None)
     chunks = AttackChunks(
         unmodifiable_prefix="unmodifiable_prefix",
         modifiable_infix="modifiable_infix",

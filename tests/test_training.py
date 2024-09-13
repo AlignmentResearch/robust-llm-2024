@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -19,6 +18,7 @@ from robust_llm.config.configs import (
     TrainingConfig,
 )
 from robust_llm.config.model_configs import ModelConfig
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
@@ -102,18 +102,18 @@ def test_adv_training_pipeline_doesnt_crash():
 def test_adv_training_state():
     state = AdversarialTrainingState(
         current_round=7,
-        rng=np.random.default_rng(42),
+        rng=DistributedRNG(42, None),
         adversarial_dataset=Dataset.from_dict(
             {
                 "text": ["a", "b", "c"],
                 "clf_label": [0, 1, 0],
             }
         ),
-        training_attack_rng=random.Random(4),
-        validation_attack_rng=random.Random(2),
+        training_attack_rng=DistributedRNG(4, None),
+        validation_attack_rng=DistributedRNG(2, None),
     )
     state.save("/tmp/")
-    loaded = AdversarialTrainingState.load("/tmp/")
+    loaded = AdversarialTrainingState.load("/tmp/", None)
     assert loaded.current_round == state.current_round
     assert loaded.adversarial_dataset["text"] == state.adversarial_dataset["text"]
     assert (

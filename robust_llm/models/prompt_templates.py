@@ -1,7 +1,8 @@
-import random
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
+
+from robust_llm.dist_utils import DistributedRNG
 
 
 class ChatRole(Enum):
@@ -39,7 +40,7 @@ class AttackChunks:
     unmodifiable_suffix: str
 
     def get_prompt_template(
-        self, perturb_min: float, perturb_max: float, rng: random.Random
+        self, perturb_min: float, perturb_max: float, rng: DistributedRNG
     ) -> PromptTemplate:
         """Split the chunks into before/after attack and return a prompt template.
 

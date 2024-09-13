@@ -36,6 +36,7 @@ from robust_llm.config.configs import (
     EvaluationConfig,
     TrainingConfig,
 )
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import (
     LoggingCounter,
@@ -460,7 +461,7 @@ class AdversarialTraining(Training):
         assert self.config.adversarial is not None
         self.adversarial_config = self.config.adversarial
 
-        self.rng = np.random.default_rng(self.config.seed)
+        self.rng = DistributedRNG(self.config.seed, self.victim.accelerator)
         self.round = 0
         self.total_flops = 0.0
         self.n_forward_calls = 0
@@ -656,7 +657,7 @@ class AdversarialTraining(Training):
         checkpoint = self.get_last_checkpoint()
         if checkpoint is not None:
             logger.info(f"Loading adversarial state from {checkpoint}")
-            state = AdversarialTrainingState.load(checkpoint)
+            state = AdversarialTrainingState.load(checkpoint, self.victim.accelerator)
             starting_round = state.apply_to_training(self)
             logger.info(f"Resuming from round {starting_round}")
         else:
@@ -804,6 +805,7 @@ class AdversarialTraining(Training):
                 )
                 input_rllm_dataset = self.train_rllm_dataset.get_random_subset(
                     self.num_examples_to_generate_each_round,
+                    accelerator=self.victim.accelerator,
                     generator=self.rng,
                 )
                 # NOTE: .get_attacked_dataset should relabel the examples

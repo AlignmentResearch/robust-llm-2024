@@ -1,9 +1,9 @@
-import random
 from unittest.mock import MagicMock
 
 import pytest
 from transformers import AutoTokenizer
 
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.prompt_templates import AttackChunks
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
@@ -58,7 +58,7 @@ def test_wrap_prompt_template(mock_model, model_name: str, model_family: str):
     )
     conv.append_assistant_message("")
     base_template = chunks.get_prompt_template(
-        perturb_min=1.0, perturb_max=1.0, rng=random.Random(0)
+        perturb_min=1.0, perturb_max=1.0, rng=DistributedRNG(0, None)
     )
     prompt_template = conv.wrap_prompt_template(base_template)
     assert prompt_template.before_attack.endswith(
@@ -93,7 +93,7 @@ def test_build_prompt(mock_model, model_name: str, model_family: str):
     assert isinstance(model, WrappedChatModel)
     conv = model.init_conversation()
     base_template = chunks.get_prompt_template(
-        perturb_min=1.0, perturb_max=1.0, rng=random.Random(0)
+        perturb_min=1.0, perturb_max=1.0, rng=DistributedRNG(0, None)
     )
     prompt_template = conv.wrap_prompt_template(base_template)
     conv.append_user_message(

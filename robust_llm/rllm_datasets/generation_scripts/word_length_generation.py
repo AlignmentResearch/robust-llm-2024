@@ -6,6 +6,7 @@ import numpy as np
 from datasets import Dataset
 from tqdm import tqdm
 
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.rllm_datasets.dataset_utils import RLLMExample, cast_column_to_feature
 
 WORD_PATH = Path(__file__).parent / "resources" / "words.txt"
@@ -44,7 +45,7 @@ def construct_word_length(
     words = _get_words()
     words_array = np.array(words)
 
-    rng = np.random.default_rng(seed=seed)
+    rng = DistributedRNG(seed=seed, accelerator=None)
     word_1_subset_indices = rng.choice(len(words), size=dataset_size, replace=True)
     word_2_subset_indices = rng.choice(len(words), size=dataset_size, replace=True)
 

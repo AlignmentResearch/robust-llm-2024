@@ -2,18 +2,17 @@ from __future__ import annotations
 
 import json
 import os
-import random
 import time
 import warnings
 from typing import TYPE_CHECKING, Any, Optional, Union
 
 import numpy as np
+from accelerate import Accelerator
 
 from robust_llm import logger
 from robust_llm.callbacks import CustomLoggingWandbCallback
 from robust_llm.logging_utils import log_dataset_to_wandb, wandb_log
 from robust_llm.rllm_datasets.dataset_utils import cast_and_concatenate
-from robust_llm.utils import nested_list_to_tuple
 
 if TYPE_CHECKING:
     from robust_llm.training import AdversarialTraining
@@ -33,6 +32,7 @@ from transformers.trainer import PREFIX_CHECKPOINT_DIR, TRAINING_ARGS_NAME, Trai
 from typing_extensions import override
 
 from robust_llm.debug_utils import assert_dicts_equal
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.utils import BalancedSampler
 
 ADV_STATE_NAME = "adversarial_training_state.json"
@@ -68,7 +68,7 @@ class RLLMTrainer(Trainer):
     def __init__(self, **trainer_kwargs):
         super().__init__(**trainer_kwargs)
         self._current_batch_size: int = -1
-        self.rng = np.random.default_rng(seed=self.args.seed)
+        self.rng = DistributedRNG(seed=self.args.seed, accelerator=self.accelerator)
 
     @override
     def training_step(  # type: ignore[misc]
@@ -145,7 +145,7 @@ class AdversarialTrainer(RLLMTrainer):
         self.loss_rank_weight = loss_rank_weight
         self.sampling_decay = sampling_decay
         self.num_training_steps = num_training_steps
-        self.rng = np.random.default_rng(seed=self.args.seed)
+        self.rng = DistributedRNG(seed=self.args.seed, accelerator=self.accelerator)
 
         # text_chunked is not needed for training.
         # Remove it so that it's possible to merge datasets later on.
@@ -290,7 +290,6 @@ class AdversarialTrainer(RLLMTrainer):
         concatenate function here to make sure the features line up (since
         otherwise we'd have a mismatch between ClassLabel and Value(int)).
         """
-
         n_train = min(
             len(self.regular_dataset) + len(self.adversarial_dataset),
             self.max_augmented_data_size,
@@ -314,7 +313,7 @@ class AdversarialTrainer(RLLMTrainer):
         )
         assert len(train_dataset_plus_adv_examples) == n_train
         self.train_dataset = train_dataset_plus_adv_examples
-        self.adversarial_indices = adv_indices.tolist()
+        self.adversarial_indices = adv_indices
 
         logger.debug(
             "Updating augmented training set to {} examples".format(
@@ -330,7 +329,7 @@ class AdversarialTrainer(RLLMTrainer):
             dataset_name = f"augmented_train_set_start_round_{round}"
             log_dataset_to_wandb(self.train_dataset, dataset_name)
 
-    def _get_adv_indices(self, n_adv: int) -> np.ndarray:
+    def _get_adv_indices(self, n_adv: int) -> list[int]:
         """Get indices of adversarial examples to use for training.
 
         We have two distinct ways of ranking adversarial examples: by time
@@ -348,9 +347,10 @@ class AdversarialTrainer(RLLMTrainer):
         Returns:
             adv_indices: Indices of adversarial examples to use for training.
         """
+        assert self.rng is not None
         n = len(self.adversarial_dataset)
         if n == 0:
-            return np.array([], dtype=int)
+            return []
         time_ranks = np.arange(n)
         losses = [self.adversarial_losses.get(i, float("inf")) for i in range(n)]
         loss_ranks = np.argsort(losses)
@@ -473,10 +473,10 @@ class AdversarialTrainingState:
     def __init__(
         self,
         current_round: int,
-        rng: np.random.Generator,
+        rng: DistributedRNG,
         adversarial_dataset: Dataset,
-        training_attack_rng: Optional[random.Random],
-        validation_attack_rng: Optional[random.Random],
+        training_attack_rng: Optional[DistributedRNG],
+        validation_attack_rng: Optional[DistributedRNG],
         total_flops: float = 0.0,
     ) -> None:
         self.rng = rng
@@ -488,7 +488,7 @@ class AdversarialTrainingState:
 
     def to_dict(self) -> dict:
         return {
-            "rng": self.rng.bit_generator.state,
+            "rng": self.rng.getstate(),
             "current_round": self.current_round,
             "total_flops": self.total_flops,
             "training_attack_rng": (
@@ -519,26 +519,24 @@ class AdversarialTrainingState:
         )
 
     @classmethod
-    def load(cls, checkpoint_dir: str) -> "AdversarialTrainingState":
+    def load(
+        cls, checkpoint_dir: str, accelerator: Accelerator | None
+    ) -> "AdversarialTrainingState":
         state_path = os.path.join(checkpoint_dir, ADV_STATE_NAME)
         with open(state_path, "r") as f:
             state = json.load(f)
-            rng = np.random.default_rng()
-            rng.bit_generator.state = state["rng"]
+            rng = DistributedRNG(None, accelerator=accelerator)
+            rng.setstate(state["rng"])
             current_round = state["current_round"]
             total_flops = state["total_flops"]
             if state["training_attack_rng"] is not None:
-                training_attack_rng = random.Random()
-                training_attack_rng.setstate(
-                    nested_list_to_tuple(state["training_attack_rng"])
-                )
+                training_attack_rng = DistributedRNG(None, accelerator=accelerator)
+                training_attack_rng.setstate(state["training_attack_rng"])
             else:
                 training_attack_rng = None
             if state["validation_attack_rng"] is not None:
-                validation_attack_rng = random.Random()
-                validation_attack_rng.setstate(
-                    nested_list_to_tuple(state["validation_attack_rng"])
-                )
+                validation_attack_rng = DistributedRNG(None, accelerator=accelerator)
+                validation_attack_rng.setstate(state["validation_attack_rng"])
             else:
                 validation_attack_rng = None
         adversarial_dataset = Dataset.load_from_disk(
@@ -590,6 +588,7 @@ class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
     ):
         """Save the full AdversarialTrainingState alongside HF trainer state."""
         assert isinstance(self.training.trainer, AdversarialTrainer)
+        assert self.training.trainer.rng is not None
         checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{state.global_step}"
         # We set trial to None as this is a HuggingFace argument for
         # hyperparameter search, which we are not using.
