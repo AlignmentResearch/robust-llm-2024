@@ -132,7 +132,7 @@ class AdversarialTrainingConfig:
     stopping_attack_success_rate: float = 0.0
     target_adversarial_success_rate: Optional[float] = None
     attack_schedule: AttackScheduleConfig = field(
-        default_factory=lambda: AttackScheduleConfig(start=1, end=10)
+        default_factory=lambda: AttackScheduleConfig(start=10, rate=0)
     )
     stopping_flops: float = float("inf")
 

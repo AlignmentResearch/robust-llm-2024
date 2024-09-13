@@ -357,24 +357,65 @@ class AttackSchedule:
     config: AttackScheduleConfig
     num_rounds: int
 
+    @property
+    def attack_rounds(self) -> int:
+        """The number of rounds for which we run the attack.
+
+        We subtract two from the number of rounds because don't run the attack in
+        round 0 (since it's just normal finetuning on clean examples) and in the
+        last round (since there is no next round for which to generate examples).
+        """
+        return max(self.num_rounds - 2, 0)
+
     def __post_init__(self):
+        """Process the attack schedule configuration.
+
+        If num_round is 2 or below, we set the rate to 0 and ensure that
+        start == end since we will run the attack at most once.
+        """
+
         if self.config.end is not None and self.config.rate is not None:
-            self.start = self.config.end - int(self.config.rate * (self.num_rounds - 1))
-            self.end = self.config.end
-            self.rate = self.config.rate
+            if self.attack_rounds == 0:
+                if self.config.rate != 0:
+                    raise ValueError("If num_rounds<=2, rate must be 0.")
+                self.start = self.config.end
+                self.end = self.config.end
+                self.rate = 0.0
+            else:
+                self.start = self.config.end - int(
+                    self.config.rate * self.attack_rounds
+                )
+                self.end = self.config.end
+                self.rate = self.config.rate
         elif self.config.start is not None and self.config.rate is not None:
-            self.end = self.config.start + int(self.config.rate * (self.num_rounds - 1))
-            self.start = self.config.start
-            self.rate = self.config.rate
+            if self.attack_rounds == 0:
+                if self.config.rate != 0:
+                    raise ValueError("If num_rounds<=2, rate must be 0.")
+                self.start = self.config.start
+                self.end = self.config.start
+                self.rate = 0
+            else:
+                self.end = self.config.start + int(
+                    self.config.rate * self.attack_rounds
+                )
+                self.start = self.config.start
+                self.rate = self.config.rate
         elif self.config.start is not None and self.config.end is not None:
-            self.rate = (self.config.end - self.config.start) / (self.num_rounds - 1)
-            self.start = self.config.start
-            self.end = self.config.end
+            if self.attack_rounds == 0:
+                if self.config.start != self.config.end:
+                    raise ValueError("If num_rounds<=2, start must equal end.")
+                self.start = self.config.end
+                self.end = self.config.end
+                self.rate = 0
+            else:
+                self.rate = (self.config.end - self.config.start) / self.attack_rounds
+                self.start = self.config.start
+                self.end = self.config.end
         else:
             raise ValueError("Exactly two of start, end, and rate must be specified.")
 
     def __getitem__(self, i: int) -> int:
-        if i < 0 or i >= self.num_rounds:
+        if i < 0 or i >= self.num_rounds - 1:
             raise IndexError(f"Index {i} out of bounds for {self.num_rounds} rounds")
         return self.start + int(i * self.rate)
 
@@ -624,7 +665,6 @@ class AdversarialTraining(Training):
         # Run the adversarial training loop
         table = WandbTable("adversarial_eval/table")
         for self.round in range(starting_round, self.num_adversarial_training_rounds):
-            n_its = self.attack_schedule[self.round]
             logger.info("Adversarial training round %s started ", self.round)
             self._log_debug_info()
 
@@ -752,6 +792,12 @@ class AdversarialTraining(Training):
             # select only successful ones; and add them to the training set so that they
             # are used in the next round of training.
             if self.round < self.num_adversarial_training_rounds - 1:
+                n_its = self.attack_schedule[self.round]
+                logger.info(
+                    "The training attack strength for round %s is n_its=%s",
+                    self.round,
+                    n_its,
+                )
                 assert (
                     len(self.train_rllm_dataset.ds)
                     >= self.num_examples_to_generate_each_round
