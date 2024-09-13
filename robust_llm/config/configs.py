@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Optional
 
 import torch
@@ -137,6 +138,13 @@ class AdversarialTrainingConfig:
         assert 0 <= self.loss_rank_weight <= 1, "loss_rank_weight should be in [0, 1]."
 
 
+class SaveTo(Enum):
+    HF = "hf"
+    DISK = "disk"
+    BOTH = "both"
+    NONE = "none"
+
+
 @dataclass
 class TrainingConfig:
     """Configs used across different training procedures.
@@ -207,10 +215,10 @@ class TrainingConfig:
     log_full_datasets_to_wandb: bool = False
     save_prefix: str = SHARED_DATA_DIR
     save_name: Optional[str] = None
-    save_to: str | None = "hf"
+    save_to: SaveTo = SaveTo.BOTH
     seed: int = 0
-    upload_retries: int = 3
-    upload_cooldown: float = 5
+    upload_retries: int = 5
+    upload_cooldown: float = 10
 
     def __post_init__(self):
         assert self.num_train_epochs > 0, "Number of training epochs must be positive."

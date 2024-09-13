@@ -17,6 +17,6 @@ training:
   gradient_checkpointing: true
   num_train_epochs: 1
   learning_rate: 1e-5
-  save_to: "hf"
+  save_to: BOTH
 
 experiment_type: "training"

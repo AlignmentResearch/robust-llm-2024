@@ -15,6 +15,7 @@ from robust_llm.config.configs import (
     EnvironmentConfig,
     EvaluationConfig,
     ExperimentConfig,
+    SaveTo,
     TrainingConfig,
 )
 from robust_llm.config.model_configs import ModelConfig
@@ -50,7 +51,9 @@ def test_training_pipeline_doesnt_crash():
             n_train=2,
             n_val=2,
         ),
-        training=TrainingConfig(save_prefix="test_training_pipeline", save_to=None),
+        training=TrainingConfig(
+            save_prefix="test_training_pipeline", save_to=SaveTo.NONE
+        ),
     )
     run_training_pipeline(config)
 
@@ -86,7 +89,7 @@ def test_adv_training_pipeline_doesnt_crash():
         ),
         training=TrainingConfig(
             save_prefix="test_adv_training_pipeline",
-            save_to=None,
+            save_to=SaveTo.NONE,
             adversarial=AdversarialTrainingConfig(
                 num_examples_to_generate_each_round=2,
                 num_adversarial_training_rounds=4,

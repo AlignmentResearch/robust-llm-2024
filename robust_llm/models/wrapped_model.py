@@ -307,7 +307,7 @@ class WrappedModel(ABC):
                     stacklevel=2,
                 )
             if attempt + 1 < retries:
-                time.sleep(cooldown_seconds)
+                time.sleep(cooldown_seconds * 2**attempt)
         raise RuntimeError(f"Failed to push to hub after {retries} attempts.")
 
     def save_local(

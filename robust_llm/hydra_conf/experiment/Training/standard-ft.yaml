@@ -9,7 +9,7 @@ training:
   # (20000/8)/240 ~= 10 times (since eval_steps is set to logging_steps by
   # default).
   logging_steps: 240
-  save_to: "hf"
+  save_to: BOTH
   num_train_epochs: 3
   learning_rate: 1e-5
   lr_scheduler_type: "linear"

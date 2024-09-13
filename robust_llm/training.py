@@ -34,6 +34,7 @@ from robust_llm.config.configs import (
     AttackScheduleConfig,
     EnvironmentConfig,
     EvaluationConfig,
+    SaveTo,
     TrainingConfig,
 )
 from robust_llm.dist_utils import DistributedRNG
@@ -296,7 +297,7 @@ class Training:
     def maybe_save_model_to_path_or_hf(
         self,
         save_prefix: str,
-        save_to: str | None,
+        save_to: SaveTo,
         adv_tr_round: Optional[int] = None,
     ) -> None:
         assert self.trainer is not None
@@ -307,11 +308,21 @@ class Training:
         adv_tr_round_str = (
             f"adv-training-round-{adv_tr_round}" if adv_tr_round is not None else None
         )
-        if save_to is None:
+        if save_to == SaveTo.NONE:
             logger.info(
                 "Not saving the model/tokenizer since no save path was specified"
             )
-        elif save_to == "hf":
+
+        if save_to in (SaveTo.DISK, SaveTo.BOTH):
+            adv_suffix = adv_tr_round_str or ""
+            model_dir = self.model_name_to_save + adv_suffix
+            output_dir = Path(save_prefix) / "models" / model_dir
+            if wandb.run is not None:
+                wandb.run.summary["saved_dir"] = str(output_dir)
+            logger.info("Saving the model/tokenizer to %s", output_dir)
+            self.victim.save_local(output_dir=output_dir)
+
+        if save_to in (SaveTo.HF, SaveTo.BOTH):
             assert self.trainer.args.hub_model_id is not None
             # This is a hack to make sure we have the properly FSDP-wrapped
             # version of the model for saving. Without this, only the inner
@@ -330,17 +341,6 @@ class Training:
             logger.info("Saving the model/tokenizer to HuggingFace as %s", hf_name)
             if wandb.run is not None:
                 wandb.run.summary["saved_hf_name"] = hf_name
-
-        elif save_to == "disk":
-            adv_suffix = adv_tr_round_str or ""
-            model_dir = self.model_name_to_save + adv_suffix
-            output_dir = Path(save_prefix) / "models" / model_dir
-            if wandb.run is not None:
-                wandb.run.summary["saved_dir"] = str(output_dir)
-            logger.info("Saving the model/tokenizer to %s", output_dir)
-            self.victim.save_local(output_dir=output_dir)
-        else:
-            raise ValueError(f"Invalid save_to value: {save_to}")
 
     @property
     def output_dir(self) -> str:

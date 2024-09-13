@@ -10,7 +10,7 @@ dataset:
   n_val: 200
 
 training:
-  save_to: "hf"
+  save_to: BOTH
   num_train_epochs: 1
   learning_rate: ???
   batch_size: 8
