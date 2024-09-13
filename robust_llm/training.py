@@ -374,7 +374,6 @@ class AttackSchedule:
         If num_round is 2 or below, we set the rate to 0 and ensure that
         start == end since we will run the attack at most once.
         """
-
         if self.config.end is not None and self.config.rate is not None:
             if self.attack_rounds == 0:
                 if self.config.rate != 0:
@@ -412,8 +411,16 @@ class AttackSchedule:
                 self.rate = (self.config.end - self.config.start) / self.attack_rounds
                 self.start = self.config.start
                 self.end = self.config.end
+        elif self.config.start is not None:
+            self.start = self.config.start
+            self.end = self.config.start
+            self.rate = 0
+        elif self.config.end is not None:
+            self.start = self.config.end
+            self.end = self.config.end
+            self.rate = 0
         else:
-            raise ValueError("Exactly two of start, end, and rate must be specified.")
+            raise ValueError(f"Bad attack schedule config: {self.config}")
 
     def __getitem__(self, i: int) -> int:
         if i < 0 or i >= self.num_rounds - 1:

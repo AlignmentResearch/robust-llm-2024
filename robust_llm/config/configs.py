@@ -61,16 +61,13 @@ class AttackScheduleConfig:
     rate: float | None = None
 
     def __post_init__(self):
-        assert (
-            sum(
-                [
-                    self.start is None,
-                    self.end is None,
-                    self.rate is None,
-                ]
-            )
-            == 1
-        ), "Exactly two of start, end, and rate must be specified."
+        assert any(
+            [
+                self.start is None,
+                self.end is None,
+                self.rate is None,
+            ]
+        ), "At least one of start, end, and rate must be implied."
         assert self.start is None or self.start >= 1, "iterations must be >= 1."
         assert self.end is None or self.end >= 1, "iterations must be >= 1."
 
@@ -132,7 +129,7 @@ class AdversarialTrainingConfig:
     stopping_attack_success_rate: float = 0.0
     target_adversarial_success_rate: Optional[float] = None
     attack_schedule: AttackScheduleConfig = field(
-        default_factory=lambda: AttackScheduleConfig(start=10, rate=0)
+        default_factory=lambda: AttackScheduleConfig(start=10)
     )
     stopping_flops: float = float("inf")
 

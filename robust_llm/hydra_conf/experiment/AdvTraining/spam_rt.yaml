@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+- short_adv_training_base
+- /dataset: EnronSpam/main
+- /model: EleutherAI/pythia-14m
+- /attack@training.adversarial.training_attack: random-token-len-10
+- /attack@evaluation.evaluation_attack: random-token-len-10
+- _self_
+
+training:
+  adversarial:
+    attack_schedule:
+      start: 640
+      end: 2560
