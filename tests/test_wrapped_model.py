@@ -14,9 +14,9 @@ def model_config_factory():
         family="pythia",
         revision="main",
         inference_type="classification",
-        train_minibatch_size=2,
-        eval_minibatch_multiplier=2,
-        env_minibatch_multiplier=1,
+        max_minibatch_size=4,
+        eval_minibatch_multiplier=1,
+        env_minibatch_multiplier=0.5,
     )
 
 
@@ -85,9 +85,9 @@ def test_llama():
         family="llama2",
         revision="main",
         inference_type="generation",
-        train_minibatch_size=2,
-        eval_minibatch_multiplier=2,
-        env_minibatch_multiplier=1,
+        max_minibatch_size=4,
+        eval_minibatch_multiplier=1,
+        env_minibatch_multiplier=0.5,
     )
     wrapped_model = WrappedModel.from_config(cfg, accelerator=None)
     assert isinstance(wrapped_model.model, LlamaForCausalLM)
@@ -100,9 +100,9 @@ def test_determinism_single_batch():
         family="pythia",
         revision="main",
         inference_type="generation",
-        train_minibatch_size=2,
-        eval_minibatch_multiplier=2,
-        env_minibatch_multiplier=1,
+        max_minibatch_size=4,
+        eval_minibatch_multiplier=1,
+        env_minibatch_multiplier=0.5,
         seed=42,
         generation_config=GenerationConfig(
             max_new_tokens=50, do_sample=True, temperature=10.0
@@ -131,9 +131,9 @@ def test_determinism_batched():
         family="pythia",
         revision="main",
         inference_type="generation",
-        train_minibatch_size=2,
-        eval_minibatch_multiplier=2,
-        env_minibatch_multiplier=1,
+        max_minibatch_size=4,
+        eval_minibatch_multiplier=1,
+        env_minibatch_multiplier=0.5,
         seed=42,
         generation_config=GenerationConfig(
             max_new_tokens=50, do_sample=True, temperature=10.0
@@ -174,9 +174,9 @@ def test_generate_equivalence():
         family="pythia",
         revision="main",
         inference_type="generation",
-        train_minibatch_size=2,
-        eval_minibatch_multiplier=2,
-        env_minibatch_multiplier=1,
+        max_minibatch_size=4,
+        eval_minibatch_multiplier=1,
+        env_minibatch_multiplier=0.5,
         seed=42,
         generation_config=GenerationConfig(
             max_new_tokens=50, do_sample=True, temperature=10.0

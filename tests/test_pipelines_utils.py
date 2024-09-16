@@ -1,3 +1,7 @@
+from unittest.mock import patch
+
+import torch
+
 from robust_llm.config.configs import (
     DatasetConfig,
     EvaluationConfig,
@@ -28,9 +32,9 @@ def test_victim_num_classes():
                 # We have to set this explicitly because we are not loading with Hydra,
                 # so interpolation doesn't happen.
                 inference_type="classification",
-                train_minibatch_size=2,
-                eval_minibatch_multiplier=2,
-                env_minibatch_multiplier=1,
+                max_minibatch_size=4,
+                eval_minibatch_multiplier=1,
+                env_minibatch_multiplier=0.5,
             ),
             evaluation=EvaluationConfig(),
         )
@@ -46,8 +50,9 @@ def test_victim_num_classes():
 
 def test_safe_run_pipeline():
     def pipeline_fn(config: ExperimentConfig):
-        # TODO: simulate OOM for batch_size>=8
-        assert config.model.train_minibatch_size == 8
+        if config.model.max_minibatch_size >= 16:
+            raise torch.cuda.OutOfMemoryError("CUDA out of memory")
+        return WrappedModel.from_config(config.model, accelerator=None)
 
     args = ExperimentConfig(
         experiment_type="evaluation",
@@ -60,12 +65,24 @@ def test_safe_run_pipeline():
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
             inference_type="classification",
-            train_minibatch_size=8,
-            eval_minibatch_multiplier=2,
+            max_minibatch_size=16,
+            train_minibatch_multiplier=0.5,
+            eval_minibatch_multiplier=1,
             env_minibatch_multiplier=1,
+            effective_batch_size=16,
         ),
         evaluation=EvaluationConfig(),
     )
-    args.model.train_minibatch_size = 8
-
-    safe_run_pipeline(pipeline_fn, args)
+    with (
+        patch("torch.cuda.is_available", return_value=True),
+        patch("torch.cuda.empty_cache"),
+        patch("accelerate.utils.memory.should_reduce_batch_size", return_value=True),
+    ):
+        model = safe_run_pipeline(pipeline_fn, args)
+    assert args.model.max_minibatch_size == 8
+    assert args.model.env_minibatch_multiplier == 1
+    assert isinstance(model, WrappedModel)
+    assert model.train_minibatch_size == 4
+    assert model.eval_minibatch_size == 8
+    assert model.effective_batch_size == 16
+    assert model.gradient_accumulation_steps == 4

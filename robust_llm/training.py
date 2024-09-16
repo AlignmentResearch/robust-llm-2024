@@ -131,8 +131,8 @@ class Training:
             learning_rate=self.config.learning_rate,
             lr_scheduler_type=self.config.lr_scheduler_type,
             warmup_ratio=self.config.warmup_ratio,
-            per_device_train_batch_size=self.train_batch_size,
-            per_device_eval_batch_size=self.eval_batch_size,
+            per_device_train_batch_size=self.per_device_train_batch_size,
+            per_device_eval_batch_size=self.per_device_eval_batch_size,
             gradient_accumulation_steps=self.gradient_accumulation_steps,
             group_by_length=self.config.group_by_length,
             optim=self.config.optimizer,
@@ -156,18 +156,22 @@ class Training:
         logger.debug("Training arguments: %s", self.training_arguments)
 
     @property
-    def train_batch_size(self) -> int:
+    def per_device_train_batch_size(self) -> int:
         return min(
             len(self.train_rllm_dataset) // self.victim.num_processes,
             self.victim.train_minibatch_size,
         )
 
     @property
-    def eval_batch_size(self) -> int:
+    def per_device_eval_batch_size(self) -> int:
         return min(
             len(self.eval_rllm_dataset) // self.victim.num_processes,
             self.victim.eval_minibatch_size,
         )
+
+    @property
+    def train_batch_size(self) -> int:
+        return self.training_arguments.train_batch_size
 
     @property
     def gradient_accumulation_steps(self) -> int:
@@ -479,6 +483,25 @@ class AdversarialTraining(Training):
             self.adversarial_config.attack_schedule,
             self.num_adversarial_training_rounds,
         )
+
+        if self.training_arguments.gradient_accumulation_steps > 1:
+            # When gradient_accumulation_steps > 1, Trainer may stop short
+            # of the desired number of epochs due to a rounding issue:
+            # https://github.com/huggingface/transformers/issues/33455
+            # For ordinary training this isn't a big deal. For adversarial
+            # training, AdversarialTrainer.maybe_update_adversarial_losses only
+            # runs every full epoch, so we set max_steps (which overrides
+            # num_train_epochs) to hit our desired epoch count.
+            global_minibatch_size = (
+                self.victim.num_processes * self.per_device_train_batch_size
+            )
+            num_minibatches_per_epoch = math.ceil(
+                len(self.hf_train) / global_minibatch_size
+            )
+            num_minibatches = num_minibatches_per_epoch * self.config.num_train_epochs
+            self.training_arguments.max_steps = math.ceil(
+                num_minibatches / self.gradient_accumulation_steps
+            )
 
     def get_total_training_steps(self) -> int:
         num_processes = Accelerator().num_processes

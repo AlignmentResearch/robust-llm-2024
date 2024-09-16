@@ -1,3 +1,3 @@
 name_or_path: "google/gemma-2-27b"
 family: "gemma-chat"
-train_minibatch_size: 1
+max_minibatch_size: 2

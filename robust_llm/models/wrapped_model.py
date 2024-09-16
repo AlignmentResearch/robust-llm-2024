@@ -87,7 +87,7 @@ class WrappedModel(ABC):
         train_minibatch_size: int,
         eval_minibatch_size: int,
         family: str,
-        gradient_accumulation_steps: int = 1,
+        effective_batch_size: int = 8,
         generation_config: GenerationConfig | None = None,
         system_prompt: str | None = None,
         seed: int = 0,
@@ -103,8 +103,8 @@ class WrappedModel(ABC):
                 or 'classification')
             train_minibatch_size: The minibatch size to use for training.
             eval_minibatch_size: The minibatch size to use for evaluation.
-            gradient_accumulation_steps: The number of minibatches to accumulate
-                gradients over. This is useful when we have to use very small
+            effective_batch_size: The product of the train batch size and gradient
+                accumulation steps. This is useful when we have to use very small
                 minibatches due to limited VRAM, but want to simulate a larger batch
                 size.
             family: The family of the model, useful for logging model details
@@ -130,7 +130,7 @@ class WrappedModel(ABC):
         self.inference_type = inference_type
         self.train_minibatch_size = train_minibatch_size
         self.eval_minibatch_size = eval_minibatch_size
-        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.effective_batch_size = effective_batch_size
         self.generation_config = generation_config
         self.system_prompt = system_prompt
         self.seed = seed
@@ -144,8 +144,18 @@ class WrappedModel(ABC):
         self.post_init()
 
     @property
+    def gradient_accumulation_steps(self) -> int:
+        return self.effective_batch_size // (
+            self.train_minibatch_size * self.num_processes
+        )
+
+    @cached_property
     def num_processes(self) -> int:
-        return self.accelerator.num_processes if self.accelerator is not None else 1
+        return (
+            torch.distributed.get_world_size()
+            if torch.distributed.is_initialized()
+            else 1
+        )
 
     def get_minibatch_size(
         self, input_ids: torch.Tensor, batch_size: int | None
@@ -408,23 +418,17 @@ class WrappedModel(ABC):
         except KeyError:
             raise ValueError(f"Unsupported model family: {config.family}")
 
-        train_mb_size = int(
-            config.train_minibatch_size * config.env_minibatch_multiplier
+        max_mb_size = max(
+            1, int(config.max_minibatch_size * config.env_minibatch_multiplier)
         )
-        eval_mb_size = int(
-            config.train_minibatch_size
-            * config.eval_minibatch_multiplier
-            * config.env_minibatch_multiplier
+        train_mb_size = max(
+            1,
+            min(
+                int(max_mb_size * config.train_minibatch_multiplier),
+                config.effective_batch_size,
+            ),
         )
-        assert train_mb_size > 0, (
-            f"{config.train_minibatch_size=} times "
-            f"{config.env_minibatch_multiplier=} rounds to 0"
-        )
-        assert eval_mb_size > 0, (
-            f"{config.train_minibatch_size=} times "
-            f"{config.eval_minibatch_multiplier=} times "
-            f"{config.env_minibatch_multiplier=} rounds to 0"
-        )
+        eval_mb_size = max(1, int(max_mb_size * config.eval_minibatch_multiplier))
         # Loads the tokenizer with right padding. We'll load the tokenizer
         # with left padding lazily if we need it.
         right_tokenizer = subcls.load_tokenizer(config)
@@ -435,7 +439,7 @@ class WrappedModel(ABC):
             inference_type=inference_type,
             train_minibatch_size=train_mb_size,
             eval_minibatch_size=eval_mb_size,
-            gradient_accumulation_steps=config.gradient_accumulation_steps,
+            effective_batch_size=config.effective_batch_size,
             generation_config=config.generation_config,
             family=config.family,
             system_prompt=config.system_prompt,

@@ -12,7 +12,7 @@ dataset:
   n_val: 20
 
 model:
-  train_minibatch_size: 2
+  max_minibatch_size: 4
 
 training:
   force_name_to_save: "pythia-2.8b_large_imdb_test"

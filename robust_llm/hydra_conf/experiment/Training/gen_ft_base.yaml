@@ -10,7 +10,7 @@ dataset:
   revision: "1.1.2"
 
 model:
-  train_minibatch_size: 16
+  max_minibatch_size: 32
 
 training:
   optimizer: "adafactor"

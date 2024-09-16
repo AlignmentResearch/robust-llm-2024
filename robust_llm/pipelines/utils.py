@@ -36,13 +36,16 @@ def prepare_attack(
     )
 
 
-def safe_run_pipeline(pipeline: Callable, args: ExperimentConfig) -> None:
-    starting_batch_size = args.model.train_minibatch_size
+def safe_run_pipeline(pipeline: Callable, args: ExperimentConfig):
+    starting_batch_size = max(
+        1, int(args.model.max_minibatch_size * args.model.env_minibatch_multiplier)
+    )
 
     @find_executable_batch_size(starting_batch_size=starting_batch_size)
-    def run_pipeline_with_batch_size(batch_size: int) -> None:
+    def run_pipeline_with_batch_size(batch_size: int):
         logger.info(f"Calling {pipeline.__name__} with batch size {batch_size}")
-        args.model.train_minibatch_size = batch_size
-        pipeline(args)
+        args.model.max_minibatch_size = batch_size
+        args.model.env_minibatch_multiplier = 1.0
+        return pipeline(args)
 
-    run_pipeline_with_batch_size()  # type: ignore[reportCallIssue]
+    return run_pipeline_with_batch_size()  # type: ignore[reportCallIssue]

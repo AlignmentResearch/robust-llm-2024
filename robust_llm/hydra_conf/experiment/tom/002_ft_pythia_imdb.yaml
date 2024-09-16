@@ -13,7 +13,7 @@ dataset:
   n_val: 200
 
 model:
-  train_minibatch_size: 2
+  max_minibatch_size: 4
 
 training:
   logging_steps: 100

@@ -41,14 +41,15 @@ def test_training_pipeline_doesnt_crash():
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
             inference_type="classification",
-            train_minibatch_size=2,
-            eval_minibatch_multiplier=2,
-            env_minibatch_multiplier=1,
+            max_minibatch_size=4,
+            eval_minibatch_multiplier=1,
+            env_minibatch_multiplier=0.5,
+            effective_batch_size=4,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
             revision="2.1.0",
-            n_train=2,
+            n_train=5,
             n_val=2,
         ),
         training=TrainingConfig(
@@ -77,9 +78,10 @@ def test_adv_training_pipeline_doesnt_crash():
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
             inference_type="classification",
-            train_minibatch_size=2,
-            eval_minibatch_multiplier=2,
-            env_minibatch_multiplier=1,
+            max_minibatch_size=4,
+            eval_minibatch_multiplier=1,
+            env_minibatch_multiplier=0.5,
+            effective_batch_size=4,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
@@ -148,7 +150,7 @@ def adv_trainer() -> AdversarialTrainer:
             name_or_path="AlignmentResearch/robust_llm_pythia-14m_clf_imdb_v-ian-067_s-0",  # noqa: E501
             family="pythia",
             inference_type="classification",
-            train_minibatch_size=1,
+            max_minibatch_size=1,
             eval_minibatch_multiplier=1,
             env_minibatch_multiplier=1,
         ),

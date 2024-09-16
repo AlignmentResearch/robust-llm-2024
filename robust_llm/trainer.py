@@ -70,6 +70,26 @@ class RLLMTrainer(Trainer):
         self._current_batch_size: int = -1
         self.rng = DistributedRNG(seed=self.args.seed, accelerator=self.accelerator)
 
+        if (
+            self.accelerator is not None
+            and self.accelerator.num_processes > 1
+            and self.args.gradient_accumulation_steps > 1
+        ):
+            effective_batch_size = (
+                self.accelerator.num_processes
+                * self.args.per_device_train_batch_size
+                * self.args.gradient_accumulation_steps
+            )
+            assert isinstance(self.train_dataset, Dataset)
+            if effective_batch_size > len(self.train_dataset):
+                warnings.warn(
+                    f"Effective batch size {effective_batch_size} is larger than"
+                    f" the number training examples {len(self.train_dataset)}."
+                    " FSDP training with gradient_accumulation_steps > 1 may break:"
+                    " https://github.com/huggingface/transformers/issues/33413"
+                )
+                raise ValueError("Effective batch size is larger than training set")
+
     @override
     def training_step(  # type: ignore[misc]
         self, model: torch.nn.Module, inputs: dict[str, Union[torch.Tensor, Any]]
@@ -168,6 +188,7 @@ class AdversarialTrainer(RLLMTrainer):
         # Store computed losses across batches
         self.computed_losses: list[float] = []
         self.in_eval_loop = False
+        self.num_epochs_done = 0
 
         # This is for the initial step, where we just want to get the model
         # prepared.
@@ -215,6 +236,45 @@ class AdversarialTrainer(RLLMTrainer):
         )
         return self.lr_scheduler
 
+    @override
+    def train(
+        self,
+        resume_from_checkpoint: str | bool | None = None,
+        trial: Optional[dict[str, Any]] = None,
+        ignore_keys_for_eval: Optional[list[str]] = None,
+        **kwargs,
+    ) -> TrainOutput:
+        output = super().train(**kwargs)
+        if self.accelerator is None or self.accelerator.is_main_process:
+            if self.args.gradient_accumulation_steps == 1:
+                assert self.computed_losses == []
+            else:
+                # self.computed_losses is not empty if we have a partial epoch.
+                # We set carefully max_steps in
+                # AdversarialTraining.__post_init__ to hit the right number of
+                # epochs but we can still overshoot by a few (less than
+                # gradient_accumulation_steps) mini-batches. E.g., if we have a
+                # training dataset [0,1,2,3,4], mini-batch size of 2, gradient
+                # accumulation steps of 2, and 3 epochs:
+                # - Minibatch 1:  0, 1
+                # - Minibatch 2:  2, 3. Step 1.
+                # - Minibatch 3:  4.
+                # - Minibatch 4:  0, 1. Step 2.
+                # ...
+                # - Minibatch 8:  2, 3. Step 4.
+                # - Minibatch 9:  4.    Finished epoch 3.
+                # - Minibatch 10: 0, 1. Step 5.
+                # The correct choice of max_steps is 5, but this leaves the
+                # losses for [0,1] in self.computed_losses.
+                if len(self.computed_losses) > 0:
+                    self.computed_losses = []
+            assert self.num_epochs_done == self.args.num_train_epochs, (
+                f"Expected {self.args.num_train_epochs} epochs,"
+                f" got {self.num_epochs_done}."
+            )
+            self.num_epochs_done = 0
+        return output
+
     def maybe_update_adversarial_losses(self):
         """Update the adversarial losses if all losses have been computed."""
         if len(self.computed_losses) < len(self.train_dataset):
@@ -227,6 +287,7 @@ class AdversarialTrainer(RLLMTrainer):
         for index, success in zip(self.adversarial_indices, adv_losses, strict=True):
             self.adversarial_losses[index] = success
         self.computed_losses = []
+        self.num_epochs_done += 1
 
     @override
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -251,8 +312,8 @@ class AdversarialTrainer(RLLMTrainer):
         if self.accelerator is not None:
             logits, labels = self.accelerator.gather_for_metrics((logits, labels))
 
-        losses = F.cross_entropy(logits, labels, reduction="none")
         if self.accelerator is None or self.accelerator.is_main_process:
+            losses = F.cross_entropy(logits, labels, reduction="none")
             self.computed_losses += losses.tolist()
         self.maybe_update_adversarial_losses()
 

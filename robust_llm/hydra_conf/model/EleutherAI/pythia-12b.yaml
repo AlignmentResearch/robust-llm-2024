@@ -1,5 +1,5 @@
 name_or_path: "EleutherAI/pythia-12b"
 family: "pythia"
-train_minibatch_size: 1
+max_minibatch_size: 2
 # We're using an effective batch size of 8 by accumulating gradients.
 gradient_accumulation_steps: 8

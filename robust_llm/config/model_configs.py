@@ -64,14 +64,17 @@ class ModelConfig:
         initialized while loading. Recommended to be True for evaluation (where the
         model should already be set up for the task) and False for training (where
         we may have to initialize a new classification head)
-    train_minibatch_size: The minibatch size to use for training. Defaults to
-        small value of 16.
-    eval_minibatch_multiplier: The minibatch size to use for evaluation as a multiple
-        of that used for training. Defaults to twice the training minibatch size
+    max_minibatch_size: The largest minibatch size to use across training and
+        evaluation. This can be overridden by accelerate's find_executable_batch_size
+        if we OOM.
+    train_minibatch_multiplier: The minibatch size to use for training as a fraction
+        of the max minibatch size. Defaults to half the eval minibatch size
         (since for evaluation we don't need to store gradients).
-    gradient_accumulation_steps: Number of minibatches to accumulate gradients
-        over. This is useful when we have to use very small minibatches due to
-        limited VRAM, but want to simulate a larger batch size.
+    eval_minibatch_multiplier: The minibatch size to use for evaluation as a fraction
+        of the max minibatch size.
+    effective_batch_size: The product of the train batch size and gradient
+        accumulation steps. This is useful when we have to use very small minibatches
+        due to limited VRAM, but want to simulate a larger batch size.
     env_minibatch_multiplier: Multiplier for the minibatch size. This should usually
         be set by interpolation from the EnvironmentConfig rather in each model
         config directly.
@@ -101,9 +104,10 @@ class ModelConfig:
     # https://omegaconf.readthedocs.io/en/2.1_branch/structured_config.html#interpolations
     inference_type: str = "${dataset.inference_type}"
     strict_load: bool = False
-    train_minibatch_size: int = 16
-    eval_minibatch_multiplier: float = 2
-    gradient_accumulation_steps: int = 1
+    max_minibatch_size: int = 32
+    train_minibatch_multiplier: float = 0.5
+    eval_minibatch_multiplier: float = 1.0
+    effective_batch_size: int = 8
     env_minibatch_multiplier: float = SI("${environment.minibatch_multiplier}")
     generation_config: Optional[GenerationConfig] = None
     dtype: str = "float32"
@@ -116,6 +120,8 @@ class ModelConfig:
 
         assert hasattr(torch, self.dtype), f"Invalid model dtype torch.{self.dtype}"
         assert isinstance(getattr(torch, self.dtype), torch.dtype)
+        assert 0 < self.train_minibatch_multiplier <= 1
+        assert 0 < self.eval_minibatch_multiplier <= 1
 
 
 cs = ConfigStore.instance()
