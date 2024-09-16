@@ -723,7 +723,10 @@ class AdversarialTraining(Training):
                 adversarial_trainer.do_dummy_train_step = True
                 # If we're in round 0 and we're skipping the first round, we can't have
                 # a checkpoint to resume from (since those are saved by .train)
-                assert checkpoint is None or checkpoint is False
+                if checkpoint:
+                    logger.info(
+                        f"Skipping first round of training, so ignoring {checkpoint}"
+                    )
                 adversarial_trainer.train(resume_from_checkpoint=False)
                 adversarial_trainer.train_dataset = train_dataset_temp
                 adversarial_trainer.do_dummy_train_step = False
