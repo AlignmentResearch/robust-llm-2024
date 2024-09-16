@@ -551,25 +551,45 @@ class AdversarialTraining(Training):
         """
         if not os.path.isdir(self.output_dir):
             return None
-        checkpoints = [
+        possible_checkpoints = [
             f
             for f in glob.iglob(f"{self.output_dir}/round-*/checkpoint-*")
             if os.path.isdir(f)
-            and all([sub_f in os.listdir(f) for sub_f in CORE_CHECKPOINT_FILES])
+        ]
+
+        complete_checkpoints = [
+            f
+            for f in possible_checkpoints
+            if all([sub_f in os.listdir(f) for sub_f in CORE_CHECKPOINT_FILES])
             and any([sub_f in os.listdir(f) for sub_f in WEIGHT_FILES])
             and all([sub_f in os.listdir(f) for sub_f in ADV_FILES])
         ]
-        if len(checkpoints) == 0:
+        partial_checkpoints = list(
+            set(possible_checkpoints) - set(complete_checkpoints)
+        )
+        self.archive_partial_checkpoints(partial_checkpoints)
+
+        if len(complete_checkpoints) == 0:
             return None
         # Sort by round number and then by checkpoint number
-        checkpoints = sorted(
-            checkpoints,
+        complete_checkpoints = sorted(
+            complete_checkpoints,
             key=lambda x: (
                 int(x.split("/")[-2].split("-")[-1]),
                 int(x.split("/")[-1].split("-")[-1]),
             ),
         )
-        return checkpoints[-1]
+        return complete_checkpoints[-1]
+
+    def archive_partial_checkpoints(self, partial_checkpoints: list[str]) -> None:
+        if not partial_checkpoints:
+            return
+        logger.warning(
+            "Some partial checkpoints were found, which will be archived: %s",
+            partial_checkpoints,
+        )
+        for partial_checkpoint in partial_checkpoints:
+            os.rename(partial_checkpoint, "archive-partial-" + partial_checkpoint)
 
     @property
     def num_adversarial_training_rounds(self) -> int:
