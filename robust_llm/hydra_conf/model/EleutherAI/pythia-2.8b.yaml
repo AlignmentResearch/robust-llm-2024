@@ -1,5 +1,3 @@
 name_or_path: "EleutherAI/pythia-2.8b"
 family: "pythia"
 max_minibatch_size: 8
-eval_minibatch_multiplier: 4
-gradient_accumulation_steps: 2

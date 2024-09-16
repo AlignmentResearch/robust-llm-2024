@@ -1,5 +1,3 @@
 name_or_path: "EleutherAI/pythia-1.4b"
 family: "pythia"
-# We're capping the training batch size to 8 for consistency across model sizes.
 max_minibatch_size: 16
-eval_minibatch_multiplier: 4
