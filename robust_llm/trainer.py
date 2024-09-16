@@ -245,6 +245,11 @@ class AdversarialTrainer(RLLMTrainer):
         **kwargs,
     ) -> TrainOutput:
         output = super().train(**kwargs)
+        if self.do_dummy_train_step:
+            # Skip length mismatch check if we're doing a dummy train step
+            self.computed_losses = []
+            self.num_epochs_done = 0
+            return output
         if self.accelerator is None or self.accelerator.is_main_process:
             if self.args.gradient_accumulation_steps == 1:
                 assert self.computed_losses == []
