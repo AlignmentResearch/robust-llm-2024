@@ -69,6 +69,16 @@ class RLLMTrainer(Trainer):
         super().__init__(**trainer_kwargs)
         self._current_batch_size: int = -1
         self.rng = DistributedRNG(seed=self.args.seed, accelerator=self.accelerator)
+        if self.args.n_gpu > 1:  # Number of GPUs in this process
+            # We conflate the number of GPUs with the number of processes
+            # because that's always true in our launched jobs.
+            # If the number of devices and processes is different, the code will
+            # probably run fine, but some hyperparameters may be off.
+            warnings.warn(
+                f"Process uses {self.args.n_gpu} GPUs. Training with >1 GPU per"
+                " process may not work as expected. Set CUDA_VISIBLE_DEVICES."
+            )
+            raise ValueError("Training with >1 GPU per process.")
 
         if (
             self.accelerator is not None
