@@ -649,6 +649,10 @@ class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
     ):
         """Save the full AdversarialTrainingState alongside HF trainer state."""
         assert isinstance(self.training.trainer, AdversarialTrainer)
+        if self.training.trainer.do_dummy_train_step:
+            # We avoid saving state in a dummy train step because we don't
+            # want to try to resume in this round.
+            return
         assert self.training.trainer.rng is not None
         checkpoint_folder = f"{PREFIX_CHECKPOINT_DIR}-{state.global_step}"
         # We set trial to None as this is a HuggingFace argument for
