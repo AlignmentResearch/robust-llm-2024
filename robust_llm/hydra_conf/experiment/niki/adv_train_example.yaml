@@ -4,7 +4,7 @@ defaults:
 - /attack@evaluation.evaluation_attack: RANDOM_TOKEN
 
 training:
-  model_save_path_prefix_or_hf: null
+  save_name: null
   adversarial:
     num_examples_to_generate_each_round: 1
 

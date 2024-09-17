@@ -741,6 +741,7 @@ class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
             validation_attack_rng=getattr(self.training.validation_attack, "rng"),
         )
         adv_state.save(output_dir)
+        self.training.clean_checkpoints_and_return_valid()
 
 
 class EvaluationLoopCallback(TrainerCallback):

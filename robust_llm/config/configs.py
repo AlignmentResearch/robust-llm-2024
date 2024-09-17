@@ -211,7 +211,7 @@ class TrainingConfig:
     logging_steps: int = 500
     save_strategy: str = "steps"
     save_steps: int = 500
-    save_total_limit: int = 1
+    save_total_limit: int = 2
     log_full_datasets_to_wandb: bool = False
     save_prefix: str = SHARED_DATA_DIR
     save_name: Optional[str] = None

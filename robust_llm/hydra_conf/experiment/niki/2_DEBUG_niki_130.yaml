@@ -14,7 +14,7 @@ evaluation:
 training:
   optimizer: "adafactor"
   logging_steps: 240  # Matches Training/standard-ft.yaml
-  model_save_path_prefix_or_hf: null
+  save_name: null
   num_train_epochs: 1
   learning_rate: 1e-5
   lr_scheduler_type: "constant"  # TODO: see if this works ok

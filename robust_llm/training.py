@@ -258,10 +258,7 @@ class Training:
                 )
             )
 
-        self.maybe_save_model_to_path_or_hf(
-            save_prefix=self.config.save_prefix,
-            save_to=self.config.save_to,
-        )
+        self.maybe_save_model_to_path_or_hf()
 
     def compute_metrics(self, eval_preds: EvalPrediction) -> dict:
         logits, labels = eval_preds
@@ -299,10 +296,14 @@ class Training:
         log_dataset_to_wandb(self.trainer.train_dataset, "train_dataset")
         log_dataset_to_wandb(validation_dataset, "validation_dataset")
 
+    def get_model_directory(self, revision: str = "") -> Path:
+        """Get the directory to save the model to disk for future evaluation."""
+        save_prefix = self.config.save_prefix
+        model_dir = self.model_name_to_save + revision
+        return Path(save_prefix) / "models" / model_dir
+
     def maybe_save_model_to_path_or_hf(
         self,
-        save_prefix: str,
-        save_to: SaveTo,
         adv_tr_round: Optional[int] = None,
     ) -> None:
         assert self.trainer is not None
@@ -310,8 +311,9 @@ class Training:
         # Make sure everything is in sync before saving.
         self.trainer.accelerator.wait_for_everyone()
 
+        save_to = self.config.save_to
         adv_tr_round_str = (
-            f"adv-training-round-{adv_tr_round}" if adv_tr_round is not None else None
+            f"-adv-training-round-{adv_tr_round}" if adv_tr_round is not None else ""
         )
         if save_to == SaveTo.NONE:
             logger.info(
@@ -319,9 +321,7 @@ class Training:
             )
 
         if save_to in (SaveTo.DISK, SaveTo.BOTH):
-            adv_suffix = adv_tr_round_str or ""
-            model_dir = self.model_name_to_save + adv_suffix
-            output_dir = Path(save_prefix) / "models" / model_dir
+            output_dir = self.get_model_directory(adv_tr_round_str)
             if wandb.run is not None:
                 wandb.run.summary["saved_dir"] = str(output_dir)
             logger.info("Saving the model/tokenizer to %s", output_dir)
@@ -528,16 +528,18 @@ class AdversarialTraining(Training):
             )
         return num_training_steps
 
-    def get_last_checkpoint(self) -> str | None:
-        """Get the directory path to the most recent completed checkpoint.
+    def clean_checkpoints_and_return_valid(self) -> list[str]:
+        """Clean up checkpoints and return the valid ones.
 
         We scan the output directory for the following conditions:
         - It is a directory.
         - It has the structure "round-{round}/checkpoint-{checkpoint}".
         - It contains all the necessary files.
+
+        We delete incomplete and old checkpoints.
         """
         if not os.path.isdir(self.output_dir):
-            return None
+            return []
         possible_checkpoints = [
             f
             for f in glob.iglob(f"{self.output_dir}/round-*/checkpoint-*")
@@ -554,10 +556,9 @@ class AdversarialTraining(Training):
         partial_checkpoints = list(
             set(possible_checkpoints) - set(complete_checkpoints)
         )
-        self.archive_partial_checkpoints(partial_checkpoints)
 
         if len(complete_checkpoints) == 0:
-            return None
+            return []
         # Sort by round number and then by checkpoint number
         complete_checkpoints = sorted(
             complete_checkpoints,
@@ -566,26 +567,27 @@ class AdversarialTraining(Training):
                 int(x.split("/")[-1].split("-")[-1]),
             ),
         )
-        return complete_checkpoints[-1]
+        checkpoints_outside_limit = complete_checkpoints[
+            : max(len(complete_checkpoints) - self.config.save_total_limit, 0)
+        ]
+        self.remove_checkpoints(partial_checkpoints + checkpoints_outside_limit)
+        return complete_checkpoints
 
-    def archive_partial_checkpoints(self, partial_checkpoints: list[str]) -> None:
-        if not partial_checkpoints:
-            return
-        logger.warning(
-            "Some partial checkpoints were found, which will be archived: %s",
-            partial_checkpoints,
-        )
+    def get_last_checkpoint(self) -> str | None:
+        """Get the directory path to the most recent completed checkpoint."""
+        complete_checkpoints = self.clean_checkpoints_and_return_valid()
+        return complete_checkpoints[-1] if complete_checkpoints else None
+
+    def remove_checkpoints(self, partial_checkpoints: list[str]) -> None:
         for partial_checkpoint in partial_checkpoints:
-            new_path = partial_checkpoint.replace(
-                "checkpoint", "archive-partial-checkpoint"
+            assert (
+                "round-" in partial_checkpoint and "checkpoint-" in partial_checkpoint
             )
-            # delete any existing archive-partial-checkpoint directory
-            if os.path.exists(new_path):
-                shutil.rmtree(new_path)
-            os.rename(
+            logger.warning(
+                "Deleting checkpoint: %s",
                 partial_checkpoint,
-                new_path,
             )
+            shutil.rmtree(partial_checkpoint)
 
     @property
     def num_adversarial_training_rounds(self) -> int:
@@ -914,8 +916,6 @@ class AdversarialTraining(Training):
             self._log_debug_info()
 
             self.maybe_save_model_to_path_or_hf(
-                save_prefix=self.config.save_prefix,
-                save_to=self.config.save_to,
                 adv_tr_round=self.round,
             )
 
