@@ -143,6 +143,7 @@ class RLLMTrainer(Trainer):
                 self.args,
                 torch.load(os.path.join(resume_from_checkpoint, TRAINING_ARGS_NAME)),
             )
+            self._load_rng_state(resume_from_checkpoint)
 
         return super().train(
             resume_from_checkpoint=resume_from_checkpoint,
@@ -246,6 +247,10 @@ class AdversarialTrainer(RLLMTrainer):
         )
         return self.lr_scheduler
 
+    @property
+    def is_main_process(self) -> bool:
+        return self.accelerator is None or self.accelerator.is_main_process
+
     @override
     def train(
         self,
@@ -254,41 +259,63 @@ class AdversarialTrainer(RLLMTrainer):
         ignore_keys_for_eval: Optional[list[str]] = None,
         **kwargs,
     ) -> TrainOutput:
-        output = super().train(**kwargs)
-        if self.do_dummy_train_step:
-            # Skip length mismatch check if we're doing a dummy train step
+        output = super().train(
+            resume_from_checkpoint=resume_from_checkpoint,
+            trial=trial,
+            ignore_keys_for_eval=ignore_keys_for_eval,
+            **kwargs,
+        )
+        if self.do_dummy_train_step or resume_from_checkpoint is not None:
+            # Skip length mismatch check if we're doing a dummy train step or
+            # resuming from a checkpoint.
             self.computed_losses = []
             self.num_epochs_done = 0
             return output
-        if self.accelerator is None or self.accelerator.is_main_process:
-            if self.args.gradient_accumulation_steps == 1:
-                assert self.computed_losses == []
-            else:
-                # self.computed_losses is not empty if we have a partial epoch.
-                # We set carefully max_steps in
-                # AdversarialTraining.__post_init__ to hit the right number of
-                # epochs but we can still overshoot by a few (less than
-                # gradient_accumulation_steps) mini-batches. E.g., if we have a
-                # training dataset [0,1,2,3,4], mini-batch size of 2, gradient
-                # accumulation steps of 2, and 3 epochs:
-                # - Minibatch 1:  0, 1
-                # - Minibatch 2:  2, 3. Step 1.
-                # - Minibatch 3:  4.
-                # - Minibatch 4:  0, 1. Step 2.
-                # ...
-                # - Minibatch 8:  2, 3. Step 4.
-                # - Minibatch 9:  4.    Finished epoch 3.
-                # - Minibatch 10: 0, 1. Step 5.
-                # The correct choice of max_steps is 5, but this leaves the
-                # losses for [0,1] in self.computed_losses.
-                if len(self.computed_losses) > 0:
-                    self.computed_losses = []
-            assert self.num_epochs_done == self.args.num_train_epochs, (
-                f"Expected {self.args.num_train_epochs} epochs,"
-                f" got {self.num_epochs_done}."
-            )
-            self.num_epochs_done = 0
+        self.check_num_epochs_done()
         return output
+
+    def check_num_epochs_done(self) -> None:
+        """Check that the number of epochs done is as expected.
+
+        In order to track adversarial losses efficiently, we append to the
+        computed_losses list in the `compute_loss` method for each batch.
+        Once all losses have been computed, we update the adversarial losses
+        and reset the computed_losses list. This is done in the
+        `maybe_update_adversarial_losses` method.
+        After a full training loop is completed, we want to check that we were
+        not left with dangling values in computed_losses. This is easy in the
+        case of gradient_accumulation_steps=1, but for larger values, we need
+        to account for the fact that there may be a partial epoch at the end.
+        """
+        if not self.is_main_process:
+            return
+        if self.args.gradient_accumulation_steps == 1:
+            assert self.computed_losses == []
+        else:
+            # self.computed_losses is not empty if we have a partial epoch.
+            # We set carefully max_steps in
+            # AdversarialTraining.__post_init__ to hit the right number of
+            # epochs but we can still overshoot by a few (less than
+            # gradient_accumulation_steps) mini-batches. E.g., if we have a
+            # training dataset [0,1,2,3,4], mini-batch size of 2, gradient
+            # accumulation steps of 2, and 3 epochs:
+            # - Minibatch 1:  0, 1
+            # - Minibatch 2:  2, 3. Step 1.
+            # - Minibatch 3:  4.
+            # - Minibatch 4:  0, 1. Step 2.
+            # ...
+            # - Minibatch 8:  2, 3. Step 4.
+            # - Minibatch 9:  4.    Finished epoch 3.
+            # - Minibatch 10: 0, 1. Step 5.
+            # The correct choice of max_steps is 5, but this leaves the
+            # losses for [0,1] in self.computed_losses.
+            if len(self.computed_losses) > 0:
+                self.computed_losses = []
+        assert self.num_epochs_done == self.args.num_train_epochs, (
+            f"Expected {self.args.num_train_epochs} epochs,"
+            f" got {self.num_epochs_done}."
+        )
+        self.num_epochs_done = 0
 
     def maybe_update_adversarial_losses(self):
         """Update the adversarial losses if all losses have been computed."""
@@ -327,7 +354,7 @@ class AdversarialTrainer(RLLMTrainer):
         if self.accelerator is not None:
             logits, labels = self.accelerator.gather_for_metrics((logits, labels))
 
-        if self.accelerator is None or self.accelerator.is_main_process:
+        if self.is_main_process:
             losses = F.cross_entropy(logits, labels, reduction="none")
             self.computed_losses += losses.tolist()
         self.maybe_update_adversarial_losses()
@@ -579,7 +606,12 @@ class AdversarialTrainingState:
             ),
         }
 
+    @property
+    def process(self) -> int:
+        return 0 if self.rng.accelerator is None else self.rng.accelerator.process_index
+
     def save(self, checkpoint_dir: str) -> None:
+        logger.debug(f"Saving adversarial training state: {self.to_dict()}, ")
         start_time = time.time()
         json.dump(
             obj=self.to_dict(),
@@ -618,6 +650,16 @@ class AdversarialTrainingState:
         adversarial_dataset = Dataset.load_from_disk(
             os.path.join(checkpoint_dir, ADV_DATA_NAME)
         )
+        process = 0 if rng.accelerator is None else rng.accelerator.process_index
+        logger.debug(
+            f"Loaded adversarial training state: round={current_round}, "
+            f"total_flops={total_flops:.2E}, "
+            f"examples={len(adversarial_dataset)}, "
+            f"rng state={rng.getstate()}, "
+            f"training_attack_rng={state.get('training_attack_rng')}, "
+            f"validation_attack_rng={state.get('validation_attack_rng')}, "
+            f"process={process}."
+        )
         return cls(
             current_round=current_round,
             total_flops=total_flops,
@@ -635,10 +677,26 @@ class AdversarialTrainingState:
         assert isinstance(training.trainer, AdversarialTrainer)
         training.trainer.rng = self.rng
         training.trainer.adversarial_dataset = self.adversarial_dataset
+        loaded_training_attack_rng = None
+        loaded_validation_attack_rng = None
         if self.training_attack_rng is not None:
             setattr(training.training_attack, "rng", self.training_attack_rng)
+            assert training.training_attack is not None
+            loaded_training_attack_rng = training.training_attack.rng.getstate()
         if self.validation_attack_rng is not None:
             setattr(training.validation_attack, "rng", self.validation_attack_rng)
+            assert training.validation_attack is not None
+            loaded_validation_attack_rng = training.validation_attack.rng.getstate()
+        training.total_flops = self.total_flops
+        logger.debug(
+            "Applied state to training: "
+            f"examples={len(training.trainer.adversarial_dataset)}, "
+            f"flops={training.total_flops:.2E}, "
+            f"rng={training.trainer.rng.getstate()}, "
+            f"training_attack_rng={loaded_training_attack_rng}, "
+            f"validation_attack_rng={loaded_validation_attack_rng}."
+            f"process={self.process}, "
+        )
         return self.current_round
 
 

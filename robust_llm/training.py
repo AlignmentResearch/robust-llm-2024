@@ -2,6 +2,7 @@ import dataclasses
 import glob
 import math
 import os
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -223,7 +224,7 @@ class Training:
         We scan the output directory for the following conditions:
         - It is a directory.
         - It starts with "checkpoint".
-        - It contains all the files in self.checkpoint_files.
+        - It contains all the necessary files.
         """
         if not os.path.isdir(self.output_dir):
             return None
@@ -527,27 +528,13 @@ class AdversarialTraining(Training):
             )
         return num_training_steps
 
-    @property
-    def checkpoint_files(self) -> tuple[str, ...]:
-        return (
-            CORE_CHECKPOINT_FILES
-            + (
-                (
-                    SAFE_WEIGHTS_NAME
-                    if self.training_arguments.save_safetensors
-                    else WEIGHTS_NAME
-                ),
-            )
-            + ADV_FILES
-        )
-
     def get_last_checkpoint(self) -> str | None:
         """Get the directory path to the most recent completed checkpoint.
 
         We scan the output directory for the following conditions:
         - It is a directory.
         - It has the structure "round-{round}/checkpoint-{checkpoint}".
-        - It contains all the files in self.checkpoint_files.
+        - It contains all the necessary files.
         """
         if not os.path.isdir(self.output_dir):
             return None
@@ -589,7 +576,16 @@ class AdversarialTraining(Training):
             partial_checkpoints,
         )
         for partial_checkpoint in partial_checkpoints:
-            os.rename(partial_checkpoint, "archive-partial-" + partial_checkpoint)
+            new_path = partial_checkpoint.replace(
+                "checkpoint", "archive-partial-checkpoint"
+            )
+            # delete any existing archive-partial-checkpoint directory
+            if os.path.exists(new_path):
+                shutil.rmtree(new_path)
+            os.rename(
+                partial_checkpoint,
+                new_path,
+            )
 
     @property
     def num_adversarial_training_rounds(self) -> int:
@@ -707,11 +703,14 @@ class AdversarialTraining(Training):
         checkpoint = self.get_last_checkpoint()
         if checkpoint is not None:
             logger.info(f"Loading adversarial state from {checkpoint}")
-            state = AdversarialTrainingState.load(checkpoint, self.victim.accelerator)
-            starting_round = state.apply_to_training(self)
+            state_to_resume = AdversarialTrainingState.load(
+                checkpoint, self.victim.accelerator
+            )
+            starting_round = state_to_resume.current_round
             logger.info(f"Resuming from round {starting_round}")
         else:
             starting_round = 0
+            state_to_resume = None
 
         # Run the adversarial training loop
         table = WandbTable("adversarial_eval/table")
@@ -754,26 +753,36 @@ class AdversarialTraining(Training):
             else:
                 logger.info("Victim started training in round %s", self.round)
                 self._log_debug_info()
-
-                with self.victim.dont_count_flops():
-                    # We rely on HF to count FLOPs during training
-
+                # We resume from checkpoint only if:
+                # 1. We allow checkpointing, and
+                # 2. there is an existing checkpoint, and
+                # 3. We haven't already resumed from a checkpoint in this
+                #    experiment run.
+                resume_from_checkpoint = (
+                    checkpoint
+                    if self.environment_config.allow_checkpointing
+                    and (self.round == starting_round)
+                    else False
+                )
+                if resume_from_checkpoint:
+                    logger.debug(
+                        f"Resuming from checkpoint {checkpoint} so "
+                        "we don't need to update the augmented training set."
+                    )
+                else:
                     adversarial_trainer.update_augmented_training_set(
                         self.config.log_full_datasets_to_wandb, self.round
                     )
-
+                if self.round == starting_round and (state_to_resume is not None):
+                    logger.info(
+                        "Applying loaded state to adversarial training for round %s",
+                        self.round,
+                    )
+                    state_to_resume.apply_to_training(self)
+                with self.victim.dont_count_flops():
+                    # We rely on HF to count FLOPs during training
                     train_out = adversarial_trainer.train(
-                        # We resume from checkpoint only if:
-                        # 1. We allow checkpointing, and
-                        # 2. there is an existing checkpoint, and
-                        # 3. We haven't already resumed from a checkpoint in this
-                        #    experiment run.
-                        resume_from_checkpoint=(
-                            checkpoint
-                            if self.environment_config.allow_checkpointing
-                            and (self.round == starting_round)
-                            else False
-                        )
+                        resume_from_checkpoint=resume_from_checkpoint
                     )
 
                 logger.info("Victim finished training in round %s ", self.round)
