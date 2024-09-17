@@ -191,11 +191,8 @@ jobs:
           command: |
             mkdir -p /tmp/test-reports
 
-            # Put error message of known flakes here.
-            FLAKE_ERROR_MESSAGES=(
-              # GH#826
-              "FileNotFoundError: \[Errno 2\] No such file or directory: '/home/circleci/\.cache/huggingface/"
-            )
+            # Put error message of known flakes in this array.
+            FLAKE_ERROR_MESSAGES=()
             FLAKE_ERROR_REGEX=$(printf "%s\|" "${FLAKE_ERROR_MESSAGES[@]}")  # Join array elements with "\|"
             FLAKE_ERROR_REGEX=${FLAKE_ERROR_REGEX%\\|}  # Remove the trailing "\|"
             FLAKE_ERROR_REGEX="\($FLAKE_ERROR_REGEX\)"
