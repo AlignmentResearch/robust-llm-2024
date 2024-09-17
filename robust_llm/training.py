@@ -681,6 +681,7 @@ class AdversarialTraining(Training):
     def run_trainer(self) -> None:
         adversarial_trainer = self.trainer
         assert isinstance(adversarial_trainer, AdversarialTrainer)
+        assert self.config.adversarial is not None
 
         # Prepare attacks
         self.training_attack = create_attack(
@@ -811,39 +812,43 @@ class AdversarialTraining(Training):
             # HF Trainer during training, otherwise we want it in eval mode.
             self.victim.eval()
 
-            # Perform adversarial evaluation every round
-            victim_log_counter = self.victim_training_logging_counter
-            compute_robustness_metric = self.evaluation_config.compute_robustness_metric
-            round_metrics = do_adversarial_evaluation(
-                victim=self.victim,
-                dataset=self.eval_rllm_dataset["validation"],
-                attack=self.validation_attack,
-                n_its=self.validation_iterations,
-                final_success_binary_callback=self.victim_success_binary_callback,
-                num_examples_to_log_detailed_info=self.evaluation_config.num_examples_to_log_detailed_info,  # noqa: E501
-                adv_training_round=self.round,
-                victim_training_step_count=victim_log_counter.step_count,
-                victim_training_datapoint_count=victim_log_counter.datapoint_count,
-                global_step_count=victim_log_counter.root.step_count,
-                global_datapoint_count=victim_log_counter.root.datapoint_count,
-                wandb_table=table,
-                # We don't use checkpointing of attacks during adversarial training
-                resume_from_checkpoint=False,
-                compute_robustness_metric=compute_robustness_metric,
-            )
+            if self.config.adversarial.evaluate_during_training:
 
-            if (
-                round_metrics["adversarial_eval/attack_success_rate"]
-                < self.stopping_attack_success_rate
-            ):
-                logger.info(
-                    f"Stopping adversarial training at round {round} because attack "
-                    f"success rate "
-                    f"{round_metrics['adversarial_eval/attack_success_rate']} "
-                    "is below the stopping threshold "
-                    f"{self.stopping_attack_success_rate}"
+                # Perform adversarial evaluation every round
+                victim_log_counter = self.victim_training_logging_counter
+                compute_robustness_metric = (
+                    self.evaluation_config.compute_robustness_metric
                 )
-                break
+                round_metrics = do_adversarial_evaluation(
+                    victim=self.victim,
+                    dataset=self.eval_rllm_dataset["validation"],
+                    attack=self.validation_attack,
+                    n_its=self.validation_iterations,
+                    final_success_binary_callback=self.victim_success_binary_callback,
+                    num_examples_to_log_detailed_info=self.evaluation_config.num_examples_to_log_detailed_info,  # noqa: E501
+                    adv_training_round=self.round,
+                    victim_training_step_count=victim_log_counter.step_count,
+                    victim_training_datapoint_count=victim_log_counter.datapoint_count,
+                    global_step_count=victim_log_counter.root.step_count,
+                    global_datapoint_count=victim_log_counter.root.datapoint_count,
+                    wandb_table=table,
+                    # We don't use checkpointing of attacks during adversarial training
+                    resume_from_checkpoint=False,
+                    compute_robustness_metric=compute_robustness_metric,
+                )
+
+                if (
+                    round_metrics["adversarial_eval/attack_success_rate"]
+                    < self.stopping_attack_success_rate
+                ):
+                    logger.info(
+                        f"Stopping adversarial training at round {round} because "
+                        f"attack success rate "
+                        f"{round_metrics['adversarial_eval/attack_success_rate']} "
+                        "is below the stopping threshold "
+                        f"{self.stopping_attack_success_rate}"
+                    )
+                    break
 
             if self.total_flops > self.stopping_flops:
                 logger.info(
@@ -919,7 +924,8 @@ class AdversarialTraining(Training):
                 adv_tr_round=self.round,
             )
 
-        table.save()
+        if self.config.adversarial.evaluate_during_training:
+            table.save()
 
     def update_flops(self, flop_count: FlopCount):
         if (

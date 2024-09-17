@@ -115,6 +115,8 @@ class AdversarialTrainingConfig:
             adversarial training.
         stopping_flops:
             The number of FLOPs to use as a stopping criterion for adversarial training.
+        evaluate_during_training:
+            Whether run adversarial evaluation on the model during adversarial training.
     """
 
     num_examples_to_generate_each_round: int = 500
@@ -133,6 +135,7 @@ class AdversarialTrainingConfig:
         default_factory=lambda: AttackScheduleConfig(start=10)
     )
     stopping_flops: float = float("inf")
+    evaluate_during_training: bool = False
 
     def __post_init__(self):
         assert 0 <= self.loss_rank_weight <= 1, "loss_rank_weight should be in [0, 1]."
