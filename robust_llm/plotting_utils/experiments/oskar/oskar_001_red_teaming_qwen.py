@@ -129,7 +129,6 @@ styler.set_caption("Qwen1.5 two-way table of Attack Success Rate")
 styler.format_index("{:.0e}", axis=0)
 styler.format_index("{:.0e}", axis=1)
 
-styler
 # %%
 # ##############################################################################
 # Regressions

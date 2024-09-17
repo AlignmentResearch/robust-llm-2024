@@ -28,5 +28,4 @@ if __name__ == "__main__":
         cpu=8,
         priority="normal-batch",
         gpu=2,
-        use_accelerate=True,
     )

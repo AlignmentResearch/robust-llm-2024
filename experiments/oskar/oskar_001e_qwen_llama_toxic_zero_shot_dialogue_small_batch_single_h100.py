@@ -43,5 +43,4 @@ if __name__ == "__main__":
         cpu=4,
         priority="normal-batch",
         gpu=1,
-        use_accelerate=False,
     )

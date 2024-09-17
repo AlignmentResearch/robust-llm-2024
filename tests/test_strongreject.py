@@ -97,7 +97,7 @@ class MagicWrappedModel(WrappedModel):
         return tokenizer
 
     @property
-    def num_processes(self):
+    def num_processes(self):  # type: ignore
         return 1
 
 

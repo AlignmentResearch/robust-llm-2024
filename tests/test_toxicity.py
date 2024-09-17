@@ -47,7 +47,7 @@ class MagicWrappedModel(WrappedModel):
         self.generation_config = None
 
     @property
-    def num_processes(self):
+    def num_processes(self):  # type: ignore
         return 1
 
     def generate(

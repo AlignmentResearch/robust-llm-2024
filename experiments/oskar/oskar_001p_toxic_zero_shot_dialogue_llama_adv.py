@@ -66,5 +66,4 @@ if __name__ == "__main__":
         cpu=CPU,
         priority="normal-batch",
         gpu=GPUS,
-        use_accelerate=True,
     )
