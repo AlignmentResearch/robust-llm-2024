@@ -485,25 +485,6 @@ class AdversarialTraining(Training):
             self.num_adversarial_training_rounds,
         )
 
-        if self.training_arguments.gradient_accumulation_steps > 1:
-            # When gradient_accumulation_steps > 1, Trainer may stop short
-            # of the desired number of epochs due to a rounding issue:
-            # https://github.com/huggingface/transformers/issues/33455
-            # For ordinary training this isn't a big deal. For adversarial
-            # training, AdversarialTrainer.maybe_update_adversarial_losses only
-            # runs every full epoch, so we set max_steps (which overrides
-            # num_train_epochs) to hit our desired epoch count.
-            global_minibatch_size = (
-                self.victim.num_processes * self.per_device_train_batch_size
-            )
-            num_minibatches_per_epoch = math.ceil(
-                len(self.hf_train) / global_minibatch_size
-            )
-            num_minibatches = num_minibatches_per_epoch * self.config.num_train_epochs
-            self.training_arguments.max_steps = math.ceil(
-                num_minibatches / self.gradient_accumulation_steps
-            )
-
     def get_total_training_steps(self) -> int:
         num_processes = Accelerator().num_processes
         assert self.config.adversarial is not None

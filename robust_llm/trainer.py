@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import time
 import warnings
@@ -259,6 +260,24 @@ class AdversarialTrainer(RLLMTrainer):
         ignore_keys_for_eval: Optional[list[str]] = None,
         **kwargs,
     ) -> TrainOutput:
+        if (self.args.gradient_accumulation_steps > 1) and not self.do_dummy_train_step:
+            # When gradient_accumulation_steps > 1, Trainer may stop short
+            # of the desired number of epochs due to a rounding issue:
+            # https://github.com/huggingface/transformers/issues/33455
+            # For ordinary training this isn't a big deal. For adversarial
+            # training, AdversarialTrainer.maybe_update_adversarial_losses only
+            # runs every full epoch, so we set max_steps (which overrides
+            # num_train_epochs) to hit our desired epoch count.
+            global_minibatch_size = (
+                self.accelerator.num_processes * self.args.per_device_train_batch_size
+            )
+            num_minibatches_per_epoch = math.ceil(
+                len(self.train_dataset) / global_minibatch_size
+            )
+            num_minibatches = num_minibatches_per_epoch * self.args.num_train_epochs
+            self.args.max_steps = math.ceil(
+                num_minibatches / self.args.gradient_accumulation_steps
+            )
         output = super().train(
             resume_from_checkpoint=resume_from_checkpoint,
             trial=trial,
