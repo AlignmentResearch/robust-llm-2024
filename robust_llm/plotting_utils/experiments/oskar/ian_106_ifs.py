@@ -1,10 +1,19 @@
 # %%
 import os
-from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+
+from robust_llm.file_utils import compute_repo_path
+from robust_llm.plotting_utils.tools import (
+    create_legend,
+    create_path_and_savefig,
+    get_color_palette,
+    get_legend_handles,
+    set_up_paper_plot,
+)
+from robust_llm.wandb_utils.constants import MODEL_SIZES
 
 GROUPS = [
     "ian_106_gcg_pythia_imdb",
@@ -16,48 +25,47 @@ GROUPS = [
     "ian_112_rt_pythia_wl",
     "ian_113_rt_pythia_spam",
 ]
-OUTPUTS_DIR = "../../../../outputs"
-# %%
-MODEL_NAMES = [
-    "pythia-14m",
-    "pythia-31m",
-    "pythia-70m",
-    "pythia-160m",
-    "pythia-410m",
-    "pythia-1b",
-    "pythia-1.4b",
-    "pythia-2.8b",
-    "pythia-6.9b",
-    "pythia-12b",
-]
 
 
 # %%
 def plot_ifs_for_group(group_name: str):
-    path = f"{OUTPUTS_DIR}/ifs_{group_name}.csv"
+    root = compute_repo_path()
+    path = os.path.join(root, "outputs", f"ifs_{group_name}.csv")
     if not os.path.exists(path):
         return
     attack = group_name.split("_")[2]
     dataset = group_name.split("_")[-1]
-    Path(f"{OUTPUTS_DIR}/ifs/{attack}").mkdir(parents=True, exist_ok=True)
     df = pd.read_csv(path)
     assert df.columns.tolist() == ["model_idx", "seed_idx", "ifs", "decile"]
     assert df.model_idx.between(0, 9).all()
     assert df.seed_idx.between(0, 4).all()
     assert df.decile.between(0, 10).all()
     assert len(df) == 11 * 5 * 10  # 11 deciles, 5 seeds, 10 models
-
-    df.to_csv(f"{OUTPUTS_DIR}/ifs/{attack}/{dataset}.csv", index=False)
-    df["model"] = df.model_idx.apply(lambda x: MODEL_NAMES[x])
+    df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
     df["asr"] = df.decile.mul(10)
     df.sort_values("model_idx", inplace=True)
 
     fig, ax = plt.subplots()
-    fig.suptitle(f"Iterations For Success metric for {group_name}")
-    sns.lineplot(data=df, x="asr", y="ifs", hue="model", ax=ax, palette="viridis")
-    ax.set_ylabel("Iterations required to reach attack success rate")
-    ax.set_xlabel("Attack success rate (%)")
-    fig.savefig(f"{OUTPUTS_DIR}/ifs/{attack}/{dataset}.pdf")
+    set_up_paper_plot(fig, ax)
+    color_data_name = "num_params"
+    palette = get_color_palette(df, color_data_name)
+    sns.lineplot(
+        data=df,
+        x="asr",
+        y="ifs",
+        hue=color_data_name,
+        ax=ax,
+        palette=palette,
+        legend=False,
+    )
+    ax.set_ylabel("Iterations required to reach ASR")
+    ax.set_xlabel("Attack Success Rate (%)")
+    fig.suptitle(f"{attack}/{dataset}".upper())
+    create_path_and_savefig(fig, "ifs", attack, dataset, "no_legend")
+    legend_handles = get_legend_handles(df, color_data_name, palette)
+    create_legend(color_data_name, ax, legend_handles, outside=False)
+    save_path = create_path_and_savefig(fig, "ifs", attack, dataset, "legend")
+    df.to_csv(str(save_path).replace("legend.pdf", "data.csv"), index=False)
 
 
 # %%

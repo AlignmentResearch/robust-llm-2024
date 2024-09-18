@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 
 from robust_llm.file_utils import compute_repo_path
 from robust_llm.plotting_utils.constants import MODEL_PLOTTING_NAMES
@@ -252,7 +254,7 @@ def extract_seed_from_name(name):
     return seed
 
 
-def _set_up_paper_plot(fig, ax) -> None:
+def set_up_paper_plot(fig, ax) -> None:
     fig.set_size_inches(3.5, 2.5)
     ax.grid(True, which="both", linestyle="--", linewidth=0.5, alpha=0.5, zorder=0)
     ax.minorticks_on()
@@ -280,6 +282,75 @@ def _get_n_parameter_updates(data: pd.DataFrame) -> None:
     )
 
 
+def get_color_palette(data: pd.DataFrame, color_data_name: str) -> dict:
+    if color_data_name == "num_params":
+        palette_color = "viridis"
+    else:
+        palette_color = "magma"
+    palette = sns.color_palette(
+        palette_color, data[color_data_name].nunique()  # type: ignore
+    )
+    palette_dict = dict(zip(sorted(data[color_data_name].unique()), palette))
+    return palette_dict
+
+
+def get_legend_handles(
+    data: pd.DataFrame, color_data_name: str, palette_dict: dict
+) -> dict:
+    legend_handles = {}
+    for name, _ in reversed(sorted(data.groupby(color_data_name))):
+        if name not in legend_handles:
+            if name in MODEL_SIZES:
+                ([model_index],) = np.where(np.array(MODEL_SIZES) == name)
+                label = MODEL_PLOTTING_NAMES[model_index]
+            else:
+                label = name
+
+            legend_handles[name] = plt.Line2D(  # type: ignore
+                xdata=[0],
+                ydata=[0],
+                color=palette_dict[name],
+                marker=".",
+                linestyle="-",
+                label=label,
+            )
+    return legend_handles
+
+
+def create_legend(
+    color_data_name: str,
+    ax: Axes,
+    legend_handles: dict,
+    loc: str = "best",
+    outside: bool = True,
+) -> None:
+    kwargs = {
+        "loc": loc,
+        "handles": legend_handles.values(),
+        "title_fontsize": "xx-small",
+        "fontsize": "xx-small",  # Reduce font size
+        "labelspacing": 0.2,  # Reduce vertical space between legend entries
+        "handletextpad": 0.5,  # Reduce space between handle and text
+        "borderpad": 0.3,  # Reduce padding between legend edge and content
+        "framealpha": 0.8,  # Add some transparency to the legend box
+    }
+    if outside:
+        kwargs["bbox_to_anchor"] = (1.05, 1)
+    if color_data_name == "adv_training_round":
+        ax.legend(
+            title="Adversarial Training Round",
+            ncols=10,
+            **kwargs,
+        )
+    elif color_data_name == "num_params":
+        ax.legend(
+            title="# params",
+            **kwargs,
+        )
+    else:
+        raise ValueError(f"We don't yet support {color_data_name} in the legend")
+
+
 def _draw_plot_adv_training(
     data: pd.DataFrame,
     x_data_name: str,
@@ -287,7 +358,7 @@ def _draw_plot_adv_training(
     title: str,
     save_as: str,
     save_dir: str,
-    metric: str = "adversarial_eval/attack_success_rate",
+    y_data_name: str = "adversarial_eval/attack_success_rate",
     xlim: tuple[float, float] = (0, 10),
     ylim: tuple[float, float] = (0, 1),
     legend: bool = False,
@@ -297,41 +368,34 @@ def _draw_plot_adv_training(
     # Make it one-indexed since evaluation happens after the training
     data["adv_training_round"] += 1
 
-    _, ax = plt.subplots()
+    fig, ax = plt.subplots()
     if x_data_name == "num_params":
-        palette_color = "magma"
         ax.set_xlabel("Model Size (# parameters)")
         plt.xscale("log")
     elif x_data_name == "adv_training_round":
-        palette_color = "viridis"
         ax.set_xlabel("Adversarial Training Round")
         plt.xlim(xlim)
     elif x_data_name == "n_parameter_updates":
         _get_n_parameter_updates(data)
-        palette_color = "viridis"
         ax.set_xlabel("# Parameter Updates")
         plt.xscale("log")
     else:
         raise ValueError(f"We don't yet support {x_data_name} on the x-axis")
 
-    # if legend:
-    #     plt.tight_layout(rect=[0, 0, 0.85, 1])  # type: ignore
+    palette_dict = get_color_palette(data, color_data_name)
 
-    palette = sns.color_palette(
-        palette_color, data[color_data_name].nunique()  # type: ignore
+    ax.set_ylabel(
+        y_data_name.replace("adversarial_eval/", "").replace("_", " ").title()
     )
-    palette_dict = dict(zip(sorted(data[color_data_name].unique()), palette))
-    ax.set_ylabel("Attack Success Rate")
     plt.title(title)
     plt.ylim(ylim)
-    _set_up_paper_plot(plt.gcf(), ax)
+    set_up_paper_plot(fig, ax)
 
     grouped = (
-        data.groupby([color_data_name, x_data_name])[metric]
+        data.groupby([color_data_name, x_data_name])[y_data_name]
         .agg(["min", "max", "median"])
         .reset_index()
     )
-    legend_handles = {}
 
     for name, group in reversed(sorted(grouped.groupby(color_data_name))):
         plt.fill_between(
@@ -349,53 +413,12 @@ def _draw_plot_adv_training(
             color=palette_dict[name],
             alpha=0.8,
         )
-        if name not in legend_handles:
-            if x_data_name in ["adv_training_round", "n_parameter_updates"]:
-                ([model_index],) = np.where(np.array(MODEL_SIZES) == name)
-                label = MODEL_PLOTTING_NAMES[model_index]
-            else:
-                label = name
-
-            legend_handles[name] = plt.Line2D(  # type: ignore
-                xdata=[0],
-                ydata=[0],
-                color=palette_dict[name],
-                marker=".",
-                linestyle="-",
-                label=label,
-            )
 
     if legend:
-        if x_data_name == "num_params":
-            plt.legend(title="Adv. Training Round", handles=legend_handles.values())
-            # plt.subplots_adjust(right=0.611)
-            ax.legend(
-                handles=legend_handles.values(),
-                title="Adversarial Training Round",
-                ncols=10,
-                bbox_to_anchor=(1.05, 1),
-                loc="upper left",
-            )
-        elif x_data_name == "adv_training_round":
-            plt.legend(title="Model Size", handles=legend_handles.values())
-            ax.legend(
-                handles=legend_handles.values(),
-                title="Model Size (# Parameters)",
-                # ncols=6,
-                bbox_to_anchor=(1.05, 1),
-                loc="upper left",
-            )
-        elif x_data_name == "n_parameter_updates":
-            plt.legend(title="Model Size", handles=legend_handles.values())
-            ax.legend(
-                handles=legend_handles.values(),
-                title="Model Size (# Parameters)",
-                # ncols=6,
-                bbox_to_anchor=(1.05, 1),
-                loc="upper left",
-            )
+        legend_handles = get_legend_handles(data, color_data_name, palette_dict)
+        create_legend(color_data_name, ax, legend_handles)
 
-    create_path_and_savefig(filename=save_as, subdirectory="adv_training/" + save_dir)
+    create_path_and_savefig(fig, "adv_training", save_dir, save_as)
 
 
 def draw_plot_adv_training(
@@ -435,13 +458,14 @@ def draw_plot_adv_training(
     )
 
 
-def create_path_and_savefig(filename: str, subdirectory: str):
+def create_path_and_savefig(fig, *nested):
+    assert isinstance(fig, Figure)
     repo_path = compute_repo_path()
-    directory = Path(f"{repo_path}/plots/{subdirectory}/")
+    directory = Path(repo_path) / "plots" / "/".join(nested[:-1])
     directory.mkdir(parents=True, exist_ok=True)
-    save_path = directory / f"{filename}.pdf"
-    plt.savefig(save_path, dpi=600, bbox_inches="tight")
-    plt.close()
+    save_path = directory / f"{nested[-1]}.pdf"
+    fig.savefig(save_path, dpi=600, bbox_inches="tight")
+    return save_path
 
 
 def draw_scatterplot(
@@ -506,9 +530,9 @@ def draw_scatterplot(
         alpha=0.5,
     )
 
-    _set_up_paper_plot(fig, ax)
+    set_up_paper_plot(fig, ax)
 
-    create_path_and_savefig(filename=save_as, subdirectory=save_dir)
+    create_path_and_savefig(fig, save_dir, save_as)
 
 
 def _maybe_get_custom_xs_and_maybe_ys(relevant_data, custom_ys, custom_xs_and_ys):
@@ -674,13 +698,13 @@ def draw_min_max_median_plot(
         zorder=5,
     )
 
-    _set_up_paper_plot(fig, ax)
+    set_up_paper_plot(fig, ax)
 
     # Turn off the legend if we don't want it
     if not legend:
         ax.get_legend().remove()
 
-    create_path_and_savefig(filename=save_as, subdirectory=save_dir)
+    create_path_and_savefig(fig, save_dir, save_as)
 
 
 def draw_scatter_with_color_from_metric(
@@ -719,14 +743,6 @@ def draw_scatter_with_color_from_metric(
         plt.colorbar(label=color_metric)
 
     plt.show()
-
-
-def get_discrete_palette_for_values(values):
-    values = sorted(set(values))
-    return {
-        v: sns.color_palette("viridis", n_colors=len(values))[i]
-        for i, v in enumerate(values)
-    }
 
 
 def _get_num_params_from_name(name: str) -> int:

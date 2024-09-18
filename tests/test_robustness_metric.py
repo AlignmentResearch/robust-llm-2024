@@ -1,14 +1,17 @@
 from unittest.mock import MagicMock
 
+import pandas as pd
 import pytest
 
 from robust_llm.attacks.attack import AttackData, AttackOutput
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.metrics.average_initial_breach import (
     compute_aib_from_attack_output,
+    compute_all_aibs,
     get_average_of_proportion,
 )
 from robust_llm.metrics.iterations_for_success import (
+    compute_all_ifs_metrics,
     compute_ifs_metric_from_wandb,
     compute_iterations_for_success,
 )
@@ -198,3 +201,33 @@ def test_recompute_ifs_metric():
         wandb_result = run.history(keys=[key])[key].squeeze()
         computed = results.ifs_per_decile[decile]
         assert pytest.approx(computed, 0.01) == wandb_result
+
+
+def test_aib_data_shape():
+    group_name = "ian_103a_gcg_pythia_helpful"
+    aib_df = compute_all_aibs(group_name, 1, 1, 1, 1)
+    assert isinstance(aib_df, pd.DataFrame)
+    assert len(aib_df) == 11
+    assert aib_df.columns.tolist() == ["model_idx", "seed_idx", "aib", "decile"]
+    assert aib_df.model_idx.eq(0).all()
+    assert aib_df.seed_idx.eq(0).all()
+    assert aib_df.decile.between(0, 10).all()
+
+
+def test_ifs_data_shape():
+    group_name = "ian_103a_gcg_pythia_helpful"
+    asr_df, ifs_df = compute_all_ifs_metrics(group_name, 1, 1, 1)
+
+    assert isinstance(ifs_df, pd.DataFrame)
+    assert len(ifs_df) == 11
+    assert ifs_df.columns.tolist() == ["model_idx", "seed_idx", "ifs", "decile"]
+    assert ifs_df.model_idx.eq(0).all()
+    assert ifs_df.seed_idx.eq(0).all()
+    assert ifs_df.decile.between(0, 10).all()
+
+    assert isinstance(asr_df, pd.DataFrame)
+    assert len(asr_df) == 11
+    assert asr_df.columns.tolist() == ["model_idx", "seed_idx", "asr", "iteration"]
+    assert asr_df.model_idx.eq(0).all()
+    assert asr_df.seed_idx.eq(0).all()
+    assert asr_df.iteration.between(0, 10).all()
