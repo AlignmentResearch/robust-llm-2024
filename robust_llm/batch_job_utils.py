@@ -48,6 +48,7 @@ def run_multiple(
     priority: str | list[str] = "normal-batch",
     cluster: str | Sequence[str | None] | None = None,
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
+    nfs: bool = True,
     dry_run: bool = False,
     skip_git_checks: bool = False,
     unique_identifier: str | None = None,
@@ -75,6 +76,7 @@ def run_multiple(
         only_jobs_with_starting_indices: if not None, only jobs with starting indices
             contained in this list will be launched. Useful for rerunning a small subset
             of jobs from an experiment (for example, if a few jobs failed).
+        nfs: Makes NFS storage available to the job if true.
         dry_run: if True, only print the k8s job yaml files without launching them.
         skip_git_checks: if True, skip the remote push and the check for dirty git repo.
         unique_identifier: A unique identifier to append to the k8s job names
@@ -128,6 +130,7 @@ def run_multiple(
         runs,
         experiment_name=experiment_name,
         only_jobs_with_starting_indices=only_jobs_with_starting_indices,
+        nfs=nfs,
         dry_run=dry_run,
         skip_git_checks=skip_git_checks,
     )
@@ -223,6 +226,7 @@ def create_job_for_multiple_runs(
     project: str,
     entity: str,
     wandb_mode: str,
+    nfs: bool = True,
 ) -> str:
     # K8s job/pod names should be short for readability (hence cutting the name).
     unique_identifier = runs[0].unique_identifier
@@ -273,6 +277,23 @@ def create_job_for_multiple_runs(
         COMMAND=command,
         **runs[0].format_args(),
     )
+    if not nfs:
+        nfs_strings_to_remove = [
+            (
+                "        - name: robust-llm-storage\n"
+                "          persistentVolumeClaim:\n"
+                "            claimName: robust-llm\n"
+            ),
+            (
+                "            - name: robust-llm-storage\n"
+                "              mountPath: /robust_llm_data\n"
+            ),
+        ]
+        for nfs_string in nfs_strings_to_remove:
+            assert (
+                nfs_string in job
+            ), f"Expected to find NFS string in job: {nfs_string}."
+            job = job.replace(nfs_string, "")
 
     return job
 
@@ -294,6 +315,7 @@ def create_jobs(
     wandb_mode: str = "online",
     experiment_name: Optional[str] = None,
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
+    nfs: bool = True,
 ) -> tuple[dict[str, list[str]], str]:
     launch_id = generate_name(style="hyphen")
 
@@ -320,7 +342,7 @@ def create_jobs(
             cluster = runs[0].CLUSTER
             jobs_by_cluster[cluster].append(
                 create_job_for_multiple_runs(
-                    runs, name, index, launch_id, project, entity, wandb_mode
+                    runs, name, index, launch_id, project, entity, wandb_mode, nfs
                 )
             )
         index += len(runs)
@@ -334,6 +356,7 @@ def launch_jobs(
     entity: str = "farai",
     experiment_name: Optional[str] = None,
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
+    nfs: bool = True,
     dry_run: bool = False,
     skip_git_checks: bool = False,
 ) -> tuple[dict[str, str], str]:
@@ -347,6 +370,7 @@ def launch_jobs(
         only_jobs_with_starting_indices: if not None, only jobs with starting indices
             contained in this list will be launched. Useful for rerunning a small subset
             of jobs from an experiment.
+        nfs: Makes NFS storage available to the job if true.
         dry_run: if True, only print the k8s job yaml files without launching them.
         skip_git_checks: if True, skip the remote push and the check for dirty git repo.
             This is useful when running unit tests.
@@ -376,6 +400,7 @@ def launch_jobs(
         entity=entity,
         experiment_name=experiment_name,
         only_jobs_with_starting_indices=only_jobs_with_starting_indices,
+        nfs=nfs,
     )
     yamls_by_cluster = {
         cluster: "\n\n---\n\n".join(jobs) for cluster, jobs in jobs_by_cluster.items()
