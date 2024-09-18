@@ -6,8 +6,13 @@ over the whole dataset. We use ASR=0%, 10%, 20%, ..., 100% as thresholds.
 """
 
 import argparse
+import concurrent.futures
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from itertools import product
+
+import pandas as pd
 
 from robust_llm import logger
 from robust_llm.attacks.attack import AttackOutput
@@ -197,12 +202,112 @@ def compute_ifs_metric_from_wandb(group_name: str, run_index: str) -> IFSMetricR
     return results
 
 
+def compute_ifs_in_thread(group_name: str, seed_first_run: int, model_idx):
+    """Callable for ThreadPoolExecutor to compute ifs in parallel.
+
+    Args:
+        group_name: The wandb group name.
+        seed_first_run: The index of the first run for this seed
+            (i.e. seed * n_models).
+        model_idx: The index of the model.
+
+    Runs are indexed such that runs for a seed are consecutive and
+    runs for a model are separated by the number of models.
+    e.g. [s0m0, s0m1, ... s0m9, s1m0, ...]
+    """
+    run_index = str(seed_first_run + model_idx)
+    ifs = compute_ifs_metric_from_wandb(group_name, run_index.zfill(4))
+    return seed_first_run, model_idx, ifs
+
+
+def compute_all_ifs_metrics(
+    group_name, n_models: int, n_seeds: int, max_workers: int = 4
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Compute the IFS for all runs in a group.
+
+    Args:
+        group_name: The wandb group name.
+        n_models: The number of models.
+        n_seeds: The number of seeds.
+        max_workers: The number of threads to use.
+
+    Returns:
+        A dataframe with columns for model index, seed index, decile, and IFS.
+    """
+    model_indices = list(range(n_models))
+    seed_first_runs = [seed_index * n_models for seed_index in range(n_seeds)]
+
+    asr_data = []
+    ifs_data = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_params = {
+            executor.submit(
+                compute_ifs_in_thread, group_name, seed_first_run, model_idx
+            ): (
+                seed_first_run,
+                model_idx,
+            )
+            for seed_first_run, model_idx in product(seed_first_runs, model_indices)
+        }
+
+        for future in concurrent.futures.as_completed(future_to_params):
+            seed_first_run, model_idx, ifs_results = future.result()
+            ifs_df = pd.DataFrame(
+                {
+                    "model_idx": model_idx,
+                    "seed_idx": seed_first_runs.index(seed_first_run),
+                    "ifs": ifs_results.ifs_per_decile,
+                    "decile": [i for i in range(len(ifs_results.ifs_per_decile))],
+                }
+            )
+            asr_df = pd.DataFrame(
+                {
+                    "model_idx": model_idx,
+                    "seed_idx": seed_first_runs.index(seed_first_run),
+                    "asr": ifs_results.asr_per_iteration,
+                    "iteration": [i for i in range(len(ifs_results.asr_per_iteration))],
+                }
+            )
+            asr_data.append(asr_df)
+            ifs_data.append(ifs_df)
+
+    return pd.concat(asr_data), pd.concat(ifs_data)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Iterations for Success metric")
     parser.add_argument("group_name", type=str, help="wandb group name")
-    parser.add_argument("run_index", type=str, help="wandb run index")
+    parser.add_argument(
+        "--n_models", type=int, default=10, help="Number of models (must be accurate)"
+    )
+    parser.add_argument(
+        "--n_seeds",
+        type=int,
+        default=5,
+        help="Number of seeds (can set artificially small)",
+    )
+    parser.add_argument(
+        "--max_workers",
+        type=int,
+        default=4,
+        help="Number of threads to use.",
+    )
     args = parser.parse_args()
-    compute_ifs_metric_from_wandb(args.group_name, args.run_index)
+
+    tic = time.perf_counter()
+    asr_df, ifs_df = compute_all_ifs_metrics(
+        args.group_name, args.n_models, args.n_seeds, args.max_workers
+    )
+    toc = time.perf_counter()
+    print(f"Computed Iterations for Success metric in {toc - tic:.2f} seconds")
+
+    ifs_path = f"outputs/ifs_{args.group_name}.csv"
+    print(f"Saving to {ifs_path}")
+    ifs_df.to_csv(ifs_path, index=False)
+
+    asr_path = f"outputs/asr_{args.group_name}.csv"
+    print(f"Saving to {asr_path}")
+    asr_df.to_csv(asr_path, index=False)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ attacked. The metric is the average of the bottom half of the CDF.
 import argparse
 import concurrent.futures
 import time
+import traceback
 
 # Example usage
 from concurrent.futures import ThreadPoolExecutor
@@ -57,15 +58,20 @@ def compute_aib_from_attack_output(attack_out) -> AIBMetricResults:
     return AIBMetricResults(aib_per_decile=aibs)
 
 
-def compute_aib_from_wandb(group_name: str, run_index: str) -> AIBMetricResults:
+def compute_aib_from_wandb(
+    group_name: str, run_index: str, max_workers: int = 4
+) -> AIBMetricResults:
     """Compute the average initial breach metric (AIB) for a single run.
 
     Args:
         group_name: The wandb group name.
         run_index: The zero-padded 4 digits appended to the group name to
             create the run name.
+        max_workers: The number of threads to use.
     """
-    attack_out = get_attack_output_from_wandb(group_name, run_index)
+    attack_out = get_attack_output_from_wandb(
+        group_name, run_index, max_workers=max_workers
+    )
     return compute_aib_from_attack_output(attack_out)
 
 
@@ -98,7 +104,9 @@ def compute_first_attack_success_iteration(
     return float("inf")
 
 
-def compute_aib_in_thread(group_name, seed_first_run, model_idx):
+def compute_aib_in_thread(
+    group_name: str, seed_first_run: int, model_idx: int, sub_workers: int = 4
+):
     """Callable for ThreadPoolExecutor to compute AIB in parallel.
 
     Args:
@@ -106,23 +114,37 @@ def compute_aib_in_thread(group_name, seed_first_run, model_idx):
         seed_first_run: The index of the first run for this seed
             (i.e. seed * n_models).
         model_idx: The index of the model.
+        sub_workers: The number of threads to use.
 
     Runs are indexed such that runs for a seed are consecutive and
     runs for a model are separated by the number of models.
     e.g. [s0m0, s0m1, ... s0m9, s1m0, ...]
     """
-    run_index = str(seed_first_run + model_idx)
-    aib = compute_aib_from_wandb(group_name, run_index.zfill(4))
-    return seed_first_run, model_idx, aib
+    try:
+        run_index = str(seed_first_run + model_idx)
+        aib = compute_aib_from_wandb(
+            group_name, run_index.zfill(4), max_workers=sub_workers
+        )
+        return seed_first_run, model_idx, aib
+    except Exception as e:
+        raise Exception(
+            f"Error in group {group_name}, run {seed_first_run + model_idx}, "
+            f"error: {e}, "
+            f"traceback: {traceback.format_exc()}"
+        )
 
 
-def compute_all_aibs(group_name, n_models: int, n_seeds: int) -> pd.DataFrame:
+def compute_all_aibs(
+    group_name, n_models: int, n_seeds: int, max_workers: int = 4, sub_workers: int = 4
+) -> pd.DataFrame:
     """Compute the AIB for all runs in a group.
 
     Args:
         group_name: The wandb group name.
         n_models: The number of models.
         n_seeds: The number of seeds.
+        max_workers: The number of threads to use at the top-level.
+        sub_workers: The number of threads to use for each run.
 
     Returns:
         A dataframe with columns for model index, seed index, decile, and AIB.
@@ -131,10 +153,14 @@ def compute_all_aibs(group_name, n_models: int, n_seeds: int) -> pd.DataFrame:
     seed_first_runs = [seed_index * n_models for seed_index in range(n_seeds)]
 
     aib_data = []
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_params = {
             executor.submit(
-                compute_aib_in_thread, group_name, seed_first_run, model_idx
+                compute_aib_in_thread,
+                group_name,
+                seed_first_run,
+                model_idx,
+                sub_workers,
             ): (
                 seed_first_run,
                 model_idx,
@@ -170,6 +196,9 @@ def main():
         type=int,
         default=5,
         help="Number of seeds (can set artificially small)",
+    )
+    parser.add_argument(
+        "--max_workers", type=int, default=4, help="Number of threads to use"
     )
     args = parser.parse_args()
 

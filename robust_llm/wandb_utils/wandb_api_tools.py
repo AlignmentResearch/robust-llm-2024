@@ -24,10 +24,12 @@ def _extract_adv_round(revision: str) -> int:
         raise ValueError(f"Invalid revision format: {revision}")
 
 
-def get_attack_data_tables(run: WandbRun) -> dict[int, pd.DataFrame]:
+def get_attack_data_tables(
+    run: WandbRun, max_workers: int = 4
+) -> dict[int, pd.DataFrame]:
     artifacts = run.logged_artifacts()
 
-    with ThreadPoolExecutor() as executor:
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_artifact = {
             executor.submit(
                 download_and_process_attack_data_table, artifact, run.name
@@ -51,6 +53,8 @@ def get_wandb_run(group_name: str, run_index: str):
         filters={"group": group_name, "state": "finished"},
         # setting high per_page based on https://github.com/wandb/wandb/issues/6614
         per_page=1000,
+        # Setting order avoids duplicates https://github.com/wandb/wandb/issues/6614
+        order="+created_at",
     )
     target_run = None
     for run in runs:
@@ -81,7 +85,7 @@ def download_and_process_attack_data_table(artifact: wandb.Artifact, run_name: s
     index = int(re_match.group(1))
     table_path = Path(f"/tmp/{run_name}/attack_data/example_{index}.table.json")
 
-    if not table_path.exists():
+    if not table_path.exists() or table_path.stat().st_size == 0:
         table_dir = artifact.download(root=f"/tmp/{run_name}")
         assert str(table_path).startswith(table_dir)
 

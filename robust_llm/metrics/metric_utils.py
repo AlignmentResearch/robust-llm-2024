@@ -11,7 +11,9 @@ from robust_llm.wandb_utils.wandb_api_tools import (
 )
 
 
-def get_attack_output_from_wandb(group_name: str, run_index: str) -> AttackOutput:
+def get_attack_output_from_wandb(
+    group_name: str, run_index: str, max_workers: int = 4
+) -> AttackOutput:
     run = get_wandb_run(group_name, run_index)
     dataset_cfg = get_dataset_config_from_run(run)
 
@@ -21,7 +23,7 @@ def get_attack_output_from_wandb(group_name: str, run_index: str) -> AttackOutpu
     print(f"Loaded dataset in {toc - tic:.2f} seconds")
 
     tic = time.perf_counter()
-    attack_data_dfs = get_attack_data_tables(run)
+    attack_data_dfs = get_attack_data_tables(run, max_workers=max_workers)
     dataset_indices = list(attack_data_dfs.keys())
     toc = time.perf_counter()
     print(f"Loaded attack data in {toc - tic:.2f} seconds")

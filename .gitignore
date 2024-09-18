@@ -192,6 +192,8 @@ trainer/
 
 # Plots
 plots/
+*.html
+*.pdf
 
 # MacOS files
 *.DS_Store
