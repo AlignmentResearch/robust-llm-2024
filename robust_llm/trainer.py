@@ -195,8 +195,10 @@ class AdversarialTrainer(RLLMTrainer):
         # Track the index in self.adversarial_dataset of each adversarial example
         # in self.train_dataset
         self.adversarial_indices: list[int] = []
+        self.clean_indices: list[int] = list(range(len(self.regular_dataset)))
         # Track the last loss on each adversarial example in self.adversarial_dataset
-        self.adversarial_losses: dict[int, float] = {}
+        # We use a 'str' since the keys are str when loading from checkpoint.
+        self.adversarial_losses: dict[str, float] = {}
         # Store computed losses across batches
         self.computed_losses: list[float] = []
         self.in_eval_loop = False
@@ -346,7 +348,8 @@ class AdversarialTrainer(RLLMTrainer):
             len(self.computed_losses) - len(self.adversarial_indices) :
         ]
         for index, success in zip(self.adversarial_indices, adv_losses, strict=True):
-            self.adversarial_losses[index] = success
+            # We use a 'str' since the keys are str when loading from checkpoint.
+            self.adversarial_losses[str(index)] = success
         self.computed_losses = []
         self.num_epochs_done += 1
 
@@ -421,21 +424,14 @@ class AdversarialTrainer(RLLMTrainer):
             len(self.adversarial_dataset),
         )
         n_clean = n_train - n_adv
-        clean_indices = self.rng.choice(
+        self.clean_indices = self.rng.choice(
             len(self.regular_dataset),
             size=n_clean,
             replace=False,
         )
-        adv_indices = self._get_adv_indices(n_adv)
-        clean_data = self.regular_dataset.select(clean_indices)
-        adv_data = self.adversarial_dataset.select(adv_indices)
-        train_dataset_plus_adv_examples = cast_and_concatenate(
-            clean_data,
-            adv_data,
-        )
-        assert len(train_dataset_plus_adv_examples) == n_train
-        self.train_dataset = train_dataset_plus_adv_examples
-        self.adversarial_indices = adv_indices
+        self.adversarial_indices = self._get_adv_indices(n_adv)
+        self.set_training_dataset()
+        assert len(self.train_dataset) == n_train
 
         logger.debug(
             "Updating augmented training set to {} examples".format(
@@ -450,6 +446,15 @@ class AdversarialTrainer(RLLMTrainer):
             assert round is not None
             dataset_name = f"augmented_train_set_start_round_{round}"
             log_dataset_to_wandb(self.train_dataset, dataset_name)
+
+    def set_training_dataset(self):
+        clean_data = self.regular_dataset.select(self.clean_indices)
+        adv_data = self.adversarial_dataset.select(self.adversarial_indices)
+        train_dataset_plus_adv_examples = cast_and_concatenate(
+            clean_data,
+            adv_data,
+        )
+        self.train_dataset = train_dataset_plus_adv_examples
 
     def _get_adv_indices(self, n_adv: int) -> list[int]:
         """Get indices of adversarial examples to use for training.
@@ -474,7 +479,8 @@ class AdversarialTrainer(RLLMTrainer):
         if n == 0:
             return []
         time_ranks = np.arange(n)
-        losses = [self.adversarial_losses.get(i, float("inf")) for i in range(n)]
+        # We use a 'str' since the keys are str when loading from checkpoint.
+        losses = [self.adversarial_losses.get(str(i), float("inf")) for i in range(n)]
         loss_ranks = np.argsort(losses)
         ranks = (
             1 - self.loss_rank_weight
@@ -590,6 +596,25 @@ class AdversarialTrainingState:
 
     This is useful for saving and loading the state of the adversarial training in
     a way that can be resumed later.
+
+    Attributes:
+        current_round: The current round of adversarial training.
+        rng: The random number generator state.
+        adversarial_dataset: The adversarial dataset.
+        clean_indices: The indices of clean examples in the training set. This is
+            necessary to reconstruct the augmented training set from the clean and
+            adversarial datasets.
+        adversarial_indices: The indices of adversarial examples in the training set.
+            This is necessary to reconstruct the augmented training set from the clean
+            and adversarial datasets.
+        adversarial_losses: A dict of losses for each adversarial example. The keys
+            are strings to keep compatibility with loading from JSON. These are used
+            to rank adversarial examples for sampling during training.
+        training_attack_rng: The random number generator state for the training attack.
+        validation_attack_rng: The random number generator state for the
+            validation attack.
+        total_flops: The total FLOPs for the model.
+        process: The process index of the accelerator.
     """
 
     def __init__(
@@ -597,6 +622,9 @@ class AdversarialTrainingState:
         current_round: int,
         rng: DistributedRNG,
         adversarial_dataset: Dataset,
+        clean_indices: list[int],
+        adversarial_indices: list[int],
+        adversarial_losses: dict[str, float],
         training_attack_rng: Optional[DistributedRNG],
         validation_attack_rng: Optional[DistributedRNG],
         total_flops: float = 0.0,
@@ -604,6 +632,9 @@ class AdversarialTrainingState:
         self.rng = rng
         self.current_round = current_round
         self.adversarial_dataset = adversarial_dataset
+        self.clean_indices = clean_indices
+        self.adversarial_indices = adversarial_indices
+        self.adversarial_losses = adversarial_losses
         self.training_attack_rng = training_attack_rng
         self.validation_attack_rng = validation_attack_rng
         self.total_flops = total_flops
@@ -623,6 +654,10 @@ class AdversarialTrainingState:
                 if self.validation_attack_rng is not None
                 else None
             ),
+            "num_adv_examples": len(self.adversarial_dataset),
+            "clean_indices": self.clean_indices,
+            "adversarial_indices": self.adversarial_indices,
+            "adversarial_losses": self.adversarial_losses,
         }
 
     @property
@@ -648,7 +683,7 @@ class AdversarialTrainingState:
     @classmethod
     def load(
         cls, checkpoint_dir: str, accelerator: Accelerator | None
-    ) -> "AdversarialTrainingState":
+    ) -> AdversarialTrainingState:
         state_path = os.path.join(checkpoint_dir, ADV_STATE_NAME)
         with open(state_path, "r") as f:
             state = json.load(f)
@@ -666,26 +701,41 @@ class AdversarialTrainingState:
                 validation_attack_rng.setstate(state["validation_attack_rng"])
             else:
                 validation_attack_rng = None
+            clean_indices = state["clean_indices"]
+            adversarial_indices = state["adversarial_indices"]
+            adversarial_losses = state["adversarial_losses"]
         adversarial_dataset = Dataset.load_from_disk(
             os.path.join(checkpoint_dir, ADV_DATA_NAME)
         )
         process = 0 if rng.accelerator is None else rng.accelerator.process_index
-        logger.debug(
-            f"Loaded adversarial training state: round={current_round}, "
-            f"total_flops={total_flops:.2E}, "
-            f"examples={len(adversarial_dataset)}, "
-            f"rng state={rng.getstate()}, "
-            f"training_attack_rng={state.get('training_attack_rng')}, "
-            f"validation_attack_rng={state.get('validation_attack_rng')}, "
-            f"process={process}."
-        )
-        return cls(
+        out = cls(
             current_round=current_round,
             total_flops=total_flops,
             rng=rng,
             adversarial_dataset=adversarial_dataset,
             training_attack_rng=training_attack_rng,
             validation_attack_rng=validation_attack_rng,
+            clean_indices=clean_indices,
+            adversarial_indices=adversarial_indices,
+            adversarial_losses=adversarial_losses,
+        )
+        logger.info(
+            f"(Process {process}) Loaded adversarial training state: {out.to_dict()}"
+        )
+        return out
+
+    @classmethod
+    def from_training(cls, training) -> AdversarialTrainingState:
+        return cls(
+            current_round=training.round,
+            total_flops=training.total_flops,
+            rng=training.trainer.rng,
+            adversarial_dataset=training.trainer.adversarial_dataset,
+            training_attack_rng=getattr(training.training_attack, "rng"),
+            validation_attack_rng=getattr(training.validation_attack, "rng"),
+            clean_indices=training.trainer.clean_indices,
+            adversarial_indices=training.trainer.adversarial_indices,
+            adversarial_losses=training.trainer.adversarial_losses,
         )
 
     def apply_to_training(self, training: AdversarialTraining) -> int:
@@ -707,6 +757,10 @@ class AdversarialTrainingState:
             assert training.validation_attack is not None
             loaded_validation_attack_rng = training.validation_attack.rng.getstate()
         training.total_flops = self.total_flops
+        training.trainer.clean_indices = self.clean_indices
+        training.trainer.adversarial_indices = self.adversarial_indices
+        training.trainer.set_training_dataset()
+        training.trainer.adversarial_losses = self.adversarial_losses
         logger.debug(
             "Applied state to training: "
             f"examples={len(training.trainer.adversarial_dataset)}, "
@@ -714,6 +768,10 @@ class AdversarialTrainingState:
             f"rng={training.trainer.rng.getstate()}, "
             f"training_attack_rng={loaded_training_attack_rng}, "
             f"validation_attack_rng={loaded_validation_attack_rng}."
+            f"clean_indices={len(training.trainer.clean_indices)}, "
+            f"adversarial_indices={len(training.trainer.adversarial_indices)}, "
+            f"train_dataset_size={len(training.trainer.train_dataset)}, "
+            f"adversarial_losses={len(training.trainer.adversarial_losses)}, "
             f"process={self.process}, "
         )
         return self.current_round
@@ -751,14 +809,7 @@ class AdversarialTrainingStateCallback(CustomLoggingWandbCallback):
         # hyperparameter search, which we are not using.
         run_dir = self.training.trainer._get_output_dir(trial=None)
         output_dir = os.path.join(run_dir, checkpoint_folder)
-        adv_state = AdversarialTrainingState(
-            current_round=self.training.round,
-            total_flops=self.training.total_flops,
-            rng=self.training.trainer.rng,
-            adversarial_dataset=self.training.trainer.adversarial_dataset,
-            training_attack_rng=getattr(self.training.training_attack, "rng"),
-            validation_attack_rng=getattr(self.training.validation_attack, "rng"),
-        )
+        adv_state = AdversarialTrainingState.from_training(self.training)
         adv_state.save(output_dir)
         self.training.clean_checkpoints_and_return_valid()
 

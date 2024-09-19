@@ -38,7 +38,6 @@ from robust_llm.config.configs import (
     SaveTo,
     TrainingConfig,
 )
-from robust_llm.dist_utils import DistributedRNG
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import (
     LoggingCounter,
@@ -473,7 +472,6 @@ class AdversarialTraining(Training):
         assert self.config.adversarial is not None
         self.adversarial_config = self.config.adversarial
 
-        self.rng = DistributedRNG(self.config.seed, self.victim.accelerator)
         self.round = 0
         self.total_flops = 0.0
         self.n_forward_calls = 0
@@ -853,10 +851,11 @@ class AdversarialTraining(Training):
                     len(self.train_rllm_dataset.ds)
                     >= self.num_examples_to_generate_each_round
                 )
+                assert self.trainer is not None
                 input_rllm_dataset = self.train_rllm_dataset.get_random_subset(
                     self.num_examples_to_generate_each_round,
                     accelerator=self.victim.accelerator,
-                    generator=self.rng,
+                    generator=self.trainer.rng,
                 )
                 # NOTE: .get_attacked_dataset should relabel the examples
                 with self.victim.flop_count_context() as flop_counter:

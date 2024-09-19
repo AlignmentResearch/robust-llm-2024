@@ -114,6 +114,9 @@ def test_adv_training_state():
                 "clf_label": [0, 1, 0],
             }
         ),
+        clean_indices=[0, 1, 2],
+        adversarial_indices=[1, 2],
+        adversarial_losses={"1": 0.1, "2": 0.2},
         training_attack_rng=DistributedRNG(4, None),
         validation_attack_rng=DistributedRNG(2, None),
     )
@@ -215,7 +218,7 @@ def test_weight_adv_examples_by_loss(adv_trainer: AdversarialTrainer):
     adv_trainer.loss_rank_weight = 1.0
     adv_trainer.sampling_decay = 1.0
     adv_trainer.add_new_adversarial_examples(val_set)
-    adv_trainer.adversarial_losses = {0: 0.0, 1: float("inf")}
+    adv_trainer.adversarial_losses = {"0": 0.0, "1": float("inf")}
     adv_trainer.update_augmented_training_set(False, 0)
     assert adv_trainer.adversarial_indices == [1]
     assert len(adv_trainer.train_dataset) == 3
@@ -273,7 +276,7 @@ def test_compute_loss(adv_trainer: AdversarialTrainer):
     assert isinstance(loss, torch.Tensor)
     assert torch.isclose(loss, torch.tensor([0.7]))
     assert adv_trainer.adversarial_losses == {
-        1: np.inf,
-        2: np.inf,
-        0: 0,
+        "1": np.inf,
+        "2": np.inf,
+        "0": 0,
     }
