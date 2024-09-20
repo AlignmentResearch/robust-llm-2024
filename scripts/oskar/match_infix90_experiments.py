@@ -7,15 +7,13 @@ def search_wandb_runs():
     api = wandb.Api(timeout=60)
     runs = api.runs(
         "farai/robust-llm",
-        filters={"config.hub_model_id": {"$regex": ".*_adv_tr.*"}, "state": "finished"},
+        filters={"display_name": {"$regex": ".*-infix90-.*"}, "state": "finished"},
     )
     return parse_runs_to_dataframe(runs)
 
 
 if __name__ == "__main__":
-    output_csv = (
-        "/home/oskar/projects/robust-llm/outputs/adv_model_experiment_mapping.csv"
-    )
+    output_csv = "/home/oskar/projects/robust-llm/outputs/infix_experiments.csv"
 
     df = search_wandb_runs()
     df.to_csv(output_csv, index=False)

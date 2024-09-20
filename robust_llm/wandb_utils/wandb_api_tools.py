@@ -4,11 +4,14 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import wandb
+from tqdm import tqdm
 from wandb.apis.public.runs import Run as WandbRun
+from wandb.apis.public.runs import Runs as WandbRuns
 
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.wandb_utils.constants import PROJECT_NAME
@@ -221,3 +224,98 @@ def get_metrics_adv_training(
     res = pd.concat(res, ignore_index=True)
 
     return res
+
+
+def parse_run_to_dict(run: WandbRun) -> dict[str, Any]:
+    if run.metadata is None:
+        print(f"Run {run.id} has no metadata")
+        return {}
+    assert all(a.count("=") == 1 for a in run.metadata["args"])
+    args = {
+        key.lstrip("+"): value
+        for item in run.metadata["args"]
+        for key, value in [item.split("=", 1)]
+    }
+    assert "experiment_name" in args
+    experiment_yaml = run.summary.get("experiment_yaml", {})
+    training_yaml = (
+        experiment_yaml["training"] if experiment_yaml["training"] is not None else {}
+    )
+    hub_model_id = run.config.get(
+        "hub_model_id", experiment_yaml.get("model", {}).get("name_or_path", None)
+    )  # e.g. "AlignmentResearch/robust_llm_clf_pm_pythia-2.8b_s-0_adv_tr_gcg_t-0"
+    match = re.match(
+        r"AlignmentResearch/robust_llm_clf_(.*)_pythia-(.*)_s-(.*)_adv_tr_(.*)_t-(.*)",  # noqa: E501
+        hub_model_id,
+    )
+    if match is None:
+        dataset, base_model, ft_seed, attack, adv_seed = [None] * 5
+    else:
+        dataset, base_model, ft_seed, attack, adv_seed = match.groups()
+    num_parameters = (
+        float(base_model.split("-")[-1].replace("m", "e6").replace("b", "e9"))
+        if base_model is not None
+        else None
+    )
+    revision = experiment_yaml.get("model", {}).get("revision", None)
+
+    run_data = {
+        "wandb_run_link": run.url,
+        "wandb_run_id": run.id,
+        "wandb_group_link": "https://wandb.ai/farai/robust-llm/groups/"
+        + args["experiment_name"],
+        "host": run.metadata.get("host", "Unknown"),
+        "hub_model_id": hub_model_id,
+        "dataset": dataset,
+        "base_model": base_model,
+        "ft_seed": ft_seed,
+        "attack": attack,
+        "adv_seed": adv_seed,
+        "num_parameters": num_parameters,
+        "num_adversarial_training_rounds": training_yaml.get("adversarial", {}).get(
+            "num_adversarial_training_rounds", None
+        ),
+        "eval_iterations": experiment_yaml.get("evaluation", {}).get("num_iterations"),
+        "eval_attack": (
+            "gcg"
+            if experiment_yaml.get("evaluation", {})
+            .get("evaluation_attack", {})
+            .get("n_candidates_per_it")
+            is not None
+            else "rt"
+        ),
+        "eval_round": revision.split("-")[-1] if revision is not None else None,
+        "really_finished": run.summary.get("really_finished", False),
+        "gpu_type": run.metadata.get("gpu", "Unknown"),
+        "gpu_count": run.metadata.get("gpu_count", "Unknown"),
+        "duration_seconds": run.summary.get("_runtime", "Unknown"),
+    }
+    run_data.update(args)
+    return run_data
+
+
+def parse_runs_to_dataframe(runs: WandbRuns) -> pd.DataFrame:
+    data = []
+    for run in tqdm(runs):
+        run_data = parse_run_to_dict(run)
+        data.append(run_data)
+    df = pd.DataFrame(data)
+    df["duration_hours"] = df.duration_seconds.astype(float).div(3600)
+    host_df = df.groupby("host").duration_hours.aggregate(["max", "sum"])
+    host_df.columns = ["max_duration_hours", "total_duration_hours"]
+    df = df.merge(host_df, on="host", how="left")
+    df["duration_hours_pro_rata"] = (
+        df.duration_hours / df.total_duration_hours
+    ) * df.max_duration_hours
+    is_h100 = df.gpu_type.str.contains("H100")
+    df["h100_hours"] = (
+        df.duration_hours_pro_rata * df.gpu_count * np.where(is_h100, 1, 0.25)
+    )
+    df.sort_values(by=["num_parameters", "dataset", "attack", "ft_seed"], inplace=True)
+    if df.num_parameters.isnull().any():
+        print(
+            f"Warning {df.num_parameters.isnull().sum()} runs are missing model size."
+        )
+    if df.h100_hours.isnull().any():
+        print(f"Warning {df.h100_hours.isnull().sum()} runs are missing cost data.")
+    return df
