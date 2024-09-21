@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
+import time
 from collections.abc import Iterator, Sequence
 from dataclasses import fields
 from datetime import datetime
@@ -12,7 +14,33 @@ from typing import Optional, Sized
 import torch
 import torch.utils.data
 
+from robust_llm import logger
 from robust_llm.dist_utils import DistributedRNG
+
+
+def remove_directory(to_remove: str, retries: int = 5, sleep: int = 1) -> None:
+    """Remove a directory and its contents."""
+    # HACK: We retry deleting the directory a few times to avoid
+    # a suspected race condition that results in
+    # "OSError: [Errno 39] Directory not empty".
+    for i in range(retries + 1):
+        try:
+            shutil.rmtree(to_remove)
+            break
+        except OSError as e:
+            sleep_seconds = sleep * (2**i)
+            if i < retries:
+                logger.error(
+                    "Error deleting directory: %s on attempt %s, "
+                    "retrying after %s seconds...\nError: %s",
+                    to_remove,
+                    i,
+                    sleep_seconds,
+                    str(e),
+                )
+                time.sleep(sleep_seconds)
+            else:
+                raise e
 
 
 def deterministic_hash(obj: object) -> str:

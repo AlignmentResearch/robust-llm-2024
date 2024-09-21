@@ -2,7 +2,6 @@ import dataclasses
 import glob
 import math
 import os
-import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -59,6 +58,7 @@ from robust_llm.trainer import (
     EvaluationLoopCallback,
     RLLMTrainer,
 )
+from robust_llm.utils import remove_directory
 
 CORE_CHECKPOINT_FILES = (
     CONFIG_NAME,
@@ -557,16 +557,14 @@ class AdversarialTraining(Training):
         complete_checkpoints = self.clean_checkpoints_and_return_valid()
         return complete_checkpoints[-1] if complete_checkpoints else None
 
-    def remove_checkpoints(self, partial_checkpoints: list[str]) -> None:
-        for partial_checkpoint in partial_checkpoints:
-            assert (
-                "round-" in partial_checkpoint and "checkpoint-" in partial_checkpoint
-            )
+    def remove_checkpoints(self, checkpoints_to_remove: list[str]) -> None:
+        for to_remove in checkpoints_to_remove:
+            assert "round-" in to_remove and "checkpoint-" in to_remove
             logger.warning(
                 "Deleting checkpoint: %s",
-                partial_checkpoint,
+                to_remove,
             )
-            shutil.rmtree(partial_checkpoint)
+            remove_directory(to_remove)
 
     @property
     def num_adversarial_training_rounds(self) -> int:

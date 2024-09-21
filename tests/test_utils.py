@@ -1,10 +1,83 @@
+from unittest.mock import patch
+
 import pytest
 import torch
 from hypothesis import assume, given
 from hypothesis import strategies as st
 from transformers import AutoTokenizer
 
-from robust_llm.utils import BalancedSampler, is_correctly_padded, nested_list_to_tuple
+from robust_llm.utils import (
+    BalancedSampler,
+    is_correctly_padded,
+    nested_list_to_tuple,
+    remove_directory,
+)
+
+
+@pytest.fixture
+def temp_directory(tmp_path):
+    """Create a temporary directory for testing."""
+    test_dir = tmp_path / "test_dir"
+    test_dir.mkdir()
+    (test_dir / "test_file.txt").write_text("Test content")
+    yield test_dir
+
+
+def test_remove_directory_success(temp_directory):
+    """Test successful removal of a directory."""
+    remove_directory(str(temp_directory))
+    assert not temp_directory.exists()
+
+
+def test_remove_directory_not_exists():
+    """Test removal of a non-existent directory."""
+    with pytest.raises(FileNotFoundError):
+        remove_directory("/path/to/nonexistent/directory", retries=1)
+
+
+@patch("shutil.rmtree")
+@patch("time.sleep")
+def test_remove_directory_retry(mock_sleep, mock_rmtree, temp_directory):
+    """Test retrying removal on OSError."""
+    mock_rmtree.side_effect = [OSError("Test error"), None]
+
+    remove_directory(str(temp_directory))
+
+    assert mock_rmtree.call_count == 2
+    assert mock_sleep.call_count == 1
+    mock_sleep.assert_called_with(1)
+
+
+@patch("shutil.rmtree")
+@patch("time.sleep")
+def test_remove_directory_max_retries(mock_sleep, mock_rmtree, temp_directory):
+    """Test maximum retries reached."""
+    mock_rmtree.side_effect = OSError("Test error")
+
+    with pytest.raises(OSError, match="Test error"):
+        remove_directory(str(temp_directory), retries=4)
+
+    assert mock_rmtree.call_count == 5
+    assert mock_sleep.call_count == 4
+
+
+@patch("shutil.rmtree")
+@patch("time.sleep")
+def test_remove_directory_exponential_backoff(mock_sleep, mock_rmtree, temp_directory):
+    """Test exponential backoff in sleep times."""
+    mock_rmtree.side_effect = [OSError("Test error")] * 4 + [None]
+
+    remove_directory(str(temp_directory))
+
+    assert mock_rmtree.call_count == 5
+    assert mock_sleep.call_count == 4
+
+
+def test_remove_directory_permission_error(temp_directory):
+    """Test handling of PermissionError."""
+    with patch("shutil.rmtree", side_effect=PermissionError("Permission denied")):
+        with pytest.raises(PermissionError, match="Permission denied"):
+            remove_directory(str(temp_directory), retries=0)
 
 
 @pytest.fixture(scope="module")
