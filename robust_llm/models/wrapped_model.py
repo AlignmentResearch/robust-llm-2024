@@ -401,6 +401,50 @@ class WrappedModel(ABC):
         num_classes: Optional[int] = None,
         **kwargs,
     ) -> WrappedModel:
+        """Wrapper around _from_config to implement a retry hack.
+
+        I (ian) accidentally uploaded some models as AlignmentResearch/clf_[...]
+        instead of AlignmentResearch/robust_llm_clf_[...]. Thus to avoid keeping
+        track of which is which, we try both and return the first one that
+        works.
+        """
+        try:
+            return cls._from_config(
+                config,
+                accelerator,
+                num_classes=num_classes,
+                **kwargs,
+            )
+        except OSError as e:
+            if config.name_or_path.startswith("AlignmentResearch/robust_llm_"):
+                new_name = config.name_or_path.replace(
+                    "AlignmentResearch/robust_llm_",
+                    "AlignmentResearch/",
+                )
+            elif config.name_or_path.startswith("AlignmentResearch/"):
+                new_name = config.name_or_path.replace(
+                    "AlignmentResearch/",
+                    "AlignmentResearch/robust_llm_",
+                )
+            else:
+                raise e
+
+            new_config = dataclasses.replace(config, name_or_path=new_name)
+            return cls._from_config(
+                new_config,
+                accelerator,
+                num_classes=num_classes,
+                **kwargs,
+            )
+
+    @classmethod
+    def _from_config(
+        cls,
+        config: ModelConfig,
+        accelerator: Accelerator | None,
+        num_classes: Optional[int] = None,
+        **kwargs,
+    ) -> WrappedModel:
         """Creates a WrappedModel from a ModelConfig."""
         inference_type = InferenceType(config.inference_type)
         model = load_hf_model(
