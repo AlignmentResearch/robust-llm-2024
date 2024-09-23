@@ -17,4 +17,7 @@ devbox/%:
 devbox/large:
 	$(MAKE) devbox DEVBOX_NAME=rllm-devbox-large CPU=8 MEMORY=100G GPU=2
 
+devbox/cpu:
+	$(MAKE) devbox DEVBOX_NAME=rllm-devbox-cpu CPU=4 MEMORY=48G GPU=0
+
 devbox: devbox/main
