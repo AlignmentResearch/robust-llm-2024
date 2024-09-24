@@ -9,8 +9,7 @@ set_plot_style("paper")
 load_and_plot_adv_training_plots(
     run_names=("niki_056_pretrained_adv-training_rt_imdb",),
     title="IMDB, RT, Pretrained",
-    save_as="imdb_rt_pretrained_adv_training_10_rounds",
-    save_dir=save_dir,
+    save_as=(save_dir, "imdb_rt_pretrained_adv_training_10_rounds"),
 )
 # load_and_plot_adv_training_plots(
 #     "niki_057_pretrained_adv-training_rt_enronspam",

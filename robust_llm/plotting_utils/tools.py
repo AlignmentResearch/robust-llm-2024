@@ -7,6 +7,7 @@ import pandas as pd
 import seaborn as sns
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 
 from robust_llm.file_utils import compute_repo_path
 from robust_llm.plotting_utils.constants import MODEL_PLOTTING_NAMES
@@ -22,34 +23,43 @@ from robust_llm.wandb_utils.wandb_api_tools import (
     get_metrics_single_step,
 )
 
+iter_str = tuple[str, ...] | list[str]
+
 
 def make_finetuned_plots(
-    run_names,
-    title,
-    save_as,
-    save_dir,
-    eval_summary_keys,
-    metrics,
-    legend=False,
+    run_names: iter_str,
+    title: str,
+    save_as: iter_str | str,
+    eval_summary_keys: list[str],
+    metrics: list[str],
+    legend: bool = False,
+    log_y: bool = True,
 ):
+    """Make scatter and min/max/median plot for many runs on the same plot."""
     make_finetuned_plot(
         run_names=run_names,
         title=title,
-        save_as=save_as + "_min_max_median",
-        save_dir=save_dir,
+        save_as=list(save_as)
+        + [
+            "_min_max_median",
+        ],
         eval_summary_keys=eval_summary_keys,
         metrics=metrics,
         plot_type="min_max_median",
         legend=legend,
+        log_y=log_y,
     )
     make_finetuned_plot(
         run_names=run_names,
         title=title,
-        save_as=save_as + "_scatter",
-        save_dir=save_dir,
+        save_as=list(save_as)
+        + [
+            "_scatter",
+        ],
         eval_summary_keys=eval_summary_keys,
         metrics=metrics,
         plot_type="scatter",
+        log_y=log_y,
     )
 
 
@@ -75,17 +85,17 @@ def extract_size_from_model_name(name: str | None) -> int | None:
 
 
 def make_finetuned_plot(
-    run_names: tuple[str, ...],
+    run_names: iter_str,
     eval_summary_keys: list[str] | tuple[list[str], ...],
     metrics: list[str] | tuple[list[str], ...],
     title: str,
-    save_as: str,
-    save_dir: str,
+    save_as: iter_str | str,
     custom_ys: list[float] | None = None,
     custom_xs_and_ys: list[tuple[float, float]] | None = None,
     plot_type: str = "scatter",
     legend: bool = False,
     check_seeds: bool = True,
+    log_y: bool = True,
 ):
     """
     Plot model size on the x-axis and attack success rate on the y-axis.
@@ -96,7 +106,6 @@ def make_finetuned_plot(
         metrics: The metrics to plot.
         title: The title to give the plot.
         save_as: The name to save the plot as.
-        save_dir: The directory to save the plot in.
         custom_ys: Custom y-values to add to the plot. The x-values are taken
             from MODEL_SIZES, assuming that the custom y-values are for
             the largest models. Mutually exclusive with custom_xs_and_ys.
@@ -109,6 +118,7 @@ def make_finetuned_plot(
         check_seeds:
             Whether to check that the correct number of seeds are present,
             and that those are the correct actual seed numbers.
+        log_y: Whether to use a log scale for the y-axis.
     """
     if plot_type not in ["scatter", "min_max_median"]:
         raise ValueError(f"Unknown plot type {plot_type}")
@@ -148,37 +158,37 @@ def make_finetuned_plot(
                 run,
                 title=title,
                 save_as=save_as,
-                save_dir=save_dir,
                 legend=legend,
                 check_seeds=check_seeds,
+                log_y=log_y,
             )
         case "scatter":
             draw_scatterplot(
                 run,
                 title=title,
                 save_as=save_as,
-                save_dir=save_dir,
                 custom_ys=custom_ys,
                 custom_xs_and_ys=custom_xs_and_ys,
                 check_seeds=check_seeds,
+                log_y=log_y,
             )
         case _:
             raise ValueError(f"Unknown plot type {plot_type}")
 
 
 def load_and_plot_adv_training_plots(
-    run_names: tuple[str, ...],
+    run_names: iter_str | str,
     title: str,
-    save_as: str,
-    save_dir: str = "",
+    save_as: iter_str | str,
     summary_keys: list[str] | None = None,
     metrics: list[str] | None = None,
     x_data_name: str = "adv_training_round",
     color_data_name: str = "num_params",
-    xlim: tuple[float, float] = (1, 10),
-    ylim: tuple[float, float] = (0, 1),
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
     legend: bool = False,
-    check_seeds: bool = True,
+    check_seeds: int | None = None,
+    use_cache: bool = True,
 ):
     """
     Make adversarial training plots for given runs, pulling data from W&B.
@@ -186,8 +196,7 @@ def load_and_plot_adv_training_plots(
     Args:
         run_names: The names of the runs to pull data from.
         title: The title to give the plot (also used for saving).
-        save_as: The name to save the plot as.
-        save_dir: The directory to save the plot in.
+        save_as: The nested directory structure to save the plot in.
         summary_keys: The keys to summarize the data by.
         metrics: The metrics to plot.
         x_data_name: The name of the data to use for the x-axis.
@@ -198,7 +207,10 @@ def load_and_plot_adv_training_plots(
         check_seeds:
             Whether to check that the correct number of seeds are present,
             and that those are the correct actual seed numbers.
+        use_cache: Whether to use the cache for the data.
     """
+    if isinstance(run_names, str):
+        run_names = (run_names,)
     if summary_keys is None:
         summary_keys = SUMMARY_KEYS
 
@@ -209,6 +221,7 @@ def load_and_plot_adv_training_plots(
         run_names=run_names,
         summary_keys=summary_keys,
         metrics=metrics,
+        use_cache=use_cache,
     )
     draw_plot_adv_training(
         data=data,
@@ -216,7 +229,6 @@ def load_and_plot_adv_training_plots(
         color_data_name=color_data_name,
         title=title,
         save_as=save_as,
-        save_dir=save_dir,
         xlim=xlim,
         ylim=ylim,
         legend=legend,
@@ -225,9 +237,10 @@ def load_and_plot_adv_training_plots(
 
 
 def prepare_adv_training_data(
-    run_names: tuple[str, ...],
+    run_names: iter_str,
     summary_keys: list[str],
     metrics: list[str],
+    use_cache: bool = True,
 ) -> pd.DataFrame:
     assert all(isinstance(name, str) for name in run_names)
     run_info_list = []
@@ -237,7 +250,11 @@ def prepare_adv_training_data(
             group=run_name,
             metrics=metrics,
             summary_keys=summary_keys,
+            use_cache=use_cache,
         )
+        assert (
+            isinstance(run_info, pd.DataFrame) and not run_info.empty
+        ), f"Found no data for {run_name}"
         postprocess_data(df=run_info)
         run_info_list.append(run_info)
 
@@ -322,7 +339,8 @@ def create_legend(
     ax: Axes,
     legend_handles: dict,
     loc: str = "best",
-    outside: bool = True,
+    outside: bool = False,
+    bbox_to_anchor: tuple[float, float] = (1.05, 1),
 ) -> None:
     kwargs = {
         "loc": loc,
@@ -335,7 +353,7 @@ def create_legend(
         "framealpha": 0.8,  # Add some transparency to the legend box
     }
     if outside:
-        kwargs["bbox_to_anchor"] = (1.05, 1)
+        kwargs["bbox_to_anchor"] = bbox_to_anchor
     if color_data_name == "adv_training_round":
         ax.legend(
             title="Adversarial Training Round",
@@ -356,11 +374,10 @@ def _draw_plot_adv_training(
     x_data_name: str,
     color_data_name: str,
     title: str,
-    save_as: str,
-    save_dir: str,
+    save_as: iter_str | str,
     y_data_name: str = "adversarial_eval/attack_success_rate",
-    xlim: tuple[float, float] = (0, 10),
-    ylim: tuple[float, float] = (0, 1),
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
     legend: bool = False,
 ):
     data = data.copy()
@@ -374,7 +391,8 @@ def _draw_plot_adv_training(
         plt.xscale("log")
     elif x_data_name == "adv_training_round":
         ax.set_xlabel("Adversarial Training Round")
-        plt.xlim(xlim)
+        if xlim is not None:
+            plt.xlim(xlim)
     elif x_data_name == "n_parameter_updates":
         _get_n_parameter_updates(data)
         ax.set_xlabel("# Parameter Updates")
@@ -388,7 +406,10 @@ def _draw_plot_adv_training(
         y_data_name.replace("adversarial_eval/", "").replace("_", " ").title()
     )
     plt.title(title)
-    plt.ylim(ylim)
+    if ylim is None:
+        plt.yscale("log")
+    else:
+        plt.ylim(ylim)
     set_up_paper_plot(fig, ax)
 
     grouped = (
@@ -418,7 +439,9 @@ def _draw_plot_adv_training(
         legend_handles = get_legend_handles(data, color_data_name, palette_dict)
         create_legend(color_data_name, ax, legend_handles)
 
-    create_path_and_savefig(fig, "adv_training", save_dir, save_as)
+    create_path_and_savefig(
+        fig, "adv_training", *save_as, "legend" if legend else "no_legend"
+    )
 
 
 def draw_plot_adv_training(
@@ -426,24 +449,24 @@ def draw_plot_adv_training(
     x_data_name: str,
     color_data_name: str,
     title: str,
-    save_as: str,
-    save_dir: str = "",
-    xlim: tuple[float, float] = (0, 10),
-    ylim: tuple[float, float] = (0, 1),
+    save_as: iter_str | str,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
     legend: bool = False,
-    check_seeds: bool = True,
+    check_seeds: int | None = None,
 ):
-    n_adv_rounds = xlim[1]
-    if data["adv_training_round"].max() + 1 < n_adv_rounds:
+    if xlim is not None and data["adv_training_round"].max() + 1 < xlim[1]:
         raise ValueError(
             f"Found {data['adv_training_round'].max()} adv rounds, "
-            f"but requested {n_adv_rounds}"
+            f"but requested {xlim[1]}"
         )
-    data_copy = data.copy()[data["adv_training_round"] < n_adv_rounds]
+    data_copy = data.copy()
+    if xlim is not None:
+        data_copy = data_copy[data_copy["adv_training_round"] < xlim[1]]
     assert isinstance(data_copy, pd.DataFrame)
 
-    if check_seeds:
-        _check_correct_num_seeds(data_copy, num_seeds=3, adversarial=True)
+    if check_seeds is not None:
+        _check_correct_num_seeds(data_copy, num_seeds=check_seeds, adversarial=True)
 
     _draw_plot_adv_training(
         data_copy,
@@ -451,7 +474,6 @@ def draw_plot_adv_training(
         color_data_name=color_data_name,
         title=title,
         save_as=save_as,
-        save_dir=save_dir,
         xlim=xlim,
         ylim=ylim,
         legend=legend,
@@ -465,17 +487,18 @@ def create_path_and_savefig(fig, *nested):
     directory.mkdir(parents=True, exist_ok=True)
     save_path = directory / f"{nested[-1]}.pdf"
     fig.savefig(save_path, dpi=600, bbox_inches="tight")
+    print(f"Saved plot to {save_path}")
     return save_path
 
 
 def draw_scatterplot(
     data: pd.DataFrame,
     title: str,
-    save_as: str,
-    save_dir: str,
+    save_as: iter_str | str,
     custom_ys=None,
     custom_xs_and_ys=None,
     check_seeds=True,
+    log_y: bool = True,
 ):
 
     # Refine data here as necessary
@@ -491,7 +514,10 @@ def draw_scatterplot(
     plt.title(title)
     plt.xlabel("Model size (# parameters)")
     plt.ylabel("Attack Success Rate")
-    plt.ylim((0, 1))
+    if log_y:
+        plt.yscale("log")
+    else:
+        plt.ylim((0, 1))
 
     relevant_data = data[["num_params", "adversarial_eval/attack_success_rate"]]
 
@@ -532,7 +558,7 @@ def draw_scatterplot(
 
     set_up_paper_plot(fig, ax)
 
-    create_path_and_savefig(fig, save_dir, save_as)
+    create_path_and_savefig(fig, *save_as)
 
 
 def _maybe_get_custom_xs_and_maybe_ys(relevant_data, custom_ys, custom_xs_and_ys):
@@ -570,8 +596,10 @@ def _get_seeds(data: pd.DataFrame) -> list[int]:
     # If the seed is already in the dataframe, just use that
     if "seed" in data.columns:
         return data["seed"].tolist()
+    if "training_seed" in data.columns:
+        return data["training_seed"].tolist()
     # Otherwise, get it from the name
-    return data["name_or_path"].apply(_get_seed_from_name).tolist()
+    return data["model_name_or_path"].apply(_get_seed_from_name).tolist()
 
 
 def _check_correct_seed_numbers(data: pd.DataFrame) -> None:
@@ -633,19 +661,19 @@ def _check_correct_num_seeds(relevant_data, num_seeds: int, adversarial: bool) -
                 print(f"Expected {num_seeds} data points")
                 print("Datapoints found: ")
                 for _, row in matching_datapoints.iterrows():
-                    print(row["name_or_path"])
+                    print(row["model_name_or_path"])
                 raise ValueError("Incorrect number of data points")
 
 
 def draw_min_max_median_plot(
     data: pd.DataFrame,
     title: str,
-    save_as: str,
-    save_dir: str,
+    save_as: iter_str | str,
     custom_ys=None,
     custom_xs_and_ys=None,
     legend: bool = False,
     check_seeds: bool = True,
+    log_y: bool = True,
 ):
     print("Found", len(data), "runs to use for the plot")
 
@@ -655,10 +683,13 @@ def draw_min_max_median_plot(
     plt.title(title)
     plt.xlabel("Model size (# parameters)")
     plt.ylabel("Attack Success Rate")
-    plt.ylim((0, 1))
+    if log_y:
+        plt.yscale("log")
+    else:
+        plt.ylim((0, 1))
 
     relevant_data = data[
-        ["num_params", "adversarial_eval/attack_success_rate", "name_or_path"]
+        ["num_params", "adversarial_eval/attack_success_rate", "model_name_or_path"]
     ]
 
     relevant_data = _maybe_get_custom_xs_and_maybe_ys(
@@ -704,7 +735,125 @@ def draw_min_max_median_plot(
     if not legend:
         ax.get_legend().remove()
 
-    create_path_and_savefig(fig, save_dir, save_as)
+    create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
+
+
+def draw_min_max_median_plot_by_round(
+    data: pd.DataFrame,
+    title: str,
+    save_as: iter_str | str,
+    custom_ys=None,
+    custom_xs_and_ys=None,
+    legend: bool = True,
+    log_y: bool = True,
+    rounds: list[int] | None = None,
+):
+    print("Found", len(data), "runs to use for the plot")
+
+    fig, ax = plt.subplots()
+
+    plt.xscale("log")
+    plt.title(title)
+    plt.xlabel("Model size (# parameters)")
+    plt.ylabel("Attack Success Rate")
+    if log_y:
+        plt.yscale("log")
+    else:
+        plt.ylim((0, 1))
+
+    relevant_data = data[
+        [
+            "num_params",
+            "adversarial_eval/attack_success_rate",
+            "model_name_or_path",
+            "adv_training_round",
+        ]
+    ]
+
+    relevant_data = _maybe_get_custom_xs_and_maybe_ys(
+        relevant_data, custom_ys, custom_xs_and_ys
+    )
+
+    # Group by num_params and adv_training_round then calculate min, max, and median
+    grouped = (
+        relevant_data.groupby(["num_params", "adv_training_round"])
+        .agg({"adversarial_eval/attack_success_rate": ["min", "max", "median"]})
+        .reset_index()
+    )
+    grouped.columns = ["num_params", "adv_training_round", "y_min", "y_max", "y_median"]
+
+    if rounds is None:
+        rounds = sorted(grouped["adv_training_round"].unique())
+
+    # Color palette for different rounds
+    colors = sns.color_palette("husl", n_colors=len(rounds))
+    color_map = dict(zip(rounds, colors))
+
+    for i, round_val in enumerate(rounds):
+        round_data = grouped[grouped["adv_training_round"] == round_val]
+
+        # Plot the band between the min and max values
+        plt.fill_between(
+            round_data["num_params"],
+            round_data["y_min"],
+            round_data["y_max"],
+            alpha=0.2,
+            label=f"Round {round_val} Min-Max",
+            color=colors[i],
+        )
+
+        # Plot the median values
+        sns.lineplot(
+            x=round_data["num_params"],
+            y=round_data["y_median"],
+            label=f"Round {round_val} Median",
+            marker="o",
+            color=colors[i],
+            alpha=0.7,
+            zorder=5,
+        )
+
+    set_up_paper_plot(fig, ax)
+
+    # Adjust legend
+    if legend:
+        # Create legend elements
+        round_legend = [
+            Line2D([0], [0], color=color_map[r], lw=2, label=f"Round {r}")
+            for r in rounds
+        ]
+        style_legend = [
+            Line2D(
+                [0],
+                [0],
+                color="gray",
+                marker="o",
+                linestyle="",
+                markersize=8,
+                label="Median",
+            ),
+            plt.Rectangle(  # type: ignore
+                (0, 0), 1, 1, fc="gray", alpha=0.2, label="Min-Max Range"
+            ),
+        ]
+
+        # Combine all legend elements
+        all_legend_elements = round_legend + style_legend
+
+        # Create a single, compact legend
+        plt.legend(
+            handles=all_legend_elements,
+            loc="upper right",
+            ncol=1,
+            fontsize="xx-small",
+        )
+    else:
+        ax.get_legend().remove()
+
+    # Adjust layout to prevent cutoff
+    plt.tight_layout()
+
+    create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
 
 
 def draw_scatter_with_color_from_metric(
@@ -770,7 +919,7 @@ def _update_model_sizes_as_necessary(df: pd.DataFrame) -> None:
     for i, row in df.iterrows():
         if row["num_params"] not in MODEL_SIZES:
             size_from_name = _get_num_params_from_name(
-                row["name_or_path"]  # type: ignore
+                row["model_name_or_path"]  # type: ignore
             )
             print(
                 f"Couldn't find model size {row['num_params']}, "
@@ -780,8 +929,7 @@ def _update_model_sizes_as_necessary(df: pd.DataFrame) -> None:
 
 
 def postprocess_data(df):
-    # if "name_or_path" not in df:
-    #     df["name_or_path"] = df["model_name_or_path"]
+    df.rename(columns={"name_or_path": "model_name_or_path"}, inplace=True)
     if "model_size" not in df:
         df["num_params"] = df["model_name_or_path"].map(_get_num_params_from_name)
     else:

@@ -26,7 +26,6 @@ GROUPS = [
     "ian_112_rt_pythia_wl",
     "ian_113_rt_pythia_spam",
 ]
-OUTPUTS_DIR = "../../../../outputs"
 # %%
 
 
@@ -41,13 +40,17 @@ def plot_asr_for_group(group_name: str):
     dataset = group_name.split("_")[-1]
     df = pd.read_csv(path)
     assert df.columns.tolist() == ["model_idx", "seed_idx", "asr", "iteration"]
-    assert df.model_idx.between(0, 9).all()
-    assert df.seed_idx.eq(0, 4).all()
-    assert df.iteration.between(0, 10).all()
-    assert len(df) == 11 * 5 * 10  # 11 iterations, 5 seeds, 10 models
-    if df.iteration.max() > 1000:
+    n_models = 10
+    n_seeds = 5
+    n_iterations = 11 if "gcg" in group_name else 1281
+    assert df.model_idx.between(0, n_models - 1).all()
+    assert df.seed_idx.between(0, n_seeds - 1).all()
+    assert df.iteration.between(0, n_iterations - 1).all()
+    assert len(df) == n_models * n_seeds * n_iterations
+    if n_iterations > 1000:
         df = df.loc[df.iteration.mod(100) == 0]
     df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
+    df["iteration_x_params"] = df.iteration * df.num_params
     df.sort_values("model_idx", inplace=True)
 
     fig, ax = plt.subplots()
@@ -56,15 +59,17 @@ def plot_asr_for_group(group_name: str):
     palette = get_color_palette(df, color_data_name)
     sns.lineplot(
         data=df,
-        x="iteration",
+        x="iteration_x_params",
         y="asr",
         hue=color_data_name,
         ax=ax,
         palette=palette,
         legend=False,
     )
-    ax.set_xlabel("Iterations")
+    ax.set_xlabel(r"Attack compute (Iterations $\times$ Parameters)")
     ax.set_ylabel("Attack success rate (%)")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
     fig.suptitle(f"{attack}/{dataset}".upper())
     create_path_and_savefig(fig, "asr", attack, dataset, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)

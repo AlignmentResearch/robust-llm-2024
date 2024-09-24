@@ -13,8 +13,7 @@ set_plot_style("paper")
 make_finetuned_plot(
     run_names=("mz_070_search_based_tt_eval_seeds_models",),
     title="PasswordMatch, GCG attack",
-    save_as="pm_gcg",
-    save_dir=save_dir,
+    save_as=(save_dir, "pm_gcg"),
     eval_summary_keys=(
         [
             "experiment_yaml.environment.model_name_or_path",
@@ -35,8 +34,7 @@ make_finetuned_plot(
 make_finetuned_plot(
     run_names=("mz_072_search_based_imdb_eval_seeds_models",),
     title="IMDB, GCG attack",
-    save_as="imdb_gcg",
-    save_dir=save_dir,
+    save_as=(save_dir, "imdb_gcg"),
     eval_summary_keys=(
         [
             "experiment_yaml.environment.model_name_or_path",
@@ -57,8 +55,7 @@ make_finetuned_plot(
 make_finetuned_plot(
     run_names=("mz_074_search_based_spam_eval_seeds_models",),
     title="Spam, GCG attack",
-    save_as="spam_gcg",
-    save_dir=save_dir,
+    save_as=(save_dir, "spam_gcg"),
     eval_summary_keys=(
         [
             "experiment_yaml.environment.model_name_or_path",
@@ -79,8 +76,7 @@ make_finetuned_plot(
 make_finetuned_plot(
     run_names=("niki_096_rt_pm_eval_seeds_models",),
     title="PasswordMatch, RT attack",
-    save_as="pm_rt",
-    save_dir=save_dir,
+    save_as=(save_dir, "pm_rt"),
     eval_summary_keys=(
         [
             "experiment_yaml.model.name_or_path",
@@ -99,8 +95,7 @@ make_finetuned_plot(
 make_finetuned_plot(
     run_names=("niki_097_rt_spam_eval_seeds_models",),
     title="Spam, RandomToken attack",
-    save_as="spam_rt",
-    save_dir=save_dir,
+    save_as=(save_dir, "spam_rt"),
     eval_summary_keys=(
         [
             "experiment_yaml.model.name_or_path",
@@ -119,8 +114,7 @@ make_finetuned_plot(
 make_finetuned_plot(
     run_names=("niki_098_rt_imdb_eval_seeds_models",),
     title="IMDB, RandomToken attack",
-    save_as="imdb_rt",
-    save_dir=save_dir,
+    save_as=(save_dir, "imdb_rt"),
     eval_summary_keys=(
         [
             "experiment_yaml.model.name_or_path",

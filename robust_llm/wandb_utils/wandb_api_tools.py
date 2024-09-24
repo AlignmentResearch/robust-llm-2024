@@ -1,5 +1,6 @@
 import concurrent.futures
 import json
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -9,6 +10,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import wandb
+from joblib import Memory
 from tqdm import tqdm
 from wandb.apis.public.runs import Run as WandbRun
 from wandb.apis.public.runs import Runs as WandbRuns
@@ -17,6 +19,11 @@ from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.wandb_utils.constants import PROJECT_NAME
 
 WANDB_API = wandb.Api(timeout=90)
+
+# Set up the cache directory
+cache_dir = "cache/get-metrics-adv-training"
+os.makedirs(cache_dir, exist_ok=True)
+memory = Memory(cache_dir, verbose=0)
 
 
 def _extract_adv_round(revision: str) -> int:
@@ -121,7 +128,7 @@ def _get_value_iterative(d: dict, key: str):
     return d
 
 
-def get_metrics_single_step(
+def _get_metrics_single_step(
     group, metrics, summary_keys, filters=None, check_num_runs=None
 ):
     print("getting metrics for", group)
@@ -156,7 +163,23 @@ def get_metrics_single_step(
     return res
 
 
-def get_metrics_adv_training(
+@memory.cache
+def _cached_get_metrics_single_step(
+    group, metrics, summary_keys, filters=None, check_num_runs=None
+):
+    return _get_metrics_single_step(
+        group, metrics, summary_keys, filters=filters, check_num_runs=check_num_runs
+    )
+
+
+def get_metrics_single_step(*args, use_cache=True, **kwargs):
+    if use_cache:
+        return _cached_get_metrics_single_step(*args, **kwargs)
+
+    return _get_metrics_single_step(*args, **kwargs)
+
+
+def _get_metrics_adv_training(
     group,
     metrics,
     summary_keys,
@@ -166,7 +189,7 @@ def get_metrics_adv_training(
     verbose=False,
 ) -> pd.DataFrame:
     if filters is None:
-        filters = {}
+        filters = {"state": "finished"}
     filters = deepcopy(filters)
     filters["group"] = group
 
@@ -182,7 +205,8 @@ def get_metrics_adv_training(
             assert False, "bad check_num_runs!"
 
     res = []
-    for run in runs:
+    run_iterator = tqdm(runs, desc="Processing runs") if len(runs) > 100 else runs
+    for run in run_iterator:
         history = run.history(keys=metrics)
         if verbose:
             print(f"Run {run.id} has {len(history)} data points")
@@ -190,10 +214,8 @@ def get_metrics_adv_training(
         if check_num_data_per_run is not None:
             assert len(history) == check_num_data_per_run
 
-        if len(history) == 0:
-            continue
-
-        if history is None:
+        if len(history) == 0 or history is None:
+            print(f"Run {run.id} has no data")
             continue
 
         for key in summary_keys:
@@ -214,16 +236,47 @@ def get_metrics_adv_training(
             history["adv_training_round"] = [
                 _extract_adv_round(name) for name in history["revision"]
             ]
+        elif "model_revision" in history:
+            history["adv_training_round"] = [
+                _extract_adv_round(name) for name in history["model_revision"]
+            ]
         else:
             history["adv_training_round"] = np.arange(len(history))
 
         res.append(history)
 
     if len(res) == 0:
-        return pd.DataFrame()
+        raise ValueError(f"No data found for group {group}")
     res = pd.concat(res, ignore_index=True)
-
     return res
+
+
+@memory.cache
+def _cached_get_metrics_adv_training(
+    group,
+    metrics,
+    summary_keys,
+    filters=None,
+    check_num_runs=None,
+    check_num_data_per_run=None,
+    verbose=False,
+):
+    return _get_metrics_adv_training(
+        group,
+        metrics,
+        summary_keys,
+        filters=filters,
+        check_num_runs=check_num_runs,
+        check_num_data_per_run=check_num_data_per_run,
+        verbose=verbose,
+    )
+
+
+def get_metrics_adv_training(*args, use_cache=True, **kwargs):
+    if use_cache:
+        return _cached_get_metrics_adv_training(*args, **kwargs)
+
+    return _get_metrics_adv_training(*args, **kwargs)
 
 
 def parse_run_to_dict(run: WandbRun) -> dict[str, Any]:
