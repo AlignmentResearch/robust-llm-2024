@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: robust-llm-storage
           persistentVolumeClaim:
-            claimName: robust-llm
+            claimName: st-cloudflare-robust-llm
         - name: devshm
           emptyDir:
             medium: Memory
