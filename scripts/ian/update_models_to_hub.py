@@ -21,7 +21,8 @@ disable_progress_bar()
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
-RECORD_DIR = Path("/robust_llm_data/upload-info")
+RECORD_DIR = Path("/robust_llm_data/update-info")
+RECORD_DIR.mkdir(exist_ok=True, parents=True)
 
 
 class NFSToHFError(Exception):
@@ -46,15 +47,12 @@ class FileDetails:
 
 # Avoid overwriting data from other threads
 file_locks = {
-    "success_new": threading.Lock(),
-    "success_exists": threading.Lock(),
-    "success_overwrite": threading.Lock(),
+    "not_present": threading.Lock(),
+    "success_update": threading.Lock(),
+    "success_older": threading.Lock(),
+    "processed": threading.Lock(),
     "failure_load": threading.Lock(),
     "failure_upload": threading.Lock(),
-    "failure_match": threading.Lock(),
-    "failure_untracked": threading.Lock(),
-    "processed": threading.Lock(),
-    "interrupted": threading.Lock(),
 }
 
 
@@ -64,24 +62,10 @@ def write_to_file(file_name: str, content: str):
             f.write(content)
 
 
-def push_model_to_hub(
+def update_model_to_hub(
     file_details: FileDetails,
 ) -> tuple[str, str, str, str, str]:
-    """Push a model to the hub given its path and revision.
-
-    Steps involved:
-    1. Check whether the repo and revision already exist on HFHub.
-        a. If they do, check that the huggingface version matches the local version?
-    1. Verify that all necessary files are present in the local_file_path.
-    2. Verify that the model can be loaded into memory.
-    3. Upload the model.
-
-    This function should also record the results to one of four files:
-    1. success_new.txt - if the model was successfully uploaded.
-    2. success_exists.txt - if the model already existed on the hub.
-    3. failure_new.txt - if the model failed to load or upload.
-    4. failure_exists.txt - if the model already existed on the hub but does not match.
-    """
+    """Push a model to the hub if it's more recent than the one on the hub."""
 
     local_file_path = file_details.local_file_path
     repo_id = file_details.repo_id
@@ -94,49 +78,51 @@ def push_model_to_hub(
     status = "success"
     message = ""
 
+    # Check if the branch already exists and contains a config.json before
+    # trying to upload again.
     try:
-        # Get some proof that the local checkpoint is not corrupted.
-        input_ids = torch.tensor([[1000, 1001]], requires_grad=False)
-        local_logits = verify_model_loading(local_file_path, input_ids)
-        if local_logits is None:
-            write_to_file("failure_load", line_to_write)
-            raise ModelLoadError("Model failed to load")
-
-        # Check if the branch already exists and contains a config.json before
-        # trying to upload again.
         already_on_hub = api.file_exists(repo_id, "config.json", revision=revision)
-        more_recent = False
         if not already_on_hub:
+            write_to_file("not_present", line_to_write)
+            raise NFSToHFError("Model not present on HFHub")
+
+        # Only upload if the new model is more recent than the one on the hub
+        last_modified_on_hub = api.repo_info(repo_id, revision=revision).last_modified
+        assert last_modified_on_hub is not None
+        if last_modified_on_hub < last_modified:
+            print(
+                f"Uploading {local_file_path} to HFHub because"
+                " it is more recent than the existing upload."
+            )
+            input_ids = torch.tensor([[1000, 1001]], requires_grad=False)
+            local_logits = verify_model_loading(local_file_path, input_ids)
+            if local_logits is None:
+                write_to_file("failure_load", line_to_write)
+                raise ModelLoadError("Model failed to load")
             upload_model(api, repo_id, revision, local_file_path)
-        else:
-            # Only upload if the new model is more recent than the one on the hub
-            last_modified_on_hub = api.repo_info(
-                repo_id, revision=revision
-            ).last_modified
-            assert last_modified_on_hub is not None
-            if last_modified_on_hub < last_modified:
-                print(
-                    f"Uploading {local_file_path} to HFHub because"
-                    " it is more recent than the existing upload."
-                )
-                more_recent = True
-                upload_model(api, repo_id, revision, local_file_path)
-
-        logits_match = check_model_upload(repo_id, revision, input_ids, local_logits)
-        if not logits_match:
-            if already_on_hub and not more_recent:
-                write_to_file("failure_match", line_to_write)
-                raise LogitsMismatchError("Logits don't match existing model")
-            else:
+            logits_match = check_model_upload(
+                repo_id, revision, input_ids, local_logits
+            )
+            if not logits_match:
                 write_to_file("failure_upload", line_to_write)
-                raise LogitsMismatchError("Logits don't match just-uploaded model")
+                raise LogitsMismatchError(
+                    "Logits mismatch between local and uploaded model"
+                )
 
-        if already_on_hub:
-            write_to_file("success_exists", line_to_write)
-            if more_recent:
-                write_to_file("success_overwrite", line_to_write)
+            status = "success"
+            message = (
+                "Uploaded model successfully:"
+                f" {last_modified_on_hub} <= {last_modified}"
+            )
+            write_to_file("success_update", line_to_write)
+
         else:
-            write_to_file("success_new", line_to_write)
+            status = "success"
+            message = (
+                "Model on HFHub is more recent than local model:"
+                f" {last_modified_on_hub} > {last_modified}"
+            )
+            write_to_file("success_older", line_to_write)
 
     except KeyboardInterrupt:
         status = "interrupted"
@@ -244,14 +230,20 @@ def construct_file_details(model_dir: Path, match: re.Match):
 
     repo_id = f"AlignmentResearch/{model_name}"
     revision = f"adv-training-round-{match.group('round')}"
-    last_modified = datetime.fromtimestamp(model_dir.stat().st_mtime, tz=timezone.utc)
+    last_modified = get_latest_modification_time(model_dir)
 
     return FileDetails(model_dir, repo_id, revision, last_modified)
 
 
-def get_dirs_to_skip(
-    retry_failures: bool, skip_logit_mismatch: bool, skip_load_failures
-) -> set[str]:
+def get_latest_modification_time(directory: Path) -> datetime:
+    latest_time = directory.stat().st_mtime
+    for file_path in directory.rglob("*"):
+        if file_path.is_file():
+            latest_time = max(latest_time, file_path.stat().st_mtime)
+    return datetime.fromtimestamp(latest_time, tz=timezone.utc)
+
+
+def get_dirs_to_skip() -> set[str]:
     """Get the directories that we should skip.
 
     If retry_failures is off, we only try previously unprocessed directories.
@@ -264,16 +256,7 @@ def get_dirs_to_skip(
     If retry_failures is on and skip_load_failures is on, we also skip
     directories that are in 'failure_load.csv'.
     """
-    if not retry_failures:
-        return get_already_processed_dirs()
-    else:
-        skips = get_dirs_from_file(RECORD_DIR / "success_new.csv")
-        skips |= get_dirs_from_file(RECORD_DIR / "success_exists.csv")
-        if skip_logit_mismatch:
-            skips |= get_dirs_from_file(RECORD_DIR / "failure_match.csv")
-        if skip_load_failures:
-            skips |= get_dirs_from_file(RECORD_DIR / "failure_load.csv")
-        return skips
+    return get_already_processed_dirs()
 
 
 def get_dirs_from_file(file_name: Path) -> set[str]:
@@ -287,10 +270,11 @@ def get_dirs_from_file(file_name: Path) -> set[str]:
 
 def get_already_processed_dirs() -> set[str]:
     processed_path = RECORD_DIR / "processed.csv"
-    if not processed_path.exists():
-        return set()
+    with file_locks["processed"]:
+        if not processed_path.exists():
+            return set()
 
-    return get_dirs_from_file(processed_path)
+        return get_dirs_from_file(processed_path)
 
 
 def get_dirs_to_push(dirs_file: str | None) -> list[FileDetails]:
@@ -331,9 +315,6 @@ adv-training-round-
 def main(
     max_workers: int,
     num_to_process: int | None,
-    retry_failures: bool,
-    skip_logit_mismatch: bool,
-    skip_load_failures: bool,
     dirs_file: str | None,
 ):
     successes = []
@@ -342,21 +323,14 @@ def main(
     if dirs_file is not None:
         dirs_to_skip = set()
     else:
-        dirs_to_skip = get_dirs_to_skip(
-            retry_failures=retry_failures,
-            skip_logit_mismatch=skip_logit_mismatch,
-            skip_load_failures=skip_load_failures,
-        )
+        dirs_to_skip = get_dirs_to_skip()
 
     still_to_push = [
         details
         for details in dirs_to_push
         if str(details.local_file_path) not in dirs_to_skip
     ]
-    retrying_failure_msg = (
-        "retrying failures" if retry_failures else "not retrying failures"
-    )
-    print(f"Skipping {len(dirs_to_skip)} directories ({retrying_failure_msg})")
+    print(f"Skipping {len(dirs_to_skip)} directories")
     # Sorting to track progress more easily
     still_to_push = sorted(still_to_push, key=lambda x: str(x.local_file_path))
 
@@ -365,7 +339,7 @@ def main(
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_dir = {
-            executor.submit(push_model_to_hub, details): details.local_file_path
+            executor.submit(update_model_to_hub, details): details.local_file_path
             for details in still_to_push
         }
 
@@ -410,44 +384,15 @@ if __name__ == "__main__":
     parser.add_argument("--max-workers", type=int, default=8)
     parser.add_argument("--num-to-process", type=int, default=None)
     parser.add_argument(
-        "--retry-failures",
-        action="store_true",
-        help=(
-            "Instead of only processing unprocessed models, process all models"
-            "that haven't explicitly succeeded."
-        ),
-    )
-    parser.add_argument(
-        "--skip-logit-mismatch",
-        action="store_true",
-        help="Skip models that have logit mismatches with existing versions on HFHub.",
-    )
-    parser.add_argument(
-        "--skip-load-failures",
-        action="store_true",
-        help="Skip models that we have already failed to load locally.",
-    )
-    parser.add_argument(
         "--dirs-file",
         type=str,
         default=None,
         help="File to get directories from, rather than searching for them.",
     )
     args = parser.parse_args()
-    if args.dirs_file is not None:
-        assert args.retry_failures is False, "Can't use --dirs-file with retry_failures"
-        assert (
-            args.skip_logit_mismatch is False
-        ), "Can't use --dirs-file with skip-logit-mismatch"
-        assert (
-            args.skip_load_failures is False
-        ), "Can't use --dirs-file with skip-load-failures"
 
     main(
         max_workers=args.max_workers,
         num_to_process=args.num_to_process,
-        retry_failures=args.retry_failures,
-        skip_logit_mismatch=args.skip_logit_mismatch,
-        skip_load_failures=args.skip_load_failures,
         dirs_file=args.dirs_file,
     )
