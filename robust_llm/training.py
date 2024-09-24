@@ -7,14 +7,17 @@ from typing import Optional
 
 import evaluate
 import numpy as np
+import torch.distributed as dist
 import transformers
 import wandb
 import wandb.util
 from accelerate import Accelerator
+from accelerate.utils.fsdp_utils import OPTIMIZER_NAME as FSDP_OPTIMIZER_NAME
 from datasets import Dataset
 from transformers import EvalPrediction, TrainingArguments
 from transformers.trainer import (
     CONFIG_NAME,
+    FSDP_MODEL_NAME,
     OPTIMIZER_NAME,
     SAFE_WEIGHTS_INDEX_NAME,
     SAFE_WEIGHTS_NAME,
@@ -37,6 +40,7 @@ from robust_llm.config.configs import (
     SaveTo,
     TrainingConfig,
 )
+from robust_llm.dist_utils import is_main_process
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import (
     LoggingCounter,
@@ -74,6 +78,13 @@ WEIGHT_FILES = (
     WEIGHTS_INDEX_NAME,
     SAFE_WEIGHTS_NAME,
     SAFE_WEIGHTS_INDEX_NAME,
+    f"{FSDP_MODEL_NAME}_0",
+)
+FSDP_CHECKPOINT_FILES = (
+    "rng_state_0.pth",
+    f"{FSDP_OPTIMIZER_NAME}_0",
+    SCHEDULER_NAME,
+    TRAINER_STATE_NAME,
 )
 
 
@@ -217,6 +228,12 @@ class Training:
 
         return self.trainer
 
+    @property
+    def core_checkpoint_files(self) -> tuple[str]:
+        if dist.is_initialized():
+            return FSDP_CHECKPOINT_FILES  # type: ignore
+        return CORE_CHECKPOINT_FILES  # type: ignore
+
     def get_last_checkpoint(self) -> str | None:
         """Get the directory path to the most recent completed checkpoint.
 
@@ -232,7 +249,7 @@ class Training:
             for f in os.scandir(self.output_dir)
             if f.is_dir()
             and f.name.startswith("checkpoint")
-            and all([sub_f in os.listdir(f) for sub_f in CORE_CHECKPOINT_FILES])
+            and all([sub_f in os.listdir(f) for sub_f in self.core_checkpoint_files])
             and any([sub_f in os.listdir(f) for sub_f in WEIGHT_FILES])
         ]
         if len(checkpoints) == 0:
@@ -528,7 +545,7 @@ class AdversarialTraining(Training):
         complete_checkpoints = [
             f
             for f in possible_checkpoints
-            if all([sub_f in os.listdir(f) for sub_f in CORE_CHECKPOINT_FILES])
+            if all([sub_f in os.listdir(f) for sub_f in self.core_checkpoint_files])
             and any([sub_f in os.listdir(f) for sub_f in WEIGHT_FILES])
             and all([sub_f in os.listdir(f) for sub_f in ADV_FILES])
         ]
@@ -906,10 +923,7 @@ class AdversarialTraining(Training):
             table.save()
 
     def update_flops(self, flop_count: FlopCount):
-        if (
-            self.victim.accelerator is not None
-            and not self.victim.accelerator.is_main_process
-        ):
+        if not is_main_process():
             return
         logger.debug("FLOPs for attacking in this round: %.2E", flop_count.flops)
         logger.debug("Forward calls: %s", flop_count.forward_calls)

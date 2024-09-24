@@ -29,7 +29,7 @@ from transformers import (
 from transformers.modeling_outputs import ModelOutput
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.dist_utils import DistributedRNG
+from robust_llm.dist_utils import DistributedRNG, is_main_process
 from robust_llm.models.model_utils import (
     AutoregressiveOutput,
     InferenceType,
@@ -145,8 +145,10 @@ class WrappedModel(ABC):
 
     @property
     def gradient_accumulation_steps(self) -> int:
-        return self.effective_batch_size // (
-            self.train_minibatch_size * self.num_processes
+        return max(
+            1,
+            self.effective_batch_size
+            // (self.train_minibatch_size * self.num_processes),
         )
 
     @cached_property
@@ -202,7 +204,7 @@ class WrappedModel(ABC):
             # We must gather_for_metrics on all processes to remove dummy inputs
             # due to batching/wrapping and to avoid hanging.
             inputs = self.accelerator.gather_for_metrics(inputs)
-            if not self.accelerator.is_main_process:
+            if not is_main_process():
                 return
         self.n_forward_calls += 1
         self.input_shapes.append(inputs[0].shape)
@@ -216,7 +218,7 @@ class WrappedModel(ABC):
         """Hook to track FLOPs during backward pass."""
         if self._skip_hooks:
             return
-        if self.accelerator is not None and not self.accelerator.is_main_process:
+        if not is_main_process():
             return
         self.n_backward_calls += 1
         self.update_flop_count(
@@ -250,7 +252,7 @@ class WrappedModel(ABC):
 
         N.B. should gather_for_metrics before calling this function.
         """
-        assert self.accelerator is None or self.accelerator.is_main_process
+        assert is_main_process()
         self.flop_count += self.compute_flops(
             input_dict=input_dict,
             backward=backward,
@@ -362,7 +364,7 @@ class WrappedModel(ABC):
         # state_dict and `save_pretrained` doesn't let you pass in a
         # tag/revision for the repo.
         assert self.accelerator is not None
-        if self.accelerator.is_main_process:
+        if is_main_process():
             repo_id = self.model._create_repo(repo_id)
             revision = revision or "main"
             self.model._upload_modified_files(
@@ -374,7 +376,7 @@ class WrappedModel(ABC):
             )
 
             # Only clean up if we didn't want to keep the local directory.
-            if local_dir is None:
+            if local_dir is None and is_main_process():
                 shutil.rmtree(save_dir)
 
     @classmethod

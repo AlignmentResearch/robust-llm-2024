@@ -69,6 +69,7 @@ def test_broadcast_int128(i: int):
 
     with (
         patch.object(dist, "is_initialized", return_value=True),
+        patch.object(dist, "get_rank", return_value=0),
         patch("robust_llm.dist_utils.broadcast_tensor", lambda data, accelerator: data),
     ):
         result = broadcast_int128(i, accelerator)
@@ -85,6 +86,7 @@ def test_broadcast_rng_state():
 
     with (
         patch.object(dist, "is_initialized", return_value=True),
+        patch.object(dist, "get_rank", return_value=0),
         patch("robust_llm.dist_utils.broadcast_tensor", lambda data, accelerator: data),
     ):
         result = broadcast_rng_state(state, accelerator)

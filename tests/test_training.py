@@ -53,7 +53,9 @@ def test_training_pipeline_doesnt_crash():
             n_val=2,
         ),
         training=TrainingConfig(
-            save_prefix="test_training_pipeline", save_to=SaveTo.NONE
+            save_prefix="test_training_pipeline",
+            save_to=SaveTo.NONE,
+            save_strategy="no",
         ),
     )
     run_training_pipeline(config)
@@ -91,6 +93,7 @@ def test_adv_training_pipeline_doesnt_crash():
         ),
         training=TrainingConfig(
             save_prefix="test_adv_training_pipeline",
+            save_strategy="no",
             save_to=SaveTo.NONE,
             adversarial=AdversarialTrainingConfig(
                 num_examples_to_generate_each_round=2,

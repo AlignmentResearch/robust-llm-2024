@@ -37,7 +37,7 @@ def broadcast_list_of_bools(
     if not dist.is_initialized():
         assert isinstance(data, list)
         return data
-    if accelerator.is_main_process:
+    if is_main_process():
         assert data is not None
         assert all(isinstance(x, bool) for x in data)
         tensor_input_data = torch.tensor(
@@ -57,7 +57,7 @@ def broadcast_list_of_floats(
     if not dist.is_initialized():
         assert isinstance(data, list)
         return data
-    if accelerator.is_main_process:
+    if is_main_process():
         assert data is not None
         assert all(isinstance(x, float) for x in data)
         tensor_input_data = torch.tensor(
@@ -78,7 +78,7 @@ def broadcast_list_of_ints(
     if not dist.is_initialized():
         assert isinstance(data, list)
         return data
-    if accelerator.is_main_process:
+    if is_main_process():
         assert data is not None
         assert all(isinstance(x, int) and x.bit_length() <= 32 for x in data)
         tensor_input_data = torch.tensor(
@@ -99,7 +99,7 @@ def broadcast_list_of_longs(
     if not dist.is_initialized():
         assert isinstance(data, list)
         return data
-    if accelerator.is_main_process:
+    if is_main_process():
         assert data is not None
         assert all(isinstance(x, int) and x.bit_length() <= 64 for x in data)
         tensor_input_data = torch.tensor(
@@ -148,7 +148,7 @@ def broadcast_int128(
         assert isinstance(data, list)
         return data
 
-    if accelerator.is_main_process:
+    if is_main_process():
         assert data is not None
         assert isinstance(data, int) and data.bit_length() <= 128
         split_data = split_int128(data)
@@ -211,7 +211,7 @@ def broadcast_tensor(
         return data
 
     # First we need to broadcast the dimension of the tensor.
-    if accelerator.is_main_process:
+    if is_main_process():
         assert isinstance(data, torch.Tensor)
         ndims = torch.tensor(data.ndim, device=accelerator.device)
     else:
@@ -219,7 +219,7 @@ def broadcast_tensor(
     dist.broadcast(ndims, src=0)
 
     # Now we need to broadcast the actual shape.
-    if accelerator.is_main_process:
+    if is_main_process():
         assert isinstance(data, torch.Tensor)
         shape = torch.tensor(data.shape, device=accelerator.device, dtype=torch.int32)
     else:
@@ -232,7 +232,7 @@ def broadcast_tensor(
     data_dtype = broadcast_dtype(data, accelerator)
 
     # Finally, broadcast the data itself.
-    if accelerator.is_main_process:
+    if is_main_process():
         assert data is not None
         data = data.to(accelerator.device)
     else:
@@ -244,7 +244,7 @@ def broadcast_tensor(
 
 def broadcast_dtype(data: torch.Tensor | None, accelerator: Accelerator):
     """Broadcast the datatype of a tensor between ranks"""
-    if accelerator.is_main_process:
+    if is_main_process():
         assert isinstance(data, torch.Tensor)
         dtype = torch.tensor(DTYPE_TO_INT[data.dtype], device=accelerator.device)
     else:

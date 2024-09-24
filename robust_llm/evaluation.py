@@ -12,6 +12,7 @@ from robust_llm import logger
 from robust_llm.attacks.attack import Attack, AttackOutput
 from robust_llm.defenses.defense import FilteringDefendedModel
 from robust_llm.defenses.perplexity import PerplexityDefendedModel
+from robust_llm.dist_utils import is_main_process
 from robust_llm.evaluation_utils import (
     AttackResults,
     assert_same_data_between_processes,
@@ -149,10 +150,7 @@ def do_adversarial_evaluation(
     if robustness_metric is not None:
         metrics |= robustness_metric.unwrap_metrics()
 
-    if (
-        num_examples_to_log_detailed_info is not None
-        and victim.accelerator.is_main_process
-    ):
+    if num_examples_to_log_detailed_info is not None and is_main_process():
         _log_examples_to_wandb(
             original_texts=dataset.ds["text"],
             original_labels=dataset.ds["clf_label"],
@@ -241,11 +239,7 @@ def maybe_save_attack_data(
     assert victim.accelerator is not None
     # Only save attack data if we're in the evaluation pipeline - we don't care
     # about computing the robustness metric in adv training.
-    if (
-        should_commit
-        and victim.accelerator.is_main_process
-        and attack_out.attack_data is not None
-    ):
+    if should_commit and is_main_process() and attack_out.attack_data is not None:
         attack_data_tables = attack_out.attack_data.to_wandb_tables()
         table_dict = {
             f"attack_data/example_{i}": table
@@ -377,7 +371,7 @@ def maybe_log_adversarial_eval_table(
     wandb_table_exists: bool = False,
 ):
     assert victim.accelerator is not None
-    if victim.accelerator.is_main_process:
+    if is_main_process():
         wandb_log(metrics, commit=True)
         logger.info("Adversarial evaluation metrics:")
         logger.info(metrics)

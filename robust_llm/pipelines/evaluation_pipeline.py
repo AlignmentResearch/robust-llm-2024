@@ -23,7 +23,6 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
     accelerator = Accelerator(cpu=use_cpu)
 
     logging_context = LoggingContext(
-        is_main_process=accelerator.is_main_process,
         args=args,
     )
     logging_context.setup()

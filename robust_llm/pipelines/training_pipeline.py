@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from accelerate import Accelerator
+import torch.distributed as dist
 from omegaconf import OmegaConf
 from transformers import set_seed
 
@@ -16,20 +16,21 @@ from robust_llm.utils import deterministic_hash, maybe_make_deterministic
 
 
 def run_training_pipeline(args: ExperimentConfig) -> None:
-    use_cpu = args.environment.device == "cpu"
-    accelerator = Accelerator(cpu=use_cpu)
     maybe_make_deterministic(
         args.environment.deterministic, args.environment.cublas_config
     )
 
     logging_context = LoggingContext(
-        is_main_process=accelerator.is_main_process,
         args=args,
         set_up_step_metrics=True,
     )
     logging_context.setup()
 
     assert args.training is not None
+    assert (args.training.save_strategy == "no") or not dist.is_initialized(), (
+        "Saving checkpoints does not work with distributed training. "
+        "See: https://github.com/AlignmentResearch/robust-llm/issues/908"
+    )
     logger.info("Configuration arguments:\n")
     logger.info("%s\n", OmegaConf.to_yaml(args))
 
@@ -84,7 +85,6 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
         training = Training(**base_training_args)
 
     trainer = training.setup_trainer()
-    logging_context.is_main_process = trainer.is_world_process_zero()
 
     logger.debug(f"Training arguments: {trainer.args.to_dict()}")
 

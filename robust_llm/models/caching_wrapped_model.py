@@ -4,6 +4,7 @@ import torch
 from transformers import BatchEncoding
 from typing_extensions import override
 
+from robust_llm.dist_utils import is_main_process
 from robust_llm.models.model_utils import PastKeyValues
 from robust_llm.models.wrapped_model import Prompt, WrappedModel
 
@@ -74,10 +75,7 @@ class CachingWrappedModel(WrappedModel):
 
         if self.accelerator is not None:
             input_ids = self.accelerator.gather_for_metrics(input_ids)
-        if (
-            self._wrapped_model.accelerator is None
-            or self._wrapped_model.accelerator.is_main_process
-        ):
+        if is_main_process():
             self._wrapped_model.update_flop_count({"input_ids": input_ids})
 
         return out

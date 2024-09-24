@@ -12,7 +12,7 @@ from typing_extensions import override
 
 from robust_llm import logger
 from robust_llm.config.configs import AttackConfig
-from robust_llm.dist_utils import DistributedRNG
+from robust_llm.dist_utils import DistributedRNG, is_main_process
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
@@ -239,7 +239,7 @@ class Attack(abc.ABC):
 
     def maybe_save_state(self):
         assert self.victim.accelerator is not None
-        if not self.victim.accelerator.is_main_process:
+        if not is_main_process():
             return
         if not self.can_checkpoint:
             return
@@ -249,7 +249,7 @@ class Attack(abc.ABC):
     def clean_states(self) -> None:
         """Delete old checkpoints if necessary to stay within save_total_limit."""
         for i, path in enumerate(self.list_checkpoints()):
-            if i >= self.attack_config.save_total_limit:
+            if i >= self.attack_config.save_total_limit and is_main_process():
                 shutil.rmtree(os.path.join(self.states_directory(), path))
 
     def maybe_load_state(self) -> bool:

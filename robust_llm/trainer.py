@@ -33,7 +33,7 @@ from transformers.trainer import PREFIX_CHECKPOINT_DIR, TRAINING_ARGS_NAME, Trai
 from typing_extensions import override
 
 from robust_llm.debug_utils import assert_dicts_equal
-from robust_llm.dist_utils import DistributedRNG
+from robust_llm.dist_utils import DistributedRNG, is_main_process
 from robust_llm.utils import BalancedSampler
 
 ADV_STATE_NAME = "adversarial_training_state.json"
@@ -250,10 +250,6 @@ class AdversarialTrainer(RLLMTrainer):
         )
         return self.lr_scheduler
 
-    @property
-    def is_main_process(self) -> bool:
-        return self.accelerator is None or self.accelerator.is_main_process
-
     @override
     def train(
         self,
@@ -308,7 +304,7 @@ class AdversarialTrainer(RLLMTrainer):
         case of gradient_accumulation_steps=1, but for larger values, we need
         to account for the fact that there may be a partial epoch at the end.
         """
-        if not self.is_main_process:
+        if not is_main_process():
             return
         if self.args.gradient_accumulation_steps == 1:
             assert self.computed_losses == []
@@ -376,7 +372,7 @@ class AdversarialTrainer(RLLMTrainer):
         if self.accelerator is not None:
             logits, labels = self.accelerator.gather_for_metrics((logits, labels))
 
-        if self.is_main_process:
+        if is_main_process():
             losses = F.cross_entropy(logits, labels, reduction="none")
             self.computed_losses += losses.tolist()
         self.maybe_update_adversarial_losses()

@@ -184,7 +184,6 @@ class LoggingContext:
 
     def __init__(
         self,
-        is_main_process: bool,
         args: ExperimentConfig,
         set_up_step_metrics: bool = False,
         model_family: Optional[str] = None,
@@ -192,7 +191,6 @@ class LoggingContext:
     ) -> None:
         self.logger = logger
         self.args = args
-        self.is_main_process = is_main_process
         self.set_up_step_metrics = set_up_step_metrics
         self.model_family = model_family
         self.model_size = model_size
@@ -203,7 +201,7 @@ class LoggingContext:
             if isinstance(handler, logging.FileHandler):
                 handler.flush()
 
-        if self.is_main_process:
+        if is_main_process():
             assert wandb.run is not None
             wandb.run.save(self.args.environment.logging_filename)
 
@@ -280,13 +278,13 @@ class LoggingContext:
         wandb.finish()
 
     def setup(self) -> None:
-        if self.is_main_process:
+        if is_main_process():
             self.wandb_initialize()
             self._setup_logging()
 
     def cleanup(self) -> None:
         self.save_logs()
-        if self.is_main_process:
+        if is_main_process():
             self.wandb_cleanup()
 
 

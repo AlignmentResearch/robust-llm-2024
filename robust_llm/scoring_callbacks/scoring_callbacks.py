@@ -2,7 +2,11 @@ from typing import cast
 
 import torch
 
-from robust_llm.dist_utils import broadcast_list_of_bools, broadcast_tensor
+from robust_llm.dist_utils import (
+    broadcast_list_of_bools,
+    broadcast_tensor,
+    is_main_process,
+)
 from robust_llm.models.model_utils import (
     InferenceType,
     classification_losses_from_logits,
@@ -272,7 +276,7 @@ def binary_univariate_fn_of_generation_from_text_callback(
         for outs in output_generator:
             assert victim.accelerator is not None
             # Only run scoring_fns on the main process.
-            if victim.accelerator.is_main_process:
+            if is_main_process():
                 batch_length = len(outs)
                 batch_end = batch_start + batch_length
 
@@ -351,7 +355,7 @@ def binary_bivariate_fn_of_generation_from_text_callback(
         for outs in output_generator:
             assert victim.accelerator is not None
             # Only run scoring_fns on the main process.
-            if victim.accelerator.is_main_process:
+            if is_main_process():
                 batch_length = len(outs)
                 batch_end = batch_start + batch_length
 
@@ -433,7 +437,7 @@ def tensor_univariate_fn_of_generation_from_text_callback(
         for outs in output_generator:
             assert victim.accelerator is not None
             # Only run scoring_fns on the main process.
-            if victim.accelerator.is_main_process:
+            if is_main_process():
                 batch_length = len(outs)
                 batch_end = batch_start + batch_length
 
@@ -513,7 +517,7 @@ def tensor_bivariate_fn_of_generation_from_text_callback(
         for outs in output_generator:
             assert victim.accelerator is not None
             # Only run scoring_fns on the main process.
-            if victim.accelerator.is_main_process:
+            if is_main_process():
                 batch_length = len(outs)
                 batch_end = batch_start + batch_length
 
