@@ -19,7 +19,7 @@ spec:
             claimName: devbox-storage
         - name: robust-llm-storage
           persistentVolumeClaim:
-            claimName: st-cloudflare-robust-llm
+            claimName: st-blobfuse-robust-llm
         - name: devshm
           emptyDir:
             medium: Memory
