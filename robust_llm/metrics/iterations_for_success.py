@@ -14,19 +14,16 @@ from itertools import product
 
 import pandas as pd
 
-from robust_llm import logger
 from robust_llm.attacks.attack import AttackOutput
-from robust_llm.metrics.metric_utils import (
-    _compute_clf_asr_from_logits,
-    _dataset_for_iteration,
-    get_attack_output_from_wandb,
+from robust_llm.metrics.asr_per_iteration import (
+    ASRMetricResults,
+    compute_asr_per_iteration_from_logits,
+    compute_asr_per_iteration_from_text,
 )
+from robust_llm.metrics.metric_utils import get_attack_output_from_wandb
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
-from robust_llm.scoring_callbacks.scoring_callback_utils import (
-    BinaryCallback,
-    CallbackInput,
-)
+from robust_llm.scoring_callbacks.scoring_callback_utils import BinaryCallback
 
 
 @dataclass(frozen=True)
@@ -48,7 +45,6 @@ def compute_iterations_for_success(
 ) -> IFSMetricResults:
     """Computes the robustness metric for the attack.
 
-    TODO(ian): Reduce redundancy in the two functions below.
     Args:
         attack_out: The AttackOutput object from the attack.
         success_callback: The callback to use to evaluate the attack.
@@ -63,7 +59,6 @@ def compute_iterations_for_success(
     # TODO(ian): Remove these asserts
     assert attack_out.attack_data is not None
     logits = attack_out.attack_data.logits  # [n_val, n_its, n_labels]
-
     if dataset.inference_type == InferenceType.CLASSIFICATION and logits is not None:
         results = compute_iterations_for_success_from_logits(
             attack_out=attack_out,
@@ -82,110 +77,41 @@ def compute_iterations_for_success_from_text(
     success_callback: BinaryCallback,
     model: WrappedModel,
 ) -> IFSMetricResults:
-    dataset = attack_out.dataset
-    # We use dataset_to_attack so that we use the same examples as in attacked_dataset
-    original_input_data = model.maybe_apply_user_template(dataset.ds["text"])
-
-    # Somewhat hacky way to get the number of iterations
-    # TODO(ian): Remove these asserts
-    assert attack_out.attack_data is not None
-    n_its = len(attack_out.attack_data.iteration_texts[0])
-    asrs = []
-    # We store the iteration number at which the ASR crosses each decile.
-    # We include 0% and 100% as deciles for convenience.
-    robustness_metric_deciles: list[int | None] = [None] * 11
-
-    # Special handling for 'iteration' 0, which is the un-attacked inputs.
-    asrs.append(0.0)
-    robustness_metric_deciles[0] = 0
-
-    for iteration in range(n_its):
-        ds = _dataset_for_iteration(attack_out, iteration)
-
-        iteration_in = CallbackInput(
-            input_data=ds["text"],
-            original_input_data=original_input_data,
-            clf_label_data=ds["clf_label"],
-            gen_target_data=ds["gen_target"],
-        )
-        iteration_out = success_callback(model, iteration_in)
-        iteration_n_examples = len(iteration_out.successes)
-        # ASR is 1 - accuracy, i.e. the fraction of examples where the model is
-        # not successful.
-        iteration_asr = iteration_out.successes.count(False) / iteration_n_examples
-
-        asrs.append(iteration_asr)
-        # Print the ASR for this iteration every roughly 10% of the way
-        logging_step = max(1, n_its // 10)
-        if iteration % logging_step == 0:
-            logger.info(f"ASR for iteration {iteration+1}: {iteration_asr}")
-
-        for decile in range(11):
-            if (
-                robustness_metric_deciles[decile] is None
-                and iteration_asr >= decile / 10
-            ):
-                # We add 1 to the iteration number because we are evaluating
-                # *after* the first iteration, and reserving iteration 0 for the
-                # unattacked inputs.
-                robustness_metric_deciles[decile] = iteration + 1
-
-    assert len(asrs) == n_its + 1
-    results = IFSMetricResults(
-        asr_per_iteration=asrs,
-        ifs_per_decile=robustness_metric_deciles,
+    asrs = compute_asr_per_iteration_from_text(
+        attack_out=attack_out,
+        success_callback=success_callback,
+        model=model,
     )
+    results = compute_iterations_for_success_from_asrs(asrs)
     return results
 
 
 def compute_iterations_for_success_from_logits(
     attack_out: AttackOutput,
 ) -> IFSMetricResults:
-
-    # TODO(ian): Remove these asserts
     assert attack_out.attack_data is not None
-    logits = attack_out.attack_data.logits  # [n_val, n_its, n_labels]
-    assert logits is not None
+    asrs = compute_asr_per_iteration_from_logits(attack_out)
+    results = compute_iterations_for_success_from_asrs(asrs)
+    return results
 
-    # Somewhat hacky way to get the number of iterations
-    n_its = len(attack_out.attack_data.iteration_texts[0])
-    asrs = []
-    # We store the iteration number at which the ASR crosses each decile.
-    # We include 0% and 100% as deciles for convenience.
+
+def compute_iterations_for_success_from_asrs(
+    asrs: ASRMetricResults,
+) -> IFSMetricResults:
     robustness_metric_deciles: list[int | None] = [None] * 11
 
     # Special handling for 'iteration' 0, which is the un-attacked inputs.
-    asrs.append(0.0)
     robustness_metric_deciles[0] = 0
 
-    for iteration in range(n_its):
-        ds = _dataset_for_iteration(attack_out, iteration)
-        clf_labels = ds["clf_label"]
-        iteration_logits = [logits[i][iteration] for i in range(len(logits))]
-        # TODO: Fix type hinting on logits
-        iteration_asr = _compute_clf_asr_from_logits(
-            iteration_logits, clf_labels  # type: ignore
-        )
-
-        asrs.append(iteration_asr)
-        # Print the ASR for this iteration every roughly 10% of the way
-        logging_step = max(1, n_its // 10)
-        if iteration % logging_step == 0:
-            logger.info(f"ASR for iteration {iteration+1}: {iteration_asr}")
-
+    for iteration, asr in enumerate(asrs.asr_per_iteration):
         for decile in range(11):
-            if (
-                robustness_metric_deciles[decile] is None
-                and iteration_asr >= decile / 10
-            ):
-                # We add 1 to the iteration number because we are evaluating
-                # *after* the first iteration, and reserving iteration 0 for the
-                # unattacked inputs.
-                robustness_metric_deciles[decile] = iteration + 1
+            if robustness_metric_deciles[decile] is None and asr >= decile / 10:
+                # We don't have to add 1 any longer because the ASR computation
+                # handles that.
+                robustness_metric_deciles[decile] = iteration
 
-    assert len(asrs) == n_its + 1
     results = IFSMetricResults(
-        asr_per_iteration=asrs,
+        asr_per_iteration=asrs.asr_per_iteration,
         ifs_per_decile=robustness_metric_deciles,
     )
     return results
