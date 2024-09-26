@@ -16,12 +16,13 @@ from wandb.apis.public.runs import Run as WandbRun
 from wandb.apis.public.runs import Runs as WandbRuns
 
 from robust_llm.config.dataset_configs import DatasetConfig
+from robust_llm.file_utils import compute_repo_path
 from robust_llm.wandb_utils.constants import PROJECT_NAME
 
 WANDB_API = wandb.Api(timeout=90)
 
 # Set up the cache directory
-cache_dir = "cache/get-metrics-adv-training"
+cache_dir = compute_repo_path() + "/cache/get-metrics-adv-training"
 os.makedirs(cache_dir, exist_ok=True)
 memory = Memory(cache_dir, verbose=0)
 
@@ -207,7 +208,10 @@ def _get_metrics_adv_training(
     res = []
     run_iterator = tqdm(runs, desc="Processing runs") if len(runs) > 100 else runs
     for run in run_iterator:
-        history = run.history(keys=metrics)
+        filtered_metrics = [m for m in metrics if run.summary.get(m) is not None]
+        if not filtered_metrics:
+            print(f"Run {run.id} is missing all metrics. Keys={run.summary.keys()}")
+        history = run.history(keys=filtered_metrics)
         if verbose:
             print(f"Run {run.id} has {len(history)} data points")
 

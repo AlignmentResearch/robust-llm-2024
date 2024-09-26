@@ -2,6 +2,7 @@
 import os
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
 from tqdm import tqdm
@@ -51,6 +52,8 @@ def plot_asr_for_group(group_name: str):
         df = df.loc[df.iteration.mod(100) == 0]
     df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
     df["iteration_x_params"] = df.iteration * df.num_params
+    df["sigmoid_asr"] = 1 / (1 + np.exp(-df.asr))
+    df["logit_asr"] = np.log(df.asr / (1 - df.asr))
     df.sort_values("model_idx", inplace=True)
 
     fig, ax = plt.subplots()
@@ -60,16 +63,15 @@ def plot_asr_for_group(group_name: str):
     sns.lineplot(
         data=df,
         x="iteration_x_params",
-        y="asr",
+        y="logit_asr",
         hue=color_data_name,
         ax=ax,
         palette=palette,
         legend=False,
     )
-    ax.set_xlabel(r"Attack compute (Iterations $\times$ Parameters)")
-    ax.set_ylabel("Attack success rate (%)")
+    ax.set_xlabel("Attack compute (Iterations $\times$ Parameters)")
+    ax.set_ylabel("Attack success rate (logit)")
     ax.set_xscale("log")
-    ax.set_yscale("log")
     fig.suptitle(f"{attack}/{dataset}".upper())
     create_path_and_savefig(fig, "asr", attack, dataset, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)

@@ -33,6 +33,7 @@ METRICS = ["adversarial_eval/attack_success_rate"]
 data = []
 for group in GROUPS:
     group_df = get_metrics_adv_training(group, METRICS, SUMMARY_KEYS)
+    assert isinstance(group_df, pd.DataFrame)
     group_df["group"] = group
     data.append(group_df)
 # %%

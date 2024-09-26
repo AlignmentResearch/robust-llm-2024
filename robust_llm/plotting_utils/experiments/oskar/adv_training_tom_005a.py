@@ -18,7 +18,7 @@ for x_data_name in ("n_parameter_updates", "adv_training_round"):
         load_and_plot_adv_training_plots(
             run_names=("tom_005a_eval_niki_149_gcg ",),
             title="IMDB, RT -> GCG",
-            save_as=("24-rounds", "imdb", "gcg_vs_rt", x_data_name),
+            save_as=("transfer", "imdb", "gcg_to_rt", x_data_name),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
             color_data_name="num_params",
@@ -29,11 +29,50 @@ for x_data_name in ("n_parameter_updates", "adv_training_round"):
         load_and_plot_adv_training_plots(
             run_names=("tom_006_eval_niki_150_gcg ",),
             title="Spam, RT -> GCG",
-            save_as=("24-rounds", "spam", "gcg_vs_rt", x_data_name),
+            save_as=("transfer", "spam", "rt_to_gcg", x_data_name),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
             color_data_name="num_params",
             # xlim=xlim,
             legend=legend,
             # check_seeds=3,
+        )
+        load_and_plot_adv_training_plots(
+            run_names=("tom_007_eval_niki_152_gcg ", "tom_007_eval_niki_152a_gcg "),
+            title="IMDB, GCG -> GCG",
+            save_as=("transfer", "imdb", "gcg_to_gcg", x_data_name),
+            summary_keys=summary_keys,
+            x_data_name=x_data_name,
+            color_data_name="num_params",
+            legend=legend,
+        )
+        load_and_plot_adv_training_plots(
+            run_names=(
+                "tom_008_eval_niki_152_gcg_infix90 ",
+                "tom_008_eval_niki_152a_gcg_infix90 ",
+            ),
+            title="IMDB, GCG -> 90%-infix GCG",
+            save_as=("transfer", "imdb", "gcg_to_gcg_infix", x_data_name),
+            summary_keys=summary_keys,
+            x_data_name=x_data_name,
+            color_data_name="num_params",
+            legend=legend,
+        )
+        load_and_plot_adv_training_plots(
+            run_names=("tom_009_eval_niki_170_gcg ",),
+            title="Spam, GCG -> GCG",
+            save_as=("transfer", "spam", "gcg_to_gcg", x_data_name),
+            summary_keys=summary_keys,
+            x_data_name=x_data_name,
+            color_data_name="num_params",
+            legend=legend,
+        )
+        load_and_plot_adv_training_plots(
+            run_names=("tom_010_eval_niki_170_gcg_infix90 ",),
+            title="Spam, GCG -> 90%-infix GCG",
+            save_as=("transfer", "spam", "gcg_to_gcg_infix", x_data_name),
+            summary_keys=summary_keys,
+            x_data_name=x_data_name,
+            color_data_name="num_params",
+            legend=legend,
         )

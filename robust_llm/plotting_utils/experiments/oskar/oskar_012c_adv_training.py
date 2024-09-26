@@ -51,6 +51,7 @@ print(GROUPS)
 data = []
 for group in GROUPS:
     group_df = get_metrics_adv_training(group, METRICS, SUMMARY_KEYS, verbose=False)
+    assert isinstance(group_df, pd.DataFrame)
     group_df["group"] = group
     data.append(group_df)
 # %%

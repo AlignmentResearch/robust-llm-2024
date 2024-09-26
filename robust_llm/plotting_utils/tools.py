@@ -1,4 +1,5 @@
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -24,6 +25,11 @@ from robust_llm.wandb_utils.wandb_api_tools import (
 )
 
 iter_str = tuple[str, ...] | list[str]
+TRANSFORMS: dict[str, Callable] = {
+    "log": np.log,
+    "logit": lambda x: np.log(x / (1 - x)),
+    "sigmoid": lambda x: 1 / (1 + np.exp(-x)),
+}
 
 
 def make_finetuned_plots(
@@ -33,7 +39,9 @@ def make_finetuned_plots(
     eval_summary_keys: list[str],
     metrics: list[str],
     legend: bool = False,
-    log_y: bool = True,
+    ylim: tuple[float, float] | None = None,
+    ytransform: str | None = None,
+    y_data_name: str = "adversarial_eval/attack_success_rate",
 ):
     """Make scatter and min/max/median plot for many runs on the same plot."""
     make_finetuned_plot(
@@ -47,7 +55,9 @@ def make_finetuned_plots(
         metrics=metrics,
         plot_type="min_max_median",
         legend=legend,
-        log_y=log_y,
+        ylim=ylim,
+        ytransform=ytransform,
+        y_data_name=y_data_name,
     )
     make_finetuned_plot(
         run_names=run_names,
@@ -59,7 +69,9 @@ def make_finetuned_plots(
         eval_summary_keys=eval_summary_keys,
         metrics=metrics,
         plot_type="scatter",
-        log_y=log_y,
+        ylim=ylim,
+        ytransform=ytransform,
+        y_data_name=y_data_name,
     )
 
 
@@ -95,7 +107,9 @@ def make_finetuned_plot(
     plot_type: str = "scatter",
     legend: bool = False,
     check_seeds: bool = True,
-    log_y: bool = True,
+    ylim: tuple[float, float] | None = None,
+    ytransform: str | None = None,
+    y_data_name: str = "adversarial_eval/attack_success_rate",
 ):
     """
     Plot model size on the x-axis and attack success rate on the y-axis.
@@ -118,7 +132,9 @@ def make_finetuned_plot(
         check_seeds:
             Whether to check that the correct number of seeds are present,
             and that those are the correct actual seed numbers.
-        log_y: Whether to use a log scale for the y-axis.
+        ylim: The y-axis limits.
+        ytransform: The transformation to apply to the y-values.
+        y_data_name: The name of the data to use for the y-axis.
     """
     if plot_type not in ["scatter", "min_max_median"]:
         raise ValueError(f"Unknown plot type {plot_type}")
@@ -160,7 +176,9 @@ def make_finetuned_plot(
                 save_as=save_as,
                 legend=legend,
                 check_seeds=check_seeds,
-                log_y=log_y,
+                ylim=ylim,
+                ytransform=ytransform,
+                y_data_name=y_data_name,
             )
         case "scatter":
             draw_scatterplot(
@@ -170,7 +188,9 @@ def make_finetuned_plot(
                 custom_ys=custom_ys,
                 custom_xs_and_ys=custom_xs_and_ys,
                 check_seeds=check_seeds,
-                log_y=log_y,
+                ylim=ylim,
+                ytransform=ytransform,
+                y_data_name=y_data_name,
             )
         case _:
             raise ValueError(f"Unknown plot type {plot_type}")
@@ -189,6 +209,7 @@ def load_and_plot_adv_training_plots(
     legend: bool = False,
     check_seeds: int | None = None,
     use_cache: bool = True,
+    y_data_name: str = "adversarial_eval/attack_success_rate",
 ):
     """
     Make adversarial training plots for given runs, pulling data from W&B.
@@ -208,6 +229,7 @@ def load_and_plot_adv_training_plots(
             Whether to check that the correct number of seeds are present,
             and that those are the correct actual seed numbers.
         use_cache: Whether to use the cache for the data.
+        y_data_name: The name of the data to use for the y-axis.
     """
     if isinstance(run_names, str):
         run_names = (run_names,)
@@ -233,6 +255,7 @@ def load_and_plot_adv_training_plots(
         ylim=ylim,
         legend=legend,
         check_seeds=check_seeds,
+        y_data_name=y_data_name,
     )
 
 
@@ -379,7 +402,10 @@ def _draw_plot_adv_training(
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
     legend: bool = False,
+    y_transform: str = "logit",
 ):
+    if isinstance(save_as, str):
+        save_as = (save_as,)
     data = data.copy()
 
     # Make it one-indexed since evaluation happens after the training
@@ -402,18 +428,17 @@ def _draw_plot_adv_training(
 
     palette_dict = get_color_palette(data, color_data_name)
 
-    ax.set_ylabel(
-        y_data_name.replace("adversarial_eval/", "").replace("_", " ").title()
-    )
     plt.title(title)
-    if ylim is None:
-        plt.yscale("log")
-    else:
+    y_name_clean = y_data_name.replace("adversarial_eval/", "").replace("metrics/", "")
+    y_transf_data_name = f"{y_transform}_{y_name_clean}"
+    data[y_transf_data_name] = TRANSFORMS[y_transform](data[y_data_name])
+    ax.set_ylabel(y_transf_data_name.replace("_", " ").title())
+    if ylim is not None:
         plt.ylim(ylim)
     set_up_paper_plot(fig, ax)
 
     grouped = (
-        data.groupby([color_data_name, x_data_name])[y_data_name]
+        data.groupby([color_data_name, x_data_name])[y_transf_data_name]
         .agg(["min", "max", "median"])
         .reset_index()
     )
@@ -439,6 +464,8 @@ def _draw_plot_adv_training(
         legend_handles = get_legend_handles(data, color_data_name, palette_dict)
         create_legend(color_data_name, ax, legend_handles)
 
+    if isinstance(save_as, str):
+        save_as = (save_as,)
     create_path_and_savefig(
         fig, "adv_training", *save_as, "legend" if legend else "no_legend"
     )
@@ -454,6 +481,7 @@ def draw_plot_adv_training(
     ylim: tuple[float, float] | None = None,
     legend: bool = False,
     check_seeds: int | None = None,
+    y_data_name: str = "adversarial_eval/attack_success_rate",
 ):
     if xlim is not None and data["adv_training_round"].max() + 1 < xlim[1]:
         raise ValueError(
@@ -477,6 +505,7 @@ def draw_plot_adv_training(
         xlim=xlim,
         ylim=ylim,
         legend=legend,
+        y_data_name=y_data_name,
     )
 
 
@@ -498,7 +527,9 @@ def draw_scatterplot(
     custom_ys=None,
     custom_xs_and_ys=None,
     check_seeds=True,
-    log_y: bool = True,
+    ylim: tuple[float, float] | None = None,
+    ytransform: str | None = None,
+    y_data_name: str = "adversarial_eval/attack_success_rate",
 ):
 
     # Refine data here as necessary
@@ -513,13 +544,18 @@ def draw_scatterplot(
     plt.xscale("log")
     plt.title(title)
     plt.xlabel("Model size (# parameters)")
-    plt.ylabel("Attack Success Rate")
-    if log_y:
-        plt.yscale("log")
+    ylabel = y_data_name.replace("adversarial_eval/", "").replace("_", " ").title()
+    if ytransform is not None:
+        ylabel += f" ({ytransform})"
+    plt.ylabel(ylabel)
+    if ytransform is None:
+        data["y_value"] = data[y_data_name]
     else:
-        plt.ylim((0, 1))
+        data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
+    if ylim is not None:
+        plt.ylim(ylim)
 
-    relevant_data = data[["num_params", "adversarial_eval/attack_success_rate"]]
+    relevant_data = data[["num_params", "y_value"]]
 
     if check_seeds:
         _check_correct_num_seeds(relevant_data, num_seeds=3, adversarial=False)
@@ -537,9 +573,7 @@ def draw_scatterplot(
         else:
             raise ValueError("should not happen")
 
-        new_data = pd.DataFrame(
-            {"num_params": xs, "adversarial_eval/attack_success_rate": custom_ys}
-        )
+        new_data = pd.DataFrame({"num_params": xs, "y_value": custom_ys})
         new_data = new_data[relevant_data.columns]
         relevant_data = pd.concat([relevant_data, new_data], ignore_index=True)
 
@@ -558,6 +592,8 @@ def draw_scatterplot(
 
     set_up_paper_plot(fig, ax)
 
+    if isinstance(save_as, str):
+        save_as = (save_as,)
     create_path_and_savefig(fig, *save_as)
 
 
@@ -586,9 +622,13 @@ def _maybe_get_custom_xs_and_maybe_ys(relevant_data, custom_ys, custom_xs_and_ys
 
 def _get_seed_from_name(name: str) -> int:
     # name_or_path=AlignmentResearch/robust_llm_pythia-31m_niki-045_pm_random-token-1280_seed-0
-    seed_str = name.split("_")[-1]
-    assert "seed" in seed_str
-    seed_num = int(seed_str.split("-")[-1])
+    # or 'AlignmentResearch/robust_llm_clf_imdb_pythia-14m_s-0_adv_tr_rt_t-0'
+    if "seed" in name:
+        seed_str = name.split("_")[-1]
+        assert "seed" in seed_str
+        seed_num = int(seed_str.split("-")[-1])
+    else:
+        seed_num = int(name.split("_t-")[-1])
     return seed_num
 
 
@@ -599,6 +639,8 @@ def _get_seeds(data: pd.DataFrame) -> list[int]:
     if "training_seed" in data.columns:
         return data["training_seed"].tolist()
     # Otherwise, get it from the name
+    if "training_force_name_to_save" in data.columns:
+        return data["training_force_name_to_save"].apply(_get_seed_from_name).tolist()
     return data["model_name_or_path"].apply(_get_seed_from_name).tolist()
 
 
@@ -673,7 +715,9 @@ def draw_min_max_median_plot(
     custom_xs_and_ys=None,
     legend: bool = False,
     check_seeds: bool = True,
-    log_y: bool = True,
+    ylim: tuple[float, float] | None = None,
+    ytransform: str | None = None,
+    y_data_name: str = "adversarial_eval/attack_success_rate",
 ):
     print("Found", len(data), "runs to use for the plot")
 
@@ -682,15 +726,18 @@ def draw_min_max_median_plot(
     plt.xscale("log")
     plt.title(title)
     plt.xlabel("Model size (# parameters)")
-    plt.ylabel("Attack Success Rate")
-    if log_y:
-        plt.yscale("log")
+    ylabel = y_data_name.replace("adversarial_eval/", "").replace("_", " ").title()
+    if ytransform is not None:
+        ylabel += f" ({ytransform})"
+    plt.ylabel(ylabel)
+    if ytransform is None:
+        data["y_value"] = data[y_data_name]
     else:
-        plt.ylim((0, 1))
+        data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
+    if ylim is not None:
+        plt.ylim(ylim)
 
-    relevant_data = data[
-        ["num_params", "adversarial_eval/attack_success_rate", "model_name_or_path"]
-    ]
+    relevant_data = data[["num_params", "y_value", "model_name_or_path"]]
 
     relevant_data = _maybe_get_custom_xs_and_maybe_ys(
         relevant_data, custom_ys, custom_xs_and_ys
@@ -702,7 +749,7 @@ def draw_min_max_median_plot(
     # Group by num_params and calculate min, max, and median
     grouped = (
         relevant_data.groupby("num_params")
-        .agg({"adversarial_eval/attack_success_rate": ["min", "max", "median"]})
+        .agg({"y_value": ["min", "max", "median"]})
         .reset_index()
     )
     grouped.columns = ["num_params", "y_min", "y_max", "y_median"]
@@ -735,6 +782,9 @@ def draw_min_max_median_plot(
     if not legend:
         ax.get_legend().remove()
 
+    if isinstance(save_as, str):
+        save_as = (save_as,)
+
     create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
 
 
@@ -745,7 +795,10 @@ def draw_min_max_median_plot_by_round(
     custom_ys=None,
     custom_xs_and_ys=None,
     legend: bool = True,
-    log_y: bool = True,
+    check_seeds: bool = True,
+    ylim: tuple[float, float] | None = None,
+    ytransform: str | None = None,
+    y_data_name: str = "adversarial_eval/attack_success_rate",
     rounds: list[int] | None = None,
 ):
     print("Found", len(data), "runs to use for the plot")
@@ -755,20 +808,27 @@ def draw_min_max_median_plot_by_round(
     plt.xscale("log")
     plt.title(title)
     plt.xlabel("Model size (# parameters)")
-    plt.ylabel("Attack Success Rate")
-    if log_y:
-        plt.yscale("log")
+    ylabel = y_data_name.replace("adversarial_eval/", "").replace("_", " ").title()
+    if ytransform is not None:
+        ylabel += f" ({ytransform})"
+    plt.ylabel(ylabel)
+    if ytransform is None:
+        data["y_value"] = data[y_data_name]
     else:
-        plt.ylim((0, 1))
+        data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
+    if ylim is not None:
+        plt.ylim(ylim)
 
     relevant_data = data[
         [
             "num_params",
-            "adversarial_eval/attack_success_rate",
-            "model_name_or_path",
+            "y_value",
+            "training_force_name_to_save",
             "adv_training_round",
         ]
     ]
+    if check_seeds:
+        _check_correct_num_seeds(relevant_data, num_seeds=3, adversarial=True)
 
     relevant_data = _maybe_get_custom_xs_and_maybe_ys(
         relevant_data, custom_ys, custom_xs_and_ys
@@ -777,7 +837,7 @@ def draw_min_max_median_plot_by_round(
     # Group by num_params and adv_training_round then calculate min, max, and median
     grouped = (
         relevant_data.groupby(["num_params", "adv_training_round"])
-        .agg({"adversarial_eval/attack_success_rate": ["min", "max", "median"]})
+        .agg({"y_value": ["min", "max", "median"]})
         .reset_index()
     )
     grouped.columns = ["num_params", "adv_training_round", "y_min", "y_max", "y_median"]
@@ -852,6 +912,9 @@ def draw_min_max_median_plot_by_round(
 
     # Adjust layout to prevent cutoff
     plt.tight_layout()
+
+    if isinstance(save_as, str):
+        save_as = (save_as,)
 
     create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
 
@@ -940,3 +1003,195 @@ def postprocess_data(df):
     assert "model_name_or_path" in df
 
     df["pretraining_fraction"] = df["model_name_or_path"].map(_get_pretraining_fraction)
+
+
+def prepare_asr_data(
+    data: pd.DataFrame,
+) -> pd.DataFrame:
+    asr_columns = [col for col in data.columns if col.startswith("metrics/asr@")]
+    other_columns = [
+        col for col in data.columns if "@" not in col and "adversarial_eval/" not in col
+    ]
+    melted_df = pd.melt(
+        data,
+        id_vars=other_columns,
+        value_vars=asr_columns,
+        var_name="iteration",
+        value_name="asr",
+    )
+    melted_df["iteration"] = melted_df["iteration"].str.extract(r"(\d+)").astype(int)
+    return melted_df
+
+
+def prepare_ifs_data(
+    data: pd.DataFrame,
+) -> pd.DataFrame:
+    asr_columns = [col for col in data.columns if col.startswith("metrics/ifs@")]
+    other_columns = [
+        col for col in data.columns if "@" not in col and "adversarial_eval/" not in col
+    ]
+    melted_df = pd.melt(
+        data,
+        id_vars=other_columns,
+        value_vars=asr_columns,
+        var_name="asr",
+        value_name="ifs",
+    )
+    # e.g. metrics/ifs@0.1
+    melted_df["asr"] = melted_df["asr"].str.extract(r"metrics/ifs@(.*)").astype(float)
+    melted_df["decile"] = (melted_df["asr"] * 10).astype(int)
+    return melted_df
+
+
+def plot_attack_scaling(
+    orig_df: pd.DataFrame,
+    attack: str,
+    dataset: str,
+    n_models: int,
+    n_seeds: int,
+    n_iterations: int,
+    datapoints: int | None = None,
+    check_seeds: bool = True,
+    x: str = "log_iteration_x_params",
+    y: str = "logit_asr",
+) -> None:
+    df = orig_df.copy()
+    if "model_size" in df and "model_idx" not in df:
+        df["model_idx"] = df.model_size.rank(method="dense").astype(int) - 1
+    if "seed_idx" not in df and "model_name_or_path" in df:
+        df["seed_idx"] = df.model_name_or_path.apply(_get_seed_from_name)
+    if "num_params" not in df:
+        df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
+    assert df.model_idx.between(0, n_models - 1).all()
+    assert df.seed_idx.between(0, n_seeds - 1).all()
+    assert df.iteration.between(0, n_iterations).all()
+    if check_seeds:
+        assert len(df) == n_models * n_seeds * (n_iterations + 1)
+    if datapoints is not None and df.iteration.nunique() > datapoints:
+        # If datapoints=10, filter out all but empirical deciles
+        df = df.loc[
+            df.iteration.isin(df.iteration.quantile(np.linspace(0, 1, datapoints)))
+        ]
+    df["iteration_x_params"] = df.iteration * df.num_params
+    df["log_iteration_x_params"] = np.log(df.iteration_x_params)
+    assert df.asr.between(0, 1).all()
+    df["sigmoid_asr"] = 1 / (1 + np.exp(-df.asr))
+    df["logit_asr"] = np.log(df.asr / (1 - df.asr))
+    df.sort_values("model_idx", inplace=True)
+
+    fig, ax = plt.subplots()
+    set_up_paper_plot(fig, ax)
+    color_data_name = "num_params"
+    palette = get_color_palette(df, color_data_name)
+    sns.lineplot(
+        data=df,
+        x=x,
+        y=y,
+        hue=color_data_name,
+        ax=ax,
+        palette=palette,
+        legend=False,
+    )
+    ax.set_xlabel(x.replace("_", " ").title())
+    ax.set_ylabel(y.replace("_", " ").title())
+    fig.suptitle(f"{attack}/{dataset}".upper())
+    create_path_and_savefig(fig, "asr", attack, dataset, "no_legend")
+    legend_handles = get_legend_handles(df, color_data_name, palette)
+    create_legend(color_data_name, ax, legend_handles, outside=False)
+    save_path = create_path_and_savefig(fig, "asr", attack, dataset, "legend")
+    df.to_csv(str(save_path).replace("legend.pdf", "data.csv"), index=False)
+
+
+def plot_ifs(
+    orig_df: pd.DataFrame,
+    attack: str,
+    dataset: str,
+    n_models: int,
+    n_seeds: int,
+    check_seeds: bool = True,
+    x: str = "log_asr",
+    y: str = "log_ifs",
+) -> None:
+    df = orig_df.copy()
+    if "model_size" in df and "model_idx" not in df:
+        df["model_idx"] = df.model_size.rank(method="dense").astype(int) - 1
+    if "seed_idx" not in df and "model_name_or_path" in df:
+        df["seed_idx"] = df.model_name_or_path.apply(_get_seed_from_name)
+    if "num_params" not in df:
+        df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
+    assert df.model_idx.between(0, n_models - 1).all()
+    assert df.seed_idx.between(0, n_seeds - 1).all()
+    assert df.asr.between(0, 1).all()
+    assert df.decile.between(0, 10).all()
+    if check_seeds:
+        assert len(df) == n_models * n_seeds * 11
+    if "asr" not in df:
+        df["asr"] = df.decile.mul(0.1)
+    df["log_ifs"] = np.log(df.ifs)
+    df["log_asr"] = np.log(df.asr)
+    df["logit_asr"] = np.log(df.asr / (1 - df.asr))
+    df.sort_values("model_idx", inplace=True)
+
+    fig, ax = plt.subplots()
+    set_up_paper_plot(fig, ax)
+    color_data_name = "num_params"
+    palette = get_color_palette(df, color_data_name)
+    sns.lineplot(
+        data=df,
+        x=x,
+        y=y,
+        hue=color_data_name,
+        ax=ax,
+        palette=palette,
+        legend=False,
+    )
+    ax.set_ylabel(
+        y.replace("_", " ").replace("ifs", "Iterations required to reach ASR").title()
+    )
+    ax.set_xlabel(x.replace("_", " ").replace("asr", "ASR").title())
+    fig.suptitle(f"{attack}/{dataset}".upper())
+    create_path_and_savefig(fig, "ifs", attack, dataset, "no_legend")
+    legend_handles = get_legend_handles(df, color_data_name, palette)
+    create_legend(color_data_name, ax, legend_handles, outside=False)
+    save_path = create_path_and_savefig(fig, "ifs", attack, dataset, "legend")
+    df.to_csv(str(save_path).replace("legend.pdf", "data.csv"), index=False)
+
+
+def load_and_plot_asr_and_ifs(
+    run_names: tuple[str, ...],
+    summary_keys: list[str],
+    metrics: list[str],
+    attack: str,
+    dataset: str,
+    n_models: int,
+    n_seeds: int,
+    n_iterations: int,
+    check_seeds: bool = True,
+    asr_x: str = "log_iteration_x_params",
+    asr_y: str = "logit_asr",
+    ifs_x: str = "log_asr",
+    ifs_y: str = "log_ifs",
+    datapoints: int | None = None,
+    use_cache: bool = True,
+):
+    adv_data = prepare_adv_training_data(
+        run_names=run_names,
+        summary_keys=summary_keys,
+        metrics=metrics,
+        use_cache=use_cache,
+    )
+    asr_data = prepare_asr_data(adv_data)
+    ifs_data = prepare_ifs_data(adv_data)
+    plot_attack_scaling(
+        asr_data,
+        attack,
+        dataset,
+        n_models,
+        n_seeds,
+        n_iterations,
+        datapoints,
+        check_seeds,
+        asr_x,
+        asr_y,
+    )
+    plot_ifs(ifs_data, attack, dataset, n_models, n_seeds, check_seeds, ifs_x, ifs_y)

@@ -1,7 +1,15 @@
 """Figure 1 with old data"""
 
+from collections.abc import Iterable
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+
 from robust_llm.plotting_utils.style import set_plot_style
 from robust_llm.plotting_utils.tools import (
+    create_path_and_savefig,
     draw_min_max_median_plot_by_round,
     make_finetuned_plots,
     prepare_adv_training_data,
@@ -18,8 +26,44 @@ summary_keys = [
 ]
 
 
-set_plot_style("paper")
+def compute_r2_by_round(raw_data: pd.DataFrame, y_value: str = "log_asr"):
+    data = raw_data.rename(
+        columns={
+            "adversarial_eval/attack_success_rate": "asr",
+        }
+    )
+    # data = data.loc[data.asr.between(0, 1, inclusive="neither")]
+    data = data.loc[data.adv_training_round.le(10)]
+    data["log_asr"] = np.log(data["asr"])
+    data["logit_asr"] = np.log(data["asr"] / (1 - data["asr"]))
+    data["log_params"] = np.log(data["model_size"])
+    r2_list = []
+    for round, round_df in data.groupby("adv_training_round"):
+        reg = smf.ols(f"{y_value} ~ log_params", data=round_df).fit()
+        r2_list.append(
+            {
+                "adv_training_round": round,
+                "r2": reg.rsquared,
+                "n": np.isfinite(round_df[y_value]).sum(),
+            }
+        )
+    return pd.DataFrame(r2_list)
 
+
+def plot_r2_by_round(data: pd.DataFrame, save_as: Iterable[str]):
+    r2_data = compute_r2_by_round(data)
+    print("R^2 by round", r2_data)
+    set_plot_style("paper")
+    fig, ax = plt.subplots()
+    r2_data.plot(x="adv_training_round", y="r2", ax=ax)
+    ax.set_ylabel("R2")
+    ax.set_xlabel("Adversarial Training Round")
+    fig.suptitle(";".join(save_as) + " R2 by round")
+    create_path_and_savefig(fig, *save_as)
+
+
+set_plot_style("paper")
+YTRANSFORM = "logit"
 for legend in (True, False):
     make_finetuned_plots(
         run_names=[
@@ -32,6 +76,7 @@ for legend in (True, False):
         eval_summary_keys=summary_keys,
         metrics=metrics,
         legend=legend,
+        ytransform=YTRANSFORM,
     )
     make_finetuned_plots(
         run_names=[
@@ -44,13 +89,14 @@ for legend in (True, False):
         eval_summary_keys=summary_keys,
         metrics=metrics,
         legend=legend,
+        ytransform=YTRANSFORM,
     )
 
 summary_keys = SUMMARY_KEYS + [
     "experiment_yaml.training.force_name_to_save",
     "experiment_yaml.training.seed",
 ]
-ROUNDS = [4, 9, 14, 19, 24, 29]
+ROUNDS = [0, 1, 2, 3, 4, 9, 29]
 # IMDB
 adv_data = prepare_adv_training_data(
     run_names=(
@@ -62,6 +108,7 @@ adv_data = prepare_adv_training_data(
     use_cache=True,
 )
 print("IMDB", adv_data)
+plot_r2_by_round(adv_data, ("post_adv_training", "imdb", "gcg", "r2"))
 for legend in (True, False):
     draw_min_max_median_plot_by_round(
         data=adv_data,
@@ -69,6 +116,7 @@ for legend in (True, False):
         save_as=("post_adv_training", "imdb", "gcg"),
         legend=legend,
         rounds=ROUNDS,
+        ytransform=YTRANSFORM,
     )
 
 # SPAM
@@ -79,6 +127,7 @@ adv_data = prepare_adv_training_data(
     use_cache=True,
 )
 print("SPAM", adv_data)
+plot_r2_by_round(adv_data, ("post_adv_training", "spam", "gcg", "r2"))
 for legend in (True, False):
     draw_min_max_median_plot_by_round(
         data=adv_data,
@@ -86,4 +135,5 @@ for legend in (True, False):
         save_as=("post_adv_training", "spam", "gcg"),
         legend=legend,
         rounds=ROUNDS,
+        ytransform=YTRANSFORM,
     )
