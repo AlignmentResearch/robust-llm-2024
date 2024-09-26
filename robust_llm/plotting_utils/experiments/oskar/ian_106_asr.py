@@ -13,6 +13,7 @@ from robust_llm.plotting_utils.tools import (
     create_path_and_savefig,
     get_color_palette,
     get_legend_handles,
+    prepare_adv_training_data,
     set_up_paper_plot,
 )
 from robust_llm.wandb_utils.constants import MODEL_SIZES
@@ -31,7 +32,11 @@ GROUPS = [
 
 
 # %%
-def plot_asr_for_group(group_name: str):
+def plot_asr_for_group(
+    group_name: str,
+    x: str = "iteration_x_flops",
+    y: str = "logit_asr",
+):
     root = compute_repo_path()
     path = os.path.join(root, "outputs", f"asr_{group_name}.csv")
     if not os.path.exists(path):
@@ -54,7 +59,41 @@ def plot_asr_for_group(group_name: str):
     df["iteration_x_params"] = df.iteration * df.num_params
     df["sigmoid_asr"] = 1 / (1 + np.exp(-df.asr))
     df["logit_asr"] = np.log(df.asr / (1 - df.asr))
+
     df.sort_values("model_idx", inplace=True)
+
+    if "flop" in x:
+        flop_data = prepare_adv_training_data(
+            (group,),
+            summary_keys=[
+                "experiment_yaml.model.name_or_path",
+                "experiment_yaml.dataset.n_val",
+                "model_size",
+                "experiment_yaml.model.revision",
+            ],
+            metrics=[
+                "flops_per_iteration",
+            ],
+        )
+        flop_data["seed_idx"] = (
+            flop_data.model_name_or_path.str.split("_s-").str[-1].astype(int)
+        )
+        flop_data["model_idx"] = (
+            flop_data.model_size.rank(method="dense").astype(int) - 1
+        )
+
+        df = df.merge(
+            flop_data,
+            on=["model_idx", "seed_idx"],
+            how="left",
+            validate="m:1",
+            suffixes=("", "_flop"),
+        )
+        assert df.flops_per_iteration.notnull().all()
+        df.flops_per_iteration = df.groupby(
+            ["model_idx", "iteration"]
+        ).flops_per_iteration.transform("mean")
+        df["iteration_x_flops"] = df.iteration * df.flops_per_iteration
 
     fig, ax = plt.subplots()
     set_up_paper_plot(fig, ax)
@@ -62,21 +101,31 @@ def plot_asr_for_group(group_name: str):
     palette = get_color_palette(df, color_data_name)
     sns.lineplot(
         data=df,
-        x="iteration_x_params",
-        y="logit_asr",
+        x=x,
+        y=y,
         hue=color_data_name,
         ax=ax,
         palette=palette,
         legend=False,
     )
-    ax.set_xlabel("Attack compute (Iterations $\times$ Parameters)")
-    ax.set_ylabel("Attack success rate (logit)")
+    ax.set_xlabel(
+        {
+            "iteration_x_params": "Attack compute (Iterations $\times$ Parameters)",
+            "iteration_x_flops": "Attack compute (FLOPs)",
+        }[x]
+    )
+    ax.set_ylabel(
+        {
+            "logit_asr": "logit(attack success)",
+            "asr": "attack success rate",
+        }[y]
+    )
     ax.set_xscale("log")
     fig.suptitle(f"{attack}/{dataset}".upper())
-    create_path_and_savefig(fig, "asr", attack, dataset, "no_legend")
+    create_path_and_savefig(fig, "asr", attack, dataset, x, y, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)
     create_legend(color_data_name, ax, legend_handles, outside=False)
-    save_path = create_path_and_savefig(fig, "asr", attack, dataset, "legend")
+    save_path = create_path_and_savefig(fig, "asr", attack, dataset, x, y, "legend")
     df.to_csv(str(save_path).replace("legend.pdf", "data.csv"), index=False)
 
 

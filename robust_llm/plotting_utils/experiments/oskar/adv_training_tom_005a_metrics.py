@@ -18,11 +18,11 @@ summary_keys = [
     "experiment_yaml.model.revision",
 ]
 METRICS = (
-    ["adversarial_eval/attack_success_rate"]
+    ["adversarial_eval/attack_success_rate", "flops_per_iteration", "attack_flops"]
     + [f"metrics/asr@{i}" for i in list(range(0, 128, 12)) + [128]]
     + [f"metrics/ifs@{r:.1f}" for r in np.arange(0, 1.1, 0.1)]
 )
-
+ASR_X = "log_iteration_flops"
 load_and_plot_asr_and_ifs(
     run_names=("tom_005a_eval_niki_149_gcg ",),
     summary_keys=summary_keys,
@@ -34,6 +34,7 @@ load_and_plot_asr_and_ifs(
     n_seeds=3,
     check_seeds=False,
     n_iterations=128,
+    asr_x=ASR_X,
 )
 load_and_plot_asr_and_ifs(
     run_names=("tom_006_eval_niki_150_gcg ",),
@@ -46,6 +47,7 @@ load_and_plot_asr_and_ifs(
     n_seeds=3,
     check_seeds=False,
     n_iterations=128,
+    asr_x=ASR_X,
 )
 load_and_plot_asr_and_ifs(
     run_names=("tom_007_eval_niki_152_gcg ", "tom_007_eval_niki_152a_gcg "),
@@ -58,6 +60,7 @@ load_and_plot_asr_and_ifs(
     n_seeds=3,
     check_seeds=False,
     n_iterations=128,
+    asr_x=ASR_X,
 )
 load_and_plot_asr_and_ifs(
     run_names=(
@@ -73,6 +76,7 @@ load_and_plot_asr_and_ifs(
     n_seeds=3,
     check_seeds=False,
     n_iterations=128,
+    asr_x=ASR_X,
 )
 load_and_plot_asr_and_ifs(
     run_names=("tom_009_eval_niki_170_gcg ",),
@@ -85,6 +89,7 @@ load_and_plot_asr_and_ifs(
     n_seeds=3,
     check_seeds=False,
     n_iterations=128,
+    asr_x=ASR_X,
 )
 load_and_plot_asr_and_ifs(
     run_names=("tom_010_eval_niki_170_gcg_infix90 ",),
@@ -97,4 +102,5 @@ load_and_plot_asr_and_ifs(
     n_seeds=3,
     check_seeds=False,
     n_iterations=128,
+    asr_x=ASR_X,
 )

@@ -41,7 +41,7 @@ def make_finetuned_plots(
     legend: bool = False,
     ylim: tuple[float, float] | None = None,
     ytransform: str | None = None,
-    y_data_name: str = "adversarial_eval/attack_success_rate",
+    y_data_name: str = "adversarial_eval_attack_success_rate",
 ):
     """Make scatter and min/max/median plot for many runs on the same plot."""
     make_finetuned_plot(
@@ -106,10 +106,10 @@ def make_finetuned_plot(
     custom_xs_and_ys: list[tuple[float, float]] | None = None,
     plot_type: str = "scatter",
     legend: bool = False,
-    check_seeds: bool = True,
+    check_seeds: int | None = None,
     ylim: tuple[float, float] | None = None,
     ytransform: str | None = None,
-    y_data_name: str = "adversarial_eval/attack_success_rate",
+    y_data_name: str = "adversarial_eval_attack_success_rate",
 ):
     """
     Plot model size on the x-axis and attack success rate on the y-axis.
@@ -196,10 +196,54 @@ def make_finetuned_plot(
             raise ValueError(f"Unknown plot type {plot_type}")
 
 
+def _fix_off_by_one_in_flops(data: pd.DataFrame) -> pd.DataFrame:
+    fixed_data = []
+    for _, run_df in data.groupby("run_id"):
+        if run_df.training_adversarial_skip_first_training_round.all():
+            # increment the adv_training_round by 1
+            run_df["adv_training_round"] = run_df["adv_training_round"] + 1
+            # prepend row with adv_training_round = 0 and train_total_flops = 0 and
+            # otherwise the same as the first row
+            run_df = pd.concat(
+                [
+                    run_df.iloc[:1].assign(
+                        adv_training_round=0,
+                        train_total_flops=0,
+                    ),
+                    run_df,
+                ],
+                ignore_index=True,
+            )
+        fixed_data.append(run_df)
+    return pd.concat(fixed_data)
+
+
+def load_flops_data(
+    run_names: iter_str | str,
+):
+    if isinstance(run_names, str):
+        run_names = (run_names,)
+    data = prepare_adv_training_data(
+        run_names=run_names,
+        summary_keys=[
+            "experiment_yaml.model.name_or_path",
+            "experiment_yaml.training.force_name_to_save",
+            "experiment_yaml.training.save_name",
+            "experiment_yaml.training.adversarial.skip_first_training_round",
+        ],
+        metrics=["train/total_flops"],
+    )
+    data["model_key"] = data.training_force_name_to_save.where(
+        data.training_force_name_to_save.notnull(), data.training_save_name
+    )
+    return _fix_off_by_one_in_flops(data)
+
+
 def load_and_plot_adv_training_plots(
     run_names: iter_str | str,
     title: str,
     save_as: iter_str | str,
+    merge_runs: iter_str | str | None = None,
     summary_keys: list[str] | None = None,
     metrics: list[str] | None = None,
     x_data_name: str = "adv_training_round",
@@ -209,7 +253,7 @@ def load_and_plot_adv_training_plots(
     legend: bool = False,
     check_seeds: int | None = None,
     use_cache: bool = True,
-    y_data_name: str = "adversarial_eval/attack_success_rate",
+    y_data_name: str = "adversarial_eval_attack_success_rate",
 ):
     """
     Make adversarial training plots for given runs, pulling data from W&B.
@@ -218,6 +262,9 @@ def load_and_plot_adv_training_plots(
         run_names: The names of the runs to pull data from.
         title: The title to give the plot (also used for saving).
         save_as: The nested directory structure to save the plot in.
+        merge_runs: The names of the adversarial training runs to merge with the
+            evaluation runs. This is useful for plotting the FLOPs used during
+            adversarial training.
         summary_keys: The keys to summarize the data by.
         metrics: The metrics to plot.
         x_data_name: The name of the data to use for the x-axis.
@@ -245,6 +292,19 @@ def load_and_plot_adv_training_plots(
         metrics=metrics,
         use_cache=use_cache,
     )
+    if merge_runs is not None:
+        data["model_key"] = data.model_name_or_path.str.replace(
+            "AlignmentResearch/", ""
+        ).str.replace("robust_llm_", "")
+        train_data = load_flops_data(merge_runs)
+        data = data.merge(
+            train_data,
+            on=["model_key", "adv_training_round"],
+            how="left",
+            validate="many_to_one",
+            suffixes=("", "_train"),
+        )
+
     draw_plot_adv_training(
         data=data,
         x_data_name=x_data_name,
@@ -282,6 +342,9 @@ def prepare_adv_training_data(
         run_info_list.append(run_info)
 
     run_info_df = pd.concat(run_info_list, ignore_index=True)
+    run_info_df.columns = run_info_df.columns.str.replace("/", "_").str.replace(
+        "@", "_at_"
+    )
 
     return run_info_df
 
@@ -398,7 +461,7 @@ def _draw_plot_adv_training(
     color_data_name: str,
     title: str,
     save_as: iter_str | str,
-    y_data_name: str = "adversarial_eval/attack_success_rate",
+    y_data_name: str = "adversarial_eval_attack_success_rate",
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
     legend: bool = False,
@@ -423,15 +486,26 @@ def _draw_plot_adv_training(
         _get_n_parameter_updates(data)
         ax.set_xlabel("# Parameter Updates")
         plt.xscale("log")
+    elif x_data_name == "train_total_flops":
+        data = data.loc[data.train_total_flops.gt(0)]
+        # Handle slight deviations in FLOPs
+        data["train_total_flops"] = (
+            data.groupby(["num_params", "adv_training_round"])["train_total_flops"]
+            .transform("mean")
+            .astype(int)
+        )
+        ax.set_xlabel("Adversarial Training FLOPs")
+        plt.xscale("log")
     else:
         raise ValueError(f"We don't yet support {x_data_name} on the x-axis")
 
     palette_dict = get_color_palette(data, color_data_name)
 
     plt.title(title)
-    y_name_clean = y_data_name.replace("adversarial_eval/", "").replace("metrics/", "")
+    y_name_clean = y_data_name.replace("adversarial_eval_", "").replace("metrics_", "")
     y_transf_data_name = f"{y_transform}_{y_name_clean}"
     data[y_transf_data_name] = TRANSFORMS[y_transform](data[y_data_name])
+    data = data.loc[np.isfinite(data[y_transf_data_name])]
     ax.set_ylabel(y_transf_data_name.replace("_", " ").title())
     if ylim is not None:
         plt.ylim(ylim)
@@ -466,9 +540,11 @@ def _draw_plot_adv_training(
 
     if isinstance(save_as, str):
         save_as = (save_as,)
-    create_path_and_savefig(
+    path = create_path_and_savefig(
         fig, "adv_training", *save_as, "legend" if legend else "no_legend"
     )
+    if legend:
+        data.to_csv(str(path).replace("legend.pdf", "data.csv"), index=False)
 
 
 def draw_plot_adv_training(
@@ -481,7 +557,7 @@ def draw_plot_adv_training(
     ylim: tuple[float, float] | None = None,
     legend: bool = False,
     check_seeds: int | None = None,
-    y_data_name: str = "adversarial_eval/attack_success_rate",
+    y_data_name: str = "adversarial_eval_attack_success_rate",
 ):
     if xlim is not None and data["adv_training_round"].max() + 1 < xlim[1]:
         raise ValueError(
@@ -526,10 +602,10 @@ def draw_scatterplot(
     save_as: iter_str | str,
     custom_ys=None,
     custom_xs_and_ys=None,
-    check_seeds=True,
+    check_seeds: int | None = None,
     ylim: tuple[float, float] | None = None,
     ytransform: str | None = None,
-    y_data_name: str = "adversarial_eval/attack_success_rate",
+    y_data_name: str = "adversarial_eval_attack_success_rate",
 ):
 
     # Refine data here as necessary
@@ -544,7 +620,7 @@ def draw_scatterplot(
     plt.xscale("log")
     plt.title(title)
     plt.xlabel("Model size (# parameters)")
-    ylabel = y_data_name.replace("adversarial_eval/", "").replace("_", " ").title()
+    ylabel = y_data_name.replace("adversarial_eval_", "").replace("_", " ").title()
     if ytransform is not None:
         ylabel += f" ({ytransform})"
     plt.ylabel(ylabel)
@@ -557,8 +633,10 @@ def draw_scatterplot(
 
     relevant_data = data[["num_params", "y_value"]]
 
-    if check_seeds:
-        _check_correct_num_seeds(relevant_data, num_seeds=3, adversarial=False)
+    if check_seeds is not None:
+        _check_correct_num_seeds(
+            relevant_data, num_seeds=check_seeds, adversarial=False
+        )
 
     # Add the custom xs and ys
     # xs are "num_params"
@@ -577,8 +655,10 @@ def draw_scatterplot(
         new_data = new_data[relevant_data.columns]
         relevant_data = pd.concat([relevant_data, new_data], ignore_index=True)
 
-    if check_seeds:
-        _check_correct_num_seeds(relevant_data, num_seeds=3, adversarial=False)
+    if check_seeds is not None:
+        _check_correct_num_seeds(
+            relevant_data, num_seeds=check_seeds, adversarial=False
+        )
 
     sns.scatterplot(
         data=pd.melt(relevant_data, ["num_params"]),  # type: ignore
@@ -612,7 +692,7 @@ def _maybe_get_custom_xs_and_maybe_ys(relevant_data, custom_ys, custom_xs_and_ys
             raise ValueError("should not happen")
 
         new_data = pd.DataFrame(
-            {"num_params": xs, "adversarial_eval/attack_success_rate": custom_ys}
+            {"num_params": xs, "adversarial_eval_attack_success_rate": custom_ys}
         )
         new_data = new_data[relevant_data.columns]
         relevant_data = pd.concat([relevant_data, new_data], ignore_index=True)
@@ -714,10 +794,10 @@ def draw_min_max_median_plot(
     custom_ys=None,
     custom_xs_and_ys=None,
     legend: bool = False,
-    check_seeds: bool = True,
+    check_seeds: int | None = None,
     ylim: tuple[float, float] | None = None,
     ytransform: str | None = None,
-    y_data_name: str = "adversarial_eval/attack_success_rate",
+    y_data_name: str = "adversarial_eval_attack_success_rate",
 ):
     print("Found", len(data), "runs to use for the plot")
 
@@ -726,7 +806,7 @@ def draw_min_max_median_plot(
     plt.xscale("log")
     plt.title(title)
     plt.xlabel("Model size (# parameters)")
-    ylabel = y_data_name.replace("adversarial_eval/", "").replace("_", " ").title()
+    ylabel = y_data_name.replace("adversarial_eval_", "").replace("_", " ").title()
     if ytransform is not None:
         ylabel += f" ({ytransform})"
     plt.ylabel(ylabel)
@@ -743,8 +823,10 @@ def draw_min_max_median_plot(
         relevant_data, custom_ys, custom_xs_and_ys
     )
 
-    if check_seeds:
-        _check_correct_num_seeds(relevant_data, num_seeds=3, adversarial=False)
+    if check_seeds is not None:
+        _check_correct_num_seeds(
+            relevant_data, num_seeds=check_seeds, adversarial=False
+        )
 
     # Group by num_params and calculate min, max, and median
     grouped = (
@@ -795,10 +877,10 @@ def draw_min_max_median_plot_by_round(
     custom_ys=None,
     custom_xs_and_ys=None,
     legend: bool = True,
-    check_seeds: bool = True,
+    check_seeds: int | None = None,
     ylim: tuple[float, float] | None = None,
     ytransform: str | None = None,
-    y_data_name: str = "adversarial_eval/attack_success_rate",
+    y_data_name: str = "adversarial_eval_attack_success_rate",
     rounds: list[int] | None = None,
 ):
     print("Found", len(data), "runs to use for the plot")
@@ -808,7 +890,12 @@ def draw_min_max_median_plot_by_round(
     plt.xscale("log")
     plt.title(title)
     plt.xlabel("Model size (# parameters)")
-    ylabel = y_data_name.replace("adversarial_eval/", "").replace("_", " ").title()
+    ylabel = (
+        y_data_name.replace("adversarial_eval_", "")
+        .replace("metrics_", "")
+        .replace("_", " ")
+        .title()
+    )
     if ytransform is not None:
         ylabel += f" ({ytransform})"
     plt.ylabel(ylabel)
@@ -827,8 +914,8 @@ def draw_min_max_median_plot_by_round(
             "adv_training_round",
         ]
     ]
-    if check_seeds:
-        _check_correct_num_seeds(relevant_data, num_seeds=3, adversarial=True)
+    if check_seeds is not None:
+        _check_correct_num_seeds(relevant_data, num_seeds=check_seeds, adversarial=True)
 
     relevant_data = _maybe_get_custom_xs_and_maybe_ys(
         relevant_data, custom_ys, custom_xs_and_ys
@@ -1000,7 +1087,10 @@ def postprocess_data(df):
 
     _update_model_sizes_as_necessary(df)
 
-    assert "model_name_or_path" in df
+    assert "model_name_or_path" in df, (
+        "model_name_or_path is necessary for plotting, "
+        "but it was not found in the dataframe"
+    )
 
     df["pretraining_fraction"] = df["model_name_or_path"].map(_get_pretraining_fraction)
 
@@ -1008,9 +1098,11 @@ def postprocess_data(df):
 def prepare_asr_data(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
-    asr_columns = [col for col in data.columns if col.startswith("metrics/asr@")]
+    asr_columns = [col for col in data.columns if col.startswith("metrics_asr_at")]
     other_columns = [
-        col for col in data.columns if "@" not in col and "adversarial_eval/" not in col
+        col
+        for col in data.columns
+        if "_at_" not in col and "adversarial_eval" not in col
     ]
     melted_df = pd.melt(
         data,
@@ -1019,16 +1111,18 @@ def prepare_asr_data(
         var_name="iteration",
         value_name="asr",
     )
-    melted_df["iteration"] = melted_df["iteration"].str.extract(r"(\d+)").astype(int)
+    melted_df["iteration"] = melted_df["iteration"].str.split("_").str[-1].astype(int)
     return melted_df
 
 
 def prepare_ifs_data(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
-    asr_columns = [col for col in data.columns if col.startswith("metrics/ifs@")]
+    asr_columns = [col for col in data.columns if col.startswith("metrics_ifs_at")]
     other_columns = [
-        col for col in data.columns if "@" not in col and "adversarial_eval/" not in col
+        col
+        for col in data.columns
+        if "_at_" not in col and "adversarial_eval" not in col
     ]
     melted_df = pd.melt(
         data,
@@ -1037,8 +1131,8 @@ def prepare_ifs_data(
         var_name="asr",
         value_name="ifs",
     )
-    # e.g. metrics/ifs@0.1
-    melted_df["asr"] = melted_df["asr"].str.extract(r"metrics/ifs@(.*)").astype(float)
+    # e.g. metrics_ifs_at_0.1
+    melted_df["asr"] = melted_df["asr"].str.split("_").str[-1].astype(float)
     melted_df["decile"] = (melted_df["asr"] * 10).astype(int)
     return melted_df
 
@@ -1052,10 +1146,12 @@ def plot_attack_scaling(
     n_iterations: int,
     datapoints: int | None = None,
     check_seeds: bool = True,
-    x: str = "log_iteration_x_params",
+    x: str = "log_iteration_flops",
     y: str = "logit_asr",
 ) -> None:
     df = orig_df.copy()
+    if "flops" in x:
+        df = df.loc[df.iteration.gt(0)]
     if "model_size" in df and "model_idx" not in df:
         df["model_idx"] = df.model_size.rank(method="dense").astype(int) - 1
     if "seed_idx" not in df and "model_name_or_path" in df:
@@ -1074,9 +1170,19 @@ def plot_attack_scaling(
         ]
     df["iteration_x_params"] = df.iteration * df.num_params
     df["log_iteration_x_params"] = np.log(df.iteration_x_params)
+    if x == "log_iteration_flops":
+        # We want the same number of iterations for the same model to be grouped
+        # together in the plot
+        df["mean_flops_per_iteration"] = df.groupby(["model_idx", "iteration"])[
+            "flops_per_iteration"
+        ].transform("mean")
+        df["log_iteration_flops"] = np.log10(df.iteration * df.mean_flops_per_iteration)
+
     assert df.asr.between(0, 1).all()
-    df["sigmoid_asr"] = 1 / (1 + np.exp(-df.asr))
-    df["logit_asr"] = np.log(df.asr / (1 - df.asr))
+    if y == "sigmoid_asr":
+        df["sigmoid_asr"] = 1 / (1 + np.exp(-df.asr))
+    if y == "logit_asr":
+        df["logit_asr"] = np.log(df.asr / (1 - df.asr))
     df.sort_values("model_idx", inplace=True)
 
     fig, ax = plt.subplots()
@@ -1095,10 +1201,10 @@ def plot_attack_scaling(
     ax.set_xlabel(x.replace("_", " ").title())
     ax.set_ylabel(y.replace("_", " ").title())
     fig.suptitle(f"{attack}/{dataset}".upper())
-    create_path_and_savefig(fig, "asr", attack, dataset, "no_legend")
+    create_path_and_savefig(fig, "asr", attack, dataset, x, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)
     create_legend(color_data_name, ax, legend_handles, outside=False)
-    save_path = create_path_and_savefig(fig, "asr", attack, dataset, "legend")
+    save_path = create_path_and_savefig(fig, "asr", attack, dataset, x, "legend")
     df.to_csv(str(save_path).replace("legend.pdf", "data.csv"), index=False)
 
 
@@ -1167,7 +1273,7 @@ def load_and_plot_asr_and_ifs(
     n_seeds: int,
     n_iterations: int,
     check_seeds: bool = True,
-    asr_x: str = "log_iteration_x_params",
+    asr_x: str = "log_iteration_flops",
     asr_y: str = "logit_asr",
     ifs_x: str = "log_asr",
     ifs_y: str = "log_ifs",

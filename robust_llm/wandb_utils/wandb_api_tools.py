@@ -28,6 +28,9 @@ memory = Memory(cache_dir, verbose=0)
 
 
 def _extract_adv_round(revision: str) -> int:
+    if revision == "main":
+        # This happens for finetuned models
+        return 0
     re_match = re.search(r"adv-training-round-(\d+)", revision)
     if re_match:
         return int(re_match.group(1))
@@ -245,6 +248,11 @@ def _get_metrics_adv_training(
                 _extract_adv_round(name) for name in history["model_revision"]
             ]
         else:
+            assert run.summary.get("experiment_yaml", {}).get("training") is not None, (
+                f"Could not infer adversarial training round for run {run.id}. "
+                "The run has no training config and no revision was found using "
+                f"keys={summary_keys}."
+            )
             history["adv_training_round"] = np.arange(len(history))
 
         res.append(history)
