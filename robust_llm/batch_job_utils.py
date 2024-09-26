@@ -35,6 +35,19 @@ with JOB_TEMPLATE_PATH.open() as f:
 DEFAULT_CONTAINER_TAG = "2024-08-07-backoff"
 
 
+def memory_str_to_bytes(memory: str) -> int:
+    """Converts Kubernetes memory string to bytes."""
+    if len(memory) < 2:
+        raise ValueError(f"Unexpected memory string: {memory}")
+    if memory[-1] == "G":
+        return int(memory[:-1]) * (1000**3)
+    if memory[-2:] == "Gi":
+        return int(memory[:-2]) * (1024**3)
+    # Job memory limits are nearly always in G or Gi, so we don't bother with
+    # other cases.
+    raise ValueError(f"Unexpected memory string: {memory}")
+
+
 def run_multiple(
     experiment_name: str,
     hydra_config: str,
@@ -48,7 +61,8 @@ def run_multiple(
     priority: str | list[str] = "normal-batch",
     cluster: str | Sequence[str | None] | None = None,
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
-    nfs: bool = True,
+    skip_runs_mask: Sequence[bool] | None = None,
+    use_cluster_storage: bool = True,
     dry_run: bool = False,
     skip_git_checks: bool = False,
     unique_identifier: str | None = None,
@@ -76,7 +90,9 @@ def run_multiple(
         only_jobs_with_starting_indices: if not None, only jobs with starting indices
             contained in this list will be launched. Useful for rerunning a small subset
             of jobs from an experiment (for example, if a few jobs failed).
-        nfs: Makes NFS storage available to the job if true.
+        skip_runs_mask: Mask of runs to skip. Useful for running a subset of
+            jobs.
+        use_cluster_storage: Mounts cluster storage to the job if true.
         dry_run: if True, only print the k8s job yaml files without launching them.
         skip_git_checks: if True, skip the remote push and the check for dirty git repo.
         unique_identifier: A unique identifier to append to the k8s job names
@@ -88,6 +104,9 @@ def run_multiple(
     memory = ensure_list(memory, len(override_args_list))
     gpu = ensure_list(gpu, len(override_args_list))
     priority = ensure_list(priority, len(override_args_list))
+    if skip_runs_mask is None:
+        skip_runs_mask = [False] * len(override_args_list)
+    skip_runs_mask = ensure_list(list(skip_runs_mask), len(override_args_list))
 
     cluster_list = fill_cluster_list(
         ensure_list(
@@ -124,13 +143,14 @@ def run_multiple(
             )
         )
         for (i, override_args) in enumerate(override_args_list)
+        if not skip_runs_mask[i]
     ]
 
     launch_jobs(
         runs,
         experiment_name=experiment_name,
         only_jobs_with_starting_indices=only_jobs_with_starting_indices,
-        nfs=nfs,
+        use_cluster_storage=use_cluster_storage,
         dry_run=dry_run,
         skip_git_checks=skip_git_checks,
     )
@@ -218,6 +238,31 @@ def organize_by_containers(runs: Sequence[FlamingoRun]) -> list[list[FlamingoRun
     return runs_by_containers
 
 
+def get_job_args_from_runs(runs: Sequence[FlamingoRun]) -> dict[str, Union[str, int]]:
+    """Combines parameters from parallel runs to get their job's args."""
+
+    # Give the job the max priority and memory among all the runs.
+    assert len(runs) > 0
+    PRIORITIES = ["low-batch", "normal-batch", "high-batch", "interactive"]
+    max_priority = max((run.PRIORITY for run in runs), key=PRIORITIES.index)
+    # It makes more sense to sum the memories instead (GH #929) but that's not
+    # how our experiments currently specify the memory limits for parallel runs.
+    max_memory = max((run.MEMORY for run in runs), key=memory_str_to_bytes)
+
+    combined_args = dataclasses.replace(
+        runs[0], PRIORITY=max_priority, MEMORY=max_memory
+    ).format_args()
+
+    # Besides args we've explicitly combined, args need to be uniform across all
+    # runs in the job.
+    EXCLUDED_KEYS = ["PRIORITY", "MEMORY"]
+    for run in runs:
+        assert {k: v for k, v in combined_args.items() if k not in EXCLUDED_KEYS} == {
+            k: v for k, v in run.format_args().items() if k not in EXCLUDED_KEYS
+        }
+    return combined_args
+
+
 def create_job_for_multiple_runs(
     runs: Sequence[FlamingoRun],
     name: str,
@@ -226,7 +271,7 @@ def create_job_for_multiple_runs(
     project: str,
     entity: str,
     wandb_mode: str,
-    nfs: bool = True,
+    use_cluster_storage: bool = True,
 ) -> str:
     # K8s job/pod names should be short for readability (hence cutting the name).
     unique_identifier = runs[0].unique_identifier
@@ -262,12 +307,7 @@ def create_job_for_multiple_runs(
         f" | parallel --line-buffer --null --jobs {num_jobs}"
     )
 
-    # Currently, we keep too much info in the FlamingoRun, including info that should be
-    # shared across all runs. Hence, we check below that it is indeed the same.
-    # TODO(michal): refactor to make it reasonable.
-    for run in runs:
-        assert runs[0].format_args() == run.format_args()
-
+    combined_run_args = get_job_args_from_runs(runs)
     job = JOB_TEMPLATE.format(
         NAME=k8s_job_name,
         LAUNCH_ID=launch_id,
@@ -275,25 +315,25 @@ def create_job_for_multiple_runs(
         WANDB_PROJECT=project,
         WANDB_MODE=wandb_mode,
         COMMAND=command,
-        **runs[0].format_args(),
+        **combined_run_args,
     )
-    if not nfs:
-        nfs_strings_to_remove = [
+    if not use_cluster_storage:
+        storage_strings_to_remove = [
             (
                 "        - name: robust-llm-storage\n"
                 "          persistentVolumeClaim:\n"
-                "            claimName: robust-llm\n"
+                "            claimName: st-blobfuse-robust-llm\n"
             ),
             (
                 "            - name: robust-llm-storage\n"
                 "              mountPath: /robust_llm_data\n"
             ),
         ]
-        for nfs_string in nfs_strings_to_remove:
+        for storage_string in storage_strings_to_remove:
             assert (
-                nfs_string in job
-            ), f"Expected to find NFS string in job: {nfs_string}."
-            job = job.replace(nfs_string, "")
+                storage_string in job
+            ), f"Expected to find storage string in job: {storage_string}."
+            job = job.replace(storage_string, "")
 
     return job
 
@@ -315,11 +355,11 @@ def create_jobs(
     wandb_mode: str = "online",
     experiment_name: Optional[str] = None,
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
-    nfs: bool = True,
+    use_cluster_storage: bool = True,
 ) -> tuple[dict[str, list[str]], str]:
     launch_id = generate_name(style="hyphen")
 
-    jobs_by_cluster = defaultdict(list)
+    jobs_by_cluster: dict[str, list[str]] = defaultdict(list)
     name = (experiment_name or generate_name(style="hyphen")).replace("_", "-")
 
     runs_by_containers = organize_by_containers(runs)
@@ -342,7 +382,14 @@ def create_jobs(
             cluster = runs[0].CLUSTER
             jobs_by_cluster[cluster].append(
                 create_job_for_multiple_runs(
-                    runs, name, index, launch_id, project, entity, wandb_mode, nfs
+                    runs,
+                    name,
+                    index,
+                    launch_id,
+                    project,
+                    entity,
+                    wandb_mode,
+                    use_cluster_storage,
                 )
             )
         index += len(runs)
@@ -356,7 +403,7 @@ def launch_jobs(
     entity: str = "farai",
     experiment_name: Optional[str] = None,
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
-    nfs: bool = True,
+    use_cluster_storage: bool = True,
     dry_run: bool = False,
     skip_git_checks: bool = False,
 ) -> tuple[dict[str, str], str]:
@@ -370,7 +417,7 @@ def launch_jobs(
         only_jobs_with_starting_indices: if not None, only jobs with starting indices
             contained in this list will be launched. Useful for rerunning a small subset
             of jobs from an experiment.
-        nfs: Makes NFS storage available to the job if true.
+        use_cluster_storage: Mounts storage to the job if true.
         dry_run: if True, only print the k8s job yaml files without launching them.
         skip_git_checks: if True, skip the remote push and the check for dirty git repo.
             This is useful when running unit tests.
@@ -400,7 +447,7 @@ def launch_jobs(
         entity=entity,
         experiment_name=experiment_name,
         only_jobs_with_starting_indices=only_jobs_with_starting_indices,
-        nfs=nfs,
+        use_cluster_storage=use_cluster_storage,
     )
     yamls_by_cluster = {
         cluster: "\n\n---\n\n".join(jobs) for cluster, jobs in jobs_by_cluster.items()

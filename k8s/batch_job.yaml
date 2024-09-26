@@ -30,8 +30,10 @@ spec:
           command:
             - bash
             - -c
+            # nvidia-smi checks that GPU is available since we've had GPU
+            # outages before that make the job silently run on CPU.
             - |
-              git clone https://github.com/AlignmentResearch/robust-llm.git && cd robust-llm && git checkout {COMMIT_HASH} && git submodule update --recursive && {COMMAND}
+              nvidia-smi && git clone https://github.com/AlignmentResearch/robust-llm.git && cd robust-llm && git checkout {COMMIT_HASH} && git submodule update --recursive && {COMMAND}
           resources:
             requests:
               cpu: {CPU}

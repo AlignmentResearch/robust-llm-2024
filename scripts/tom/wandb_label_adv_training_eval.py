@@ -1,17 +1,19 @@
-# For ease of plotting, adds extra fields to wandb runs doing evals of
-# adversarially trained models.
+# For ease of plotting in the wandb dashboard, adds extra fields to wandb runs
+# doing evals of adversarially trained models.
 # - Parses adv training round out of model.revision
 # - Parses base model out of our adv training model name
-# Applied to tom-004.
 import re
+import time
 
 import wandb
 
 api = wandb.Api()
 
 groups = [
-    "tom_004a_gcg_prefix_imdb",
-    "tom_004b_gcg_90pc_imdb",
+    # "tom_004a_gcg_prefix_imdb",
+    # "tom_004b_gcg_90pc_imdb",
+    "tom_005a_eval_niki_149_gcg",
+    "tom_006_eval_niki_150_gcg",
 ]
 
 
@@ -36,6 +38,9 @@ for group in groups:
         filters={"group": group, "state": "finished"},
     )
     for run in runs:
+        if "adv_training_round" in run.summary and "base_model" in run.summary:
+            continue
+
         revision = run.summary["experiment_yaml"]["model"]["revision"]
         round_number = extract_round(revision)
         run.summary["adv_training_round"] = round_number
@@ -44,5 +49,12 @@ for group in groups:
         base_model = extract_base_model(model)
         run.summary["base_model"] = base_model
 
-        run.summary.update()
-        print(f"Updated run '{run.name}'")
+        for _ in range(3):
+            try:
+                run.summary.update()
+                print(f"Updated run '{run.name}'")
+                break
+            except Exception as e:
+                print(f"Failed to update run '{run.name}': {e}")
+                print("Waiting for 15 seconds...")
+                time.sleep(15)

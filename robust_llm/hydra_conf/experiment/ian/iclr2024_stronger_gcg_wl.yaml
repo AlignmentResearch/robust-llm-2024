@@ -1,6 +1,6 @@
 # @package _global_
 defaults:
-- /dataset: Wordlength/stable
+- /dataset: WordLength/stable
 - /evaluation: DEFAULT
 - /environment: no-checkpointing
 - /attack@evaluation.evaluation_attack: GCG

@@ -314,6 +314,12 @@ def parse_run_to_dict(run: WandbRun) -> dict[str, Any]:
         hub_model_id,
     )
     if match is None:
+        # Handle model misnaming issue (GH #921)
+        match = re.match(
+            r"AlignmentResearch/clf_(.*)_pythia-(.*)_s-(.*)_adv_tr_(.*)_t-(.*)",  # noqa: E501
+            hub_model_id,
+        )
+    if match is None:
         dataset, base_model, ft_seed, attack, adv_seed = [None] * 5
     else:
         dataset, base_model, ft_seed, attack, adv_seed = match.groups()
