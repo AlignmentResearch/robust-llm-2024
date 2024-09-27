@@ -139,8 +139,31 @@ def _get_value_iterative(d: dict, key: str):
     return d
 
 
+def get_metrics_single_step(
+    group,
+    metrics,
+    summary_keys,
+    filters=None,
+    check_num_runs=None,
+    invalidate_cache=False,
+):
+    if invalidate_cache:
+        result = _get_metrics_single_step.call_and_shelve(  # type: ignore
+            group, metrics, summary_keys, filters, check_num_runs
+        )
+        result.clear()  # type: ignore
+    return _get_metrics_single_step(
+        group, metrics, summary_keys, filters, check_num_runs  # type: ignore
+    )
+
+
+@memory.cache
 def _get_metrics_single_step(
-    group, metrics, summary_keys, filters=None, check_num_runs=None
+    group,
+    metrics,
+    summary_keys,
+    filters=None,
+    check_num_runs=None,
 ):
     print("getting metrics for", group)
 
@@ -174,22 +197,20 @@ def _get_metrics_single_step(
     return res
 
 
+def get_metrics_adv_training(
+    *args,
+    invalidate_cache=False,
+    **kwargs,
+) -> pd.DataFrame:
+    if invalidate_cache:
+        result = _get_metrics_adv_training.call_and_shelve(  # type: ignore
+            *args, **kwargs
+        )
+        result.clear()  # type: ignore
+    return _get_metrics_adv_training(*args, **kwargs)  # type: ignore
+
+
 @memory.cache
-def _cached_get_metrics_single_step(
-    group, metrics, summary_keys, filters=None, check_num_runs=None
-):
-    return _get_metrics_single_step(
-        group, metrics, summary_keys, filters=filters, check_num_runs=check_num_runs
-    )
-
-
-def get_metrics_single_step(*args, use_cache=True, **kwargs):
-    if use_cache:
-        return _cached_get_metrics_single_step(*args, **kwargs)
-
-    return _get_metrics_single_step(*args, **kwargs)
-
-
 def _get_metrics_adv_training(
     group,
     metrics,
@@ -242,6 +263,7 @@ def _get_metrics_adv_training(
 
         history["run_id"] = run.id
         history["run_state"] = run.state
+        history["run_created_at"] = run.created_at
 
         # Hack: create 'round' column based on increasing steps.
         history = history.sort_values(by="_step")
@@ -268,34 +290,6 @@ def _get_metrics_adv_training(
         raise ValueError(f"No data found for group {group}")
     res = pd.concat(res, ignore_index=True)
     return res
-
-
-@memory.cache
-def _cached_get_metrics_adv_training(
-    group,
-    metrics,
-    summary_keys,
-    filters=None,
-    check_num_runs=None,
-    check_num_data_per_run=None,
-    verbose=False,
-):
-    return _get_metrics_adv_training(
-        group,
-        metrics,
-        summary_keys,
-        filters=filters,
-        check_num_runs=check_num_runs,
-        check_num_data_per_run=check_num_data_per_run,
-        verbose=verbose,
-    )
-
-
-def get_metrics_adv_training(*args, use_cache=True, **kwargs):
-    if use_cache:
-        return _cached_get_metrics_adv_training(*args, **kwargs)
-
-    return _get_metrics_adv_training(*args, **kwargs)
 
 
 def parse_run_to_dict(run: WandbRun) -> dict[str, Any]:

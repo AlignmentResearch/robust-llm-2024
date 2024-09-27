@@ -29,10 +29,9 @@ for asr_x in (
     "flops_percent_pretrain",
 ):
     load_and_plot_asr_and_ifs(
-        run_names=("tom_005a_eval_niki_149_gcg ",),
+        run_names=("tom_005a_eval_niki_149_gcg",),
         summary_keys=summary_keys,
         metrics=METRICS,
-        use_cache=True,
         attack="rt_gcg",
         dataset="imdb",
         n_models=10,
@@ -42,10 +41,9 @@ for asr_x in (
         asr_x=asr_x,
     )
     load_and_plot_asr_and_ifs(
-        run_names=("tom_006_eval_niki_150_gcg ",),
+        run_names=("tom_006_eval_niki_150_gcg",),
         summary_keys=summary_keys,
         metrics=METRICS,
-        use_cache=True,
         attack="rt_gcg",
         dataset="spam",
         n_models=10,
@@ -55,10 +53,9 @@ for asr_x in (
         asr_x=asr_x,
     )
     load_and_plot_asr_and_ifs(
-        run_names=("tom_007_eval_niki_152_gcg ", "tom_007_eval_niki_152a_gcg "),
+        run_names=("tom_007_eval_niki_152_gcg", "tom_007_eval_niki_152a_gcg"),
         summary_keys=summary_keys,
         metrics=METRICS,
-        use_cache=True,
         attack="gcg_gcg",
         dataset="imdb",
         n_models=10,
@@ -69,12 +66,11 @@ for asr_x in (
     )
     load_and_plot_asr_and_ifs(
         run_names=(
-            "tom_008_eval_niki_152_gcg_infix90 ",
-            "tom_008_eval_niki_152a_gcg_infix90 ",
+            "tom_008_eval_niki_152_gcg_infix90",
+            "tom_008_eval_niki_152a_gcg_infix90",
         ),
         summary_keys=summary_keys,
         metrics=METRICS,
-        use_cache=True,
         attack="gcg_infix90",
         dataset="imdb",
         n_models=10,
@@ -84,10 +80,9 @@ for asr_x in (
         asr_x=asr_x,
     )
     load_and_plot_asr_and_ifs(
-        run_names=("tom_009_eval_niki_170_gcg ",),
+        run_names=("tom_009_eval_niki_170_gcg",),
         summary_keys=summary_keys,
         metrics=METRICS,
-        use_cache=True,
         attack="gcg_gcg",
         dataset="spam",
         n_models=10,
@@ -97,12 +92,38 @@ for asr_x in (
         asr_x=asr_x,
     )
     load_and_plot_asr_and_ifs(
-        run_names=("tom_010_eval_niki_170_gcg_infix90 ",),
+        run_names=("tom_010_eval_niki_170_gcg_infix90",),
         summary_keys=summary_keys,
         metrics=METRICS,
-        use_cache=True,
         attack="gcg_infix90",
         dataset="spam",
+        n_models=10,
+        n_seeds=3,
+        check_seeds=False,
+        n_iterations=128,
+        asr_x=asr_x,
+    )
+    load_and_plot_asr_and_ifs(
+        run_names=(
+            "tom_012_eval_niki_153_gcg",
+            "tom_014_eval_niki_172_gcg ",
+        ),
+        summary_keys=summary_keys,
+        metrics=METRICS,
+        attack="gcg_gcg",
+        dataset="wl",
+        n_models=10,
+        n_seeds=3,
+        check_seeds=False,
+        n_iterations=128,
+        asr_x=asr_x,
+    )
+    load_and_plot_asr_and_ifs(
+        run_names=("tom_013_eval_niki_171_gcg",),
+        summary_keys=summary_keys,
+        metrics=METRICS,
+        attack="gcg_gcg",
+        dataset="pm",
         n_models=10,
         n_seeds=3,
         check_seeds=False,

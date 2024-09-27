@@ -99,3 +99,47 @@ for x_data_name in (
             legend=legend,
             metrics=metrics,
         )
+        load_and_plot_adv_training_plots(
+            run_names=("tom_012_eval_niki_153_gcg",),
+            merge_runs=("niki_153_adv_tr_rt_wl_small", "niki_159_adv_tr_rt_wl_large"),
+            title="WL, RT -> GCG",
+            save_as=("transfer", "wl", "gcg_to_gcg"),
+            summary_keys=summary_keys,
+            x_data_name=x_data_name,
+            color_data_name="num_params",
+            legend=legend,
+            metrics=metrics,
+        )
+        load_and_plot_adv_training_plots(
+            run_names=("tom_014_eval_niki_172_gcg ",),
+            merge_runs=("niki_172_adv_tr_gcg_wl_small",),
+            title="WL, GCG -> GCG",
+            save_as=("transfer", "wl", "gcg_to_gcg"),
+            summary_keys=summary_keys,
+            x_data_name=x_data_name,
+            color_data_name="num_params",
+            legend=legend,
+            metrics=metrics,
+        )
+        load_and_plot_adv_training_plots(
+            run_names=("tom_013_eval_niki_171_gcg",),
+            merge_runs=("niki_171_adv_tr_gcg_pm_small",),
+            title="PM, GCG -> GCG",
+            save_as=("transfer", "pm", "gcg_to_gcg"),
+            summary_keys=summary_keys,
+            x_data_name=x_data_name,
+            color_data_name="num_params",
+            legend=legend,
+            metrics=metrics,
+        )
+        load_and_plot_adv_training_plots(
+            run_names=("tom_011_eval_niki_151_gcg",),
+            merge_runs=("niki_151_adv_tr_rt_pm_small", "niki_158_adv_tr_rt_pm_large"),
+            title="PM, RT -> GCG",
+            save_as=("transfer", "pm", "rt_to_gcg"),
+            summary_keys=summary_keys,
+            x_data_name=x_data_name,
+            color_data_name="num_params",
+            legend=legend,
+            metrics=metrics,
+        )

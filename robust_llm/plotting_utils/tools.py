@@ -224,19 +224,24 @@ def _fix_off_by_one_in_flops(data: pd.DataFrame) -> pd.DataFrame:
 
 def load_flops_data(
     run_names: iter_str | str,
+    invalidate_cache: bool = False,
 ):
     if isinstance(run_names, str):
         run_names = (run_names,)
     data = prepare_adv_training_data(
         run_names=run_names,
         summary_keys=[
+            "experiment_yaml.run_name",
             "experiment_yaml.model.name_or_path",
             "experiment_yaml.training.force_name_to_save",
             "experiment_yaml.training.save_name",
             "experiment_yaml.training.adversarial.skip_first_training_round",
         ],
         metrics=["train/total_flops"],
+        invalidate_cache=invalidate_cache,
     )
+    data.sort_values("run_created_at", inplace=True, ascending=True)
+    data = data.drop_duplicates(subset=["run_name", "adv_training_round"], keep="last")
     data["model_key"] = data.training_force_name_to_save.where(
         data.training_force_name_to_save.notnull(), data.training_save_name
     )
@@ -256,7 +261,7 @@ def load_and_plot_adv_training_plots(
     ylim: tuple[float, float] | None = None,
     legend: bool = False,
     check_seeds: int | None = None,
-    use_cache: bool = True,
+    invalidate_cache: bool = False,
     y_data_name: str = "adversarial_eval_attack_success_rate",
 ):
     """
@@ -279,7 +284,8 @@ def load_and_plot_adv_training_plots(
         check_seeds:
             Whether to check that the correct number of seeds are present,
             and that those are the correct actual seed numbers.
-        use_cache: Whether to use the cache for the data.
+        invalidate_cache: Whether to invalidate the cache used when pulling
+            data from wandb.
         y_data_name: The name of the data to use for the y-axis.
     """
     if isinstance(run_names, str):
@@ -294,13 +300,13 @@ def load_and_plot_adv_training_plots(
         run_names=run_names,
         summary_keys=summary_keys,
         metrics=metrics,
-        use_cache=use_cache,
+        invalidate_cache=invalidate_cache,
     )
     if merge_runs is not None:
         data["model_key"] = data.model_name_or_path.str.replace(
             "AlignmentResearch/", ""
         ).str.replace("robust_llm_", "")
-        train_data = load_flops_data(merge_runs)
+        train_data = load_flops_data(merge_runs, invalidate_cache=invalidate_cache)
         data = data.merge(
             train_data,
             on=["model_key", "adv_training_round"],
@@ -308,6 +314,9 @@ def load_and_plot_adv_training_plots(
             validate="many_to_one",
             suffixes=("", "_train"),
         )
+        assert (
+            data.train_total_flops.notnull().all()
+        ), "Some adversarial training rounds are missing FLOPs data. "
 
     draw_plot_adv_training(
         data=data,
@@ -327,7 +336,7 @@ def prepare_adv_training_data(
     run_names: iter_str,
     summary_keys: list[str],
     metrics: list[str],
-    use_cache: bool = True,
+    invalidate_cache: bool = False,
 ) -> pd.DataFrame:
     assert all(isinstance(name, str) for name in run_names)
     run_info_list = []
@@ -337,7 +346,7 @@ def prepare_adv_training_data(
             group=run_name,
             metrics=metrics,
             summary_keys=summary_keys,
-            use_cache=use_cache,
+            invalidate_cache=invalidate_cache,
         )
         assert (
             isinstance(run_info, pd.DataFrame) and not run_info.empty
@@ -1309,13 +1318,13 @@ def load_and_plot_asr_and_ifs(
     ifs_x: str = "log_asr",
     ifs_y: str = "log_ifs",
     datapoints: int | None = None,
-    use_cache: bool = True,
+    invalidate_cache: bool = False,
 ):
     adv_data = prepare_adv_training_data(
         run_names=run_names,
         summary_keys=summary_keys,
         metrics=metrics,
-        use_cache=use_cache,
+        invalidate_cache=invalidate_cache,
     )
     asr_data = prepare_asr_data(adv_data)
     ifs_data = prepare_ifs_data(adv_data)

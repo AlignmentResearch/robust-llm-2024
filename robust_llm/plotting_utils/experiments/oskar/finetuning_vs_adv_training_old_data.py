@@ -105,7 +105,6 @@ adv_data = prepare_adv_training_data(
     ),
     summary_keys=summary_keys,
     metrics=METRICS,
-    use_cache=True,
 )
 print("IMDB", adv_data)
 plot_r2_by_round(adv_data, ("post_adv_training", "imdb", "gcg", "r2"))
@@ -124,7 +123,6 @@ adv_data = prepare_adv_training_data(
     run_names=("niki_053_long_adversarial_training_gcg_enron-spam",),
     summary_keys=summary_keys,
     metrics=METRICS,
-    use_cache=True,
 )
 print("SPAM", adv_data)
 plot_r2_by_round(adv_data, ("post_adv_training", "spam", "gcg", "r2"))

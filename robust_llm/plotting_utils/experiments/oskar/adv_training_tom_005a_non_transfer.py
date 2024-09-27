@@ -23,6 +23,7 @@ METRICS = [
     "metrics/asr@120",
     "metrics/asr@128",
 ]
+first = True
 for x_data_name in (
     "train_total_flops",
     "flops_percent_pretrain",
@@ -30,7 +31,7 @@ for x_data_name in (
     "n_parameter_updates",
 ):
     for legend in (True, False):
-        for iteration in (12, 60):
+        for iteration in (12, 60, 128):
             load_and_plot_adv_training_plots(
                 run_names=("tom_007_eval_niki_152_gcg", "tom_007_eval_niki_152a_gcg"),
                 merge_runs=(
@@ -58,3 +59,28 @@ for x_data_name in (
                 y_data_name=f"metrics_asr_at_{iteration}",
                 metrics=METRICS,
             )
+            load_and_plot_adv_training_plots(
+                run_names=("tom_014_eval_niki_172_gcg",),
+                merge_runs=("niki_172_adv_tr_gcg_wl_small",),
+                title="WL, GCG",
+                save_as=("wl", f"gcg_vs_gcg{iteration}"),
+                summary_keys=summary_keys,
+                x_data_name=x_data_name,
+                color_data_name="num_params",
+                legend=legend,
+                y_data_name=f"metrics_asr_at_{iteration}",
+                metrics=METRICS,
+            )
+            load_and_plot_adv_training_plots(
+                run_names=("tom_013_eval_niki_171_gcg",),
+                merge_runs=("niki_171_adv_tr_gcg_pm_small",),
+                title="PM, GCG",
+                save_as=("pm", f"gcg_vs_gcg{iteration}"),
+                summary_keys=summary_keys,
+                x_data_name=x_data_name,
+                color_data_name="num_params",
+                legend=legend,
+                y_data_name=f"metrics_asr_at_{iteration}",
+                metrics=METRICS,
+            )
+            first = False
