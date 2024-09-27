@@ -8,6 +8,10 @@ import seaborn as sns
 from tqdm import tqdm
 
 from robust_llm.file_utils import compute_repo_path
+from robust_llm.plotting_utils.constants import FUDGE_FOR_12B
+from robust_llm.plotting_utils.experiments.pretrain_compute_per_model import (
+    ESTIMATED_PRETRAIN_COMPUTE,
+)
 from robust_llm.plotting_utils.tools import (
     create_legend,
     create_path_and_savefig,
@@ -28,22 +32,14 @@ GROUPS = [
     "ian_112_rt_pythia_wl",
     "ian_113_rt_pythia_spam",
 ]
-# %%
 
 
 # %%
-def plot_asr_for_group(
-    group_name: str,
-    x: str = "iteration_x_flops",
-    y: str = "logit_asr",
-):
+def get_cached_asr_data(group_name: str) -> pd.DataFrame:
     root = compute_repo_path()
     path = os.path.join(root, "outputs", f"asr_{group_name}.csv")
     if not os.path.exists(path):
-        print(f"Group {group_name} does not exist")
-        return
-    attack = group_name.split("_")[2]
-    dataset = group_name.split("_")[-1]
+        return pd.DataFrame()
     df = pd.read_csv(path)
     assert df.columns.tolist() == ["model_idx", "seed_idx", "asr", "iteration"]
     n_models = 10
@@ -57,10 +53,26 @@ def plot_asr_for_group(
         df = df.loc[df.iteration.mod(100) == 0]
     df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
     df["iteration_x_params"] = df.iteration * df.num_params
-    df["sigmoid_asr"] = 1 / (1 + np.exp(-df.asr))
-    df["logit_asr"] = np.log(df.asr / (1 - df.asr))
-
     df.sort_values("model_idx", inplace=True)
+    return df
+
+
+# %%
+def plot_asr_for_group(
+    df: pd.DataFrame,
+    group_name: str,
+    x: str = "iteration_x_flops",
+    y: str = "logit_asr",
+    log_x: bool = True,
+):
+
+    attack = group_name.split("_")[2]
+    dataset = group_name.split("_")[-1]
+
+    if y == "sigmoid_asr":
+        df["sigmoid_asr"] = 1 / (1 + np.exp(-df.asr))
+    elif y == "logit_asr":
+        df["logit_asr"] = np.log(df.asr / (1 - df.asr))
 
     if "flop" in x:
         flop_data = prepare_adv_training_data(
@@ -81,6 +93,12 @@ def plot_asr_for_group(
         flop_data["model_idx"] = (
             flop_data.model_size.rank(method="dense").astype(int) - 1
         )
+        # Fudge the compute for the 12b model due to issue recording multi-GPU
+        # flops.
+        flop_data.loc[flop_data.model_idx == 9, "flops_per_iteration"] *= FUDGE_FOR_12B
+        flop_data["pretrain_compute"] = flop_data.model_idx.map(
+            ESTIMATED_PRETRAIN_COMPUTE
+        )
 
         df = df.merge(
             flop_data,
@@ -94,6 +112,7 @@ def plot_asr_for_group(
             ["model_idx", "iteration"]
         ).flops_per_iteration.transform("mean")
         df["iteration_x_flops"] = df.iteration * df.flops_per_iteration
+        df["flops_percent_pretrain"] = 100 * df.iteration_x_flops / df.pretrain_compute
 
     fig, ax = plt.subplots()
     set_up_paper_plot(fig, ax)
@@ -112,6 +131,8 @@ def plot_asr_for_group(
         {
             "iteration_x_params": "Attack compute (Iterations $\times$ Parameters)",
             "iteration_x_flops": "Attack compute (FLOPs)",
+            "iteration": "Attack iteration",
+            "flops_percent_pretrain": "Attack compute (% of pretrain)",
         }[x]
     )
     ax.set_ylabel(
@@ -120,7 +141,8 @@ def plot_asr_for_group(
             "asr": "attack success rate",
         }[y]
     )
-    ax.set_xscale("log")
+    if log_x:
+        ax.set_xscale("log")
     fig.suptitle(f"{attack}/{dataset}".upper())
     create_path_and_savefig(fig, "asr", attack, dataset, x, y, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)
@@ -131,6 +153,17 @@ def plot_asr_for_group(
 
 # %%
 for group in tqdm(GROUPS):
-    plot_asr_for_group(group)
+    df = get_cached_asr_data(group)
+    if df.empty:
+        print(f"Group {group} does not exist")
+        continue
+    for x in (
+        "iteration",
+        "iteration_x_params",
+        "iteration_x_flops",
+        "flops_percent_pretrain",
+    ):
+        for y in ("asr", "logit_asr"):
+            plot_asr_for_group(df, group, x, y)
 
 # %%

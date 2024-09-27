@@ -15,3 +15,7 @@ MODEL_PLOTTING_NAMES = [
 
 assert len(MODEL_SIZES) == len(MODEL_PLOTTING_NAMES)
 PLOTTING_NAME_DICT = dict(zip(MODEL_SIZES, MODEL_PLOTTING_NAMES))
+
+# This is a multiplier we use to make up for the fact that we didn't
+# log multi-GPU flops properly for the 12b model.
+FUDGE_FOR_12B = 1.6

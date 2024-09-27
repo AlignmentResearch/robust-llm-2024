@@ -12,6 +12,9 @@ from matplotlib.lines import Line2D
 
 from robust_llm.file_utils import compute_repo_path
 from robust_llm.plotting_utils.constants import MODEL_PLOTTING_NAMES
+from robust_llm.plotting_utils.experiments.pretrain_compute_per_model import (
+    ESTIMATED_PRETRAIN_COMPUTE,
+)
 from robust_llm.wandb_utils.constants import (
     FINAL_PYTHIA_CHECKPOINT,
     METRICS,
@@ -167,6 +170,7 @@ def make_finetuned_plot(
 
     # Concatenate the runs together
     run = pd.concat(runs, ignore_index=True)
+    run.columns = run.columns.str.replace("/", "_").str.replace("@", "_at_")
 
     match plot_type:
         case "min_max_median":
@@ -496,6 +500,18 @@ def _draw_plot_adv_training(
         )
         ax.set_xlabel("Adversarial Training FLOPs")
         plt.xscale("log")
+    elif x_data_name == "flops_percent_pretrain":
+        data = data.loc[data.train_total_flops.gt(0)]
+        # Handle slight deviations in FLOPs
+        data["train_total_flops"] = (
+            data.groupby(["num_params", "adv_training_round"])["train_total_flops"]
+            .transform("mean")
+            .astype(int)
+        )
+        data["pretrain_compute"] = data.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
+        data["flops_percent_pretrain"] = data.train_total_flops / data.pretrain_compute
+        ax.set_xlabel("Adversarial Training FLOPs (% pretrain)")
+        plt.xscale("log")
     else:
         raise ValueError(f"We don't yet support {x_data_name} on the x-axis")
 
@@ -541,7 +557,12 @@ def _draw_plot_adv_training(
     if isinstance(save_as, str):
         save_as = (save_as,)
     path = create_path_and_savefig(
-        fig, "adv_training", *save_as, "legend" if legend else "no_legend"
+        fig,
+        "adv_training",
+        *save_as,
+        x_data_name,
+        y_transf_data_name,
+        "legend" if legend else "no_legend",
     )
     if legend:
         data.to_csv(str(path).replace("legend.pdf", "data.csv"), index=False)
@@ -867,7 +888,9 @@ def draw_min_max_median_plot(
     if isinstance(save_as, str):
         save_as = (save_as,)
 
-    create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
+    path = create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
+    if legend:
+        grouped.to_csv(str(path).replace("legend.pdf", "data.csv"), index=False)
 
 
 def draw_min_max_median_plot_by_round(
@@ -1003,7 +1026,9 @@ def draw_min_max_median_plot_by_round(
     if isinstance(save_as, str):
         save_as = (save_as,)
 
-    create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
+    path = create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
+    if legend:
+        grouped.to_csv(str(path).replace("legend.pdf", "data.csv"), index=False)
 
 
 def draw_scatter_with_color_from_metric(
@@ -1085,6 +1110,8 @@ def postprocess_data(df):
     else:
         df["num_params"] = df["model_size"]
 
+    df["model_idx"] = df.num_params.rank(method="dense").astype(int) - 1
+
     _update_model_sizes_as_necessary(df)
 
     assert "model_name_or_path" in df, (
@@ -1146,7 +1173,7 @@ def plot_attack_scaling(
     n_iterations: int,
     datapoints: int | None = None,
     check_seeds: bool = True,
-    x: str = "log_iteration_flops",
+    x: str = "iteration_flops",
     y: str = "logit_asr",
 ) -> None:
     df = orig_df.copy()
@@ -1169,14 +1196,15 @@ def plot_attack_scaling(
             df.iteration.isin(df.iteration.quantile(np.linspace(0, 1, datapoints)))
         ]
     df["iteration_x_params"] = df.iteration * df.num_params
-    df["log_iteration_x_params"] = np.log(df.iteration_x_params)
-    if x == "log_iteration_flops":
+    if "flop" in x:
         # We want the same number of iterations for the same model to be grouped
         # together in the plot
         df["mean_flops_per_iteration"] = df.groupby(["model_idx", "iteration"])[
             "flops_per_iteration"
         ].transform("mean")
-        df["log_iteration_flops"] = np.log10(df.iteration * df.mean_flops_per_iteration)
+        df["iteration_flops"] = df.iteration * df.mean_flops_per_iteration
+        df["pretrain_compute"] = df.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
+        df["flops_percent_pretrain"] = 100 * df.iteration_flops / df.pretrain_compute
 
     assert df.asr.between(0, 1).all()
     if y == "sigmoid_asr":
@@ -1198,13 +1226,16 @@ def plot_attack_scaling(
         palette=palette,
         legend=False,
     )
+    if x != "iteration":
+        # The only case where we don't want log scale is plotting iterations directly
+        ax.set_xscale("log")
     ax.set_xlabel(x.replace("_", " ").title())
     ax.set_ylabel(y.replace("_", " ").title())
     fig.suptitle(f"{attack}/{dataset}".upper())
-    create_path_and_savefig(fig, "asr", attack, dataset, x, "no_legend")
+    create_path_and_savefig(fig, "asr", attack, dataset, x, y, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)
     create_legend(color_data_name, ax, legend_handles, outside=False)
-    save_path = create_path_and_savefig(fig, "asr", attack, dataset, x, "legend")
+    save_path = create_path_and_savefig(fig, "asr", attack, dataset, x, y, "legend")
     df.to_csv(str(save_path).replace("legend.pdf", "data.csv"), index=False)
 
 
@@ -1256,10 +1287,10 @@ def plot_ifs(
     )
     ax.set_xlabel(x.replace("_", " ").replace("asr", "ASR").title())
     fig.suptitle(f"{attack}/{dataset}".upper())
-    create_path_and_savefig(fig, "ifs", attack, dataset, "no_legend")
+    create_path_and_savefig(fig, "ifs", attack, dataset, x, y, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)
     create_legend(color_data_name, ax, legend_handles, outside=False)
-    save_path = create_path_and_savefig(fig, "ifs", attack, dataset, "legend")
+    save_path = create_path_and_savefig(fig, "ifs", attack, dataset, x, y, "legend")
     df.to_csv(str(save_path).replace("legend.pdf", "data.csv"), index=False)
 
 
@@ -1273,7 +1304,7 @@ def load_and_plot_asr_and_ifs(
     n_seeds: int,
     n_iterations: int,
     check_seeds: bool = True,
-    asr_x: str = "log_iteration_flops",
+    asr_x: str = "iteration_flops",
     asr_y: str = "logit_asr",
     ifs_x: str = "log_asr",
     ifs_y: str = "log_ifs",

@@ -23,33 +23,38 @@ METRICS = [
     "metrics/asr@120",
     "metrics/asr@128",
 ]
-x_data_name = "train_total_flops"
-for legend in (True, False):
-    for iteration in (12, 60):
-        load_and_plot_adv_training_plots(
-            run_names=("tom_007_eval_niki_152_gcg", "tom_007_eval_niki_152a_gcg"),
-            merge_runs=(
-                "niki_152a_adv_tr_gcg_imdb_small",
-                "niki_152_adv_tr_gcg_imdb_small",
-            ),
-            title="IMDB, GCG",
-            save_as=("imdb", f"gcg_vs_gcg{iteration}", x_data_name),
-            summary_keys=summary_keys,
-            x_data_name=x_data_name,
-            color_data_name="num_params",
-            legend=legend,
-            y_data_name=f"metrics_asr_at_{iteration}",
-            metrics=METRICS,
-        )
-        load_and_plot_adv_training_plots(
-            run_names=("tom_009_eval_niki_170_gcg",),
-            merge_runs="niki_170_adv_tr_gcg_spam_small",
-            title="Spam, GCG",
-            save_as=("spam", f"gcg_vs_gcg{iteration}", x_data_name),
-            summary_keys=summary_keys,
-            x_data_name=x_data_name,
-            color_data_name="num_params",
-            legend=legend,
-            y_data_name=f"metrics_asr_at_{iteration}",
-            metrics=METRICS,
-        )
+for x_data_name in (
+    "train_total_flops",
+    "flops_percent_pretrain",
+    "adv_training_round",
+    "n_parameter_updates",
+):
+    for legend in (True, False):
+        for iteration in (12, 60):
+            load_and_plot_adv_training_plots(
+                run_names=("tom_007_eval_niki_152_gcg", "tom_007_eval_niki_152a_gcg"),
+                merge_runs=(
+                    "niki_152a_adv_tr_gcg_imdb_small",
+                    "niki_152_adv_tr_gcg_imdb_small",
+                ),
+                title="IMDB, GCG",
+                save_as=("imdb", f"gcg_vs_gcg{iteration}"),
+                summary_keys=summary_keys,
+                x_data_name=x_data_name,
+                color_data_name="num_params",
+                legend=legend,
+                y_data_name=f"metrics_asr_at_{iteration}",
+                metrics=METRICS,
+            )
+            load_and_plot_adv_training_plots(
+                run_names=("tom_009_eval_niki_170_gcg",),
+                merge_runs="niki_170_adv_tr_gcg_spam_small",
+                title="Spam, GCG",
+                save_as=("spam", f"gcg_vs_gcg{iteration}"),
+                summary_keys=summary_keys,
+                x_data_name=x_data_name,
+                color_data_name="num_params",
+                legend=legend,
+                y_data_name=f"metrics_asr_at_{iteration}",
+                metrics=METRICS,
+            )

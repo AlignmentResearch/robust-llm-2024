@@ -81,12 +81,17 @@ def get_wandb_run(group_name: str, run_index: str):
     return target_run
 
 
-def download_and_process_attack_data_table(artifact: wandb.Artifact, run_name: str):
-    """Download an attack data table artifact to /tmp/ and return it as a DataFrame.
+def download_and_process_attack_data_table(
+    artifact: wandb.Artifact,
+    run_name: str,
+    cache_dir: str = "~/.cache/rllm",
+):
+    """Download an attack data table artifact to CACHE_DIR and return it as a DataFrame.
 
     Args:
         artifact: The wandb artifact to download.
         run_name: The name of the run on wandb.
+        cache_dir: The directory to cache the downloaded table.
 
     Returns:
         A tuple of (the index of the example in the dataset, the table as a DataFrame).
@@ -96,11 +101,13 @@ def download_and_process_attack_data_table(artifact: wandb.Artifact, run_name: s
     if not re_match:
         return None
 
+    cache_path = Path(cache_dir).expanduser().resolve()
+    cache_path.mkdir(parents=True, exist_ok=True)
     index = int(re_match.group(1))
-    table_path = Path(f"/tmp/{run_name}/attack_data/example_{index}.table.json")
+    table_path = cache_path / f"{run_name}/attack_data/example_{index}.table.json"
 
     if not table_path.exists() or table_path.stat().st_size == 0:
-        table_dir = artifact.download(root=f"/tmp/{run_name}")
+        table_dir = artifact.download(root=str(cache_path / run_name))
         assert str(table_path).startswith(table_dir)
 
     with table_path.open("r") as f:

@@ -11,6 +11,7 @@ from robust_llm.plotting_utils.style import set_plot_style
 from robust_llm.plotting_utils.tools import (
     create_path_and_savefig,
     draw_min_max_median_plot_by_round,
+    make_finetuned_plots,
     prepare_adv_training_data,
 )
 from robust_llm.wandb_utils.constants import METRICS, SUMMARY_KEYS
@@ -18,7 +19,6 @@ from robust_llm.wandb_utils.constants import METRICS, SUMMARY_KEYS
 metrics = [
     "adversarial_eval/attack_success_rate",
     "model_size",
-    "metrics/asr@12",
 ]
 
 summary_keys = [
@@ -29,7 +29,7 @@ summary_keys = [
 def compute_r2_by_round(raw_data: pd.DataFrame, y_value: str = "log_asr"):
     data = raw_data.rename(
         columns={
-            "adversarial_eval/attack_success_rate": "asr",
+            "adversarial_eval_attack_success_rate": "asr",
         }
     )
     # data = data.loc[data.asr.between(0, 1, inclusive="neither")]
@@ -77,17 +77,17 @@ FINETUNED_RUNS = [
 for legend in (True, False):
     for run in FINETUNED_RUNS:
         attack, dataset = run.split("_")[2], run.split("_")[-1]
-        # make_finetuned_plots(
-        #     run_names=[
-        #         run,
-        #     ],
-        #     title=f"{dataset}, {attack} attack",
-        #     save_as=("finetuned", dataset, attack),
-        #     eval_summary_keys=summary_keys,
-        #     metrics=metrics,
-        #     legend=legend,
-        #     ytransform=YTRANSFORM,
-        # )
+        make_finetuned_plots(
+            run_names=[
+                run,
+            ],
+            title=f"{dataset.upper()}, {attack.upper()} attack".title(),
+            save_as=("finetuned", dataset, attack),
+            eval_summary_keys=summary_keys,
+            metrics=metrics,
+            legend=legend,
+            ytransform=YTRANSFORM,
+        )
 
 summary_keys = SUMMARY_KEYS + [
     "experiment_yaml.training.force_name_to_save",
@@ -128,6 +128,45 @@ for legend in (True, False):
         data=adv_data,
         title="Spam, GCG attack (adversarial training)",
         save_as=("post_adv_training", "spam", "gcg"),
+        legend=legend,
+        rounds=ROUNDS,
+        ytransform=YTRANSFORM,
+        y_data_name="metrics_asr_at_12",
+    )
+# WL
+adv_data = prepare_adv_training_data(
+    run_names=(
+        "tom_012_eval_niki_153_gcg",
+        "tom_014_eval_niki_172_gcg ",
+    ),
+    summary_keys=summary_keys,
+    metrics=metrics,
+)
+print("WL", adv_data)
+plot_r2_by_round(adv_data, ("post_adv_training", "wl", "gcg", "r2"))
+for legend in (True, False):
+    draw_min_max_median_plot_by_round(
+        data=adv_data,
+        title="WL, GCG attack (adversarial training)",
+        save_as=("post_adv_training", "wl", "gcg"),
+        legend=legend,
+        rounds=ROUNDS,
+        ytransform=YTRANSFORM,
+        y_data_name="metrics_asr_at_12",
+    )
+# PM
+adv_data = prepare_adv_training_data(
+    run_names=("tom_013_eval_niki_171_gcg",),
+    summary_keys=summary_keys,
+    metrics=metrics,
+)
+print("PM", adv_data)
+plot_r2_by_round(adv_data, ("post_adv_training", "pm", "gcg", "r2"))
+for legend in (True, False):
+    draw_min_max_median_plot_by_round(
+        data=adv_data,
+        title="PM, GCG attack (adversarial training)",
+        save_as=("post_adv_training", "pm", "gcg"),
         legend=legend,
         rounds=ROUNDS,
         ytransform=YTRANSFORM,
