@@ -25,7 +25,7 @@ spec:
             medium: Memory
             sizeLimit: 4Gi
       containers:
-        - name: devbox-container
+        - name: batch-job
           image: "ghcr.io/alignmentresearch/robust-llm:{CONTAINER_TAG}"
           command:
             - bash
