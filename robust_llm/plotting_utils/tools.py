@@ -1,5 +1,7 @@
+import os
 import re
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -11,9 +13,15 @@ from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
 from robust_llm.file_utils import compute_repo_path
+from robust_llm.metrics.asr_per_iteration import interpolated_iteration_for_asr
 from robust_llm.plotting_utils.constants import MODEL_PLOTTING_NAMES
 from robust_llm.plotting_utils.experiments.pretrain_compute_per_model import (
     ESTIMATED_PRETRAIN_COMPUTE,
+)
+from robust_llm.plotting_utils.utils import (
+    add_model_idx_inplace,
+    drop_duplicates,
+    merge_adv_and_train_data,
 )
 from robust_llm.wandb_utils.constants import (
     FINAL_PYTHIA_CHECKPOINT,
@@ -32,6 +40,7 @@ TRANSFORMS: dict[str, Callable] = {
     "log": np.log,
     "logit": lambda x: np.log(x / (1 - x)),
     "sigmoid": lambda x: 1 / (1 + np.exp(-x)),
+    "none": lambda x: x,
 }
 
 
@@ -236,6 +245,7 @@ def load_flops_data(
             "experiment_yaml.training.force_name_to_save",
             "experiment_yaml.training.save_name",
             "experiment_yaml.training.adversarial.skip_first_training_round",
+            "experiment_yaml.training.seed",
         ],
         metrics=["train/total_flops"],
         invalidate_cache=invalidate_cache,
@@ -245,6 +255,7 @@ def load_flops_data(
     data["model_key"] = data.training_force_name_to_save.where(
         data.training_force_name_to_save.notnull(), data.training_save_name
     )
+    data = data.rename(columns={"training_seed": "seed_idx"})
     return _fix_off_by_one_in_flops(data)
 
 
@@ -311,7 +322,7 @@ def load_and_plot_adv_training_plots(
             train_data,
             on=["model_key", "adv_training_round"],
             how="left",
-            validate="many_to_one",
+            validate="one_to_one",
             suffixes=("", "_train"),
         )
         assert (
@@ -355,11 +366,18 @@ def prepare_adv_training_data(
         run_info_list.append(run_info)
 
     run_info_df = pd.concat(run_info_list, ignore_index=True)
+    # Only add model idx after concat so that we have all the sizes.
+    run_info_df = add_model_idx_inplace(run_info_df, reference_col="num_params")
     run_info_df.columns = run_info_df.columns.str.replace("/", "_").str.replace(
         "@", "_at_"
     )
+    # Check for duplicates in everything but run_id
+    columns_to_check = list(run_info_df.columns.difference(["run_id"]))
+    dups = run_info_df.duplicated(subset=columns_to_check)
+    if dups.any():
+        run_info_df = run_info_df[~dups]
 
-    return run_info_df
+    return run_info_df  # type: ignore
 
 
 def extract_seed_from_name(name):
@@ -479,6 +497,8 @@ def _draw_plot_adv_training(
     ylim: tuple[float, float] | None = None,
     legend: bool = False,
     y_transform: str = "logit",
+    xscale: str | None = None,
+    yscale: str | None = None,
 ):
     if isinstance(save_as, str):
         save_as = (save_as,)
@@ -521,9 +541,14 @@ def _draw_plot_adv_training(
         data["flops_percent_pretrain"] = data.train_total_flops / data.pretrain_compute
         ax.set_xlabel("Adversarial Training FLOPs (% pretrain)")
         plt.xscale("log")
+
     else:
         raise ValueError(f"We don't yet support {x_data_name} on the x-axis")
 
+    if xscale is not None:
+        plt.xscale(xscale)
+    if yscale is not None:
+        plt.yscale(yscale)
     palette_dict = get_color_palette(data, color_data_name)
 
     plt.title(title)
@@ -588,6 +613,9 @@ def draw_plot_adv_training(
     legend: bool = False,
     check_seeds: int | None = None,
     y_data_name: str = "adversarial_eval_attack_success_rate",
+    y_transform: str = "logit",
+    xscale: str | None = None,
+    yscale: str | None = None,
 ):
     if xlim is not None and data["adv_training_round"].max() + 1 < xlim[1]:
         raise ValueError(
@@ -612,6 +640,9 @@ def draw_plot_adv_training(
         ylim=ylim,
         legend=legend,
         y_data_name=y_data_name,
+        y_transform=y_transform,
+        xscale=xscale,
+        yscale=yscale,
     )
 
 
@@ -1119,8 +1150,6 @@ def postprocess_data(df):
     else:
         df["num_params"] = df["model_size"]
 
-    df["model_idx"] = df.num_params.rank(method="dense").astype(int) - 1
-
     _update_model_sizes_as_necessary(df)
 
     assert "model_name_or_path" in df, (
@@ -1188,8 +1217,7 @@ def plot_attack_scaling(
     df = orig_df.copy()
     if "flops" in x:
         df = df.loc[df.iteration.gt(0)]
-    if "model_size" in df and "model_idx" not in df:
-        df["model_idx"] = df.model_size.rank(method="dense").astype(int) - 1
+    df = add_model_idx_inplace(df, reference_col="model_size")
     if "seed_idx" not in df and "model_name_or_path" in df:
         df["seed_idx"] = df.model_name_or_path.apply(_get_seed_from_name)
     if "num_params" not in df:
@@ -1259,8 +1287,7 @@ def plot_ifs(
     y: str = "log_ifs",
 ) -> None:
     df = orig_df.copy()
-    if "model_size" in df and "model_idx" not in df:
-        df["model_idx"] = df.model_size.rank(method="dense").astype(int) - 1
+    df = add_model_idx_inplace(df, reference_col="model_size")
     if "seed_idx" not in df and "model_name_or_path" in df:
         df["seed_idx"] = df.model_name_or_path.apply(_get_seed_from_name)
     if "num_params" not in df:
@@ -1303,6 +1330,38 @@ def plot_ifs(
     df.to_csv(str(save_path).replace("legend.pdf", "data.csv"), index=False)
 
 
+def get_cached_asr_data(
+    group_name: str, for_offense_defense: bool = False
+) -> pd.DataFrame:
+    root = compute_repo_path()
+    path = os.path.join(root, "cache_csvs", f"asr_{group_name}.csv")
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+
+    if for_offense_defense:
+        assert set(df.columns.tolist()) > set(
+            ["model_idx", "seed_idx", "asr", "iteration", "adv_training_round"]
+        )
+    else:
+        assert set(df.columns.tolist()) > set(
+            ["model_idx", "seed_idx", "asr", "iteration"]
+        )
+        n_models = 10
+        n_seeds = 5
+        n_iterations = 11 if "gcg" in group_name else 1281
+        assert df.model_idx.between(0, n_models - 1).all()
+        assert df.seed_idx.between(0, n_seeds - 1).all()
+        assert df.iteration.between(0, n_iterations - 1).all()
+        assert len(df) == n_models * n_seeds * n_iterations
+        if n_iterations > 1000:
+            df = df.loc[df.iteration.mod(100) == 0]
+    df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
+    df["iteration_x_params"] = df.iteration * df.num_params
+    df.sort_values("model_idx", inplace=True)
+    return df
+
+
 def load_and_plot_asr_and_ifs(
     run_names: tuple[str, ...],
     summary_keys: list[str],
@@ -1341,3 +1400,151 @@ def load_and_plot_asr_and_ifs(
         asr_y,
     )
     plot_ifs(ifs_data, attack, dataset, n_models, n_seeds, check_seeds, ifs_x, ifs_y)
+
+
+def load_and_plot_offense_defense_plots(
+    group_names: iter_str | str,
+    title: str,
+    save_as: iter_str | str,
+    merge_runs: iter_str | str | None = None,
+    summary_keys: list[str] | None = None,
+    metrics: list[str] | None = None,
+    x_data_name: str = "train_total_flops",
+    y_data_name: str = "iteration_x_flops",
+    color_data_name: str = "num_params",
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
+    legend: bool = False,
+    check_seeds: int | None = None,
+    invalidate_cache: bool = False,
+):
+    if isinstance(group_names, str):
+        group_names = (group_names,)
+    if summary_keys is None:
+        summary_keys = SUMMARY_KEYS
+
+    if metrics is None:
+        metrics = METRICS
+
+    adv_data = prepare_adv_training_data(
+        run_names=group_names,
+        summary_keys=summary_keys,
+        metrics=metrics,
+        invalidate_cache=invalidate_cache,
+    )
+
+    if "seed_idx" not in adv_data and "model_name_or_path" in adv_data:
+        adv_data["seed_idx"] = adv_data.model_name_or_path.apply(_get_seed_from_name)
+
+    if merge_runs is not None:
+        adv_data["model_key"] = adv_data.model_name_or_path.str.replace(
+            "AlignmentResearch/", ""
+        ).str.replace("robust_llm_", "")
+        train_data = load_flops_data(merge_runs)
+        adv_data = merge_adv_and_train_data(adv_data, train_data)
+
+    asr_data = pd.concat(
+        [get_cached_asr_data(name, for_offense_defense=True) for name in group_names],
+        ignore_index=True,
+    )
+    # HACK: reset model_idx based on model_size because if we merged runs, the model_idx
+    # might be wrong if each run only had a subset of the models.
+    add_model_idx_inplace(asr_data, reference_col="model_size", exists_ok=True)
+
+    df = adv_data.copy()
+    if "num_params" not in df:
+        df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
+    # assert df.model_idx.between(0, n_models - 1).all()
+    # assert df.seed_idx.between(0, n_seeds - 1).all()
+    # assert df.iteration.between(0, n_iterations).all()
+    # if check_seeds:
+    #     assert len(df) == n_models * n_seeds * (n_iterations + 1)
+    if "flop" in x_data_name:
+        # We want the same number of iterations for the same model to be grouped
+        # together in the plot
+        df["mean_train_total_flops"] = df.groupby(["model_idx", "adv_training_round"])[
+            "train_total_flops"
+        ].transform("mean")
+        df["pretrain_compute"] = df.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
+        df["defense_flops_percent_pretrain"] = (
+            100 * df.mean_train_total_flops / df.pretrain_compute
+        )
+
+    # Now that we have some kind of x axis data, we need to construct data for
+    # the y axis.
+    # We do this by getting all the ASRs for each model at each adv
+    # training round, and then interpolating to the iteration needed for 10%
+    # ASR.
+
+    assert asr_data.asr.between(0, 1).all()
+    # We need to sort by iteration so the asr values are in order.
+    asr_data = asr_data.sort_values(
+        by=["model_idx", "seed_idx", "adv_training_round", "iteration"]
+    )
+    list_asr_data = (
+        asr_data.groupby(["model_size", "seed_idx", "model_idx", "adv_training_round"])[
+            "asr"
+        ]
+        .apply(list)
+        .reset_index()
+    )
+
+    list_asr_data = drop_duplicates(
+        list_asr_data,
+        ["model_idx", "seed_idx", "adv_training_round"],
+        name="list_asr_data",
+    )
+
+    # The y_data_name contains the threshold for the ASR we want to interpolate to,
+    # so we need to extract that.
+    regex = r"^interpolated_iteration_for_(\d+\.?\d*)_percent(_flops|_flops_percent_pretrain)?$"  # noqa: E501
+    match = re.match(regex, y_data_name)
+    if not match:
+        raise ValueError(f"{y_data_name=} must match {regex}")
+    threshold_str = match.group(1)
+    threshold = float(threshold_str) / 100
+    interpolate_fn = partial(interpolated_iteration_for_asr, asr_threshold=threshold)
+    interp_column = f"interpolated_iteration_for_{threshold_str}_percent"
+    list_asr_data[interp_column] = list_asr_data["asr"].apply(interpolate_fn)
+
+    list_asr_data = drop_duplicates(
+        list_asr_data,
+        ["model_idx", "seed_idx", "adv_training_round"],
+        name="list_asr_data",
+    )
+
+    adv_data = adv_data.merge(
+        list_asr_data,
+        on=["model_idx", "seed_idx", "adv_training_round"],
+        how="left",
+        validate="one_to_one",
+    )
+    if "flops" in y_data_name:
+        adv_data["mean_flops_per_iteration"] = adv_data.groupby(["model_idx"])[
+            "flops_per_iteration"
+        ].transform("mean")
+        interp_flops_column = f"{interp_column}_flops"
+        adv_data[interp_flops_column] = (
+            adv_data[interp_column] * adv_data["mean_flops_per_iteration"]
+        )
+        adv_data["pretrain_compute"] = adv_data.model_idx.map(
+            ESTIMATED_PRETRAIN_COMPUTE
+        )
+        adv_data[f"{interp_flops_column}_percent_pretrain"] = (
+            100 * adv_data[interp_flops_column] / adv_data.pretrain_compute
+        )
+
+    draw_plot_adv_training(
+        data=adv_data,
+        x_data_name=x_data_name,
+        color_data_name=color_data_name,
+        title=title,
+        save_as=save_as,
+        xlim=xlim,
+        ylim=ylim,
+        legend=legend,
+        check_seeds=check_seeds,
+        y_data_name=y_data_name,
+        y_transform="log",
+        # yscale="log",
+    )

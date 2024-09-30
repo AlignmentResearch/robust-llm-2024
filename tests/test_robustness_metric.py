@@ -216,18 +216,22 @@ def test_aib_data_shape():
 
 def test_ifs_data_shape():
     group_name = "ian_103a_gcg_pythia_helpful"
-    asr_df, ifs_df = compute_all_ifs_metrics(group_name, 1, 1, 1)
+    asr_df, ifs_df = compute_all_ifs_metrics(group_name, max_workers=1, debug_n_runs=1)
 
     assert isinstance(ifs_df, pd.DataFrame)
     assert len(ifs_df) == 11
-    assert ifs_df.columns.tolist() == ["model_idx", "seed_idx", "ifs", "decile"]
+    assert set(ifs_df.columns.tolist()) >= set(
+        ["model_idx", "model_size", "seed_idx", "ifs", "decile"]
+    )
     assert ifs_df.model_idx.eq(0).all()
     assert ifs_df.seed_idx.eq(0).all()
     assert ifs_df.decile.between(0, 10).all()
 
     assert isinstance(asr_df, pd.DataFrame)
     assert len(asr_df) == 11
-    assert asr_df.columns.tolist() == ["model_idx", "seed_idx", "asr", "iteration"]
+    assert set(asr_df.columns.tolist()) >= set(
+        ["model_idx", "model_size", "seed_idx", "asr", "iteration"]
+    )
     assert asr_df.model_idx.eq(0).all()
     assert asr_df.seed_idx.eq(0).all()
     assert asr_df.iteration.between(0, 10).all()

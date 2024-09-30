@@ -35,32 +35,44 @@ class ASRMetricResults:
     def interpolated_iteration_for_asr(self, asr_threshold: float) -> float | None:
         """Returns the interpolated iteration at which the ASR would cross a threshold.
 
-        We linearly interpolate between the first two iterations on either side
-        of the desired threshold.
-
-        TODO(ian): Maybe do more sophisticated interpolation.
-
-        Args:
-            asr_threshold: The threshold to cross.
-
-        Returns:
-            The interpolated iteration at which the ASR would cross the threshold
-            If the ASR never crosses the threshold, returns None.
+        See docstring for `interpolated_iteration_for_asr` for more details.
         """
-        if asr_threshold == 0:
-            return 0.0
+        return interpolated_iteration_for_asr(self.asr_per_iteration, asr_threshold)
 
-        prev_asr = 0.0
-        for i, asr in enumerate(self.asr_per_iteration):
-            if asr == asr_threshold:
-                return i
-            if asr > asr_threshold:
-                fraction_between_asrs = (asr_threshold - prev_asr) / (asr - prev_asr)
-                interpolated_iteration = (i - 1) + fraction_between_asrs
-                return interpolated_iteration
-            prev_asr = asr
 
-        return None
+def interpolated_iteration_for_asr(
+    asr_per_iteration: list[float], asr_threshold: float
+) -> float | None:
+    """Returns the interpolated iteration at which the ASR would cross a threshold.
+
+    We linearly interpolate between the first two iterations on either side
+    of the desired threshold.
+
+    TODO(ian): Maybe do more sophisticated interpolation.
+
+    Args:
+        asr_per_iteration: The ASR at each iteration.
+        asr_threshold: The threshold to cross.
+
+    Returns:
+        The interpolated iteration at which the ASR would cross the threshold
+        If the ASR never crosses the threshold, returns None.
+    """
+    if asr_threshold == 0:
+        return 0.0
+
+    prev_asr = 0.0
+    for i, asr in enumerate(asr_per_iteration):
+        if asr == asr_threshold:
+            return i
+        if asr > asr_threshold:
+            fraction_between_asrs = (asr_threshold - prev_asr) / (asr - prev_asr)
+            assert fraction_between_asrs > 0, "does ASR start at 0?"
+            interpolated_iteration = (i - 1) + fraction_between_asrs
+            return interpolated_iteration
+        prev_asr = asr
+
+    return None
 
 
 def compute_asr_per_iteration(

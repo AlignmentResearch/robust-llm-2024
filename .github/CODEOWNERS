@@ -9,3 +9,6 @@ robust_llm/hydra_conf/experiment/
 
 # Exclude the robust_llm/plotting_utils/experiments directory
 robust_llm/plotting_utils/experiments
+
+# Exclude the cache_csvs directory
+cache_csvs/

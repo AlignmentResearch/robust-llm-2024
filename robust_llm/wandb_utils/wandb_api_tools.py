@@ -27,6 +27,11 @@ os.makedirs(cache_dir, exist_ok=True)
 memory = Memory(cache_dir, verbose=0)
 
 
+def get_adv_training_round_from_run(run: WandbRun) -> int:
+    revision = run.summary.get("experiment_yaml", {}).get("model", {}).get("revision")
+    return _extract_adv_round(revision)
+
+
 def _extract_adv_round(revision: str) -> int:
     if revision == "main":
         # This happens for finetuned models
@@ -61,7 +66,7 @@ def get_attack_data_tables(
     return dfs
 
 
-def get_wandb_run(group_name: str, run_index: str):
+def get_wandb_runs(group_name: str) -> WandbRuns:
     runs = WANDB_API.runs(
         path=PROJECT_NAME,
         filters={"group": group_name, "state": "finished"},
@@ -70,6 +75,23 @@ def get_wandb_run(group_name: str, run_index: str):
         # Setting order avoids duplicates https://github.com/wandb/wandb/issues/6614
         order="+created_at",
     )
+    return runs
+
+
+def get_wandb_runs_by_index(group_name: str) -> dict[str, WandbRun]:
+    """Return a dictionary of runs indexed by the run index."""
+    runs = get_wandb_runs(group_name)
+    run_dict = {}
+    for run in runs:
+        match = re.search(r"-(\d+)$", run.name)
+        assert match is not None, f"Run name {run.name} does not end in '-<index>'"
+        run_index = match.group(1)
+        run_dict[run_index] = run
+    return run_dict
+
+
+def get_wandb_run(group_name: str, run_index: str):
+    runs = get_wandb_runs(group_name)
     target_run = None
     for run in runs:
         if re.search(rf"-{run_index}$", run.name):
@@ -79,6 +101,33 @@ def get_wandb_run(group_name: str, run_index: str):
             f"No finished run called {run_index} found in group {group_name}"
         )
     return target_run
+
+
+def get_model_size_and_seed_from_run(run: WandbRun) -> tuple[int, int]:
+    """Get the model size and seed from a wandb run.
+
+    Requires that the model name is of one of these forms:
+    - `...s-<seed}` or
+    - `...s-<seed>_...t-<seed>` and the seeds match.
+    """
+    model_size = run.summary["model_size"]
+    model_name = run.summary["experiment_yaml"]["model"]["name_or_path"]
+    ft_seed_regex = r"^.*s-(\d+)$"
+    ft_match = re.match(ft_seed_regex, model_name)
+    if ft_match is not None:
+        return int(model_size), int(ft_match.group(1))
+
+    adv_seed_regex = r"^.*s-(\d+)_.*t-(\d+)$"
+    adv_match = re.match(adv_seed_regex, model_name)
+    if adv_match is None or len(adv_match.groups()) != 2:
+        raise ValueError(f"Could not extract seed from model name {model_name}")
+    ft_seed, adv_seed = adv_match.groups()
+    if ft_seed != adv_seed:
+        print(
+            f"Warning: Seeds do not match: {ft_seed=} != {adv_seed=}."
+            " Using adv_seed (i.e. t-<seed>)"
+        )
+    return int(model_size), int(adv_seed)
 
 
 def download_and_process_attack_data_table(
@@ -100,6 +149,42 @@ def download_and_process_attack_data_table(
     re_match = re.search(r"attack_dataexample_([\d]+):", artifact.name)
     if not re_match:
         return None
+    index = int(re_match.group(1))
+
+    table_path = download_attack_data_table_if_not_cached(
+        artifact,
+        run_name,
+        cache_dir=cache_dir,
+    )
+
+    try:
+        with table_path.open("r") as f:
+            json_data = json.load(f)
+    except Exception as e:
+        raise ValueError(f"Error loading {table_path=} for {run_name=}") from e
+
+    df = pd.DataFrame(json_data["data"], columns=json_data["columns"])
+    return index, df
+
+
+def download_attack_data_table_if_not_cached(
+    artifact: wandb.Artifact,
+    run_name: str,
+    cache_dir: str = "~/.cache/rllm",
+) -> Path:
+    """Download an attack data table artifact to CACHE_DIR if not already cached.
+
+    Args:
+        artifact: The wandb artifact to download.
+        run_name: The name of the run on wandb.
+        cache_dir: The directory to cache the downloaded table.
+
+    Returns:
+        The path to the download in the cache, or None.
+    """
+    re_match = re.search(r"attack_dataexample_([\d]+):", artifact.name)
+    if not re_match:
+        raise ValueError(f"{artifact.name = } does not match expected pattern")
 
     cache_path = Path(cache_dir).expanduser().resolve()
     cache_path.mkdir(parents=True, exist_ok=True)
@@ -110,11 +195,7 @@ def download_and_process_attack_data_table(
         table_dir = artifact.download(root=str(cache_path / run_name))
         assert str(table_path).startswith(table_dir)
 
-    with table_path.open("r") as f:
-        json_data = json.load(f)
-
-    df = pd.DataFrame(json_data["data"], columns=json_data["columns"])
-    return index, df
+    return table_path
 
 
 def get_dataset_config_from_run(run):

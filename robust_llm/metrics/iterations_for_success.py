@@ -10,9 +10,10 @@ import concurrent.futures
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from itertools import product
+from pathlib import Path
 
 import pandas as pd
+from wandb.apis.public.runs import Run as WandbRun
 
 from robust_llm.attacks.attack import AttackOutput
 from robust_llm.metrics.asr_per_iteration import (
@@ -20,10 +21,17 @@ from robust_llm.metrics.asr_per_iteration import (
     compute_asr_per_iteration_from_logits,
     compute_asr_per_iteration_from_text,
 )
-from robust_llm.metrics.metric_utils import get_attack_output_from_wandb
+from robust_llm.metrics.metric_utils import get_attack_output_from_wandb_run
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
+from robust_llm.plotting_utils.utils import add_model_idx_inplace
 from robust_llm.scoring_callbacks.scoring_callback_utils import BinaryCallback
+from robust_llm.wandb_utils.wandb_api_tools import (
+    get_adv_training_round_from_run,
+    get_model_size_and_seed_from_run,
+    get_wandb_run,
+    get_wandb_runs_by_index,
+)
 
 
 @dataclass(frozen=True)
@@ -118,100 +126,141 @@ def compute_iterations_for_success_from_asrs(
 
 
 def compute_ifs_metric_from_wandb(group_name: str, run_index: str) -> IFSMetricResults:
-    attack_output = get_attack_output_from_wandb(group_name, run_index)
+    run = get_wandb_run(group_name, run_index)
+    return compute_ifs_metric_from_wandb_run(run)
+
+
+def compute_ifs_metric_from_wandb_run(run: WandbRun) -> IFSMetricResults:
+    attack_output = get_attack_output_from_wandb_run(run)
 
     tic = time.perf_counter()
     results = compute_iterations_for_success_from_logits(attack_output)
     toc = time.perf_counter()
-    print(results)
     print(f"Computed Iterations For Success metric in {toc - tic:.2f} seconds")
     return results
 
 
-def compute_ifs_in_thread(group_name: str, seed_first_run: int, model_idx):
+def compute_ifs_in_thread(run: WandbRun) -> tuple[IFSMetricResults, int, int, int]:
     """Callable for ThreadPoolExecutor to compute ifs in parallel.
 
     Args:
-        group_name: The wandb group name.
-        seed_first_run: The index of the first run for this seed
-            (i.e. seed * n_models).
-        model_idx: The index of the model.
+        run: The WandbRun object
 
-    Runs are indexed such that runs for a seed are consecutive and
-    runs for a model are separated by the number of models.
-    e.g. [s0m0, s0m1, ... s0m9, s1m0, ...]
+    Returns:
+        A tuple containing the IFS results, the model size, the ft/adv
+        training seed, and the adv training round.
+
     """
-    run_index = str(seed_first_run + model_idx)
-    ifs = compute_ifs_metric_from_wandb(group_name, run_index.zfill(4))
-    return seed_first_run, model_idx, ifs
+    ifs = compute_ifs_metric_from_wandb_run(run)
+    model_size, seed = get_model_size_and_seed_from_run(run)
+    adv_training_round = get_adv_training_round_from_run(run)
+    return ifs, model_size, seed, adv_training_round
 
 
 def compute_all_ifs_metrics(
-    group_name, n_models: int, n_seeds: int, max_workers: int = 4
+    group_name, max_workers: int = 2, debug_n_runs: int = -1
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Compute the IFS for all runs in a group.
 
     Args:
         group_name: The wandb group name.
-        n_models: The number of models.
-        n_seeds: The number of seeds.
         max_workers: The number of threads to use.
+        debug_n_runs: If >= 0, only process this many runs.
 
     Returns:
-        A dataframe with columns for model index, seed index, decile, and IFS.
+        Dataframes with columns for model index, model size, seed index, adv
+        training round, and (decile, IFS) for IFS, (iteration, ASR) for ASR.
     """
-    model_indices = list(range(n_models))
-    seed_first_runs = [seed_index * n_models for seed_index in range(n_seeds)]
-
+    wandb_runs_by_index = get_wandb_runs_by_index(group_name)
+    # Sort runs by name (which implicitly sorts by index)
+    wandb_runs_by_index_tuples = sorted(wandb_runs_by_index.items())
+    if debug_n_runs >= 0:
+        # DEBUG: just trying a few.
+        wandb_runs_by_index_tuples = wandb_runs_by_index_tuples[:debug_n_runs]
     asr_data = []
     ifs_data = []
+    asr_cache_dir = Path("~/.cache/rllm/asr_csvs").expanduser()
+    ifs_cache_dir = Path("~/.cache/rllm/ifs_csvs").expanduser()
+    asr_cache_dir.mkdir(parents=True, exist_ok=True)
+    ifs_cache_dir.mkdir(parents=True, exist_ok=True)
+
+    # Load cached results first
+    debug_suffix = f"_debug_{debug_n_runs}" if debug_n_runs >= 0 else ""
+    already_computed = []
+    for run_index, run in wandb_runs_by_index_tuples:
+        asr_cache_path = asr_cache_dir / f"{group_name}_{run_index}{debug_suffix}.csv"
+        ifs_cache_path = ifs_cache_dir / f"{group_name}_{run_index}{debug_suffix}.csv"
+        if asr_cache_path.exists():
+            asr_df = pd.read_csv(asr_cache_path)
+            asr_data.append(asr_df)
+            ifs_df = pd.read_csv(ifs_cache_path)
+            ifs_data.append(ifs_df)
+            already_computed.append(run_index)
+
+    wandb_runs_by_index_tuples = [
+        (run_index, run)
+        for run_index, run in wandb_runs_by_index_tuples
+        if run_index not in already_computed
+    ]
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_params = {
-            executor.submit(
-                compute_ifs_in_thread, group_name, seed_first_run, model_idx
-            ): (
-                seed_first_run,
-                model_idx,
-            )
-            for seed_first_run, model_idx in product(seed_first_runs, model_indices)
+        future_to_index = {
+            executor.submit(compute_ifs_in_thread, run): run_index
+            for run_index, run in wandb_runs_by_index_tuples
         }
 
-        for future in concurrent.futures.as_completed(future_to_params):
-            seed_first_run, model_idx, ifs_results = future.result()
+        for future in concurrent.futures.as_completed(future_to_index):
+            print(f"Processing future for {group_name}_{future_to_index[future]}")
+            future.exception()
+            try:
+                ifs_results, model_size, seed, adv_training_round = future.result()
+            except Exception as e:
+                print(f"Exception: {e}")
+                # Cancel remaining futures and exit as gracefully as possible
+                for potential_future in future_to_index:
+                    potential_future.cancel()
+                raise e
             ifs_df = pd.DataFrame(
                 {
-                    "model_idx": model_idx,
-                    "seed_idx": seed_first_runs.index(seed_first_run),
                     "ifs": ifs_results.ifs_per_decile,
                     "decile": [i for i in range(len(ifs_results.ifs_per_decile))],
+                    "model_size": model_size,
+                    "seed_idx": seed,
+                    "adv_training_round": adv_training_round,
                 }
             )
             asr_df = pd.DataFrame(
                 {
-                    "model_idx": model_idx,
-                    "seed_idx": seed_first_runs.index(seed_first_run),
                     "asr": ifs_results.asr_per_iteration,
                     "iteration": [i for i in range(len(ifs_results.asr_per_iteration))],
+                    "model_size": model_size,
+                    "seed_idx": seed,
+                    "adv_training_round": adv_training_round,
                 }
             )
+
+            # Cache the results
+            run_index = future_to_index[future]
+            with asr_cache_dir / f"{group_name}_{run_index}{debug_suffix}.csv" as f:
+                asr_df.to_csv(f, index=False)
+            with ifs_cache_dir / f"{group_name}_{run_index}{debug_suffix}.csv" as f:
+                ifs_df.to_csv(f, index=False)
+            print(f"Cached IFS for {group_name}_{future_to_index[future]}")
+
             asr_data.append(asr_df)
             ifs_data.append(ifs_df)
 
-    return pd.concat(asr_data), pd.concat(ifs_data)
+    asr_df = pd.concat(asr_data)
+    ifs_df = pd.concat(ifs_data)
+    # Add model index based on model size
+    asr_df = add_model_idx_inplace(asr_df, reference_col="model_size")
+    ifs_df = add_model_idx_inplace(ifs_df, reference_col="model_size")
+    return asr_df, ifs_df
 
 
 def main():
     parser = argparse.ArgumentParser(description="Iterations for Success metric")
     parser.add_argument("group_name", type=str, help="wandb group name")
-    parser.add_argument(
-        "--n_models", type=int, default=10, help="Number of models (must be accurate)"
-    )
-    parser.add_argument(
-        "--n_seeds",
-        type=int,
-        default=5,
-        help="Number of seeds (can set artificially small)",
-    )
     parser.add_argument(
         "--max_workers",
         type=int,
@@ -221,9 +270,7 @@ def main():
     args = parser.parse_args()
 
     tic = time.perf_counter()
-    asr_df, ifs_df = compute_all_ifs_metrics(
-        args.group_name, args.n_models, args.n_seeds, args.max_workers
-    )
+    asr_df, ifs_df = compute_all_ifs_metrics(args.group_name, args.max_workers)
     toc = time.perf_counter()
     print(f"Computed Iterations for Success metric in {toc - tic:.2f} seconds")
 

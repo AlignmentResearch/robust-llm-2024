@@ -1,5 +1,4 @@
 # %%
-import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,7 +6,6 @@ import pandas as pd
 import seaborn as sns
 from tqdm import tqdm
 
-from robust_llm.file_utils import compute_repo_path
 from robust_llm.plotting_utils.constants import FUDGE_FOR_12B
 from robust_llm.plotting_utils.experiments.pretrain_compute_per_model import (
     ESTIMATED_PRETRAIN_COMPUTE,
@@ -15,12 +13,13 @@ from robust_llm.plotting_utils.experiments.pretrain_compute_per_model import (
 from robust_llm.plotting_utils.tools import (
     create_legend,
     create_path_and_savefig,
+    get_cached_asr_data,
     get_color_palette,
     get_legend_handles,
     prepare_adv_training_data,
     set_up_paper_plot,
 )
-from robust_llm.wandb_utils.constants import MODEL_SIZES
+from robust_llm.plotting_utils.utils import add_model_idx_inplace
 
 GROUPS = [
     "ian_106_gcg_pythia_imdb",
@@ -35,26 +34,6 @@ GROUPS = [
 
 
 # %%
-def get_cached_asr_data(group_name: str) -> pd.DataFrame:
-    root = compute_repo_path()
-    path = os.path.join(root, "outputs", f"asr_{group_name}.csv")
-    if not os.path.exists(path):
-        return pd.DataFrame()
-    df = pd.read_csv(path)
-    assert df.columns.tolist() == ["model_idx", "seed_idx", "asr", "iteration"]
-    n_models = 10
-    n_seeds = 5
-    n_iterations = 11 if "gcg" in group_name else 1281
-    assert df.model_idx.between(0, n_models - 1).all()
-    assert df.seed_idx.between(0, n_seeds - 1).all()
-    assert df.iteration.between(0, n_iterations - 1).all()
-    assert len(df) == n_models * n_seeds * n_iterations
-    if n_iterations > 1000:
-        df = df.loc[df.iteration.mod(100) == 0]
-    df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
-    df["iteration_x_params"] = df.iteration * df.num_params
-    df.sort_values("model_idx", inplace=True)
-    return df
 
 
 # %%
@@ -90,9 +69,7 @@ def plot_asr_for_group(
         flop_data["seed_idx"] = (
             flop_data.model_name_or_path.str.split("_s-").str[-1].astype(int)
         )
-        flop_data["model_idx"] = (
-            flop_data.model_size.rank(method="dense").astype(int) - 1
-        )
+        flop_data = add_model_idx_inplace(flop_data, reference_col="model_size")
         # Fudge the compute for the 12b model due to issue recording multi-GPU
         # flops.
         flop_data.loc[flop_data.model_idx == 9, "flops_per_iteration"] *= FUDGE_FOR_12B
