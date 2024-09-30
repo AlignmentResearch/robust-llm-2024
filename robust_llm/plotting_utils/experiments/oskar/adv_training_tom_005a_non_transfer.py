@@ -20,18 +20,19 @@ summary_keys = [
 METRICS = [
     "metrics/asr@12",
     "metrics/asr@60",
+    "metrics/asr@72",
     "metrics/asr@120",
     "metrics/asr@128",
 ]
 first = True
 for x_data_name in (
     "train_total_flops",
-    "flops_percent_pretrain",
+    "flops_fraction_pretrain",
     "adv_training_round",
     "n_parameter_updates",
 ):
     for legend in (True, False):
-        for iteration in (12, 60, 128):
+        for iteration in (12, 60, 72, 128):
             load_and_plot_adv_training_plots(
                 run_names=("tom_007_eval_niki_152_gcg", "tom_007_eval_niki_152a_gcg"),
                 merge_runs=(

@@ -18,10 +18,15 @@ from robust_llm.plotting_utils.tools import (
     get_legend_handles,
     prepare_adv_training_data,
     set_up_paper_plot,
+    set_yticks_for_logit,
 )
 from robust_llm.plotting_utils.utils import add_model_idx_inplace
 
 GROUPS = [
+    "ian_102a_gcg_pythia_harmless",
+    "ian_103a_gcg_pythia_helpful",
+    "ian_104a_rt_pythia_harmless",
+    "ian_105a_rt_pythia_helpful",
     "ian_106_gcg_pythia_imdb",
     "ian_107_gcg_pythia_pm",
     "ian_108_gcg_pythia_wl",
@@ -89,7 +94,7 @@ def plot_asr_for_group(
             ["model_idx", "iteration"]
         ).flops_per_iteration.transform("mean")
         df["iteration_x_flops"] = df.iteration * df.flops_per_iteration
-        df["flops_percent_pretrain"] = 100 * df.iteration_x_flops / df.pretrain_compute
+        df["flops_fraction_pretrain"] = df.iteration_x_flops / df.pretrain_compute
 
     fig, ax = plt.subplots()
     set_up_paper_plot(fig, ax)
@@ -109,7 +114,7 @@ def plot_asr_for_group(
             "iteration_x_params": "Attack compute (Iterations $\times$ Parameters)",
             "iteration_x_flops": "Attack compute (FLOPs)",
             "iteration": "Attack iteration",
-            "flops_percent_pretrain": "Attack compute (% of pretrain)",
+            "flops_fraction_pretrain": "Attack compute (fraction of pretrain)",
         }[x]
     )
     ax.set_ylabel(
@@ -120,6 +125,8 @@ def plot_asr_for_group(
     )
     if log_x:
         ax.set_xscale("log")
+    if y == "logit_asr":
+        set_yticks_for_logit(ax)
     fig.suptitle(f"{attack}/{dataset}".upper())
     create_path_and_savefig(fig, "asr", attack, dataset, x, y, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)
@@ -138,7 +145,7 @@ for group in tqdm(GROUPS):
         "iteration",
         "iteration_x_params",
         "iteration_x_flops",
-        "flops_percent_pretrain",
+        "flops_fraction_pretrain",
     ):
         for y in ("asr", "logit_asr"):
             plot_asr_for_group(df, group, x, y)

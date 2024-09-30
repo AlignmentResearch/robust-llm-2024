@@ -21,13 +21,13 @@ for x_data_name in (
     "n_parameter_updates",
     "adv_training_round",
     "train_total_flops",
-    "flops_percent_pretrain",
+    "flops_fraction_pretrain",
 ):
     for legend in (True, False):
         load_and_plot_adv_training_plots(
             run_names=("tom_005a_eval_niki_149_gcg ",),
             merge_runs=("niki_149_adv_tr_rt_imdb_small",),
-            title="IMDB, RT -> GCG",
+            title=r"IMDB, RT $\to$ GCG",
             save_as=("transfer", "imdb", "rt_to_gcg"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
@@ -38,7 +38,7 @@ for x_data_name in (
         load_and_plot_adv_training_plots(
             run_names=("tom_006_eval_niki_150_gcg ",),
             merge_runs=("niki_150_adv_tr_rt_spam_small",),
-            title="Spam, RT -> GCG",
+            title=r"Spam, RT $\to$ GCG",
             save_as=("transfer", "spam", "rt_to_gcg"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
@@ -52,7 +52,7 @@ for x_data_name in (
                 "niki_152a_adv_tr_gcg_imdb_small",
                 "niki_152_adv_tr_gcg_imdb_small",
             ),
-            title="IMDB, GCG -> GCG",
+            title=r"IMDB, GCG $\to$ GCG",
             save_as=("transfer", "imdb", "gcg_to_gcg"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
@@ -69,7 +69,7 @@ for x_data_name in (
                 "niki_152a_adv_tr_gcg_imdb_small",
                 "niki_152_adv_tr_gcg_imdb_small",
             ),
-            title="IMDB, GCG -> 90%-infix GCG",
+            title=r"IMDB, GCG $\to$ 90%-infix GCG",
             save_as=("transfer", "imdb", "gcg_to_gcg_infix"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
@@ -80,7 +80,7 @@ for x_data_name in (
         load_and_plot_adv_training_plots(
             run_names=("tom_009_eval_niki_170_gcg ",),
             merge_runs="niki_170_adv_tr_gcg_spam_small",
-            title="Spam, GCG -> GCG",
+            title=r"Spam, GCG $\to$ GCG",
             save_as=("transfer", "spam", "gcg_to_gcg"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
@@ -91,7 +91,7 @@ for x_data_name in (
         load_and_plot_adv_training_plots(
             run_names=("tom_010_eval_niki_170_gcg_infix90 ",),
             merge_runs="niki_170_adv_tr_gcg_spam_small",
-            title="Spam, GCG -> 90%-infix GCG",
+            title=r"Spam, GCG $\to$ 90%-infix GCG",
             save_as=("transfer", "spam", "gcg_to_gcg_infix"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
@@ -102,7 +102,7 @@ for x_data_name in (
         load_and_plot_adv_training_plots(
             run_names=("tom_012_eval_niki_153_gcg",),
             merge_runs=("niki_153_adv_tr_rt_wl_small", "niki_159_adv_tr_rt_wl_large"),
-            title="WL, RT -> GCG",
+            title=r"WL, RT $\to$ GCG",
             save_as=("transfer", "wl", "gcg_to_gcg"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
@@ -113,7 +113,7 @@ for x_data_name in (
         load_and_plot_adv_training_plots(
             run_names=("tom_014_eval_niki_172_gcg ",),
             merge_runs=("niki_172_adv_tr_gcg_wl_small",),
-            title="WL, GCG -> GCG",
+            title=r"WL, GCG $\to$ GCG",
             save_as=("transfer", "wl", "gcg_to_gcg"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
@@ -124,7 +124,7 @@ for x_data_name in (
         load_and_plot_adv_training_plots(
             run_names=("tom_013_eval_niki_171_gcg",),
             merge_runs=("niki_171_adv_tr_gcg_pm_small",),
-            title="PM, GCG -> GCG",
+            title=r"PM, GCG $\to$ GCG",
             save_as=("transfer", "pm", "gcg_to_gcg"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,
@@ -135,7 +135,7 @@ for x_data_name in (
         load_and_plot_adv_training_plots(
             run_names=("tom_011_eval_niki_151_gcg",),
             merge_runs=("niki_151_adv_tr_rt_pm_small", "niki_158_adv_tr_rt_pm_large"),
-            title="PM, RT -> GCG",
+            title=r"PM, RT $\to$ GCG",
             save_as=("transfer", "pm", "rt_to_gcg"),
             summary_keys=summary_keys,
             x_data_name=x_data_name,

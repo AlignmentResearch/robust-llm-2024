@@ -184,7 +184,7 @@ def download_attack_data_table_if_not_cached(
     """
     re_match = re.search(r"attack_dataexample_([\d]+):", artifact.name)
     if not re_match:
-        raise ValueError(f"{artifact.name = } does not match expected pattern")
+        raise ValueError(f"{artifact.name=} does not match expected pattern")
 
     cache_path = Path(cache_dir).expanduser().resolve()
     cache_path.mkdir(parents=True, exist_ok=True)

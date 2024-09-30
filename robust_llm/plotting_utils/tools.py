@@ -44,6 +44,41 @@ TRANSFORMS: dict[str, Callable] = {
 }
 
 
+def set_yticks_for_logit(ax: Axes) -> None:
+    # Get the current y-axis limits based on the data
+    y_min, y_max = ax.get_ylim()
+
+    # Convert limits to probabilities
+    p_min = 1 / (1 + np.exp(-y_min))
+    p_max = 1 / (1 + np.exp(-y_max))
+
+    # Define the percentage values for major ticks,
+    # ensuring they're within the data range
+    major_percentages = [1, 5, 10, 25, 50, 75, 90, 95, 99]
+    major_percentages = [
+        p for p in major_percentages if p_min * 100 <= p <= p_max * 100
+    ]
+
+    # Define percentage values for minor ticks
+    minor_percentages = []
+    for p1, p2 in zip(major_percentages[:-1], major_percentages[1:]):
+        gap = p2 - p1
+        minor_percentages.extend([p1 + 0.25 * gap, p1 + 0.5 * gap, p1 + 0.75 * gap])
+
+    # Convert percentages to logit values
+    major_logit_values = [np.log(p / (100 - p)) for p in major_percentages]
+    minor_logit_values = [np.log(p / (100 - p)) for p in minor_percentages]
+
+    # Set the major tick locations and labels
+    ax.set_yticks(major_logit_values)
+    ax.set_yticklabels([f"{p}%" for p in major_percentages])
+
+    # Set the minor tick locations
+    ax.set_yticks(minor_logit_values, minor=True)
+
+    ax.set_ylim(y_min, y_max)
+
+
 def make_finetuned_plots(
     run_names: iter_str,
     title: str,
@@ -529,7 +564,7 @@ def _draw_plot_adv_training(
         )
         ax.set_xlabel("Adversarial Training FLOPs")
         plt.xscale("log")
-    elif x_data_name == "flops_percent_pretrain":
+    elif x_data_name == "flops_fraction_pretrain":
         data = data.loc[data.train_total_flops.gt(0)]
         # Handle slight deviations in FLOPs
         data["train_total_flops"] = (
@@ -538,8 +573,8 @@ def _draw_plot_adv_training(
             .astype(int)
         )
         data["pretrain_compute"] = data.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
-        data["flops_percent_pretrain"] = data.train_total_flops / data.pretrain_compute
-        ax.set_xlabel("Adversarial Training FLOPs (% pretrain)")
+        data["flops_fraction_pretrain"] = data.train_total_flops / data.pretrain_compute
+        ax.set_xlabel("Adversarial Training FLOPs as a Fraction of Pretraining")
         plt.xscale("log")
 
     else:
@@ -587,7 +622,8 @@ def _draw_plot_adv_training(
     if legend:
         legend_handles = get_legend_handles(data, color_data_name, palette_dict)
         create_legend(color_data_name, ax, legend_handles)
-
+    if y_transform == "logit":
+        set_yticks_for_logit(ax)
     if isinstance(save_as, str):
         save_as = (save_as,)
     path = create_path_and_savefig(
@@ -730,6 +766,8 @@ def draw_scatterplot(
         legend=False,
         alpha=0.5,
     )
+    if ytransform == "logit":
+        set_yticks_for_logit(ax)
 
     set_up_paper_plot(fig, ax)
 
@@ -920,6 +958,8 @@ def draw_min_max_median_plot(
     )
 
     set_up_paper_plot(fig, ax)
+    if ytransform == "logit":
+        set_yticks_for_logit(ax)
 
     # Turn off the legend if we don't want it
     if not legend:
@@ -1059,6 +1099,9 @@ def draw_min_max_median_plot_by_round(
         )
     else:
         ax.get_legend().remove()
+
+    if ytransform == "logit":
+        set_yticks_for_logit(ax)
 
     # Adjust layout to prevent cutoff
     plt.tight_layout()
@@ -1241,7 +1284,7 @@ def plot_attack_scaling(
         ].transform("mean")
         df["iteration_flops"] = df.iteration * df.mean_flops_per_iteration
         df["pretrain_compute"] = df.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
-        df["flops_percent_pretrain"] = 100 * df.iteration_flops / df.pretrain_compute
+        df["flops_fraction_pretrain"] = df.iteration_flops / df.pretrain_compute
 
     assert df.asr.between(0, 1).all()
     if y == "sigmoid_asr":
@@ -1266,6 +1309,8 @@ def plot_attack_scaling(
     if x != "iteration":
         # The only case where we don't want log scale is plotting iterations directly
         ax.set_xscale("log")
+    if y == "logit_asr":
+        set_yticks_for_logit(ax)
     ax.set_xlabel(x.replace("_", " ").title())
     ax.set_ylabel(y.replace("_", " ").title())
     fig.suptitle(f"{attack}/{dataset}".upper())
@@ -1322,6 +1367,8 @@ def plot_ifs(
         y.replace("_", " ").replace("ifs", "Iterations required to reach ASR").title()
     )
     ax.set_xlabel(x.replace("_", " ").replace("asr", "ASR").title())
+    if y == "logit_asr":
+        set_yticks_for_logit(ax)
     fig.suptitle(f"{attack}/{dataset}".upper())
     create_path_and_savefig(fig, "ifs", attack, dataset, x, y, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)

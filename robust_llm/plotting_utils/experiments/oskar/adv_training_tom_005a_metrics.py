@@ -26,7 +26,7 @@ for asr_x in (
     "iteration_flops",
     "iteration",
     "iteration_x_params",
-    "flops_percent_pretrain",
+    "flops_fraction_pretrain",
 ):
     load_and_plot_asr_and_ifs(
         run_names=("tom_005a_eval_niki_149_gcg",),
