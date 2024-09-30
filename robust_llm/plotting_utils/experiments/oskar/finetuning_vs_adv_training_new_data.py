@@ -23,6 +23,7 @@ metrics = [
 
 summary_keys = [
     "experiment_yaml.model.name_or_path",
+    "experiment_yaml.dataset.n_val",
 ]
 
 
@@ -93,6 +94,7 @@ summary_keys = SUMMARY_KEYS + [
     "experiment_yaml.training.force_name_to_save",
     "experiment_yaml.training.seed",
     "experiment_yaml.model.revision",
+    "experiment_yaml.dataset.n_val",
 ]
 ROUNDS = [0, 1, 2, 3, 4, 9, 29]
 metrics = METRICS + ["metrics/asr@12"]

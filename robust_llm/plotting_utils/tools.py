@@ -14,7 +14,7 @@ from matplotlib.lines import Line2D
 
 from robust_llm.file_utils import compute_repo_path
 from robust_llm.metrics.asr_per_iteration import interpolated_iteration_for_asr
-from robust_llm.plotting_utils.constants import MODEL_PLOTTING_NAMES
+from robust_llm.plotting_utils.constants import DEFAULT_SMOOTHING, MODEL_PLOTTING_NAMES
 from robust_llm.plotting_utils.experiments.pretrain_compute_per_model import (
     ESTIMATED_PRETRAIN_COMPUTE,
 )
@@ -42,6 +42,35 @@ TRANSFORMS: dict[str, Callable] = {
     "sigmoid": lambda x: 1 / (1 + np.exp(-x)),
     "none": lambda x: x,
 }
+
+
+def apply_laplace_smoothing(
+    data: pd.DataFrame, y_data_name: str, smoothing: int, size_name: str | None = None
+) -> None:
+    """Apply Laplace smoothing to the y-values in the dataframe in-place.
+
+    See https://en.wikipedia.org/wiki/Additive_smoothing for more details.
+
+    Args:
+        data: The dataframe to apply smoothing to.
+        y_data_name: The name of the column in the dataframe that contains the observed
+            rates, e.g. `adversarial_eval_attack_success_rate`.
+        smoothing: The amount of Laplace smoothing to apply. A value of 1 here
+            corresponds to Laplace's rule of succession.
+        size_name: The name of the column in the dataframe that contains the size of
+            the dataset. Standard values are `n_val` or `dataset_n_val`.
+    """
+    if size_name is None:
+        size_name = "n_val" if "n_val" in data.columns else "dataset_n_val"
+    assert size_name in data.columns, (
+        f"Expected {size_name} to be in the columns of the data, "
+        f"but found {data.columns}"
+    )
+    # Assume binary classification setting
+    num_classes = 2
+    data[y_data_name] = (data[y_data_name] * data[size_name] + smoothing) / (
+        data[size_name] + num_classes * smoothing
+    )
 
 
 def set_yticks_for_logit(ax: Axes) -> None:
@@ -89,6 +118,8 @@ def make_finetuned_plots(
     ylim: tuple[float, float] | None = None,
     ytransform: str | None = None,
     y_data_name: str = "adversarial_eval_attack_success_rate",
+    smoothing: int = DEFAULT_SMOOTHING,
+    invalidate_cache: bool = False,
 ):
     """Make scatter and min/max/median plot for many runs on the same plot."""
     make_finetuned_plot(
@@ -105,6 +136,8 @@ def make_finetuned_plots(
         ylim=ylim,
         ytransform=ytransform,
         y_data_name=y_data_name,
+        smoothing=smoothing,
+        invalidate_cache=invalidate_cache,
     )
     make_finetuned_plot(
         run_names=run_names,
@@ -119,6 +152,8 @@ def make_finetuned_plots(
         ylim=ylim,
         ytransform=ytransform,
         y_data_name=y_data_name,
+        smoothing=smoothing,
+        invalidate_cache=invalidate_cache,
     )
 
 
@@ -157,6 +192,8 @@ def make_finetuned_plot(
     ylim: tuple[float, float] | None = None,
     ytransform: str | None = None,
     y_data_name: str = "adversarial_eval_attack_success_rate",
+    smoothing: int = DEFAULT_SMOOTHING,
+    invalidate_cache: bool = False,
 ):
     """
     Plot model size on the x-axis and attack success rate on the y-axis.
@@ -182,6 +219,9 @@ def make_finetuned_plot(
         ylim: The y-axis limits.
         ytransform: The transformation to apply to the y-values.
         y_data_name: The name of the data to use for the y-axis.
+        smoothing: The amount of Laplace smoothing to apply to y-values.
+        invalidate_cache: Whether to invalidate the cache used when pulling
+            data from wandb.
     """
     if plot_type not in ["scatter", "min_max_median"]:
         raise ValueError(f"Unknown plot type {plot_type}")
@@ -206,6 +246,7 @@ def make_finetuned_plot(
             group=run_name,
             metrics=metric_list,
             summary_keys=summary_key_list,
+            invalidate_cache=invalidate_cache,
         )
         runs.append(run)
 
@@ -227,6 +268,7 @@ def make_finetuned_plot(
                 ylim=ylim,
                 ytransform=ytransform,
                 y_data_name=y_data_name,
+                smoothing=smoothing,
             )
         case "scatter":
             draw_scatterplot(
@@ -239,6 +281,7 @@ def make_finetuned_plot(
                 ylim=ylim,
                 ytransform=ytransform,
                 y_data_name=y_data_name,
+                smoothing=smoothing,
             )
         case _:
             raise ValueError(f"Unknown plot type {plot_type}")
@@ -285,8 +328,6 @@ def load_flops_data(
         metrics=["train/total_flops"],
         invalidate_cache=invalidate_cache,
     )
-    data.sort_values("run_created_at", inplace=True, ascending=True)
-    data = data.drop_duplicates(subset=["run_name", "adv_training_round"], keep="last")
     data["model_key"] = data.training_force_name_to_save.where(
         data.training_force_name_to_save.notnull(), data.training_save_name
     )
@@ -309,6 +350,7 @@ def load_and_plot_adv_training_plots(
     check_seeds: int | None = None,
     invalidate_cache: bool = False,
     y_data_name: str = "adversarial_eval_attack_success_rate",
+    smoothing: int = DEFAULT_SMOOTHING,
 ):
     """
     Make adversarial training plots for given runs, pulling data from W&B.
@@ -333,6 +375,7 @@ def load_and_plot_adv_training_plots(
         invalidate_cache: Whether to invalidate the cache used when pulling
             data from wandb.
         y_data_name: The name of the data to use for the y-axis.
+        smoothing: The amount of Laplace smoothing to apply to y-values.
     """
     if isinstance(run_names, str):
         run_names = (run_names,)
@@ -375,6 +418,7 @@ def load_and_plot_adv_training_plots(
         legend=legend,
         check_seeds=check_seeds,
         y_data_name=y_data_name,
+        smoothing=smoothing,
     )
 
 
@@ -385,6 +429,8 @@ def prepare_adv_training_data(
     invalidate_cache: bool = False,
 ) -> pd.DataFrame:
     assert all(isinstance(name, str) for name in run_names)
+    if "experiment_yaml.run_name" not in summary_keys:
+        summary_keys.append("experiment_yaml.run_name")
     run_info_list = []
 
     for run_name in run_names:
@@ -532,6 +578,7 @@ def _draw_plot_adv_training(
     ylim: tuple[float, float] | None = None,
     legend: bool = False,
     y_transform: str = "logit",
+    smoothing: int = DEFAULT_SMOOTHING,
     xscale: str | None = None,
     yscale: str | None = None,
 ):
@@ -579,6 +626,9 @@ def _draw_plot_adv_training(
 
     else:
         raise ValueError(f"We don't yet support {x_data_name} on the x-axis")
+
+    if smoothing != 0:
+        apply_laplace_smoothing(data, y_data_name, smoothing)
 
     if xscale is not None:
         plt.xscale(xscale)
@@ -632,6 +682,7 @@ def _draw_plot_adv_training(
         *save_as,
         x_data_name,
         y_transf_data_name,
+        f"smoothing-{smoothing}",
         "legend" if legend else "no_legend",
     )
     if legend:
@@ -652,6 +703,7 @@ def draw_plot_adv_training(
     y_transform: str = "logit",
     xscale: str | None = None,
     yscale: str | None = None,
+    smoothing: int = DEFAULT_SMOOTHING,
 ):
     if xlim is not None and data["adv_training_round"].max() + 1 < xlim[1]:
         raise ValueError(
@@ -679,22 +731,25 @@ def draw_plot_adv_training(
         y_transform=y_transform,
         xscale=xscale,
         yscale=yscale,
+        smoothing=smoothing,
     )
 
 
-def create_path_and_savefig(fig, *nested):
+def create_path_and_savefig(fig, *nested, close: bool = True) -> Path:
     assert isinstance(fig, Figure)
     repo_path = compute_repo_path()
     directory = Path(repo_path) / "plots" / "/".join(nested[:-1])
     directory.mkdir(parents=True, exist_ok=True)
     save_path = directory / f"{nested[-1]}.pdf"
     fig.savefig(save_path, dpi=600, bbox_inches="tight")
+    if close:
+        plt.close(fig)
     print(f"Saved plot to {save_path}")
     return save_path
 
 
 def draw_scatterplot(
-    data: pd.DataFrame,
+    orig_data: pd.DataFrame,
     title: str,
     save_as: iter_str | str,
     custom_ys=None,
@@ -703,15 +758,11 @@ def draw_scatterplot(
     ylim: tuple[float, float] | None = None,
     ytransform: str | None = None,
     y_data_name: str = "adversarial_eval_attack_success_rate",
+    smoothing: int = DEFAULT_SMOOTHING,
 ):
-
-    # Refine data here as necessary
-    # data = data[data.n_its == 10]
-    # data = data[data.search_type == "gcg"]
-    # data = data[~data['model_name_or_path'].str.contains("-s-", case=False, na=False)]
-
-    print("Found", len(data), "runs to use for the plot")
-
+    data = orig_data.copy()
+    if smoothing != 0:
+        apply_laplace_smoothing(data, y_data_name, smoothing)
     fig, ax = plt.subplots()
 
     plt.xscale("log")
@@ -887,7 +938,7 @@ def _check_correct_num_seeds(relevant_data, num_seeds: int, adversarial: bool) -
 
 
 def draw_min_max_median_plot(
-    data: pd.DataFrame,
+    orig_data: pd.DataFrame,
     title: str,
     save_as: iter_str | str,
     custom_ys=None,
@@ -897,8 +948,10 @@ def draw_min_max_median_plot(
     ylim: tuple[float, float] | None = None,
     ytransform: str | None = None,
     y_data_name: str = "adversarial_eval_attack_success_rate",
+    smoothing: int = DEFAULT_SMOOTHING,
 ):
-    print("Found", len(data), "runs to use for the plot")
+    data = orig_data.copy()
+    print("Found", len(data), "runs to use for the min/max/median plot")
 
     fig, ax = plt.subplots()
 
@@ -906,6 +959,8 @@ def draw_min_max_median_plot(
     plt.title(title)
     plt.xlabel("Model size (# parameters)")
     ylabel = y_data_name.replace("adversarial_eval_", "").replace("_", " ").title()
+    if smoothing != 0:
+        apply_laplace_smoothing(data, y_data_name, smoothing)
     if ytransform is not None:
         ylabel += f" ({ytransform})"
     plt.ylabel(ylabel)
@@ -968,7 +1023,9 @@ def draw_min_max_median_plot(
     if isinstance(save_as, str):
         save_as = (save_as,)
 
-    path = create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
+    path = create_path_and_savefig(
+        fig, *save_as, f"smoothing-{smoothing}", "legend" if legend else "no_legend"
+    )
     if legend:
         grouped.to_csv(str(path).replace("legend.pdf", "data.csv"), index=False)
 
@@ -985,6 +1042,7 @@ def draw_min_max_median_plot_by_round(
     ytransform: str | None = None,
     y_data_name: str = "adversarial_eval_attack_success_rate",
     rounds: list[int] | None = None,
+    smoothing: int = DEFAULT_SMOOTHING,
 ):
     print("Found", len(data), "runs to use for the plot")
 
@@ -1008,6 +1066,8 @@ def draw_min_max_median_plot_by_round(
         data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
     if ylim is not None:
         plt.ylim(ylim)
+    if smoothing != 0:
+        apply_laplace_smoothing(data, "y_value", smoothing)
 
     relevant_data = data[
         [
@@ -1109,7 +1169,9 @@ def draw_min_max_median_plot_by_round(
     if isinstance(save_as, str):
         save_as = (save_as,)
 
-    path = create_path_and_savefig(fig, *save_as, "legend" if legend else "no_legend")
+    path = create_path_and_savefig(
+        fig, *save_as, f"smoothing-{smoothing}", "legend" if legend else "no_legend"
+    )
     if legend:
         grouped.to_csv(str(path).replace("legend.pdf", "data.csv"), index=False)
 
@@ -1256,8 +1318,11 @@ def plot_attack_scaling(
     check_seeds: bool = True,
     x: str = "iteration_flops",
     y: str = "logit_asr",
+    smoothing: int = DEFAULT_SMOOTHING,
 ) -> None:
     df = orig_df.copy()
+    if smoothing != 0:
+        apply_laplace_smoothing(df, "asr", smoothing)
     if "flops" in x:
         df = df.loc[df.iteration.gt(0)]
     df = add_model_idx_inplace(df, reference_col="model_size")
@@ -1304,7 +1369,7 @@ def plot_attack_scaling(
         hue=color_data_name,
         ax=ax,
         palette=palette,
-        legend=False,
+        legend=False,  # We will add the legend later manually
     )
     if x != "iteration":
         # The only case where we don't want log scale is plotting iterations directly
@@ -1314,10 +1379,23 @@ def plot_attack_scaling(
     ax.set_xlabel(x.replace("_", " ").title())
     ax.set_ylabel(y.replace("_", " ").title())
     fig.suptitle(f"{attack}/{dataset}".upper())
-    create_path_and_savefig(fig, "asr", attack, dataset, x, y, "no_legend")
+    create_path_and_savefig(
+        fig,
+        "asr",
+        attack,
+        dataset,
+        x,
+        y,
+        f"smoothing-{smoothing}",
+        "no_legend",
+        close=False,
+    )
+    # Now add the legend and export again
     legend_handles = get_legend_handles(df, color_data_name, palette)
     create_legend(color_data_name, ax, legend_handles, outside=False)
-    save_path = create_path_and_savefig(fig, "asr", attack, dataset, x, y, "legend")
+    save_path = create_path_and_savefig(
+        fig, "asr", attack, dataset, x, y, f"smoothing-{smoothing}", "legend"
+    )
     df.to_csv(str(save_path).replace("legend.pdf", "data.csv"), index=False)
 
 
@@ -1370,7 +1448,7 @@ def plot_ifs(
     if y == "logit_asr":
         set_yticks_for_logit(ax)
     fig.suptitle(f"{attack}/{dataset}".upper())
-    create_path_and_savefig(fig, "ifs", attack, dataset, x, y, "no_legend")
+    create_path_and_savefig(fig, "ifs", attack, dataset, x, y, "no_legend", close=False)
     legend_handles = get_legend_handles(df, color_data_name, palette)
     create_legend(color_data_name, ax, legend_handles, outside=False)
     save_path = create_path_and_savefig(fig, "ifs", attack, dataset, x, y, "legend")
@@ -1464,6 +1542,7 @@ def load_and_plot_offense_defense_plots(
     legend: bool = False,
     check_seeds: int | None = None,
     invalidate_cache: bool = False,
+    smoothing: int = DEFAULT_SMOOTHING,
 ):
     if isinstance(group_names, str):
         group_names = (group_names,)
@@ -1593,5 +1672,5 @@ def load_and_plot_offense_defense_plots(
         check_seeds=check_seeds,
         y_data_name=y_data_name,
         y_transform="log",
-        # yscale="log",
+        smoothing=smoothing,
     )

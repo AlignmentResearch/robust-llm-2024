@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Exit immediately if a command exits with a non-zero status
+set -e
+
 # Set the working directory to the directory of this script
 cd "$(dirname "$0")"
 
