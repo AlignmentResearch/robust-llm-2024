@@ -104,6 +104,8 @@ def launch(
     model_subrange: Iterable[int] | None = None,
     # is this a 90%-infix attack, or a suffix attack?
     is_infix_eval_attack: bool = False,
+    is_prefix_eval_attack: bool = False,
+    priority: str = "normal-batch",
     # make the first job high priority to check that the set of runs seems to
     # work
     is_first_job_high_priority=False,
@@ -115,6 +117,8 @@ def launch(
     skip_git_checks: bool = False,
     experiment_name_suffix: str = "",
 ):
+    assert not (is_infix_eval_attack and is_prefix_eval_attack)
+
     # We can pack more on h100 but it seems to be worse for throughput.
     # 3-parallel 14mil takes 6 hours, 4-parallel 14mil takes 7.5 hours,
     # 7-parallel 14mil takes 17.5 hours.
@@ -142,6 +146,9 @@ def launch(
     if is_infix_eval_attack:
         base_overrides["evaluation.evaluation_attack.perturb_position_min"] = 0.9
         base_overrides["evaluation.evaluation_attack.perturb_position_max"] = 0.9
+    if is_prefix_eval_attack:
+        base_overrides["evaluation.evaluation_attack.perturb_position_min"] = 0.0
+        base_overrides["evaluation.evaluation_attack.perturb_position_max"] = 0.0
 
     overrides_and_parallelism = [
         (
@@ -167,7 +174,7 @@ def launch(
     max_memory = 114 if cluster == "h100" else 52
     memories = [f"{min(max_memory, par * 17)}G" for par in n_parallel]
 
-    priorities = ["normal-batch"] * len(overrides)
+    priorities = [priority] * len(overrides)
     if is_first_job_high_priority:
         priorities[0] = "high-batch"
 
@@ -200,6 +207,8 @@ def launch(
     experiment_name = f"{experiment_name_prefix}_eval_{adv_train_exp}_{eval_attack}"
     if is_infix_eval_attack:
         experiment_name += "_infix90"
+    if is_prefix_eval_attack:
+        experiment_name += "_prefix"
     if experiment_name_suffix:
         experiment_name += f"_{experiment_name_suffix}"
 

@@ -1,5 +1,3 @@
-"""Eval niki_150 with GCG"""
-
 from pathlib import Path
 
 from t005b_gcg_infix_vs_rt_imdb import launch

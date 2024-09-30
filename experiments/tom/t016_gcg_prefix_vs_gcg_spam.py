@@ -8,14 +8,14 @@ if __name__ == "__main__":
 
     launch(
         experiment_name_prefix=experiment_name_prefix,
-        adv_train_exp="niki_153",
-        adv_train_attack="rt",
+        adv_train_exp="niki_170",
+        adv_train_attack="gcg",
         eval_attack="gcg",
-        dataset="wl",
-        is_infix_eval_attack=False,
-        correct_seeds=False,
+        dataset="spam",
+        is_prefix_eval_attack=True,
         # eval one seed at a time
         seed_subrange=[0],
         cluster="h100",
-        skip_git_checks=False,
+        skip_git_checks=True,
+        is_first_job_high_priority=True,
     )
