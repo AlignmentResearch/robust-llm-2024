@@ -37,7 +37,7 @@ spec:
               git checkout {COMMIT_HASH}
               git submodule update --recursive
               pip install -e '.[dev]'
-              sleep 2d
+              sleep {SLEEP_TIME}
           resources:
             requests:
               cpu: {CPU}
