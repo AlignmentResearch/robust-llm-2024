@@ -306,6 +306,9 @@ Kaniko will push the Docker image to a tag formed of a timestamp followed by the
 ## Working in a devbox
 The most convenient way to create a devbox is to run `make devbox` which will use `k8s/auto-devbox.yaml` and you can pass various arguments to this, e.g. CPU, GPU and MEMORY (see the Makefile).
 
+To use the different default configurations, you can run e.g. `make cpu devbox`.
+This can be combined with making a customized `auto-devbox.yaml`, like `auto-devbox-ian.yaml`. Then you can do things like `make ian devbox` or even `make cpu ian devbox`.
+
 You can also run `kubectl create -f k8s/devbox.yaml`.
 
 Using the VSCode Kubernetes extension, you can then right click the pod and select "Attach VS Code".

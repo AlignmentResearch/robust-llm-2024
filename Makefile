@@ -8,17 +8,27 @@ SHM_SIZE ?= 4Gi
 GPU ?= 1
 SLEEP_TIME ?= 2d
 DEVBOX_NAME ?= rllm-devbox
+YAML_FILE ?= k8s/auto-devbox.yaml
 
-.PHONY: devbox devbox/% devbox/large
+.PHONY: devbox devbox/% large cpu user
 
 devbox/%:
 	git push
-	python -c "print(open('k8s/auto-devbox.yaml').read().format(NAME='${DEVBOX_NAME}', IMAGE='${APPLICATION_URL}:${RELEASE_PREFIX}', COMMIT_HASH='${COMMIT_HASH}', CPU='${CPU}', MEMORY='${MEMORY}', SHM_SIZE='${SHM_SIZE}', GPU='${GPU}', SLEEP_TIME='${SLEEP_TIME}'))" | kubectl create -f -
+	python -c "print(open('${YAML_FILE}').read().format(NAME='${DEVBOX_NAME}', IMAGE='${APPLICATION_URL}:${RELEASE_PREFIX}', COMMIT_HASH='${COMMIT_HASH}', CPU='${CPU}', MEMORY='${MEMORY}', SHM_SIZE='${SHM_SIZE}', GPU='${GPU}', SLEEP_TIME='${SLEEP_TIME}'))" | kubectl create -f -
 
-devbox/large:
-	$(MAKE) devbox DEVBOX_NAME=rllm-devbox-large CPU=8 MEMORY=100G GPU=2
+large:
+	$(eval CPU := 8)
+	$(eval MEMORY := 100G)
+	$(eval GPU := 2)
+	$(eval DEVBOX_NAME := $(DEVBOX_NAME)-large)
 
-devbox/cpu:
-	$(MAKE) devbox DEVBOX_NAME=rllm-devbox-cpu CPU=4 GPU=0
+cpu:
+	$(eval CPU := 4)
+	$(eval MEMORY := 48G)
+	$(eval GPU := 0)
+	$(eval DEVBOX_NAME := $(DEVBOX_NAME)-cpu)
+
+ian:
+	$(eval YAML_FILE := k8s/auto-devbox-ian.yaml)
 
 devbox: devbox/main

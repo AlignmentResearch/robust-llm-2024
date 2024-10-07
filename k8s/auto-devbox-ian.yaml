@@ -26,6 +26,7 @@ spec:
       containers:
         - name: devbox-container
           image: {IMAGE}
+          # TODO: Move tmux installation to the Dockerfile.
           command:
             - bash
             - -c
@@ -37,6 +38,8 @@ spec:
               git checkout {COMMIT_HASH}
               git submodule update --recursive
               pip install -e '.[dev]'
+              git clone https://github.com/naimenz/remote-dotfiles ~/.remote-dotfiles && cd ~/.remote-dotfiles && source setup.sh && source ~/.bashrc && cd -
+              apt update && apt install -y tmux
               sleep {SLEEP_TIME}
           resources:
             requests:

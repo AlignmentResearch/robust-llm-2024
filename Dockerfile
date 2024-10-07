@@ -38,6 +38,9 @@ RUN curl -fsSL https://code-server.dev/install.sh | sh
 ENV PATH="/home/coder/.local/bin:${PATH}"
 RUN code-server --install-extension ms-python.python
 RUN code-server --install-extension ms-pyright.pyright
+RUN code-server --install-extension github.copilot
+RUN code-server --install-extension ms-python.black-formatter
+
 
 # Copy the venv with built packages from compile stage
 COPY --from=compile /usr/local/venv /usr/local/venv
