@@ -1,7 +1,9 @@
 """Pipeline to evaluate a fixed model under attack."""
 
 from accelerate import Accelerator
+from omegaconf import OmegaConf
 
+from robust_llm import logger
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.defenses import make_defended_model
 from robust_llm.evaluation import do_adversarial_evaluation
@@ -26,6 +28,9 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
         args=args,
     )
     logging_context.setup()
+
+    logger.info("Configuration arguments:\n")
+    logger.info("%s\n", OmegaConf.to_yaml(args))
 
     validation = load_rllm_dataset(args.dataset, split="validation")
     num_classes = validation.num_classes
