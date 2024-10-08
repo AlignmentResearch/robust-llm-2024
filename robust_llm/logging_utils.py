@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Optional
 
 import wandb
@@ -228,17 +227,9 @@ class LoggingContext:
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
 
-        # Also save a copy to the wandb directory.
-        # TODO(niki): find a nicer way to get the logs on wandb
-        assert wandb.run is not None
-        wandb_filename = Path(wandb.run.dir).joinpath(logging_filename)
-        wandb_file_handler = logging.FileHandler(wandb_filename)
-        wandb_file_handler.setLevel(logging.DEBUG)
-
         # Add three handlers to logger
         self.logger.addHandler(console_handler)
         self.logger.addHandler(file_handler)
-        self.logger.addHandler(wandb_file_handler)
 
     def wandb_initialize(self) -> None:
         """Initializes wandb run and does appropriate setup.
