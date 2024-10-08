@@ -352,7 +352,7 @@ class Training:
             self.victim.model = self.trainer.model  # type: ignore
             self.victim.push_to_hub(
                 repo_id=self.trainer.args.hub_model_id,
-                revision=adv_tr_round_str,
+                revision=adv_tr_round_str.lstrip("-"),  # Remove the leading hyphen.
                 retries=self.config.upload_retries,
                 cooldown_seconds=self.config.upload_cooldown,
             )
