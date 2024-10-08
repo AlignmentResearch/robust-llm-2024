@@ -23,11 +23,9 @@ BIT_GENERATOR = "PCG64"
 
 
 def is_main_process():
-    """Find out if we are the main process without relying on a Accelerator object."""
-    if dist.is_initialized():
-        return dist.get_rank() == 0
-    else:
-        return True
+    """Find out if we are the main process without passing in an Accelerator object."""
+    accelerator = Accelerator()
+    return accelerator.is_main_process
 
 
 def broadcast_list_of_bools(
