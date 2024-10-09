@@ -96,6 +96,8 @@ OVERRIDE_TUPLES = [
             # We temporarily set checkpointing off until it's fixed
             "environment.allow_checkpointing": False,
             "training.save_strategy": "no",
+            # Save to disk and NOT HF because it's been so unreliable
+            "training.save_to": "DISK",
         },
         n_gpus,
         memory,
@@ -124,5 +126,5 @@ if __name__ == "__main__":
         cluster=CLUSTER,
         n_max_parallel=PARALLEL,
         cpu=8,
-        priority="normal-batch",
+        priority="high-batch",
     )

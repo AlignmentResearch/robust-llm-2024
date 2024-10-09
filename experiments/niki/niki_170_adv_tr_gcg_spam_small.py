@@ -21,15 +21,16 @@ N_ADV_TR_ROUNDS = [max(5, min(60, x)) for x in N_ADV_TR_ROUNDS]
 # avoid training on clean data only.
 N_ADV_TR_ROUNDS = [i + 1 for i in N_ADV_TR_ROUNDS]
 
-CLUSTER_NAME = "a6k"
+CLUSTER_NAME = "h100"
 
-MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
+MODEL_GPU_MEMORY_CLUSTER_PARALLEL_BS: list[tuple[str, int, str, str, int, int]] = [
     (
         "pythia-14m",
         1,
         "60G",
         CLUSTER_NAME,
         5,
+        512,
     ),
     (
         "pythia-31m",
@@ -37,6 +38,7 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
         "80G",
         CLUSTER_NAME,
         5,
+        256,
     ),
     (
         "pythia-70m",
@@ -44,6 +46,7 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
         "100G",
         CLUSTER_NAME,
         5,
+        128,
     ),
     (
         "pythia-160m",
@@ -51,6 +54,7 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
         "40G",
         CLUSTER_NAME,
         2,
+        32,
     ),
     (
         "pythia-410m",
@@ -58,6 +62,7 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
         "30G",
         CLUSTER_NAME,
         1,
+        32,
     ),
     (
         "pythia-1b",
@@ -65,6 +70,7 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
         "30G",
         CLUSTER_NAME,
         1,
+        32,
     ),
     (
         "pythia-1.4b",
@@ -72,6 +78,7 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
         "30G",
         CLUSTER_NAME,
         1,
+        32,
     ),
     (
         "pythia-2.8b",
@@ -79,6 +86,7 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
         "50G",
         CLUSTER_NAME,
         1,
+        16,
     ),
 ]
 FINETUNE_SEEDS = [0, 1, 2, 3, 4]
@@ -93,17 +101,21 @@ OVERRIDE_TUPLES = [
             ),
             "training.adversarial.num_adversarial_training_rounds": n_adv_tr_rounds,
             "training.seed": finetune_seed,
-            # We temporarily set checkpointing off until it's fixed
+            # Turn checkpointing off again
             "environment.allow_checkpointing": False,
-            "training.save_strategy": "no",
+            # "training.save_strategy": "no",
+            # Save to disk and NOT HF because it's been so unreliable
+            "training.save_to": "DISK",
+            # Try increasing the batch size
+            "model.max_minibatch_size": bs,
         },
         n_gpus,
         memory,
         cluster,
         parallel,
     )
-    for (model, n_gpus, memory, cluster, parallel), n_adv_tr_rounds in zip(
-        MODEL_GPU_MEMORY_CLUSTER_PARALLEL, N_ADV_TR_ROUNDS
+    for (model, n_gpus, memory, cluster, parallel, bs), n_adv_tr_rounds in zip(
+        MODEL_GPU_MEMORY_CLUSTER_PARALLEL_BS, N_ADV_TR_ROUNDS
     )
     for finetune_seed in FINETUNE_SEEDS
 ]
@@ -114,6 +126,19 @@ MEMORY = [x[2] for x in OVERRIDE_TUPLES]
 CLUSTER = [x[3] for x in OVERRIDE_TUPLES]
 PARALLEL = [x[4] for x in OVERRIDE_TUPLES]
 
+# Perform Tom's masking operation to only
+# keep seeds 0, 1, 2
+overrides = [x[0] for x in OVERRIDE_TUPLES]
+skip_runs_mask = [False] * len(overrides)
+seed_subrange = {0, 1, 2}
+
+if seed_subrange is not None:
+    skip_runs_mask = [
+        int(ov["training.save_name"].split("_t-")[-1]) not in seed_subrange  # type: ignore  # noqa: E501
+        for ov in overrides
+    ]
+
+
 if __name__ == "__main__":
     run_multiple(
         EXPERIMENT_NAME,
@@ -123,6 +148,7 @@ if __name__ == "__main__":
         memory=MEMORY,
         cluster=CLUSTER,
         n_max_parallel=PARALLEL,
+        skip_runs_mask=skip_runs_mask,
         cpu=8,
-        priority="normal-batch",
+        priority="high-batch",
     )

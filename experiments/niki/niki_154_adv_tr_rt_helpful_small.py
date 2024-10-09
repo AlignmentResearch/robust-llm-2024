@@ -50,7 +50,7 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
         1,
         "50G",
         CLUSTER_NAME,
-        1,
+        2,
     ),
     (
         "pythia-410m",
@@ -81,6 +81,7 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
         1,
     ),
 ]
+# This is the wrong seeds, but we're keeping it for now for consistency
 FINETUNE_SEEDS = [0]
 ADV_TRAIN_SEEDS = [0, 1, 2, 3, 4]
 
@@ -94,9 +95,8 @@ OVERRIDE_TUPLES = [
             ),
             "training.adversarial.num_adversarial_training_rounds": n_adv_tr_rounds,
             "training.seed": adv_tr_seed,
-            # We temporarily set checkpointing off until it's fixed
-            "environment.allow_checkpointing": False,
-            "training.save_strategy": "no",
+            "environment.allow_checkpointing": True,
+            "training.save_strategy": "steps",
         },
         n_gpus,
         memory,

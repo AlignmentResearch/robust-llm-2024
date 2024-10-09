@@ -21,7 +21,7 @@ N_ADV_TR_ROUNDS = [max(5, min(60, x)) for x in N_ADV_TR_ROUNDS]
 # avoid training on clean data only.
 N_ADV_TR_ROUNDS = [i + 1 for i in N_ADV_TR_ROUNDS]
 
-CLUSTER_NAME = "a6k"
+CLUSTER_NAME = "h100"
 
 MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
     (
@@ -66,9 +66,11 @@ OVERRIDE_TUPLES = [
             ),
             "training.adversarial.num_adversarial_training_rounds": n_adv_tr_rounds,
             "training.seed": finetune_seed,
-            # We temporarily set checkpointing off until it's fixed
+            # Turn checkpointing off again
             "environment.allow_checkpointing": False,
             "training.save_strategy": "no",
+            # Save to disk and NOT HF because it's been so unreliable
+            "training.save_to": "DISK",
         },
         n_gpus,
         memory,

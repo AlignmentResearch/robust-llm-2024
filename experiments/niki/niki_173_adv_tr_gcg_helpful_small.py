@@ -27,49 +27,49 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
     (
         "pythia-14m",
         1,
-        "20G",
+        "60G",
         CLUSTER_NAME,
-        10,
+        5,
     ),
     (
         "pythia-31m",
         1,
-        "20G",
+        "80G",
         CLUSTER_NAME,
-        6,
+        5,
     ),
     (
         "pythia-70m",
         1,
-        "25G",
+        "100G",
         CLUSTER_NAME,
-        4,
+        5,
     ),
     (
         "pythia-160m",
         1,
-        "30G",
+        "40G",
         CLUSTER_NAME,
         2,
     ),
     (
         "pythia-410m",
         1,
-        "35G",
+        "30G",
         CLUSTER_NAME,
         1,
     ),
     (
         "pythia-1b",
         1,
-        "40G",
+        "30G",
         CLUSTER_NAME,
         1,
     ),
     (
         "pythia-1.4b",
         1,
-        "40G",
+        "30G",
         CLUSTER_NAME,
         1,
     ),
@@ -93,16 +93,21 @@ OVERRIDE_TUPLES = [
             ),
             "training.adversarial.num_adversarial_training_rounds": n_adv_tr_rounds,
             "training.seed": finetune_seed,
+            # Turn checkpointing back off
+            "environment.allow_checkpointing": False,
+            "training.save_strategy": "no",
+            # Save to disk and NOT HF because it's been so unreliable
+            "training.save_to": "DISK",
         },
         n_gpus,
         memory,
         cluster,
         parallel,
     )
-    for finetune_seed in FINETUNE_SEEDS
     for (model, n_gpus, memory, cluster, parallel), n_adv_tr_rounds in zip(
         MODEL_GPU_MEMORY_CLUSTER_PARALLEL, N_ADV_TR_ROUNDS
     )
+    for finetune_seed in FINETUNE_SEEDS
 ]
 
 OVERRIDE_ARGS_LIST = [x[0] for x in OVERRIDE_TUPLES]
