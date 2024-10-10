@@ -10,7 +10,7 @@ SLEEP_TIME ?= 2d
 DEVBOX_NAME ?= rllm-devbox
 YAML_FILE ?= k8s/auto-devbox.yaml
 
-.PHONY: devbox devbox/% large cpu user
+.PHONY: devbox devbox/% large cpu ian tom
 
 devbox/%:
 	git push
@@ -30,5 +30,9 @@ cpu:
 
 ian:
 	$(eval YAML_FILE := k8s/auto-devbox-ian.yaml)
+
+tom:
+	$(eval CPU := 1)
+	$(eval YAML_FILE := k8s/auto-devbox-tom.yaml)
 
 devbox: devbox/main
