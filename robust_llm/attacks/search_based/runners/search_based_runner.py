@@ -500,28 +500,41 @@ class SearchBasedRunner(abc.ABC):
     def prep_candidates_using_batched_tokenization(
         self,
         text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
-        reference_tokens: list[int],
-        reference_attack_tokens: list[list[int]],
+        reference_tokens_list: list[list[int]],
+        reference_attack_tokens_list: list[list[int]],
     ) -> list[ReencodedReplacementCandidate]:
         """Prepares the candidates using batched tokenization.
 
         Attributes:
-            text_replacement_pairs: A list of (attack_text, replacement) pairs to
-                prepare.
-            reference_tokens: The token ids of a valid full prompt, used to check
-                for tokenization changes.
-            reference_attack_tokens: The token ids of a valid attack string. This
-                is a sub-list of reference_tokens.
+            text_replacement_pairs:
+                A list of (attack_text, replacement) pairs to prepare.
+            reference_tokens_list:
+                The token ids of each valid full prompt, used to check for
+                tokenization changes. The outer list contains the reference
+                tokens for each candidate, and the inner list contains the
+                tokens in the reference.
+            reference_attack_tokens_list:
+                The token ids of each valid attack string. Each element of this
+                list is a sub-list of the corresponding element in
+                reference_tokens_list, containing the attack tokens.
         """
         template = self.example.prompt_template
         indices = self.attack_indices
 
+        candidates_with_references = zip(
+            text_replacement_pairs,
+            reference_tokens_list,
+            reference_attack_tokens_list,
+            strict=True,
+        )
         # Perform the replacements and get the new attack tokens.
         candidate_attack_tokens_list = [
             candidate.compute_tokens_after_replacement(
-                reference_attack_tokens, tensors=None
+                # TODO(ian): Remove the horrible hack of wrapping tokens in list.
+                [reference_attack_tokens],
+                tensors=None,
             )[0]
-            for _, candidate in text_replacement_pairs
+            for (_, candidate), _, reference_attack_tokens in candidates_with_references
         ]
 
         # Decode and re-encode to check for tokenization differences.
@@ -536,8 +549,10 @@ class SearchBasedRunner(abc.ABC):
         # *by replacement* of a single attack token in the tokenized prompt with the
         # candidate token.
         candidate_by_replacement_list = [
-            copy.deepcopy(reference_tokens) for _ in range(len(text_replacement_pairs))
+            copy.deepcopy(reference_tokens)
+            for reference_tokens in reference_tokens_list
         ]
+
         for i, candidate_attack_tokens in enumerate(candidate_attack_tokens_list):
             candidate_by_replacement_list[i][
                 indices.attack_start : indices.attack_end
@@ -593,21 +608,32 @@ class SearchBasedRunner(abc.ABC):
         indices = self.attack_indices
         template = self.example.prompt_template
 
-        # The reference only needs to be computed once as it's the same for all
-        # candidates.
-        current_attack_text = text_replacement_pairs[0][0]
-        reference_prompt = template.build_prompt(attack_text=current_attack_text)
-        reference_tokens = self._get_tokens(reference_prompt, return_tensors=None)[0]
-        reference_attack_tokens = self._get_tokens(
-            current_attack_text, return_tensors=None
+        # We have to tokenize all the references because beam search can have different
+        # attack texts per candidate.
+        # TODO(ian): We only really need to tokenize the distinct attack texts,
+        # rather than all of them.
+        current_attack_texts = [text for text, _ in text_replacement_pairs]
+        reference_prompts = [
+            template.build_prompt(attack_text=text) for text in current_attack_texts
+        ]
+        reference_tokens_list = self._get_tokens(reference_prompts, return_tensors=None)
+        reference_attack_tokens_list = self._get_tokens(
+            current_attack_texts,
+            return_tensors=None,
         )
 
         candidate_replacements = self.prep_candidates_using_batched_tokenization(
-            text_replacement_pairs, reference_tokens, reference_attack_tokens
+            text_replacement_pairs, reference_tokens_list, reference_attack_tokens_list
         )
+        candidates_with_references = zip(
+            candidate_replacements,
+            reference_tokens_list,
+            strict=True,
+        )
+
         filtered_candidates = [
             cand.text_replacement_pair
-            for cand in candidate_replacements
+            for cand, reference_tokens in candidates_with_references
             if cand.is_valid(reference_tokens, indices)
         ]
 

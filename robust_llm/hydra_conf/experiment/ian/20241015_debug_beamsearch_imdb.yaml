@@ -1,0 +1,31 @@
+# @package _global_
+defaults:
+- /dataset: IMDB/stable
+- /evaluation: DEFAULT
+- /environment: no-checkpointing
+- /attack@evaluation.evaluation_attack: BEAM_SEARCH
+# From the experiment config
+
+- _self_
+
+model:
+  # - /model/Default/clf/base@_here_
+  strict_load: true
+  inference_type: "classification"
+
+  # - /model/EleutherAI/pythia-14m@_here_
+  # name_or_path: "EleutherAI/pythia-14m"
+  family: "pythia"
+  max_minibatch_size: 64
+
+  name_or_path: "AlignmentResearch/robust_llm_clf_imdb_pythia-14m_s-0_adv_tr_gcg_t-0"
+  revision: "adv-training-round-5"
+
+dataset:
+  n_train: 0
+  n_val: 5
+
+evaluation:
+  num_iterations: 10
+
+experiment_type: "evaluation"
