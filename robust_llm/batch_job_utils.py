@@ -63,6 +63,7 @@ def run_multiple(
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     skip_runs_mask: Sequence[bool] | None = None,
     use_cluster_storage: bool = True,
+    wandb_mode: str = "online",
     dry_run: bool = False,
     skip_git_checks: bool = False,
     unique_identifier: str | None = None,
@@ -93,6 +94,7 @@ def run_multiple(
         skip_runs_mask: Mask of runs to skip. Useful for running a subset of
             jobs.
         use_cluster_storage: Mounts cluster storage to the job if true.
+        wandb_mode: Value to give the WANDB_MODE environment variable.
         dry_run: if True, only print the k8s job yaml files without launching them.
         skip_git_checks: if True, skip the remote push and the check for dirty git repo.
         unique_identifier: A unique identifier to append to the k8s job names
@@ -151,6 +153,7 @@ def run_multiple(
         experiment_name=experiment_name,
         only_jobs_with_starting_indices=only_jobs_with_starting_indices,
         use_cluster_storage=use_cluster_storage,
+        wandb_mode=wandb_mode,
         dry_run=dry_run,
         skip_git_checks=skip_git_checks,
     )
@@ -401,6 +404,7 @@ def launch_jobs(
     runs: Sequence[FlamingoRun],
     project: str = "robust-llm",
     entity: str = "farai",
+    wandb_mode: str = "online",
     experiment_name: Optional[str] = None,
     only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     use_cluster_storage: bool = True,
@@ -413,6 +417,7 @@ def launch_jobs(
         runs: a list of FlamingoRun objects.
         project: wandb project to use.
         entity: wandb entity to use.
+        wandb_mode: Value to give WANDB_MODE environment variable.
         experiment_name: descriptive name of the experiment, used to set wandb group.
         only_jobs_with_starting_indices: if not None, only jobs with starting indices
             contained in this list will be launched. Useful for rerunning a small subset
@@ -445,6 +450,7 @@ def launch_jobs(
         filtered_runs,
         project=project,
         entity=entity,
+        wandb_mode=wandb_mode,
         experiment_name=experiment_name,
         only_jobs_with_starting_indices=only_jobs_with_starting_indices,
         use_cluster_storage=use_cluster_storage,

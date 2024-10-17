@@ -31,6 +31,8 @@ spec:
             - -c
             - |
               ln -sf /my-storage/{{.bash_profile,.fzf.bash,.gitconfig,.last_cd,.python_history,.tmux.conf,.vimrc,.bashrc,.ssh-find-agent.sh,.git.bash-plugin.sh,.bash_history,.viminfo,.config,.unison,unison,.fzf,.vim}} /root/
+              apt-get update
+              apt-get install -y tmux
               mkdir -p "/root/robust-llm"
               git clone https://github.com/AlignmentResearch/robust-llm.git "/root/robust-llm"
               cd "/root/robust-llm"

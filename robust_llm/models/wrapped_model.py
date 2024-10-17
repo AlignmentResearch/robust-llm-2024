@@ -28,8 +28,13 @@ from transformers import (
 )
 from transformers.modeling_outputs import ModelOutput
 
+from robust_llm import logger
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.dist_utils import DistributedRNG, is_main_process
+from robust_llm.models.model_disk_utils import (
+    get_model_load_path,
+    mark_model_save_as_finished,
+)
 from robust_llm.models.model_utils import (
     AutoregressiveOutput,
     InferenceType,
@@ -339,6 +344,7 @@ class WrappedModel(ABC):
         self.right_tokenizer.save_pretrained(
             save_directory=output_dir,
         )
+        mark_model_save_as_finished(model_save_directory=output_dir)
 
     def _push_to_hub_once(
         self,
@@ -403,13 +409,12 @@ class WrappedModel(ABC):
         num_classes: Optional[int] = None,
         **kwargs,
     ) -> WrappedModel:
-        """Wrapper around _from_config to implement a retry hack.
+        """Wrapper around _from_config to try different model load locations.
 
-        I (ian) accidentally uploaded some models as AlignmentResearch/clf_[...]
-        instead of AlignmentResearch/robust_llm_clf_[...]. Thus to avoid keeping
-        track of which is which, we try both and return the first one that
-        works.
+        Raises:
+            OSError: If the model cannot be loaded from any location.
         """
+        error_list = []
         try:
             return cls._from_config(
                 config,
@@ -418,26 +423,63 @@ class WrappedModel(ABC):
                 **kwargs,
             )
         except OSError as e:
-            if config.name_or_path.startswith("AlignmentResearch/robust_llm_"):
-                new_name = config.name_or_path.replace(
-                    "AlignmentResearch/robust_llm_",
-                    "AlignmentResearch/",
-                )
-            elif config.name_or_path.startswith("AlignmentResearch/"):
-                new_name = config.name_or_path.replace(
-                    "AlignmentResearch/",
-                    "AlignmentResearch/robust_llm_",
-                )
-            else:
-                raise e
+            error_list.append(e)
 
-            new_config = dataclasses.replace(config, name_or_path=new_name)
-            return cls._from_config(
-                new_config,
-                accelerator,
-                num_classes=num_classes,
-                **kwargs,
+        # note(ian): I accidentally uploaded some models as AlignmentResearch/clf_[...]
+        # instead of AlignmentResearch/robust_llm_clf_[...]. Thus to avoid keeping
+        # track of which is which, we try both and return the first one that
+        # works.
+        new_name = None
+        if config.name_or_path.startswith("AlignmentResearch/robust_llm_"):
+            new_name = config.name_or_path.replace(
+                "AlignmentResearch/robust_llm_",
+                "AlignmentResearch/",
             )
+        elif config.name_or_path.startswith("AlignmentResearch/"):
+            new_name = config.name_or_path.replace(
+                "AlignmentResearch/",
+                "AlignmentResearch/robust_llm_",
+            )
+        if new_name is not None:
+            new_config = dataclasses.replace(config, name_or_path=new_name)
+            try:
+                return cls._from_config(
+                    new_config,
+                    accelerator,
+                    num_classes=num_classes,
+                    **kwargs,
+                )
+            except OSError as e:
+                error_list.append(e)
+        logger.warning("Failed to load model from HFHub.")
+
+        # HF Hub failed. Let's try loading from disk in case we saved the model
+        # locally but have not yet uploaded it.
+        model_name = config.name_or_path.removeprefix(
+            "AlignmentResearch/robust_llm_"
+        ).removeprefix("AlignmentResearch/")
+        disk_path = get_model_load_path(
+            storage_path=Path(config.load_prefix),
+            model_name=model_name,
+            revision=config.revision,
+        )
+        if disk_path is None:
+            logger.info("Model not found on disk.")
+        else:
+            logger.info("Loading model from disk instead: %s", disk_path)
+            new_config = dataclasses.replace(config, name_or_path=str(disk_path))
+            try:
+                return cls._from_config(
+                    new_config,
+                    accelerator,
+                    num_classes=num_classes,
+                    **kwargs,
+                )
+            except OSError as e:
+                error_list.append(e)
+
+        logger.error("Failed to load model from HFHub and disk: %s", error_list)
+        raise error_list[0]
 
     @classmethod
     def _from_config(

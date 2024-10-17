@@ -142,9 +142,16 @@ class AdversarialTrainingConfig:
 
 
 class SaveTo(Enum):
+    # Save to HF hub.
     HF = "hf"
+    # Save to disk.
     DISK = "disk"
+    # Save to both HF hub and disk.
     BOTH = "both"
+    # Save to HF hub. If that fails, save to disk instead and mark it as needing
+    # to be uploaded to HF.
+    HF_ELSE_DISK = "hf_else_disk"
+    # Model is not saved.
     NONE = "none"
 
 
@@ -191,10 +198,7 @@ class TrainingConfig:
         save_prefix: The parent directory to use for saving checkpoints.
         save_name: The name to use for saving checkpoints. If None, the name will be
             automatically generated.
-        save_to: Where to save the model after running the trainer. Possible values are:
-            - "hf": Save to the huggingface hub.
-            - "disk": Save to disk.
-            - None, the model will not be saved.
+        save_to: Where to save the model after running the trainer.
         seed: seed to use for training. It will be set at the beginning of huggingface
             Trainer's training. In particular, it may affect random initialization
             (if any).

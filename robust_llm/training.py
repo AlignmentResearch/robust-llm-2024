@@ -49,6 +49,7 @@ from robust_llm.logging_utils import (
     wandb_log,
 )
 from robust_llm.models import WrappedModel
+from robust_llm.models.model_disk_utils import generate_model_save_path
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import FlopCount
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -312,11 +313,38 @@ class Training:
         log_dataset_to_wandb(self.trainer.train_dataset, "train_dataset")
         log_dataset_to_wandb(validation_dataset, "validation_dataset")
 
-    def get_model_directory(self, revision: str = "") -> Path:
-        """Get the directory to save the model to disk for future evaluation."""
-        save_prefix = self.config.save_prefix
-        model_dir = self.model_name_to_save + revision
-        return Path(save_prefix) / "models" / model_dir
+    def save_model_to_disk(self, adv_tr_round_str: str) -> None:
+        output_dir = generate_model_save_path(
+            storage_path=Path(self.config.save_prefix),
+            model_name=self.model_name_to_save,
+            revision=adv_tr_round_str,
+        )
+        if wandb.run is not None:
+            wandb.run.summary["saved_dir"] = str(output_dir)
+
+        logger.info("Saving the model/tokenizer to %s", output_dir)
+        self.victim.save_local(output_dir=output_dir)
+
+    def save_model_to_hf(self, adv_tr_round_str: str) -> None:
+        assert self.trainer is not None
+        assert self.trainer.args.hub_model_id is not None
+        # This is a hack to make sure we have the properly FSDP-wrapped
+        # version of the model for saving. Without this, only the inner
+        # layers are wrapped, not the whole model, which causes size
+        # mismatches when saving/loading.
+        self.victim.model = self.trainer.model  # type: ignore
+        self.victim.push_to_hub(
+            repo_id=self.trainer.args.hub_model_id,
+            revision=adv_tr_round_str,
+            retries=self.config.upload_retries,
+            cooldown_seconds=self.config.upload_cooldown,
+        )
+
+        # Record the saving on wandb.
+        hf_name = self.trainer.args.hub_model_id
+        logger.info("Saving the model/tokenizer to HuggingFace as %s", hf_name)
+        if wandb.run is not None:
+            wandb.run.summary["saved_hf_name"] = hf_name
 
     def maybe_save_model_to_path_or_hf(
         self,
@@ -329,39 +357,24 @@ class Training:
 
         save_to = self.config.save_to
         adv_tr_round_str = (
-            f"-adv-training-round-{adv_tr_round}" if adv_tr_round is not None else ""
+            f"adv-training-round-{adv_tr_round}" if adv_tr_round is not None else ""
         )
         if save_to == SaveTo.NONE:
             logger.info(
                 "Not saving the model/tokenizer since no save path was specified"
             )
-
         if save_to in (SaveTo.DISK, SaveTo.BOTH):
-            output_dir = self.get_model_directory(adv_tr_round_str)
-            if wandb.run is not None:
-                wandb.run.summary["saved_dir"] = str(output_dir)
-            logger.info("Saving the model/tokenizer to %s", output_dir)
-            self.victim.save_local(output_dir=output_dir)
-
+            self.save_model_to_disk(adv_tr_round_str)
         if save_to in (SaveTo.HF, SaveTo.BOTH):
-            assert self.trainer.args.hub_model_id is not None
-            # This is a hack to make sure we have the properly FSDP-wrapped
-            # version of the model for saving. Without this, only the inner
-            # layers are wrapped, not the whole model, which causes size
-            # mismatches when saving/loading.
-            self.victim.model = self.trainer.model  # type: ignore
-            self.victim.push_to_hub(
-                repo_id=self.trainer.args.hub_model_id,
-                revision=adv_tr_round_str.lstrip("-"),  # Remove the leading hyphen.
-                retries=self.config.upload_retries,
-                cooldown_seconds=self.config.upload_cooldown,
-            )
-
-            # Record the saving on wandb.
-            hf_name = self.trainer.args.hub_model_id
-            logger.info("Saving the model/tokenizer to HuggingFace as %s", hf_name)
-            if wandb.run is not None:
-                wandb.run.summary["saved_hf_name"] = hf_name
+            self.save_model_to_hf(adv_tr_round_str)
+        if save_to == SaveTo.HF_ELSE_DISK:
+            try:
+                self.save_model_to_hf(adv_tr_round_str)
+            except Exception as error:
+                logger.error(
+                    "Failed to save to HuggingFace, saving to disk instead: %s", error
+                )
+                self.save_model_to_disk(adv_tr_round_str)
 
     @property
     def output_dir(self) -> str:

@@ -19,7 +19,7 @@ spec:
       volumes:
         - name: robust-llm-storage
           persistentVolumeClaim:
-            claimName: st-blobfuse-robust-llm
+            claimName: az-robust-llm
         - name: devshm
           emptyDir:
             medium: Memory

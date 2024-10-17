@@ -6,7 +6,7 @@ import torch
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, SI, OmegaConf
 
-from robust_llm.config.constants import MODEL_FAMILIES
+from robust_llm.config.constants import MODEL_FAMILIES, SHARED_DATA_DIR
 
 # This is a custom resolver that allows us to e.g. set batch sizes
 # as multiples of each other.
@@ -94,6 +94,8 @@ class ModelConfig:
         This is used to control the behavior of the model, e.g., to make it
         more conversational or more factual. If None, the default system prompt
         chosen by HuggingFace is used.
+    load_prefix: The parent directory to load the model from when loading from
+        disk.
     seed: The seed to use for generation.
     """
 
@@ -113,6 +115,8 @@ class ModelConfig:
     dtype: str = "float32"
     attention_implementation: Optional[str] = None
     system_prompt: str | None = None
+    load_prefix: str = SHARED_DATA_DIR
+    load_name: str | None = None
     seed: int = 0
 
     def __post_init__(self):
