@@ -11,7 +11,7 @@ from typing_extensions import override
 
 from robust_llm.attacks.attack import (
     Attack,
-    AttackData,
+    AttackedRawInputOutput,
     AttackOutput,
     AttackState,
     PromptAttackMode,
@@ -159,7 +159,7 @@ class SearchFreeAttack(Attack, ABC):
         final_logits_cache: list[list[list[float]]] | None = logits_cache if any(logits_cache) else None  # type: ignore  # noqa: E501
         attack_out = AttackOutput(
             dataset=attacked_dataset,
-            attack_data=AttackData(
+            attack_data=AttackedRawInputOutput(
                 iteration_texts=all_iteration_texts, logits=final_logits_cache
             ),
             per_example_info=per_example_info,
@@ -515,7 +515,7 @@ def _prepare_attack_data(
     logits: list[list[float]] | None,
     success_index: int,
 ) -> tuple[list[str], list[list[float]] | None]:
-    """Prepare the attacked inputs and logits for saving in AttackData.
+    """Prepare the attacked inputs and logits for saving in AttackedRawInputOutput.
 
     In a search-free attack, we don't want to save attacked strings beyond
     the first successful attack, since the rest are redundant. We also don't

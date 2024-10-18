@@ -9,7 +9,7 @@ from omegaconf import MISSING, SI
 
 from robust_llm.config.attack_configs import AttackConfig
 from robust_llm.config.callback_configs import CallbackConfig
-from robust_llm.config.constants import SHARED_DATA_DIR
+from robust_llm.config.constants import get_save_root
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.defense_configs import DefenseConfig
 from robust_llm.config.model_configs import ModelConfig
@@ -23,6 +23,7 @@ class EnvironmentConfig:
     Attributes:
         device: Device to use for models.
         test_mode: Whether or not we're currently testing
+        save_root: Prefix to use for the local artifacts directory.
         minibatch_multiplier: Multiplier for the minibatch size.
             This is useful if we want to set default batch sizes for models in the
             ModelConfig but then adjust all of these values based on the GPU memory
@@ -45,6 +46,7 @@ class EnvironmentConfig:
 
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     test_mode: bool = False
+    save_root: str = get_save_root()
     minibatch_multiplier: float = 1.0
     logging_level: int = logging.INFO
     logging_filename: str = "robust_llm.log"
@@ -220,7 +222,7 @@ class TrainingConfig:
     save_steps: int = 500
     save_total_limit: int = 2
     log_full_datasets_to_wandb: bool = False
-    save_prefix: str = SHARED_DATA_DIR
+    save_prefix: str = get_save_root()
     save_name: Optional[str] = None
     save_to: SaveTo = SaveTo.BOTH
     seed: int = 0
@@ -246,6 +248,7 @@ class EvaluationConfig:
             BinaryCallback, because we need discrete success/failure for each
             attacked input.
         compute_robustness_metric: Whether to compute the robustness metric.
+        upload_artifacts: Whether to upload artifacts to wandb.
     """
 
     evaluation_attack: AttackConfig = MISSING
@@ -257,6 +260,7 @@ class EvaluationConfig:
         )
     )
     compute_robustness_metric: bool = True
+    upload_artifacts: bool = True
 
 
 @dataclass

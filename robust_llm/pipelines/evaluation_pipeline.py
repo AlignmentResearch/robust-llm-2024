@@ -77,6 +77,7 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
         victim=victim,
         dataset=validation,
         attack=attack,
+        local_files_path=logging_context.local_files_path,
         n_its=args.evaluation.num_iterations,
         final_success_binary_callback=final_callback,
         num_examples_to_log_detailed_info=args.evaluation.num_examples_to_log_detailed_info,  # noqa: E501
@@ -89,6 +90,7 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
         global_datapoint_count=global_datapoint_count,
         resume_from_checkpoint=args.environment.allow_checkpointing,
         compute_robustness_metric=args.evaluation.compute_robustness_metric,
+        upload_artifacts=args.evaluation.upload_artifacts,
     )
 
     logging_context.cleanup()

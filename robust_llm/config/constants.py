@@ -1,3 +1,5 @@
+from pathlib import Path
+
 SHARED_DATA_DIR = "/robust_llm_data"
 
 
@@ -20,3 +22,10 @@ MODEL_FAMILIES = [
     "gemma",
     "gemma-chat",
 ]
+
+
+def get_save_root() -> str:
+    if Path(SHARED_DATA_DIR).exists():
+        return SHARED_DATA_DIR
+    else:
+        return "cache"

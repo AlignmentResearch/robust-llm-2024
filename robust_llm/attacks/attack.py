@@ -7,7 +7,6 @@ from enum import Enum
 from typing import Any, Optional
 
 import pandas as pd
-import wandb
 from typing_extensions import override
 
 from robust_llm import logger
@@ -41,46 +40,24 @@ class AttackState:
 
 
 @dataclass
-class AttackData:
+class AttackedRawInputOutput:
     """Contains a record of how the attack did at each iteration.
 
     Includes the attack strings. This is used after the fact to compute
     robustness metrics.
 
-    NOTE: iteration_texts and logits are stored per-example. In other words,
-    the shape of iteration_texts should be (n_examples, n_iterations), and
-    the shape of logits should be (n_examples, n_iterations, n_classes).
-
-    TODO(ian): Add attributes and come up with a more informative name.
+    Attributes:
+        iteration_texts: (n_examples, n_iterations) nested lists of attacked texts
+        logits: (n_examples, n_iterations, n_classes) nested lists of logits. Only
+            saved in the classification setting.
     """
 
     iteration_texts: list[list[str]] = field(default_factory=list)
     logits: list[list[list[float]]] | None = None
 
-    def to_wandb_tables(self) -> list[wandb.Table]:
-        tables = []
-        n_examples = len(self.iteration_texts)
-        for example_ix in range(n_examples):
-            n_its = len(self.iteration_texts[example_ix])
-
-            if self.logits is None:
-                table = wandb.Table(columns=["iteration_texts"])
-                for iteration in range(n_its):
-                    table.add_data(self.iteration_texts[example_ix][iteration])
-
-            else:
-                table = wandb.Table(columns=["iteration_texts", "logits"])
-                for iteration in range(n_its):
-                    table.add_data(
-                        self.iteration_texts[example_ix][iteration],
-                        self.logits[example_ix][iteration],
-                    )
-            tables.append(table)
-        return tables
-
     @classmethod
-    def from_dfs(cls, dfs_dict: dict[int, pd.DataFrame]) -> "AttackData":
-        """Constructs an AttackData object from a dictionary of DataFrames.
+    def from_dfs(cls, dfs_dict: dict[int, pd.DataFrame]) -> "AttackedRawInputOutput":
+        """Constructs an AttackedRawInputOutput object from a dictionary of DataFrames.
 
         Args:
             dfs_dict: A dictionary of DataFrames, where the keys are indices
@@ -100,6 +77,21 @@ class AttackData:
 
         assert out_logits is None or len(out_logits) == len(iteration_texts)
         return cls(iteration_texts=iteration_texts, logits=out_logits)
+
+    def to_dfs(self) -> list[pd.DataFrame]:
+        dfs = []
+        if self.logits is None:
+            for iteration_texts in self.iteration_texts:
+                df = pd.DataFrame({"iteration_texts": iteration_texts})
+                dfs.append(df)
+            return dfs
+        else:
+            for iteration_texts, logits in zip(self.iteration_texts, self.logits):
+                df = pd.DataFrame(
+                    {"iteration_texts": iteration_texts, "logits": logits}
+                )
+                dfs.append(df)
+            return dfs
 
 
 @dataclass
@@ -121,7 +113,7 @@ class AttackOutput:
     """
 
     dataset: RLLMDataset
-    attack_data: AttackData | None
+    attack_data: AttackedRawInputOutput | None
     global_info: dict[str, Any] = field(default_factory=dict)
     per_example_info: dict[str, list[Any]] = field(default_factory=dict)
 

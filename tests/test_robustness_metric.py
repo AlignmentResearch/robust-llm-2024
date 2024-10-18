@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pandas as pd
 import pytest
 
-from robust_llm.attacks.attack import AttackData, AttackOutput
+from robust_llm.attacks.attack import AttackedRawInputOutput, AttackOutput
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.metrics.average_initial_breach import (
     compute_aib_from_attack_output,
@@ -64,7 +64,7 @@ def rllm_dataset():
 
 
 def test_ifs_metric_logits(rllm_dataset):
-    attack_data = AttackData(
+    attack_data = AttackedRawInputOutput(
         iteration_texts=[
             ["attack_text00", "attack_text01", "attack_text02"],
             ["attack_text10", "attack_text11", "attack_text12"],
@@ -91,7 +91,7 @@ def test_ifs_metric_logits(rllm_dataset):
 
 
 def test_ifs_metric_no_logits(rllm_dataset):
-    attack_data = AttackData(
+    attack_data = AttackedRawInputOutput(
         iteration_texts=[
             ["attack_text00", "attack_text01", "attack_text02"],
             ["attack_text10", "attack_text11", "attack_text12"],
@@ -120,7 +120,7 @@ def test_ifs_metric_no_logits(rllm_dataset):
 
 
 def test_ifs_metric_logits_no_success(rllm_dataset):
-    attack_data = AttackData(
+    attack_data = AttackedRawInputOutput(
         iteration_texts=[
             ["attack_text00", "attack_text01", "attack_text02"],
             ["attack_text10", "attack_text11", "attack_text12"],
@@ -165,7 +165,7 @@ def mock_attack_output():
     dataset = load_rllm_dataset(dataset_config, split="validation")
     return AttackOutput(
         dataset=dataset,
-        attack_data=AttackData(
+        attack_data=AttackedRawInputOutput(
             iteration_texts=[
                 ["attack_text00", "attack_text01", "attack_text02"],
                 ["attack_text10", "attack_text11", "attack_text12"],

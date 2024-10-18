@@ -1,5 +1,7 @@
 import git.repo
 
+ATTACK_DATA_NAME = "attack_data.csv"
+
 
 def get_git_repo() -> git.repo.base.Repo:
     return git.repo.Repo(".", search_parent_directories=True)

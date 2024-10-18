@@ -155,6 +155,7 @@ cython_debug/
 # Wandb
 wandb/
 robust_llm/wandb/
+artifacts/
 
 # PyCharm
 .idea/
@@ -183,6 +184,7 @@ pythia*/
 
 # Jupyter notebooks
 *.ipynb
+notebooks/
 
 # Trainer files
 adversarial_trainer/

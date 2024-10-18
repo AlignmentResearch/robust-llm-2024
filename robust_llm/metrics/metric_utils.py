@@ -3,7 +3,7 @@ import time
 import datasets
 from wandb.apis.public.runs import Run as WandbRun
 
-from robust_llm.attacks.attack import AttackData, AttackOutput
+from robust_llm.attacks.attack import AttackedRawInputOutput, AttackOutput
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.wandb_utils.wandb_api_tools import (
     get_attack_data_tables,
@@ -38,7 +38,7 @@ def get_attack_output_from_wandb_run(
     # We only want the ones that were actually attacked
     dataset = dataset.get_subset(dataset_indices)
 
-    attack_data = AttackData.from_dfs(attack_data_dfs)
+    attack_data = AttackedRawInputOutput.from_dfs(attack_data_dfs)
     attack_output = AttackOutput(dataset=dataset, attack_data=attack_data)
     return attack_output
 

@@ -5,7 +5,12 @@ import numpy as np
 from tqdm import tqdm
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack, AttackData, AttackOutput, AttackState
+from robust_llm.attacks.attack import (
+    Attack,
+    AttackedRawInputOutput,
+    AttackOutput,
+    AttackState,
+)
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.utils import (
     PreppedExample,
@@ -166,7 +171,7 @@ class SearchBasedAttack(Attack):
         final_logits_cache: list[list[list[float]]] | None = logits_cache if any(logits_cache) else None  # type: ignore  # noqa: E501
         attack_out = AttackOutput(
             dataset=attacked_dataset,
-            attack_data=AttackData(
+            attack_data=AttackedRawInputOutput(
                 iteration_texts=all_iteration_texts, logits=final_logits_cache
             ),
             global_info=global_info,

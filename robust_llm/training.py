@@ -100,6 +100,7 @@ class Training:
     environment_config: EnvironmentConfig
     evaluation_config: EvaluationConfig
     run_name: str
+    local_files_path: Path
     trainer: Optional[RLLMTrainer] = None
 
     @property
@@ -838,10 +839,12 @@ class AdversarialTraining(Training):
                     victim_training_datapoint_count=victim_log_counter.datapoint_count,
                     global_step_count=victim_log_counter.root.step_count,
                     global_datapoint_count=victim_log_counter.root.datapoint_count,
+                    local_files_path=self.local_files_path,
                     wandb_table=table,
                     # We don't use checkpointing of attacks during adversarial training
                     resume_from_checkpoint=False,
                     compute_robustness_metric=compute_robustness_metric,
+                    upload_artifacts=False,
                 )
 
                 if (

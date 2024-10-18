@@ -1,4 +1,5 @@
 from functools import partial
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -159,6 +160,7 @@ def test_few_shot_calls(exp_config: ExperimentConfig) -> None:
             global_step_count=0,
             global_datapoint_count=0,
             resume_from_checkpoint=False,
+            local_files_path=Path("/tmp/dummy_local_files_path"),
         )
     calls = [call.args[0] for call in mock_generate.call_args_list]
     zs_prompt = (

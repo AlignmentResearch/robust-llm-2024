@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import csv
 import time
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, Optional
 
+import pandas as pd
 import wandb
 
 from robust_llm import logger
@@ -17,6 +20,7 @@ from robust_llm.evaluation_utils import (
     AttackResults,
     assert_same_data_between_processes,
 )
+from robust_llm.file_utils import ATTACK_DATA_NAME
 from robust_llm.logging_utils import WandbTable, wandb_log
 from robust_llm.metrics import maybe_compute_robustness_metrics
 from robust_llm.models import WrappedModel
@@ -37,9 +41,11 @@ def do_adversarial_evaluation(
     victim_training_datapoint_count: int,
     global_step_count: int,
     global_datapoint_count: int,
+    local_files_path: Path | None,
     wandb_table: Optional[WandbTable] = None,
     resume_from_checkpoint: bool = True,
     compute_robustness_metric: bool = True,
+    upload_artifacts: bool = True,
 ) -> dict[str, float]:
     """Performs adversarial evaluation and logs the results."""
     wandb_table_exists = wandb_table is not None
@@ -83,7 +89,14 @@ def do_adversarial_evaluation(
         resume_from_checkpoint=resume_from_checkpoint,
     )
     attacked_dataset = attack_out.dataset
-    maybe_save_attack_data(victim, attack_out, should_commit, indices_to_attack)
+    maybe_save_attack_data(
+        victim,
+        attack_out,
+        should_commit,
+        indices_to_attack,
+        local_files_path,
+        upload_artifacts=upload_artifacts,
+    )
     # In case the attack changed the victim from eval() mode, we set it again here.
     victim.eval()
 
@@ -225,6 +238,8 @@ def maybe_save_attack_data(
     attack_out: AttackOutput,
     should_commit: bool,
     indices_to_attack: Sequence[int],
+    local_files_path: Path | None,
+    upload_artifacts: bool = True,
 ):
     """Saves the attack data to wandb if we're in the evaluation pipeline.
 
@@ -235,17 +250,30 @@ def maybe_save_attack_data(
         indices_to_attack: The indices in the pre-attack dataset of the examples
             that were attacked. This is important for getting the correct labels
             and other information when loading from wandb.
+        local_files_path: The path to the local files directory.
+        upload_artifacts: Whether to upload the artifact to wandb.
     """
     assert victim.accelerator is not None
     # Only save attack data if we're in the evaluation pipeline - we don't care
     # about computing the robustness metric in adv training.
     if should_commit and is_main_process() and attack_out.attack_data is not None:
-        attack_data_tables = attack_out.attack_data.to_wandb_tables()
-        table_dict = {
-            f"attack_data/example_{i}": table
-            for i, table in zip(indices_to_attack, attack_data_tables, strict=True)
-        }
-        wandb_log(table_dict, commit=True)
+        assert isinstance(local_files_path, Path)
+        dfs = attack_out.attack_data.to_dfs()
+        for example_idx, df in zip(indices_to_attack, dfs, strict=True):
+            df["example_idx"] = example_idx
+        concat_df = pd.concat(dfs, ignore_index=True)
+        local_files_path.mkdir(parents=True, exist_ok=True)
+        path = str(local_files_path / ATTACK_DATA_NAME)
+        concat_df.to_csv(path, index=False, quoting=csv.QUOTE_ALL, escapechar="\\")
+        print(f"Saved attack data to {path}")
+        if upload_artifacts:
+            run = wandb.run
+            assert run is not None
+            artifact = wandb.Artifact(
+                name=f"run-{run.id}-attack_data", type="attack_data"
+            )
+            artifact.add_file(path)
+            artifact.save()
 
 
 def post_attack_evaluation(

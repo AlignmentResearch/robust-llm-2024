@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Optional
 
 import wandb
@@ -193,6 +194,7 @@ class LoggingContext:
         self.set_up_step_metrics = set_up_step_metrics
         self.model_family = model_family
         self.model_size = model_size
+        self.local_files_path: Path | None = None
         disable_progress_bar()
 
     def save_logs(self) -> None:
@@ -242,7 +244,7 @@ class LoggingContext:
         We do this in the `CustomLoggingWandbCallback`'s `setup` method.
         """
         config = self.args
-        wandb.init(
+        run = wandb.init(
             project="robust-llm",
             group=config.experiment_name,
             job_type=config.job_type,
@@ -250,9 +252,20 @@ class LoggingContext:
             # default if not in test_mode
             mode="disabled" if config.environment.test_mode else None,
         )
+        assert run is not None
         if self.set_up_step_metrics:
             setup_wandb_metrics()
         log_config_to_wandb(config)
+        self.local_files_path = (
+            Path(config.environment.save_root)
+            / "local-files"
+            / config.experiment_name
+            / config.run_name
+            / run.id
+        )
+        assert isinstance(self.local_files_path, Path)
+        self.local_files_path.mkdir(exist_ok=True, parents=True)
+        wandb_log({"local_files_path": str(self.local_files_path)}, commit=False)
 
     def maybe_log_model_info(self, model_family: str, model_size: int) -> None:
         """Logs model info to wandb for use in plots.

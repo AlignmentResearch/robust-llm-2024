@@ -1,4 +1,5 @@
 import concurrent.futures
+import csv
 import json
 import os
 import re
@@ -16,7 +17,7 @@ from wandb.apis.public.runs import Run as WandbRun
 from wandb.apis.public.runs import Runs as WandbRuns
 
 from robust_llm.config.dataset_configs import DatasetConfig
-from robust_llm.file_utils import compute_repo_path
+from robust_llm.file_utils import ATTACK_DATA_NAME, compute_repo_path
 from robust_llm.wandb_utils.constants import PROJECT_NAME
 
 WANDB_API = wandb.Api(timeout=90)
@@ -46,6 +47,14 @@ def _extract_adv_round(revision: str) -> int:
 def get_attack_data_tables(
     run: WandbRun, max_workers: int = 4
 ) -> dict[int, pd.DataFrame]:
+    dfs = _maybe_get_attack_data_from_storage(run)
+    if dfs is not None:
+        return dfs
+    dfs = _maybe_get_attack_data_from_artifacts(run)
+    if dfs is not None:
+        return dfs
+
+    # Fallback to the old way of downloading the attack data tables
     artifacts = run.logged_artifacts()
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -64,6 +73,39 @@ def get_attack_data_tables(
                 dfs[index] = df
 
     return dfs
+
+
+def _get_attack_data_from_csv(
+    path: Path | str,
+) -> dict[int, pd.DataFrame]:
+    concat_df = pd.read_csv(path, quoting=csv.QUOTE_ALL, escapechar="\\")
+    dfs = {}
+    for index, df in concat_df.groupby("example_idx"):
+        dfs[index] = df.drop(columns="example_idx")
+    return dfs
+
+
+def _maybe_get_attack_data_from_storage(
+    run: WandbRun,
+) -> dict[int, pd.DataFrame] | None:
+    local_files_path = run.summary.get("local_files_path")
+    if local_files_path is None:
+        return None
+    path = Path(local_files_path) / ATTACK_DATA_NAME
+    if not path.exists():
+        print(f"Warning: {path} does not exist for run {run.name}")
+        return None
+    return _get_attack_data_from_csv(path)
+
+
+def _maybe_get_attack_data_from_artifacts(
+    run: WandbRun,
+) -> dict[int, pd.DataFrame] | None:
+    for artifact in run.logged_artifacts():
+        if artifact.name.endswith("attack_data:v0"):
+            root = artifact.download()
+            return _get_attack_data_from_csv(Path(root) / ATTACK_DATA_NAME)
+    return None
 
 
 def get_wandb_runs(group_name: str) -> WandbRuns:

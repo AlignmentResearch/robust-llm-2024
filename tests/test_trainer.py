@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from robust_llm.config.configs import (
@@ -51,6 +53,7 @@ def test_basic_constructor():
         evaluation_config=EvaluationConfig(),
         run_name="test_run",
         hash="test_basic_constructor",
+        local_files_path=Path("test_local_files_path"),
     )
 
 

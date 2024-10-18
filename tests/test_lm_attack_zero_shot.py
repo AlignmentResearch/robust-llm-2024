@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import PropertyMock, patch
 
 import pytest
@@ -125,6 +126,7 @@ def test_adversary_input_zs(exp_config: ExperimentConfig) -> None:
             victim_training_datapoint_count=0,
             global_step_count=0,
             global_datapoint_count=0,
+            local_files_path=Path("/tmp/dummy_local_files_path"),
         )
     first_call = attack.adversary.decode(
         mock_generate.call_args_list[0].kwargs["input_ids"].squeeze(0)
@@ -213,4 +215,5 @@ def test_wrong_chunks_dataset_zs(exp_config: ExperimentConfig) -> None:
                 victim_training_datapoint_count=0,
                 global_step_count=0,
                 global_datapoint_count=0,
+                local_files_path=Path("/tmp/dummy_local_files_path"),
             )

@@ -68,6 +68,7 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
         "evaluation_config": args.evaluation,
         "run_name": args.run_name,
         "hash": deterministic_hash(args),
+        "local_files_path": logging_context.local_files_path,
     }
 
     # Set up the training environment

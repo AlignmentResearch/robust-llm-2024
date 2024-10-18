@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -200,6 +201,7 @@ def adv_trainer() -> AdversarialTrainer:
         validation_attack_config=args.evaluation.evaluation_attack,
         hash="dummy_adv_training",
         validation_iterations=args.evaluation.num_iterations,
+        local_files_path=Path("/tmp/dummy_local_files_path"),
     )
     trainer = training.setup_trainer()
     return trainer

@@ -2,17 +2,24 @@ import argparse
 
 import matplotlib.pyplot as plt
 
+from robust_llm.attacks.attack import AttackedRawInputOutput, AttackOutput
 from robust_llm.metrics.asr_per_iteration import (
     ASRMetricResults,
-    compute_asr_per_iteration_from_wandb,
+    compute_asr_per_iteration_from_logits,
+)
+from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
+from robust_llm.wandb_utils.wandb_api_tools import (
+    _maybe_get_attack_data_from_artifacts,
+    _maybe_get_attack_data_from_storage,
+    get_dataset_config_from_run,
+    get_wandb_run,
 )
 
 
 def plot_interpolated_asr_from_asrs(asrs: ASRMetricResults) -> None:
     """Computes the interpolated ASR from the ASRs for each iteration of the attack."""
     plt.plot(asrs.asr_per_iteration, label="raw", linewidth=4)
-    # plt.xscale("log")
-    # plt.yscale("log")
+    print(asrs.asr_per_iteration)
     deciles = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     interpolated_iterations = [
         asrs.interpolated_iteration_for_asr(decile) for decile in deciles
@@ -40,6 +47,23 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    run = get_wandb_run(args.group_name, args.run_index)
+    dataset_cfg = get_dataset_config_from_run(run)
 
-    asrs = compute_asr_per_iteration_from_wandb(args.group_name, args.run_index)
-    plot_interpolated_asr_from_asrs(asrs)
+    for method in (
+        _maybe_get_attack_data_from_storage,
+        _maybe_get_attack_data_from_artifacts,
+    ):
+        attack_data_dfs = method(run)
+        assert attack_data_dfs is not None
+        dataset_indices = list(attack_data_dfs.keys())
+
+        # We only want the ones that were actually attacked
+        dataset = load_rllm_dataset(dataset_cfg, split="validation")
+        dataset = dataset.get_subset(dataset_indices)
+
+        attack_data = AttackedRawInputOutput.from_dfs(attack_data_dfs)
+        attack_output = AttackOutput(dataset=dataset, attack_data=attack_data)
+
+        asrs = compute_asr_per_iteration_from_logits(attack_output)
+        plot_interpolated_asr_from_asrs(asrs)
