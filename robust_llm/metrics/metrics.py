@@ -38,23 +38,23 @@ class RobustnessMetricResults:
             return None
         return self.aib_results.aib_per_decile
 
-    def unwrap_metrics(self) -> dict[str, float | int | None]:
+    def unwrap_metrics(self, prefix: str = "metrics") -> dict[str, float | int | None]:
         metrics: dict[str, float | int | None] = {}
         if self.aib_per_decile is not None:
             for decile in range(11):
-                metrics[f"metrics/aib@{decile/10}"] = self.aib_per_decile[decile]
+                metrics[f"{prefix}/aib@{decile/10}"] = self.aib_per_decile[decile]
         if self.ifs_per_decile is not None:
             for decile in range(11):
-                metrics[f"metrics/ifs@{decile/10}"] = self.ifs_per_decile[decile]
+                metrics[f"{prefix}/ifs@{decile/10}"] = self.ifs_per_decile[decile]
         if self.asr_per_iteration is not None:
             total_iterations = len(self.asr_per_iteration)
             # Record ~10 iterations
             step = max(1, total_iterations // 10)
             for i in range(0, total_iterations, step):
-                metrics[f"metrics/asr@{i}"] = self.asr_per_iteration[i]
+                metrics[f"{prefix}/asr@{i}"] = self.asr_per_iteration[i]
             # Ensure the last iteration is always included
             if (total_iterations - 1) % step != 0:
-                metrics[f"metrics/asr@{total_iterations-1}"] = self.asr_per_iteration[
+                metrics[f"{prefix}/asr@{total_iterations-1}"] = self.asr_per_iteration[
                     -1
                 ]
         return metrics

@@ -48,6 +48,7 @@ from robust_llm.logging_utils import (
     log_dataset_to_wandb,
     wandb_log,
 )
+from robust_llm.metrics.metrics import maybe_compute_robustness_metrics
 from robust_llm.models import WrappedModel
 from robust_llm.models.model_disk_utils import generate_model_save_path
 from robust_llm.models.model_utils import InferenceType
@@ -897,6 +898,16 @@ class AdversarialTraining(Training):
                     )
                 attacked_dataset = attack_out.dataset
                 self.update_flops(flop_counter)
+                attack_metrics = maybe_compute_robustness_metrics(
+                    self.evaluation_config.compute_robustness_metric,
+                    attack_out,
+                    self.victim_success_binary_callback,
+                    self.victim,
+                )
+                if attack_metrics is not None:
+                    wandb_log(
+                        attack_metrics.unwrap_metrics(prefix="train"), commit=False
+                    )
 
                 new_adv_examples = attacked_dataset.as_adversarial_examples()
                 logger.info(
