@@ -1,5 +1,3 @@
-from unittest.mock import MagicMock, patch
-
 import matplotlib.pyplot as plt
 import pandas as pd
 import pytest
@@ -11,9 +9,7 @@ from robust_llm.plotting_utils.tools import (
     extract_size_from_model_name,
     get_color_palette,
     get_legend_handles,
-    get_metrics_adv_training,
     postprocess_data,
-    prepare_adv_training_data,
     set_up_paper_plot,
 )
 from robust_llm.wandb_utils.constants import FINAL_PYTHIA_CHECKPOINT
@@ -101,23 +97,9 @@ def sample_data():
             "metric_1": [0.1, 0.2],
             "metric_2": [0.3, 0.4],
             "_step": [1, 2],
+            "seed_idx": [1, 2],
         }
     )
-
-
-@patch("robust_llm.wandb_utils.wandb_api_tools.WANDB_API.runs")
-def test_get_metrics_adv_training(mock_runs, sample_data):
-    mock_run = MagicMock()
-    mock_run.history.return_value = sample_data
-    mock_run.summary = {"summary_key": "value"}
-    mock_runs.return_value = [mock_run]
-
-    # Call the function under test
-    result = get_metrics_adv_training("test_group", ["metric_1"], ["summary_key"])
-
-    # Assertions
-    assert not result.empty
-    assert "metric_1" in result.columns
 
 
 def test_postprocess_data(sample_data):
@@ -135,17 +117,6 @@ def test_get_num_params_from_name():
 def test_get_pretraining_fraction():
     assert _get_pretraining_fraction("model-ch-1000") == 1000 / FINAL_PYTHIA_CHECKPOINT
     assert _get_pretraining_fraction("model-no-checkpoint") == 1.0
-
-
-@patch("robust_llm.wandb_utils.wandb_api_tools.WANDB_API.runs")
-def test_prepare_adv_training_data(mock_runs, sample_data):
-    mock_run = MagicMock()
-    mock_run.history.return_value = sample_data
-    mock_runs.return_value = [mock_run]
-
-    result = prepare_adv_training_data(("test_name",), ["summary_key"], ["metric_1"])
-    assert not result.empty
-    assert "metric_1" in result.columns
 
 
 def test_extract_size_from_model_name():

@@ -12,7 +12,7 @@ from robust_llm.wandb_utils.wandb_api_tools import (
     _maybe_get_attack_data_from_artifacts,
     _maybe_get_attack_data_from_storage,
     get_dataset_config_from_run,
-    get_wandb_run,
+    get_run_from_index,
 )
 
 
@@ -47,14 +47,15 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    run = get_wandb_run(args.group_name, args.run_index)
+    run = get_run_from_index(args.group_name, args.run_index)
+    wandb_run = run.to_wandb()
     dataset_cfg = get_dataset_config_from_run(run)
 
     for method in (
         _maybe_get_attack_data_from_storage,
         _maybe_get_attack_data_from_artifacts,
     ):
-        attack_data_dfs = method(run)
+        attack_data_dfs = method(wandb_run)
         assert attack_data_dfs is not None
         dataset_indices = list(attack_data_dfs.keys())
 

@@ -63,12 +63,12 @@ def merge_adv_and_train_data(
 
 
 def drop_duplicates(
-    df: pd.DataFrame, keys: list[str], name: str = "df"
+    df: pd.DataFrame, keys: list[str], name: str = "df", keep: str = "last"
 ) -> pd.DataFrame:
     dups = df.duplicated(subset=keys)
     if dups.any():
         print(
             f"\033[91mWARNING: Dropping {len(df[dups]) // 2} duplicates in {name}\033[0m"  # noqa: E501
         )
-        df = df.drop_duplicates(subset=keys, keep="last")
+        df = df.drop_duplicates(subset=keys, keep=keep)  # type: ignore
     return df

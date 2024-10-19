@@ -8,7 +8,7 @@ import seaborn as sns
 
 from robust_llm.plotting_utils.tools import (
     extract_size_from_model_name,
-    get_metrics_adv_training,
+    get_group_enriched_history,
 )
 
 # %%
@@ -45,7 +45,7 @@ print(GROUPS)
 # %%
 data = []
 for group in GROUPS:
-    group_df = get_metrics_adv_training(group, METRICS, SUMMARY_KEYS)
+    group_df = get_group_enriched_history(group, METRICS, SUMMARY_KEYS)
     assert isinstance(group_df, pd.DataFrame)
     group_df["group"] = group
     data.append(group_df)

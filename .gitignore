@@ -194,6 +194,7 @@ trainer/
 
 # Plots
 cache/
+notebooks/
 plots/
 *.html
 *.pdf

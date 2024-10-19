@@ -1,6 +1,32 @@
 import matplotlib.pyplot as plt
 
 
+def name_to_attack(name: str) -> str:
+    if "gcg" in name:
+        return "GCG"
+    elif "rt" in name:
+        return "RandomToken"
+    else:
+        raise ValueError(f"Unknown attack name: {name}")
+
+
+def name_to_dataset(name: str) -> str:
+    if "imdb" in name:
+        return "IMDB"
+    elif "spam" in name:
+        return "Spam"
+    elif "pm" in name:
+        return "PasswordMatch"
+    elif "wl" in name:
+        return "WordLength"
+    elif "helpful" in name:
+        return "Helpful"
+    elif "harmless" in name:
+        return "Harmless"
+    else:
+        raise ValueError(f"Unknown dataset name: {name}")
+
+
 def set_plot_style(style: str) -> None:
     match style:
         case "paper":

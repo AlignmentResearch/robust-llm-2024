@@ -1,4 +1,5 @@
-# %%
+"""Plot slopes of slopes for attack scaling"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -6,20 +7,21 @@ import seaborn as sns
 import statsmodels.formula.api as smf
 from matplotlib.ticker import ScalarFormatter
 
-from robust_llm.file_utils import compute_repo_path
 from robust_llm.plotting_utils.constants import AXIS_LABELS
 from robust_llm.plotting_utils.style import set_plot_style
-from robust_llm.plotting_utils.tools import create_path_and_savefig, set_up_paper_plot
+from robust_llm.plotting_utils.tools import (
+    create_path_and_savefig,
+    postprocess_attack_compute,
+    read_csv_and_metadata,
+    set_up_paper_plot,
+)
 
-# %%
 set_plot_style("paper")
 
 
-# %%
 def regress_attack_scaling(attack: str, dataset: str, round: str):
-    root = compute_repo_path()
-    path = f"{root}/plots/asr/{attack}/{dataset}/{round}/attack_flops_fraction_pretrain/logit_asr/smoothing-1/data.csv"  # noqa
-    df = pd.read_csv(path)
+    df, metadata = read_csv_and_metadata("asr", attack, dataset, round)
+    postprocess_attack_compute(df, attack, dataset)
     df = df.loc[np.isfinite(df.logit_asr)]
     gradients = dict()
     reg = None
@@ -95,28 +97,31 @@ def regress_attack_scaling(attack: str, dataset: str, round: str):
         "logit_asr",
         "smoothing-1",
         "regplot",
+        data=df,
+        metadata=metadata,
     )
-    if reg is not None:
-        print(reg.summary())
 
 
-# %%
-for attack in ["gcg", "gcg_gcg", "rt"]:
-    for dataset in ["imdb", "spam", "pm", "wl", "helpful", "harmless"]:
-        if dataset in ["helpful", "harmless"] and attack == "gcg_gcg":
-            continue
-        rounds = (
-            [
-                "round_0",
-                "pretrain_fraction_10_bps",
-                "pretrain_fraction_50_bps",
-                "final_round",
-            ]
-            if "_" in attack
-            else [
-                "finetuned",
-            ]
-        )
-        for round in rounds:
-            regress_attack_scaling(attack, dataset, round)
-# %%
+def main():
+    for attack in ["gcg", "gcg_gcg", "rt"]:
+        for dataset in ["imdb", "spam", "pm", "wl", "helpful", "harmless"]:
+            if dataset in ["helpful", "harmless"] and attack == "gcg_gcg":
+                continue
+            rounds = (
+                [
+                    "round_0",
+                    "pretrain_fraction_10_bps",
+                    "pretrain_fraction_50_bps",
+                    "final_round",
+                ]
+                if "_" in attack
+                else [
+                    "finetuned",
+                ]
+            )
+            for round in rounds:
+                regress_attack_scaling(attack, dataset, round)
+
+
+if __name__ == "__main__":
+    main()

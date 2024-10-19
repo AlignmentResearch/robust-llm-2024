@@ -1,26 +1,26 @@
 import time
 
 import datasets
-from wandb.apis.public.runs import Run as WandbRun
 
 from robust_llm.attacks.attack import AttackedRawInputOutput, AttackOutput
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.wandb_utils.wandb_api_tools import (
+    RunInfo,
     get_attack_data_tables,
     get_dataset_config_from_run,
-    get_wandb_run,
+    get_run_from_index,
 )
 
 
 def get_attack_output_from_wandb(
     group_name: str, run_index: str, max_workers: int = 4
 ) -> AttackOutput:
-    run = get_wandb_run(group_name, run_index)
+    run = get_run_from_index(group_name, run_index)
     return get_attack_output_from_wandb_run(run, max_workers=max_workers)
 
 
 def get_attack_output_from_wandb_run(
-    run: WandbRun, max_workers: int = 2
+    run: RunInfo, max_workers: int = 2
 ) -> AttackOutput:
     dataset_cfg = get_dataset_config_from_run(run)
 

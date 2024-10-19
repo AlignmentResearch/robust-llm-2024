@@ -1,5 +1,4 @@
 # %%
-import math
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,11 +7,15 @@ import seaborn as sns
 import statsmodels.formula.api as smf
 from scipy.interpolate import griddata
 
-from robust_llm.plotting_utils.constants import MODEL_PLOTTING_NAMES
+from robust_llm.plotting_utils.constants import AXIS_LABELS, MODEL_PLOTTING_NAMES
 from robust_llm.plotting_utils.experiments.pretrain_compute_per_model import (
     ESTIMATED_PRETRAIN_COMPUTE,
 )
-from robust_llm.plotting_utils.tools import load_flops_data, prepare_adv_training_data
+from robust_llm.plotting_utils.tools import (
+    TRANSFORMS,
+    load_flops_data,
+    prepare_adv_training_data,
+)
 
 # set max columns to 100
 pd.set_option("display.max_columns", 100)
@@ -42,7 +45,7 @@ color_data_name = "num_params"
 y_data_name = f"metrics_asr_at_{iteration}"
 metrics = METRICS
 data = prepare_adv_training_data(
-    run_names=run_names,
+    group_names=run_names,
     summary_keys=summary_keys,
     metrics=metrics,
 )
@@ -66,9 +69,9 @@ if merge_runs is not None:
 df = data.copy()
 df["model_idx"] = df.model_size.rank(method="dense").astype(int) - 1
 df["pretrain_compute"] = df.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
-df["logit_asr_at_12"] = np.log(df.metrics_asr_at_12 / (1 - df.metrics_asr_at_12))
-df["log_pretrain_compute"] = df.pretrain_compute.apply(math.log10)
-df["log_train_total_flops"] = np.log10(df.train_total_flops)
+df["logit_asr_at_12"] = TRANSFORMS["logit"](df.metrics_asr_at_12)
+df["log_pretrain_compute"] = df.pretrain_compute.apply(TRANSFORMS["log"])
+df["log_train_total_flops"] = TRANSFORMS["log"](df.train_total_flops)
 df["pretrain_compute_percent"] = (df.train_total_flops / df.pretrain_compute).astype(
     float
 )
@@ -87,7 +90,7 @@ adv_reg.summary()
 fig, ax = plt.subplots(figsize=(12, 10))
 fig.suptitle("Residuals vs. Pretraining FLOPs")
 sns.boxplot(x="log_pretrain_compute", y=adv_reg.resid, data=df, ax=ax)
-ax.set_xlabel("Pretraining FLOPs")
+ax.set_xlabel(AXIS_LABELS["log_pretrain_compute"])
 ax.set_ylabel("Residuals")
 # rotate x ticks
 _ = plt.xticks(rotation=45)
@@ -110,7 +113,7 @@ model_names = model_gradients.index.str.extract(r"\[T.(.*)\]").squeeze()
 fig, ax = plt.subplots(figsize=(12, 10))
 fig.suptitle("Gradient of ASR vs. % Pretrain Compute by Model Size")
 ax.plot(model_names.astype(int).values, model_gradients)
-ax.set_xlabel("Num parameters")
+ax.set_xlabel(AXIS_LABELS["model_size"])
 ax.set_xscale("log")
 ax.set_ylabel("Gradient of ASR vs. % Pretrain Compute")
 # %%
@@ -136,8 +139,8 @@ sns.scatterplot(
     data=df,
     ax=ax,
 )
-ax.set_ylabel("Adversarial Training FLOPs")
-ax.set_xlabel("Pretraining FLOPs")
+ax.set_ylabel(AXIS_LABELS["train_total_flops"])
+ax.set_xlabel(AXIS_LABELS["pretrain_compute"])
 # %%
 # Create a grid for interpolation
 x = df.log_pretrain_compute
@@ -200,7 +203,7 @@ scatter = ax.scatter(
     vmax=z.max(),
 )
 
-ax.set_xlabel("Pretraining FLOPs (log10)")
+ax.set_xlabel(AXIS_LABELS["pretrain_compute"])
 ax.set_ylabel("Adversarial Training FLOPs (log10)")
 ax.set_title("Logit ASR at 12 vs Pretraining and Adversarial Training FLOPs")
 
@@ -295,7 +298,7 @@ sns.heatmap(
     fmt=".2f",
     cmap="YlOrRd_r",
     ax=ax,
-    cbar_kws={"label": "Logit ASR at 12"},
+    cbar_kws={"label": AXIS_LABELS["logit_asr_at_12"]},
 )
 
 # Highlight the diagonal minima
@@ -303,10 +306,10 @@ for i, j in diagonal_mins:
     ax.add_patch(plt.Rectangle((j, i), 1, 1, fill=False, edgecolor="blue", lw=3))  # type: ignore # noqa
 
 ax.set_title(
-    "Logit ASR at 12 vs Pretraining and Adversarial Training FLOPs", fontsize=16
+    "Attack Success Rate vs Pretraining and Adversarial Training FLOPs", fontsize=16
 )
-ax.set_xlabel("Pretraining FLOPs (log10)", fontsize=12)
-ax.set_ylabel("Adversarial Training FLOPs (log10)", fontsize=12)
+ax.set_xlabel(AXIS_LABELS["log_pretrain_compute"], fontsize=12)
+ax.set_ylabel(AXIS_LABELS["train_total_flops"], fontsize=12)
 
 # Rotate x-axis labels for better readability
 plt.xticks(rotation=45, ha="right")
@@ -347,9 +350,9 @@ Z = mod.predict(X_pred).values.reshape(X.shape)
 # Create the contour plot
 plt.figure(figsize=(10, 8))
 contour = plt.contourf(X, Y, Z, levels=20, cmap="viridis")
-plt.colorbar(contour, label="logit_asr_at_12")
-plt.xlabel("log_pretrain_compute")
-plt.ylabel("log_train_total_flops")
+plt.colorbar(contour, label=AXIS_LABELS["logit_asr_at_12"])
+plt.xlabel(AXIS_LABELS["log_pretrain_compute"])
+plt.ylabel(AXIS_LABELS["log_train_total_flops"])
 plt.title("Contour Plot of Regression Model")
 
 # Add contour lines

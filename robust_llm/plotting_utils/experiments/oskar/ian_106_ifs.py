@@ -6,6 +6,7 @@ import pandas as pd
 import seaborn as sns
 
 from robust_llm.file_utils import compute_repo_path
+from robust_llm.plotting_utils.constants import AXIS_LABELS
 from robust_llm.plotting_utils.tools import (
     create_legend,
     create_path_and_savefig,
@@ -59,7 +60,7 @@ def plot_ifs_for_group(group_name: str):
         legend=False,
     )
     ax.set_ylabel("Iterations required to reach ASR")
-    ax.set_xlabel("Attack Success Rate (%)")
+    ax.set_xlabel(AXIS_LABELS["asr"])
     fig.suptitle(f"{attack}/{dataset}".upper())
     create_path_and_savefig(fig, "ifs", attack, dataset, "no_legend")
     legend_handles = get_legend_handles(df, color_data_name, palette)

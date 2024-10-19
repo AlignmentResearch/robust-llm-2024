@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
-from wandb.apis.public.runs import Run as WandbRun
 
 from robust_llm.attacks.attack import AttackOutput
 from robust_llm.metrics.asr_per_iteration import (
@@ -27,9 +26,10 @@ from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.plotting_utils.utils import add_model_idx_inplace
 from robust_llm.scoring_callbacks.scoring_callback_utils import BinaryCallback
 from robust_llm.wandb_utils.wandb_api_tools import (
-    get_adv_training_round_from_run,
+    RunInfo,
+    get_adv_training_round_from_eval_run,
     get_model_size_and_seed_from_run,
-    get_wandb_run,
+    get_run_from_index,
     get_wandb_runs_by_index,
 )
 
@@ -126,11 +126,11 @@ def compute_iterations_for_success_from_asrs(
 
 
 def compute_ifs_metric_from_wandb(group_name: str, run_index: str) -> IFSMetricResults:
-    run = get_wandb_run(group_name, run_index)
+    run = get_run_from_index(group_name, run_index)
     return compute_ifs_metric_from_wandb_run(run)
 
 
-def compute_ifs_metric_from_wandb_run(run: WandbRun) -> IFSMetricResults:
+def compute_ifs_metric_from_wandb_run(run: RunInfo) -> IFSMetricResults:
     attack_output = get_attack_output_from_wandb_run(run)
 
     tic = time.perf_counter()
@@ -140,7 +140,7 @@ def compute_ifs_metric_from_wandb_run(run: WandbRun) -> IFSMetricResults:
     return results
 
 
-def compute_ifs_in_thread(run: WandbRun) -> tuple[IFSMetricResults, int, int, int]:
+def compute_ifs_in_thread(run: RunInfo) -> tuple[IFSMetricResults, int, int, int]:
     """Callable for ThreadPoolExecutor to compute ifs in parallel.
 
     Args:
@@ -153,7 +153,7 @@ def compute_ifs_in_thread(run: WandbRun) -> tuple[IFSMetricResults, int, int, in
     """
     ifs = compute_ifs_metric_from_wandb_run(run)
     model_size, seed = get_model_size_and_seed_from_run(run)
-    adv_training_round = get_adv_training_round_from_run(run)
+    adv_training_round = get_adv_training_round_from_eval_run(run)
     return ifs, model_size, seed, adv_training_round
 
 

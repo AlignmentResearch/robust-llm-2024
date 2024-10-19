@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 import statsmodels.formula.api as smf
 
-from robust_llm.plotting_utils.tools import get_metrics_adv_training
+from robust_llm.plotting_utils.tools import get_group_enriched_history
 
 # %%
 # increase pandas max string length
@@ -32,7 +32,7 @@ METRICS = ["adversarial_eval/attack_success_rate"]
 # %%
 data = []
 for group in GROUPS:
-    group_df = get_metrics_adv_training(group, METRICS, SUMMARY_KEYS)
+    group_df = get_group_enriched_history(group, METRICS, SUMMARY_KEYS)
     assert isinstance(group_df, pd.DataFrame)
     group_df["group"] = group
     data.append(group_df)

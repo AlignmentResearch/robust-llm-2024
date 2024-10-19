@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from robust_llm.plotting_utils.tools import get_metrics_adv_training
+from robust_llm.plotting_utils.tools import get_group_enriched_history
 
 # %%
 # increase pandas max string length
@@ -50,7 +50,7 @@ print(GROUPS)
 # %%
 data = []
 for group in GROUPS:
-    group_df = get_metrics_adv_training(group, METRICS, SUMMARY_KEYS, verbose=False)
+    group_df = get_group_enriched_history(group, METRICS, SUMMARY_KEYS)
     assert isinstance(group_df, pd.DataFrame)
     group_df["group"] = group
     data.append(group_df)

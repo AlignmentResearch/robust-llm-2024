@@ -1,17 +1,18 @@
+from __future__ import annotations
+
 import concurrent.futures
 import csv
 import json
-import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 import wandb
-from joblib import Memory
 from tqdm import tqdm
 from wandb.apis.public.runs import Run as WandbRun
 from wandb.apis.public.runs import Runs as WandbRuns
@@ -22,18 +23,111 @@ from robust_llm.wandb_utils.constants import PROJECT_NAME
 
 WANDB_API = wandb.Api(timeout=90)
 
-# Set up the cache directory
-cache_dir = compute_repo_path() + "/cache/get-metrics-adv-training"
-os.makedirs(cache_dir, exist_ok=True)
-memory = Memory(cache_dir, verbose=0)
+
+def get_cache_root() -> Path:
+    root = Path("/robust_llm_data")
+    if not root.exists():
+        root = Path(compute_repo_path())
+    path = root / "cache"
+    if not path.exists():
+        path.mkdir(parents=True)
+    return path
 
 
-def get_adv_training_round_from_run(run: WandbRun) -> int:
+def try_get_run_from_id(run_id: str, retries: int = 5, backoff: int = 5) -> WandbRun:
+    for attempt in range(retries):
+        try:
+            return WANDB_API.run(f"{PROJECT_NAME}/{run_id}")
+        except Exception as e:
+            print(f"Error getting run on attempt {attempt}: {e}")
+            time.sleep(backoff * 2**attempt)
+    raise ValueError(f"Failed to get run {run_id}")
+
+
+def _get_max_adv_training_round(run: WandbRun) -> int:
+    return run.summary.get(
+        "adv_training_round", run.summary.get("adversarial_training_round", 0)
+    )
+
+
+def try_get_runs_from_wandb(
+    group_name: str, retries: int = 5, backoff: int = 5
+) -> list[WandbRun]:
+    for attempt in range(retries):
+        try:
+            # setting per_page and order based on
+            # https://github.com/wandb/wandb/issues/6614
+            runs = WANDB_API.runs(
+                path=PROJECT_NAME,
+                filters={"group": group_name},
+                per_page=1000,
+                order="+created_at",
+            )
+            name_to_run = dict()
+            for run in tqdm(runs, desc=f"Getting runs for {group_name}"):
+                # runs which have `really_finished`` are always good to use
+                # otherwise we take the run ID per run name with the most
+                # adversarial training rounds
+                if run.summary.get("really_finished") == 1:
+                    name_to_run[run.name] = run
+                    continue
+                max_round = _get_max_adv_training_round(run)
+                prev_furthest_run = name_to_run.get(run.name)
+                prev_furthest_round = (
+                    _get_max_adv_training_round(prev_furthest_run)
+                    if prev_furthest_run is not None
+                    else 0
+                )
+                if max_round > prev_furthest_round:
+                    name_to_run[run.name] = run
+            run_list = list(name_to_run.values())
+            return run_list
+        except Exception as e:
+            print(f"Error getting runs on attempt {attempt}: {e}")
+            time.sleep(backoff * 2**attempt)
+    raise ValueError(f"Failed to get runs for group {group_name}")
+
+
+@dataclass
+class RunInfo:
+    id: str
+    name: str
+    group: str
+    state: str
+    created_at: str
+    summary: dict[str, Any]
+
+    def to_json(self, path: Path) -> None:
+        with path.open("w") as f:
+            json.dump(asdict(self), f)
+
+    @classmethod
+    def from_json(cls, path: Path) -> RunInfo:
+        with path.open("r") as f:
+            data = json.load(f)
+        return cls(**data)
+
+    @classmethod
+    def from_wandb(cls, run: WandbRun) -> RunInfo:
+        return cls(
+            id=run.id,
+            name=run.name,
+            group=run.group,
+            state=run.state,
+            created_at=run.created_at,
+            summary=run.summary._json_dict,
+        )
+
+    def to_wandb(self) -> WandbRun:
+        return try_get_run_from_id(self.id)
+
+
+def get_adv_training_round_from_eval_run(run: RunInfo) -> int:
     revision = run.summary.get("experiment_yaml", {}).get("model", {}).get("revision")
-    return _extract_adv_round(revision)
+    return _extract_adv_round_from_revision(revision)
 
 
-def _extract_adv_round(revision: str) -> int:
+def _extract_adv_round_from_revision(revision: str) -> int:
     if revision == "main":
         # This happens for finetuned models
         return 0
@@ -45,22 +139,23 @@ def _extract_adv_round(revision: str) -> int:
 
 
 def get_attack_data_tables(
-    run: WandbRun, max_workers: int = 4
+    run: RunInfo, max_workers: int = 4
 ) -> dict[int, pd.DataFrame]:
-    dfs = _maybe_get_attack_data_from_storage(run)
+    wandb_run = run.to_wandb()
+    dfs = _maybe_get_attack_data_from_storage(wandb_run)
     if dfs is not None:
         return dfs
-    dfs = _maybe_get_attack_data_from_artifacts(run)
+    dfs = _maybe_get_attack_data_from_artifacts(wandb_run)
     if dfs is not None:
         return dfs
 
     # Fallback to the old way of downloading the attack data tables
-    artifacts = run.logged_artifacts()
+    artifacts = wandb_run.logged_artifacts()
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_artifact = {
             executor.submit(
-                download_and_process_attack_data_table, artifact, run.name
+                download_and_process_attack_data_table, artifact, wandb_run.name
             ): artifact
             for artifact in artifacts
         }
@@ -73,6 +168,10 @@ def get_attack_data_tables(
                 dfs[index] = df
 
     return dfs
+
+
+def get_summary_cache_path_for_group(group: str) -> Path:
+    return get_cache_root() / "wandb-run-summaries" / group
 
 
 def _get_attack_data_from_csv(
@@ -120,9 +219,54 @@ def get_wandb_runs(group_name: str) -> WandbRuns:
     return runs
 
 
-def get_wandb_runs_by_index(group_name: str) -> dict[str, WandbRun]:
+def get_summary_cache_path(group: str, run_id: str) -> Path:
+    root = get_summary_cache_path_for_group(group)
+    if not root.exists():
+        root.mkdir(parents=True)
+    return root / f"{run_id}.json"
+
+
+def get_history_cache_path(group: str, run_id: str) -> Path:
+    root = get_cache_root() / "wandb-run-histories" / group
+    if not root.exists():
+        root.mkdir(parents=True)
+    return root / f"{run_id}.csv"
+
+
+def cache_run_and_return_info(run: WandbRun) -> RunInfo:
+    cache_path = get_summary_cache_path(run.group, run.id)
+    run_info = RunInfo.from_wandb(run)
+    run_info.to_json(cache_path)
+    return run_info
+
+
+def get_runs_from_cache(group_name: str) -> list[RunInfo]:
+    cache_path = get_summary_cache_path_for_group(group_name)
+    run_ids = [path.stem for path in cache_path.iterdir()]
+    return [RunInfo.from_json(cache_path / f"{run_id}.json") for run_id in run_ids]
+
+
+def get_runs_for_group(group_name: str, use_cache: bool = True) -> list[RunInfo]:
+    cache_path = get_summary_cache_path_for_group(group_name)
+    if not use_cache or not cache_path.exists():
+        runs = try_get_runs_from_wandb(group_name)
+        return [cache_run_and_return_info(run) for run in runs]
+    return get_runs_from_cache(group_name)
+
+
+def get_summary_from_id(run_id: str) -> RunInfo:
+    cache_path = get_cache_root() / "wandb-run-summaries" / f"{run_id}.json"
+    if not cache_path.exists():
+        run = try_get_run_from_id(run_id)
+        return cache_run_and_return_info(run)
+    return RunInfo.from_json(cache_path)
+
+
+def get_wandb_runs_by_index(
+    group_name: str, use_cache: bool = True
+) -> dict[str, RunInfo]:
     """Return a dictionary of runs indexed by the run index."""
-    runs = get_wandb_runs(group_name)
+    runs = get_runs_for_group(group_name, use_cache=use_cache)
     run_dict = {}
     for run in runs:
         match = re.search(r"-(\d+)$", run.name)
@@ -132,8 +276,10 @@ def get_wandb_runs_by_index(group_name: str) -> dict[str, WandbRun]:
     return run_dict
 
 
-def get_wandb_run(group_name: str, run_index: str):
-    runs = get_wandb_runs(group_name)
+def get_run_from_index(
+    group_name: str, run_index: str, use_cache: bool = True
+) -> RunInfo:
+    runs = get_runs_for_group(group_name, use_cache=use_cache)
     target_run = None
     for run in runs:
         if re.search(rf"-{run_index}$", run.name):
@@ -145,7 +291,7 @@ def get_wandb_run(group_name: str, run_index: str):
     return target_run
 
 
-def get_model_size_and_seed_from_run(run: WandbRun) -> tuple[int, int]:
+def get_model_size_and_seed_from_run(run: RunInfo) -> tuple[int, int]:
     """Get the model size and seed from a wandb run.
 
     Requires that the model name is of one of these forms:
@@ -240,7 +386,7 @@ def download_attack_data_table_if_not_cached(
     return table_path
 
 
-def get_dataset_config_from_run(run):
+def get_dataset_config_from_run(run: RunInfo) -> DatasetConfig:
     """Get a DatasetConfig object from wandb.
 
     NOTE: This uses the API of wandb.old.summary. Presumably at some point
@@ -262,160 +408,162 @@ def _get_value_iterative(d: dict, key: str):
     return d
 
 
-def get_metrics_single_step(
-    group,
-    metrics,
-    summary_keys,
-    filters=None,
-    check_num_runs=None,
-    invalidate_cache=False,
-):
-    if invalidate_cache:
-        result = _get_metrics_single_step.call_and_shelve(  # type: ignore
-            group, metrics, summary_keys, filters, check_num_runs
-        )
-        result.clear()  # type: ignore
-    return _get_metrics_single_step(
-        group, metrics, summary_keys, filters, check_num_runs  # type: ignore
+def _get_history_for_run(run: RunInfo) -> pd.DataFrame:
+    wandb_run = run.to_wandb()
+    data = []
+    for row in wandb_run.scan_history():
+        data.append(row)
+    history = pd.DataFrame(data)
+    assert isinstance(history, pd.DataFrame)
+    return history
+
+
+def _safe_get_history(
+    run: RunInfo, max_retries: int = 5, backoff: int = 2
+) -> pd.DataFrame:
+    for attempt in range(max_retries):
+        try:
+            # Get the full history here (we will filter later).
+            return _get_history_for_run(run)
+        except Exception as e:
+            print(f"Error getting history on attempt {attempt} for run {run.id}: {e}")
+            time.sleep(backoff * 2**attempt)
+    raise ValueError(f"Failed to get history for run {run.id}")
+
+
+def _get_full_history(run: RunInfo) -> pd.DataFrame:
+    cache_path = get_history_cache_path(run.group, run.id)
+    if not cache_path.exists():
+        history = _safe_get_history(run)
+        assert not history.empty, f"Raw history is empty for run {run.id}"
+        history.to_csv(cache_path, index=False)
+        return history
+    return pd.read_csv(cache_path)
+
+
+def _fix_deprecated_adversarial_training_round(history: pd.DataFrame):
+    if "adv_training_round" not in history and "adversarial_training_round" in history:
+        history["adv_training_round"] = history["train/total_flops"].notnull().cumsum()
+    history.adv_training_round = history.adv_training_round.where(
+        history.adv_training_round.notnull(),
+        (history.adv_training_round.bfill() - 1).clip(0, None),
     )
+    assert history.adv_training_round.min() == 0, "adv_training_round is not 0-indexed"
 
 
-@memory.cache
-def _get_metrics_single_step(
-    group,
-    metrics,
-    summary_keys,
-    filters=None,
-    check_num_runs=None,
-):
-    print("getting metrics for", group)
-
-    if filters is None:
-        filters = {}
-    filters = deepcopy(filters)
-    filters["group"] = group
-    filters["state"] = "finished"
-
-    runs = WANDB_API.runs(path=PROJECT_NAME, filters=filters)
-    if check_num_runs is not None:
-        if type(check_num_runs) is int:
-            assert len(runs) == check_num_runs
-        elif type(check_num_runs) is list:
-            assert check_num_runs[0] <= len(runs) <= check_num_runs[1]
-        else:
-            assert False, "bad check_num_runs!"
-
-    res = []
-    for run in runs:
-        history = run.history(keys=metrics)
-        if history is None or len(history) == 0:
-            continue
-        for key in summary_keys:
-            history[key.split(".")[-1]] = _get_value_iterative(run.summary, key)
-        assert len(history) == 1, "Expected 1 step, got {}".format(len(history))
-        res.append(history)
-
-    res = pd.concat(res, ignore_index=True)
-
-    return res
+def _fix_round_0_flops(history: pd.DataFrame):
+    if "train/total_flops" in history and "adv_training_round" in history:
+        history.loc[
+            history.adv_training_round.eq(0) & history["train/total_flops"].isnull(),
+            "train/total_flops",
+        ] = 0
 
 
-def get_metrics_adv_training(
-    *args,
-    invalidate_cache=False,
-    **kwargs,
+def _filter_for_metrics(history: pd.DataFrame, metrics: list[str]):
+    if "_step" not in metrics:
+        metrics = ["_step"] + metrics
+    filtered_metrics = [m for m in metrics if m in history.columns]
+    return history.loc[
+        history[filtered_metrics].notnull().all(axis=1), filtered_metrics
+    ]
+
+
+def _get_filtered_history(run: RunInfo, metrics: list[str]) -> pd.DataFrame:
+    history = _get_full_history(run)
+    assert not history.empty, f"Full history is empty for run {run.id}"
+    _fix_deprecated_adversarial_training_round(history)
+    _fix_round_0_flops(history)
+    return _filter_for_metrics(history, metrics)
+
+
+def get_enriched_history(
+    run: RunInfo,
+    metrics: list[str] | None = None,
+    summary_keys: list[str] | None = None,
 ) -> pd.DataFrame:
-    if invalidate_cache:
-        result = _get_metrics_adv_training.call_and_shelve(  # type: ignore
-            *args, **kwargs
-        )
-        result.clear()  # type: ignore
-    return _get_metrics_adv_training(*args, **kwargs)  # type: ignore
+    """Main entrypoint to get wandb logs for a single run."""
+    if metrics is None:
+        metrics = []
+    if summary_keys is None:
+        summary_keys = []
+    history = _get_filtered_history(run, metrics)
+    assert not history.empty, (
+        f"Filtered history is empty for run={run.id}, "
+        f"metrics={metrics}, summary_keys={summary_keys}"
+    )
+    for key in summary_keys:
+        new_key = key.replace(".", "_")
+        if new_key.startswith("experiment_yaml_"):
+            new_key = new_key[len("experiment_yaml_") :]
+        history[new_key] = _get_value_iterative(run.summary, key)
+    history["run_id"] = run.id
+    history["run_state"] = run.state
+    history["run_created_at"] = run.created_at
+    history = history.sort_values(by="_step")
+    if "adv_training_round" in history:
+        history.adv_training_round = history.adv_training_round.astype(int)
+    elif "revision" in history:
+        history["adv_training_round"] = [
+            _extract_adv_round_from_revision(name) for name in history["revision"]
+        ]
+    elif "model_revision" in history:
+        history["adv_training_round"] = [
+            _extract_adv_round_from_revision(name) for name in history["model_revision"]
+        ]
+    return history
 
 
-@memory.cache
-def _get_metrics_adv_training(
-    group,
-    metrics,
-    summary_keys,
-    filters=None,
-    check_num_runs=None,
-    check_num_data_per_run=None,
-    verbose=False,
+def get_group_enriched_history(
+    group_name: str,
+    metrics: list[str] | None = None,
+    summary_keys: list[str] | None = None,
+    use_group_cache: bool = True,
+    max_workers: int = 4,
 ) -> pd.DataFrame:
-    if filters is None:
-        filters = {"state": "finished"}
-    filters = deepcopy(filters)
-    filters["group"] = group
+    """Main entrypoint to get wandb logs for a group of runs."""
+    runs = get_runs_for_group(group_name, use_cache=use_group_cache)
 
-    runs = WANDB_API.runs(path=PROJECT_NAME, filters=filters)
-    if verbose:
-        print(f"Found {len(runs)} runs")
-    if check_num_runs is not None:
-        if type(check_num_runs) is int:
-            assert len(runs) == check_num_runs
-        elif type(check_num_runs) is list:
-            assert check_num_runs[0] <= len(runs) <= check_num_runs[1]
+    def process_run(run):
+        cache_path = get_history_cache_path(run.group, run.id)
+        if cache_path.exists():
+            # If cached, process synchronously
+            return get_enriched_history(run, metrics, summary_keys)
         else:
-            assert False, "bad check_num_runs!"
+            # If not cached, return the run to be processed asynchronously
+            return run
 
-    res = []
-    run_iterator = tqdm(runs, desc="Processing runs") if len(runs) > 100 else runs
-    for run in run_iterator:
-        filtered_metrics = [m for m in metrics if run.summary.get(m) is not None]
-        if not filtered_metrics:
-            print(f"Run {run.id} is missing all metrics. Keys={run.summary.keys()}")
-        history = run.history(keys=filtered_metrics)
-        if verbose:
-            print(f"Run {run.id} has {len(history)} data points")
-
-        if check_num_data_per_run is not None:
-            assert len(history) == check_num_data_per_run
-
-        if len(history) == 0 or history is None:
-            print(f"Run {run.id} has no data")
-            continue
-
-        for key in summary_keys:
-            # First, replace '.' with '_' in the key
-            # Next, delete the "experiment_yaml_" prefix if present
-            new_key = key.replace(".", "_")
-            if new_key.startswith("experiment_yaml_"):
-                new_key = new_key[len("experiment_yaml_") :]
-            history[new_key] = _get_value_iterative(run.summary, key)
-
-        history["run_id"] = run.id
-        history["run_state"] = run.state
-        history["run_created_at"] = run.created_at
-
-        # Hack: create 'round' column based on increasing steps.
-        history = history.sort_values(by="_step")
-
-        if "revision" in history:
-            history["adv_training_round"] = [
-                _extract_adv_round(name) for name in history["revision"]
-            ]
-        elif "model_revision" in history:
-            history["adv_training_round"] = [
-                _extract_adv_round(name) for name in history["model_revision"]
-            ]
+    # First, process all runs that have cache
+    dfs = []
+    runs_to_fetch = []
+    for run in tqdm(runs, desc=f"Processing cached runs for {group_name}"):
+        result = process_run(run)
+        if isinstance(result, pd.DataFrame):
+            dfs.append(result)
         else:
-            assert run.summary.get("experiment_yaml", {}).get("training") is not None, (
-                f"Could not infer adversarial training round for run {run.id}. "
-                "The run has no training config and no revision was found using "
-                f"keys={summary_keys}."
-            )
-            history["adv_training_round"] = np.arange(len(history))
+            runs_to_fetch.append(result)
 
-        res.append(history)
+    # Then, use multithreading for runs that need fetching
+    if runs_to_fetch:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(get_enriched_history, run, metrics, summary_keys)
+                for run in runs_to_fetch
+            ]
+            for future in tqdm(
+                concurrent.futures.as_completed(futures),
+                total=len(runs_to_fetch),
+                desc=f"Fetching uncached runs for {group_name}",
+            ):
+                try:
+                    df = future.result()
+                    dfs.append(df)
+                except Exception as e:
+                    print(f"An error occurred while processing a run: {e}")
 
-    if len(res) == 0:
-        raise ValueError(f"No data found for group {group}")
-    res = pd.concat(res, ignore_index=True)
-    return res
+    return pd.concat(dfs, ignore_index=True)
 
 
-def parse_run_to_dict(run: WandbRun) -> dict[str, Any]:
+def _get_tracking_data_for_run(run: WandbRun) -> dict[str, Any]:
     if run.metadata is None:
         print(f"Run {run.id} has no metadata")
         return {}
@@ -489,10 +637,11 @@ def parse_run_to_dict(run: WandbRun) -> dict[str, Any]:
     return run_data
 
 
-def parse_runs_to_dataframe(runs: WandbRuns) -> pd.DataFrame:
+def get_tracking_data_for_runs(runs: WandbRuns) -> pd.DataFrame:
+    """Create a dataframe for GSheet export to track runs."""
     data = []
-    for run in tqdm(runs):
-        run_data = parse_run_to_dict(run)
+    for run in tqdm(runs, desc="Getting tracking data"):
+        run_data = _get_tracking_data_for_run(run)
         data.append(run_data)
     df = pd.DataFrame(data)
     df["duration_hours"] = df.duration_seconds.astype(float).div(3600)

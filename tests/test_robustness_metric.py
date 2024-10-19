@@ -18,7 +18,7 @@ from robust_llm.metrics.iterations_for_success import (
 from robust_llm.metrics.metric_utils import _compute_clf_asr_from_logits
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks.scoring_callback_utils import BinaryCallbackOutput
-from robust_llm.wandb_utils.wandb_api_tools import get_wandb_run
+from robust_llm.wandb_utils.wandb_api_tools import get_run_from_index
 
 
 @pytest.mark.parametrize(
@@ -194,11 +194,11 @@ def test_recompute_ifs_metric():
     # TODO (Oskar): Implement the same for the AIB metric
     group_name = "ian_103a_gcg_pythia_helpful"
     run_index = "0000"
-    run = get_wandb_run(group_name, run_index)
+    run = get_run_from_index(group_name, run_index)
     results = compute_ifs_metric_from_wandb(group_name, run_index)
     for decile in range(11):
         key = f"robustness_metric@{decile/10:.1f}"
-        wandb_result = run.history(keys=[key])[key].squeeze()
+        wandb_result = run.summary[key]
         computed = results.ifs_per_decile[decile]
         assert pytest.approx(computed, 0.01) == wandb_result
 
