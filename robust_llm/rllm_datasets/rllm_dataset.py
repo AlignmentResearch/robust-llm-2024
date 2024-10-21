@@ -379,8 +379,8 @@ class RLLMDataset(ABC):
         new_dataset.tokenizer = tokenizer
         return new_dataset
 
-    def for_hf_trainer(self) -> Dataset:
-        """Returns a datasets.Dataset that is suitable for the hf Trainer.
+    def for_training(self) -> Dataset:
+        """Returns a datasets.Dataset that is suitable for training.
 
         This involves:
         - Ensuring the dataset is tokenized
@@ -395,18 +395,18 @@ class RLLMDataset(ABC):
         assert self.is_tokenized
         assert self.tokenizer is not None
         if self.inference_type == InferenceType.CLASSIFICATION:
-            ds_for_trainer = self.ds.rename_column("clf_label", "label")
-            trainer_cols = ["text", "input_ids", "attention_mask", "label"]
+            ds_for_training = self.ds.rename_column("clf_label", "label")
+            training_cols = ["text", "input_ids", "attention_mask", "label"]
             unused_cols = [
-                c for c in ds_for_trainer.column_names if c not in trainer_cols
+                c for c in ds_for_training.column_names if c not in training_cols
             ]
-            ds_for_trainer = ds_for_trainer.remove_columns(unused_cols)
-            return ds_for_trainer
+            ds_for_training = ds_for_training.remove_columns(unused_cols)
+            return ds_for_training.with_format("torch")
 
         elif self.inference_type == InferenceType.GENERATION:
             # For generation, we tokenize the gen_target and stick it on the end
             # of the input_ids/attention_mask columns.
-            ds_for_trainer = self.ds.remove_columns(["clf_label"])
+            ds_for_training = self.ds.remove_columns(["clf_label"])
             # TODO(ian): Make this work for chat models (pass in WrappedModel?)
             tokenized_gen_target = self.tokenizer(self.ds["gen_target"])
             all_target_ids = tokenized_gen_target["input_ids"]
@@ -428,26 +428,26 @@ class RLLMDataset(ABC):
             ]
 
             # Remove and readd columns to update them
-            ds_for_trainer = ds_for_trainer.remove_columns(
+            ds_for_training = ds_for_training.remove_columns(
                 ["input_ids", "attention_mask"]
             )
-            ds_for_trainer = ds_for_trainer.add_column(
+            ds_for_training = ds_for_training.add_column(
                 "input_ids",
                 input_ids,
                 new_fingerprint=None,  # type: ignore  # (bug in datasets)
             )
-            ds_for_trainer = ds_for_trainer.add_column(
+            ds_for_training = ds_for_training.add_column(
                 "attention_mask",
                 attention_mask,
                 new_fingerprint=None,  # type: ignore  # (bug in datasets)
             )
 
-            trainer_cols = ["input_ids", "attention_mask"]
+            training_cols = ["input_ids", "attention_mask"]
             unused_cols = [
-                c for c in ds_for_trainer.column_names if c not in trainer_cols
+                c for c in ds_for_training.column_names if c not in training_cols
             ]
-            ds_for_trainer = ds_for_trainer.remove_columns(unused_cols)
-            return ds_for_trainer
+            ds_for_training = ds_for_training.remove_columns(unused_cols)
+            return ds_for_training
 
         else:
             raise ValueError(f"Unsupported inference type: {self.inference_type}")

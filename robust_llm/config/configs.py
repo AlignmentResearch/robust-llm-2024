@@ -35,6 +35,10 @@ class EnvironmentConfig:
         logging_filename: If set, logs will be saved to this file.
         allow_checkpointing: Whether to allow checkpointing during training and also
             attacks that support it.
+        resume_mode: How often to resume from checkpoint during training.
+            - "once": Resume from checkpoint and then run as normal
+            - "always": Resume from checkpoint at the beginning of each epoch.
+                The "always" mode is useful for debugging and ensuring determinism.
         deterministic: Whether to force use of deterministic CUDA algorithms at the
             cost of performance.
         cublas_config: The configuration string for cuBLAS, only used if
@@ -51,6 +55,7 @@ class EnvironmentConfig:
     logging_level: int = logging.INFO
     logging_filename: str = "robust_llm.log"
     allow_checkpointing: bool = True
+    resume_mode: str = "once"
     deterministic: bool = True
     cublas_config: str = ":4096:8"
 

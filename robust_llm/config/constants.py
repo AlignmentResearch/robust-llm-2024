@@ -25,7 +25,10 @@ MODEL_FAMILIES = [
 
 
 def get_save_root() -> str:
-    if Path(SHARED_DATA_DIR).exists():
-        return SHARED_DATA_DIR
-    else:
-        return "cache"
+    try:
+        if Path(SHARED_DATA_DIR).exists():
+            return SHARED_DATA_DIR
+    except OSError as e:
+        raise OSError("Error checking for shared dir, maybe storage is down?") from e
+
+    return "cache"

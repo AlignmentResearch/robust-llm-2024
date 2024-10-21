@@ -49,9 +49,9 @@ def main(
     max_subthreads_per_thread: int,
 ) -> None:
     for group_name in tqdm(group_names):
-        runs = get_wandb_runs(group_name)
+        unsorted_runs = get_wandb_runs(group_name)
         # Sort runs by name (which implicitly sorts by index)
-        runs = sorted(runs, key=lambda run: get_run_index(run))
+        runs = sorted(unsorted_runs, key=lambda run: get_run_index(run))
         if starting_index is not None:
             runs = [run for run in runs if get_run_index(run) >= starting_index]
 

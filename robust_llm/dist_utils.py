@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.distributed as dist
 from accelerate import Accelerator
+from transformers import PreTrainedTokenizerBase
 
 INT_TO_DTYPE = {
     0: torch.float32,
@@ -314,3 +315,26 @@ class DistributedRNG:
     def setstate(self, state: dict[str, Any] | None) -> None:
         if self._rng is not None and state is not None:
             self._rng.bit_generator.state = state
+
+
+def pad_batch_across_processes(
+    tokenizer: PreTrainedTokenizerBase, accelerator: Accelerator, batch: dict
+) -> dict:
+    """Pad a batch across processes.
+
+    We have to do this because otherwise we can end up with different length sequences
+    across processes, which will cause a hang.
+    """
+    pad_token_id = tokenizer.pad_token_id
+    assert pad_token_id is not None
+    input_ids = accelerator.pad_across_processes(
+        batch["input_ids"], pad_index=pad_token_id, dim=1
+    )
+    attention_mask = accelerator.pad_across_processes(
+        batch["attention_mask"], pad_index=0, dim=1
+    )
+    return {
+        "input_ids": input_ids,
+        "attention_mask": attention_mask,
+        "labels": batch["labels"],
+    }

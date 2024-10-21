@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 import wandb
 import yaml
+from accelerate import Accelerator
 from datasets import Dataset
 from datasets.utils.logging import disable_progress_bar
 from omegaconf import OmegaConf
@@ -349,3 +350,59 @@ def should_log():
 def wandb_log(d: dict, commit: bool) -> None:
     if should_log():
         wandb.log(d, commit=commit)
+
+
+def log(
+    message: str,
+    main_process_only: bool = False,
+    level: str = "info",
+    colors: bool = True,
+    accelerator: Accelerator | None = None,
+):
+    """Log a message.
+
+    Args:
+        message:
+            The message to log.
+        main_process_only:
+            Whether to only log the message on the main process.
+        level:
+            The logging level to use.
+            Choose "print" to print, or the normal logging levels "info",
+            "warning", "error", "critical".
+        colors:
+            Whether to color output by process index
+        accelerator:
+            The accelerator object.
+    """
+    if accelerator is None:
+        accelerator = Accelerator()
+    if main_process_only and not accelerator.is_main_process:
+        return
+
+    # Add process to the message
+    message = f"Proc {accelerator.process_index} | {message}"
+    if colors:
+        color = COLOR_MAP[accelerator.process_index % len(COLOR_MAP)]
+        message = f"{color}{message}{COLOR_END}"
+
+    if level == "print":
+        # Add the newline manually to avoid issues in multi-process logging.
+        message = f"{message}\n"
+        print(message, end="")
+
+    elif level == "debug":
+        logger.debug(message)
+    elif level == "info":
+        logger.info(message)
+    elif level == "warning":
+        logger.warning(message)
+    elif level == "error":
+        logger.error(message)
+    else:
+        raise ValueError(f"Invalid logging level: {level}")
+
+
+# Blue for process 0, yellow for process 1, etc
+COLOR_MAP = ["\033[94m", "\033[93m", "\033[92m", "\033[91m", "\033[95m"]
+COLOR_END = "\033[0m"

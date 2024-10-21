@@ -10,33 +10,25 @@ from robust_llm.config.configs import (
 )
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.training import AttackSchedule
-
-
-def test_attack_rounds():
-    schedule = AttackSchedule(AttackScheduleConfig(start=1, end=10), num_rounds=5)
-    assert schedule.attack_rounds == 3
-
-    schedule = AttackSchedule(AttackScheduleConfig(start=1, end=1), num_rounds=2)
-    assert schedule.attack_rounds == 0
+from robust_llm.training.training_utils import AttackSchedule
 
 
 def test_init_with_end_and_rate():
-    schedule = AttackSchedule(AttackScheduleConfig(end=10, rate=2), num_rounds=5)
+    schedule = AttackSchedule(AttackScheduleConfig(end=10, rate=2), num_rounds=4)
     assert schedule.start == 4
     assert schedule.end == 10
     assert schedule.rate == 2
 
 
 def test_init_with_start_and_rate():
-    schedule = AttackSchedule(AttackScheduleConfig(start=1, rate=2), num_rounds=5)
+    schedule = AttackSchedule(AttackScheduleConfig(start=1, rate=2), num_rounds=4)
     assert schedule.start == 1
     assert schedule.end == 7
     assert schedule.rate == 2
 
 
 def test_init_with_start_and_end():
-    schedule = AttackSchedule(AttackScheduleConfig(start=1, end=10), num_rounds=5)
+    schedule = AttackSchedule(AttackScheduleConfig(start=1, end=10), num_rounds=4)
     assert schedule.start == 1
     assert schedule.end == 10
     assert pytest.approx(schedule.rate) == 3
@@ -44,24 +36,24 @@ def test_init_with_start_and_end():
 
 def test_init_with_too_many_params():
     with pytest.raises(AssertionError):
-        AttackSchedule(AttackScheduleConfig(start=1, end=2, rate=0.1), num_rounds=5)
+        AttackSchedule(AttackScheduleConfig(start=1, end=2, rate=0.1), num_rounds=4)
 
 
-def test_init_with_num_rounds_less_than_3():
-    schedule = AttackSchedule(AttackScheduleConfig(start=5, end=5), num_rounds=2)
+def test_init_with_num_rounds_less_than_2():
+    schedule = AttackSchedule(AttackScheduleConfig(start=5, end=5), num_rounds=1)
     assert schedule.start == 5
     assert schedule.end == 5
     assert schedule.rate == 0
 
-    with pytest.raises(ValueError, match="If num_rounds<=2, rate must be 0."):
-        AttackSchedule(AttackScheduleConfig(end=5, rate=1), num_rounds=2)
+    with pytest.raises(ValueError, match="If num_rounds<=1, rate must be 0."):
+        print(AttackSchedule(AttackScheduleConfig(end=5, rate=1), num_rounds=1))
 
-    with pytest.raises(ValueError, match="If num_rounds<=2, start must equal end."):
-        AttackSchedule(AttackScheduleConfig(start=1, end=5), num_rounds=2)
+    with pytest.raises(ValueError, match="If num_rounds<=1, start must equal end."):
+        AttackSchedule(AttackScheduleConfig(start=1, end=5), num_rounds=1)
 
 
 def test_getitem():
-    schedule = AttackSchedule(AttackScheduleConfig(start=1, end=10), num_rounds=5)
+    schedule = AttackSchedule(AttackScheduleConfig(start=1, end=10), num_rounds=4)
     assert schedule[0] == 1
     assert schedule[1] == 4
     assert schedule[2] == 7
@@ -75,14 +67,12 @@ def test_getitem():
 
 
 def test_edge_cases():
-    # Test with num_rounds = 2
-    schedule = AttackSchedule(AttackScheduleConfig(start=5, end=5), num_rounds=2)
+    schedule = AttackSchedule(AttackScheduleConfig(start=5, end=5), num_rounds=1)
     assert schedule.start == 5
     assert schedule.end == 5
     assert schedule.rate == 0
 
-    # Test with num_rounds = 3
-    schedule = AttackSchedule(AttackScheduleConfig(start=1, end=10), num_rounds=3)
+    schedule = AttackSchedule(AttackScheduleConfig(start=1, end=10), num_rounds=2)
     assert schedule.start == 1
     assert schedule.end == 10
     assert schedule.rate == 9
@@ -133,5 +123,5 @@ def test_schedule_config(start: int | None, end: int | None, rate: float | None)
     assert interpolated.training is not None
     assert interpolated.training.adversarial is not None
     AttackSchedule(
-        config=interpolated.training.adversarial.attack_schedule, num_rounds=5
+        config=interpolated.training.adversarial.attack_schedule, num_rounds=4
     )

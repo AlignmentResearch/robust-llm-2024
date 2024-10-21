@@ -129,12 +129,12 @@ def test_with_attacked_text(clf_dataset: RLLMDataset, tokenizer):
     assert isinstance(adv_dataset.ds.features["clf_label"], ClassLabel)
 
 
-def test_for_hf_trainer_clf(clf_dataset: RLLMDataset, tokenizer):
+def test_for_training_clf(clf_dataset: RLLMDataset, tokenizer):
     with pytest.raises(AssertionError):
-        clf_dataset.for_hf_trainer()
+        clf_dataset.for_training()
 
     tokenized_dataset = clf_dataset.tokenize(tokenizer)
-    hf_ds = tokenized_dataset.for_hf_trainer()
+    hf_ds = tokenized_dataset.for_training()
     assert len(hf_ds) == len(tokenized_dataset)
     # Check that the features are correct
     assert "input_ids" in hf_ds.features
@@ -145,12 +145,12 @@ def test_for_hf_trainer_clf(clf_dataset: RLLMDataset, tokenizer):
     assert isinstance(hf_ds.features["label"], ClassLabel)
 
 
-def test_for_hf_trainer_gen(gen_dataset: RLLMDataset, tokenizer):
+def test_for_training_gen(gen_dataset: RLLMDataset, tokenizer):
     with pytest.raises(AssertionError):
-        gen_dataset.for_hf_trainer()
+        gen_dataset.for_training()
 
     tokenized_dataset = gen_dataset.tokenize(tokenizer)
-    hf_ds = tokenized_dataset.for_hf_trainer()
+    hf_ds = tokenized_dataset.for_training()
     assert len(hf_ds) == len(tokenized_dataset)
     # Check that the features are correct
     assert "input_ids" in hf_ds.features

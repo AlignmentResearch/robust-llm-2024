@@ -23,6 +23,8 @@ dependencies = [
     "semver==3.0.2",
     "detoxify==0.5.2",
     "openai==1.35.3",
+    "pydantic==2.7.4",
+    "torchdata==0.8.0",
 ]
 
 [project.optional-dependencies]
