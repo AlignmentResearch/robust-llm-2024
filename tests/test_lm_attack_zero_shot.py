@@ -4,7 +4,6 @@ from unittest.mock import PropertyMock, patch
 import pytest
 import wandb
 from accelerate import Accelerator
-from omegaconf import OmegaConf
 
 from robust_llm.attacks.search_free.lm_attack_zero_shot import ZeroShotLMAttack
 from robust_llm.config.attack_configs import LMAttackConfig
@@ -25,6 +24,7 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ModifiableChunkSpec,
 )
 from robust_llm.scoring_callbacks import build_binary_scoring_callback
+from robust_llm.utils import interpolate_config
 
 
 @pytest.fixture
@@ -82,8 +82,7 @@ def test_adversary_input_zs(exp_config: ExperimentConfig) -> None:
         ],
     )
     exp_config.evaluation.num_iterations = n_its
-    config = OmegaConf.to_object(OmegaConf.structured(exp_config))
-    assert isinstance(config, ExperimentConfig)
+    config = interpolate_config(exp_config)
     assert config.evaluation is not None
     use_cpu = config.environment.device == "cpu"
     final_callback_config = config.evaluation.final_success_binary_callback
@@ -165,9 +164,7 @@ def test_wrong_chunks_dataset_zs(exp_config: ExperimentConfig) -> None:
     )
     exp_config.evaluation.num_iterations = 2
     exp_config.dataset.dataset_type = "AlignmentResearch/PasswordMatch"
-    config = OmegaConf.to_object(OmegaConf.structured(exp_config))
-    print(config)
-    assert isinstance(config, ExperimentConfig)
+    config = interpolate_config(exp_config)
     assert config.evaluation is not None
     use_cpu = config.environment.device == "cpu"
     final_callback_config = config.evaluation.final_success_binary_callback

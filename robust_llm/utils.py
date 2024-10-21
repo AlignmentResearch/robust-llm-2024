@@ -9,13 +9,22 @@ from collections.abc import Iterator, Sequence
 from dataclasses import fields
 from datetime import datetime
 from functools import cached_property
-from typing import Optional, Sized
+from typing import Optional, Sized, TypeVar
 
 import torch
 import torch.utils.data
+from omegaconf import OmegaConf
 
 from robust_llm import logger
 from robust_llm.dist_utils import DistributedRNG
+
+T = TypeVar("T")
+
+
+def interpolate_config(config: T) -> T:
+    interpolated = OmegaConf.to_object(OmegaConf.structured(config))
+    assert isinstance(interpolated, type(config))
+    return interpolated
 
 
 def remove_directory(to_remove: str, retries: int = 5, sleep: int = 1) -> None:

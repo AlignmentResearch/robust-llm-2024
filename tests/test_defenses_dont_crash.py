@@ -1,7 +1,6 @@
 """Test that the various defenses don't crash."""
 
 import pytest
-from omegaconf import OmegaConf
 
 from robust_llm.config import (
     DatasetConfig,
@@ -17,6 +16,7 @@ from robust_llm.config.defense_configs import (
     RetokenizationDefenseConfig,
 )
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
+from robust_llm.utils import interpolate_config
 
 
 @pytest.fixture
@@ -61,8 +61,7 @@ def _run_evaluation_pipeline(exp_config: ExperimentConfig) -> None:
     - Then we convert back to an ExperimentConfig object, and use
     that to run the pipeline.
     """
-    config = OmegaConf.to_object(OmegaConf.structured(exp_config))
-    assert isinstance(config, ExperimentConfig)
+    config = interpolate_config(exp_config)
     run_evaluation_pipeline(config)
 
 

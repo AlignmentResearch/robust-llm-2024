@@ -76,7 +76,9 @@ docs/_build/
 target/
 
 # Jupyter Notebook
+*.ipynb
 .ipynb_checkpoints
+notebooks/
 
 # IPython
 profile_default/
@@ -182,9 +184,6 @@ robust_llm/outputs/
 # Pythia
 pythia*/
 
-# Jupyter notebooks
-*.ipynb
-notebooks/
 
 # Trainer files
 adversarial_trainer/

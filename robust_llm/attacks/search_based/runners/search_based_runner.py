@@ -2,7 +2,7 @@ import abc
 import copy
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, overload
+from typing import Any
 
 import torch
 import torch.utils.data
@@ -13,12 +13,14 @@ from robust_llm.attacks.search_based.utils import (
     AttackTokenizationChangeException,
     PreppedExample,
     ReplacementCandidate,
+    apply_replacements_and_eval_candidates,
     create_onehot_embedding,
+    select_next_candidates,
 )
 from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models import WrappedModel
-from robust_llm.scoring_callbacks import CallbackInput, build_tensor_scoring_callback
+from robust_llm.scoring_callbacks import build_tensor_scoring_callback
 
 
 @dataclass(frozen=True)
@@ -233,25 +235,7 @@ class SearchBasedRunner(abc.ABC):
     def _select_next_candidates(
         self, candidates: list[tuple[float, str]]
     ) -> tuple[list[str], list[int]]:
-        """Selects text candidates for the next round, based on (score, text) pairs.
-
-        Args:
-            candidates: A list of (score, text) pairs to select from.
-
-        Returns:
-            A list of the next candidates to consider and a list of their indices.
-        """
-        indexed_candidates = list(enumerate(candidates))
-        sorted_candidates = list(sorted(indexed_candidates, key=lambda x: x[1][0]))
-        next_candidates = [
-            candidate[1][1]
-            for candidate in sorted_candidates[: self.n_best_candidates_to_keep]
-        ]
-        next_candidates_indices = [
-            candidate[0]
-            for candidate in sorted_candidates[: self.n_best_candidates_to_keep]
-        ]
-        return next_candidates, next_candidates_indices
+        return select_next_candidates(candidates, self.n_best_candidates_to_keep)
 
     @property
     @abc.abstractmethod
@@ -279,7 +263,7 @@ class SearchBasedRunner(abc.ABC):
         """
         optional_character = "@" if n_attack_tokens % 2 == 1 else ""
         attack_text = "@&" * (n_attack_tokens // 2) + optional_character
-        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
+        attack_tokens = self.victim.get_tokens(attack_text, return_tensors="pt")
         assert len(attack_tokens[0]) == n_attack_tokens
 
         try:
@@ -318,66 +302,6 @@ class SearchBasedRunner(abc.ABC):
         # We exceeded the maximum number of trials, so we raise an exception.
         raise AttackTokenizationChangeException
 
-    @overload
-    def _get_tokens(
-        self,
-        inputs: str | list[str],
-        return_tensors: Literal[None] = None,
-        add_special_and_chat: bool = False,
-    ) -> list[list[int]]: ...
-
-    @overload
-    def _get_tokens(
-        self,
-        inputs: str | list[str],
-        return_tensors: Literal["pt"],
-        add_special_and_chat: bool = False,
-    ) -> torch.Tensor: ...
-
-    def _get_tokens(
-        self,
-        inputs: str | list[str],
-        return_tensors: Literal[None, "pt"] = None,
-        add_special_and_chat: bool = False,
-    ) -> list[list[int]] | torch.Tensor:
-        """Tokenize the inputs and return the token ids.
-
-        Use tokenizer which is part of the wrapped model. Handle all the arguments we
-        have to add to the tokenizer.
-
-        Args:
-            inputs: The input text or list of texts to tokenize.
-            return_tensors: Whether to return tensors, and what type of tensors to
-                return.
-            add_special_and_chat: Whether to add special tokens and use chat template.
-        """
-        if isinstance(inputs, str):
-            inputs = [inputs]
-
-        encoded = self.victim.tokenize(
-            inputs,
-            return_tensors=return_tensors,
-            add_special_tokens=add_special_and_chat,
-            use_chat_template=add_special_and_chat,
-        )
-        input_ids = encoded["input_ids"]
-        if isinstance(input_ids, torch.Tensor):
-            input_ids = input_ids.to(device=self.victim.device)
-        return input_ids  # type: ignore  # mypy thinks it's EncodingFast | Any
-
-    def _decode_tokens(
-        self,
-        inp: torch.Tensor,
-        skip_special_tokens: bool = True,
-        try_squeeze: bool = True,
-    ) -> str:
-        strings = self.victim.decode_tokens(
-            inp,
-            skip_special_tokens=skip_special_tokens,
-            try_squeeze=try_squeeze,
-        )
-        return strings
-
     def _get_attack_indices(
         self, attack_text: str, example: PreppedExample
     ) -> AttackIndices:
@@ -399,7 +323,7 @@ class SearchBasedRunner(abc.ABC):
             TargetTokenizationChangeException: If the tokenization changes after
                 concatenating the strings because of the target tokens.
         """
-        before_attack_tokens = self._get_tokens(
+        before_attack_tokens = self.victim.get_tokens(
             example.prompt_template.before_attack, return_tensors="pt"
         )
         attack_start = before_attack_tokens.shape[1]
@@ -409,9 +333,9 @@ class SearchBasedRunner(abc.ABC):
             attack_text=attack_text,
             target=example.gen_target,
         )
-        full_tokens = self._get_tokens(full_prompt, return_tensors="pt")
+        full_tokens = self.victim.get_tokens(full_prompt, return_tensors="pt")
         target_end = full_tokens.shape[1]
-        target_tokens = self._get_tokens(example.gen_target, return_tensors="pt")
+        target_tokens = self.victim.get_tokens(example.gen_target, return_tensors="pt")
         target_start = target_end - target_tokens.shape[1]
 
         attack_indices = AttackIndices(
@@ -422,7 +346,7 @@ class SearchBasedRunner(abc.ABC):
         )
 
         # Check that the attack indices actually line up.
-        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
+        attack_tokens = self.victim.get_tokens(attack_text, return_tensors="pt")
         attack_indices.assert_attack_and_target_tokens_validity(
             full_tokens, attack_tokens, target_tokens
         )
@@ -434,68 +358,12 @@ class SearchBasedRunner(abc.ABC):
         self,
         text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
     ) -> tuple[list[tuple[float, str]], dict[str, Any]]:
-        """Evaluates the candidates using a forward pass through the model.
-
-        Args:
-            text_replacement_pairs: A list of (attack_text, replacement) pairs to
-                evaluate.
-
-        Returns:
-            A tuple containing:
-                - a list of (score, attack_text) pairs, where the score is the model's
-                    output on the attack text.
-                - a dictionary containing additional information about the
-                    evaluation, in particular the logits on the example in the
-                    classification setting.
-        """
-
-        attack_tokens_list = [
-            self._get_tokens(text, return_tensors=None)
-            for text, _ in text_replacement_pairs
-        ]
-
-        candidate_attack_texts = self.victim.batch_decode(
-            torch.cat(
-                [
-                    candidate.compute_tokens_after_replacement(
-                        torch.tensor(attack_tokens)
-                    )
-                    for attack_tokens, (_, candidate) in zip(
-                        attack_tokens_list, text_replacement_pairs
-                    )
-                ]
-            ),
-            skip_special_tokens=True,
+        return apply_replacements_and_eval_candidates(
+            text_replacement_pairs,
+            self.victim,
+            self.example,
+            self.scores_from_text_callback,
         )
-
-        # NOTE: We don't add the target here; it'll be added inside the
-        # callback.
-        # TODO (ian): Check that this doesn't mess up tokenization.
-        full_prompts = [
-            self.example.prompt_template.build_prompt(
-                attack_text=attack_text,
-                target="",
-            )
-            for attack_text in candidate_attack_texts
-        ]
-        goal_clf_labels = [self.example.clf_label] * len(candidate_attack_texts)
-        goal_gen_targets = [self.example.gen_target] * len(candidate_attack_texts)
-
-        callback_input = CallbackInput(
-            input_data=full_prompts,
-            clf_label_data=goal_clf_labels,
-            gen_target_data=goal_gen_targets,
-        )
-        cb_out = self.scores_from_text_callback(self.victim, callback_input)
-        losses = cb_out.losses
-
-        evaluated_candidates = []
-        for loss, text in zip(losses.to(device="cpu"), candidate_attack_texts):
-            evaluated_candidates.append((float(loss), text))
-
-        assert len(evaluated_candidates) == len(text_replacement_pairs)
-
-        return evaluated_candidates, {"logits": cb_out.info["logits"]}
 
     def prep_candidates_using_batched_tokenization(
         self,
@@ -541,7 +409,7 @@ class SearchBasedRunner(abc.ABC):
         candidate_attack_text_list = self.victim.batch_decode(
             candidate_attack_tokens_list
         )
-        reencoded_cand_attack_tokens_list = self._get_tokens(
+        reencoded_cand_attack_tokens_list = self.victim.get_tokens(
             candidate_attack_text_list, return_tensors=None
         )
 
@@ -565,7 +433,7 @@ class SearchBasedRunner(abc.ABC):
 
         # candidate_from_text_list holds the new prompt tokens created by detokenizing
         # the new attack, adding it to the prompt, and tokenizing the whole thing.
-        candidate_from_text_list = self._get_tokens(
+        candidate_from_text_list = self.victim.get_tokens(
             candidate_text_list, return_tensors=None
         )
         return [
@@ -616,8 +484,10 @@ class SearchBasedRunner(abc.ABC):
         reference_prompts = [
             template.build_prompt(attack_text=text) for text in current_attack_texts
         ]
-        reference_tokens_list = self._get_tokens(reference_prompts, return_tensors=None)
-        reference_attack_tokens_list = self._get_tokens(
+        reference_tokens_list = self.victim.get_tokens(
+            reference_prompts, return_tensors=None
+        )
+        reference_attack_tokens_list = self.victim.get_tokens(
             current_attack_texts,
             return_tensors=None,
         )

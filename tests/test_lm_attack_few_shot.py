@@ -5,7 +5,6 @@ from unittest.mock import patch
 import pytest
 import wandb
 from accelerate import Accelerator
-from omegaconf import OmegaConf
 
 from robust_llm.attacks.search_free.lm_attack_few_shot import FewShotLMAttack
 from robust_llm.config.attack_configs import FewShotLMAttackConfig
@@ -24,6 +23,7 @@ from robust_llm.pipelines.utils import prepare_attack
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks import CallbackRegistry
 from robust_llm.scoring_callbacks.scoring_fn_utils import ScoringFnRegistry
+from robust_llm.utils import interpolate_config
 
 
 @pytest.fixture
@@ -93,8 +93,7 @@ def exp_config() -> ExperimentConfig:
             revision="latest",
         ),
     )
-    interpolated = OmegaConf.to_object(OmegaConf.structured(config))
-    assert isinstance(interpolated, ExperimentConfig)
+    interpolated = interpolate_config(config)
     return interpolated
 
 
@@ -102,8 +101,7 @@ def test_few_shot_calls(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     assert isinstance(exp_config.evaluation.evaluation_attack, FewShotLMAttackConfig)
     exp_config.run_name = "test_few_shot_calls"
-    config = OmegaConf.to_object(OmegaConf.structured(exp_config))
-    assert isinstance(config, ExperimentConfig)
+    config = interpolate_config(exp_config)
     assert config.evaluation is not None
     assert isinstance(
         config.evaluation.final_success_binary_callback, AutoregressiveCallbackConfig

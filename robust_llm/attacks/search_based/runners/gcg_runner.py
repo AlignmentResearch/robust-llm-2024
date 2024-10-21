@@ -113,10 +113,10 @@ class GCGRunner(SearchBasedRunner):
             target="",
         )
 
-        full_prompt_tokens = self._get_tokens(full_prompt, return_tensors="pt")
+        full_prompt_tokens = self.victim.get_tokens(full_prompt, return_tensors="pt")
         full_prompt_embeddings = self.victim.get_embeddings(full_prompt_tokens)
 
-        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
+        attack_tokens = self.victim.get_tokens(attack_text, return_tensors="pt")
         attack_onehot = self._get_attack_onehot(attack_tokens.to(self.victim.device))
         embed_weights = self.victim.get_embedding_weights()
 

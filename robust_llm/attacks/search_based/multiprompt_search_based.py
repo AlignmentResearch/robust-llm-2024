@@ -3,7 +3,7 @@ from typing import Any
 import numpy as np
 from typing_extensions import override
 
-from robust_llm.attacks.attack import Attack, AttackOutput
+from robust_llm.attacks.attack import Attack, AttackedRawInputOutput, AttackOutput
 from robust_llm.attacks.search_based.runners import make_runner
 from robust_llm.attacks.search_based.utils import (
     PreppedExample,
@@ -43,6 +43,7 @@ class MultiPromptSearchBasedAttack(Attack):
         TODO(GH#113): consider multi-model attacks in the future.
         """
         all_filtered_out_counts: list[int] = []
+        all_iteration_texts: list[list[str]] = []
 
         attacked_input_texts = []
         prepped_examples: list[PreppedExample] = []
@@ -82,12 +83,21 @@ class MultiPromptSearchBasedAttack(Attack):
             for example in prepped_examples
         ]
         all_filtered_out_counts.append(example_debug_info["all_filtered_out_count"])
+        all_iteration_texts = [
+            [
+                p.prompt_template.build_prompt(attack_text=a)
+                for a in example_debug_info["attack_strings"]
+            ]
+            for p in prepped_examples
+        ]
 
         attacked_dataset = dataset.with_attacked_text(attacked_input_texts)
         info_dict = _create_info_dict(all_filtered_out_counts)
         attack_out = AttackOutput(
             dataset=attacked_dataset,
-            attack_data=None,
+            attack_data=AttackedRawInputOutput(
+                iteration_texts=all_iteration_texts, logits=None
+            ),
             global_info=info_dict,
         )
 

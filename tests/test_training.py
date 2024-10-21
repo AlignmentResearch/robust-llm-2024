@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-from omegaconf import OmegaConf
 
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
 from robust_llm.config.configs import (
@@ -15,6 +14,7 @@ from robust_llm.config.configs import (
 )
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
+from robust_llm.utils import interpolate_config
 
 
 @pytest.mark.multigpu
@@ -98,6 +98,5 @@ def test_adv_training_pipeline_doesnt_crash():
             lr_scheduler_type="constant",
         ),
     )
-    interpolated = OmegaConf.to_object(OmegaConf.structured(config))
-    assert isinstance(interpolated, ExperimentConfig)
+    interpolated = interpolate_config(config)
     run_training_pipeline(interpolated)

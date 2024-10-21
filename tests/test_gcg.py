@@ -184,16 +184,18 @@ def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     full_prompt = gcg_runner.example.prompt_template.build_prompt(
         attack_text=initial_attack_text, target=target
     )
-    full_tokens = gcg_runner._get_tokens(full_prompt, return_tensors="pt")
+    full_tokens = gcg_runner.victim.get_tokens(full_prompt, return_tensors="pt")
 
-    before_attack_tokens = gcg_runner._get_tokens(
+    before_attack_tokens = gcg_runner.victim.get_tokens(
         gcg_runner.example.prompt_template.before_attack, return_tensors="pt"
     )
-    attack_tokens = gcg_runner._get_tokens(initial_attack_text, return_tensors="pt")
-    after_attack_tokens = gcg_runner._get_tokens(
+    attack_tokens = gcg_runner.victim.get_tokens(
+        initial_attack_text, return_tensors="pt"
+    )
+    after_attack_tokens = gcg_runner.victim.get_tokens(
         gcg_runner.example.prompt_template.after_attack, return_tensors="pt"
     )
-    target_tokens = gcg_runner._get_tokens(target, return_tensors="pt")
+    target_tokens = gcg_runner.victim.get_tokens(target, return_tensors="pt")
 
     concat_tokens = torch.cat(
         [before_attack_tokens, attack_tokens, after_attack_tokens, target_tokens],
@@ -216,15 +218,17 @@ def test_get_attack_indices(gcg_runner: GCGRunner, target: str) -> None:
     assert attack_indices.attack_length == gcg_runner.n_attack_tokens
     assert (
         attack_indices.target_length
-        == gcg_runner._get_tokens(target, return_tensors="pt").shape[1]
+        == gcg_runner.victim.get_tokens(target, return_tensors="pt").shape[1]
     )
 
-    new_attack_text = gcg_runner._decode_tokens(
+    new_attack_text = gcg_runner.victim.decode_tokens(
         full_tokens[:, attack_indices.attack_slice]
     )
     assert new_attack_text == initial_attack_text
 
-    new_target = gcg_runner._decode_tokens(full_tokens[:, attack_indices.target_slice])
+    new_target = gcg_runner.victim.decode_tokens(
+        full_tokens[:, attack_indices.target_slice]
+    )
     assert new_target == target
 
 
@@ -237,7 +241,7 @@ def test_filter_candidates(model_name: str, before_attack_text: str) -> None:
     gcg_runner = get_gcg_runner(model_name, before_attack_text)
 
     def get_token_id(s: str) -> int:
-        tokens = gcg_runner._get_tokens(s, return_tensors="pt")
+        tokens = gcg_runner.victim.get_tokens(s, return_tensors="pt")
         assert tokens.shape == (1, 1)
         return tokens.squeeze().item()  # type: ignore
 
@@ -319,7 +323,7 @@ def test_replacements(gcg_runner: GCGRunner) -> None:
     initial_attack_text = "a!a!a"
 
     def get_token_id(s: str) -> int:
-        tokens = gcg_runner._get_tokens(s, return_tensors="pt")
+        tokens = gcg_runner.victim.get_tokens(s, return_tensors="pt")
         assert tokens.shape == (1, 1)
         return tokens.squeeze().item()  # type: ignore
 
@@ -330,9 +334,9 @@ def test_replacements(gcg_runner: GCGRunner) -> None:
     ]
 
     for candidate, expected in replacement_candidates:
-        updated = gcg_runner._decode_tokens(
+        updated = gcg_runner.victim.decode_tokens(
             candidate.compute_tokens_after_replacement(
-                gcg_runner._get_tokens(initial_attack_text, return_tensors="pt")
+                gcg_runner.victim.get_tokens(initial_attack_text, return_tensors="pt")
             )
         )
         assert updated == expected
@@ -340,12 +344,12 @@ def test_replacements(gcg_runner: GCGRunner) -> None:
 
 def test_apply_replacements_and_eval_candidates(gcg_runner: GCGRunner) -> None:
     def get_token_id(s: str) -> int:
-        tokens = gcg_runner._get_tokens(s, return_tensors="pt")
+        tokens = gcg_runner.victim.get_tokens(s, return_tensors="pt")
         assert tokens.shape == (1, 1)
         return tokens.squeeze().item()  # type: ignore
 
     initial_attack_text = "@!@!@!"
-    gcg_runner.n_attack_tokens = gcg_runner._get_tokens(
+    gcg_runner.n_attack_tokens = gcg_runner.victim.get_tokens(
         initial_attack_text, return_tensors="pt"
     ).shape[1]
     text_replacement_pairs = [

@@ -15,6 +15,7 @@ from robust_llm.attacks.search_based.utils import (
     ExampleWithAttackIndices,
     PreppedExample,
     ReplacementCandidate,
+    apply_replacements_and_eval_candidates,
 )
 from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.models.wrapped_model import WrappedModel
@@ -66,6 +67,8 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
 
         # In how many iterations it happened that all candidates were filtered out
         all_filtered_out_count = 0
+        attack_strings = []
+        all_logits = []
 
         for i in (pbar := tqdm(range(self.n_its))):
             # TODO (ian): track whether attack is successful on each prompt
@@ -84,16 +87,30 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             if len(candidate_texts_and_replacements) == 0:
                 all_filtered_out_count += 1
                 continue
-            evaluated_candidates = self._apply_replacements_and_eval_candidates(
-                candidate_texts_and_replacements, considered_examples
+            evaluated_candidates, eval_info = (
+                self._apply_replacements_and_eval_candidates(
+                    candidate_texts_and_replacements, considered_examples
+                )
             )
-            candidate_texts = self._select_next_candidates(evaluated_candidates)
+            candidate_texts, cand_indices = self._select_next_candidates(
+                evaluated_candidates
+            )
             attack_text = candidate_texts[0]
+            attack_index = cand_indices[0]
+            attack_strings.append(attack_text)
+            eval_logits = eval_info["logits"]
+            all_logits.append(
+                eval_logits[attack_index] if eval_logits is not None else None
+            )
 
             # TODO(GH#112): track progress more cleanly
             pbar.set_description(f"Attack text: {attack_text}")
 
-        info_dict = {"all_filtered_out_count": all_filtered_out_count}
+        info_dict = {
+            "all_filtered_out_count": all_filtered_out_count,
+            "attack_strings": attack_strings,
+            "logits": all_logits,
+        }
 
         return attack_text, info_dict
 
@@ -128,7 +145,9 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         attack_text_list = [attack_text for attack_text, _ in text_replacement_pairs]
         replacement_list = [replacement for _, replacement in text_replacement_pairs]
 
-        attack_tokens_list = self._get_tokens(attack_text_list, return_tensors=None)
+        attack_tokens_list = self.victim.get_tokens(
+            attack_text_list, return_tensors=None
+        )
         assert isinstance(attack_tokens_list, list)
 
         # candidates that will be removed because they mess with tokenization of
@@ -168,7 +187,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
 
         original_full_prompt_tokens_list = [
             torch.tensor([tokens])
-            for tokens in self._get_tokens(
+            for tokens in self.victim.get_tokens(
                 original_full_prompt_list, return_tensors=None
             )
         ]
@@ -201,7 +220,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         )
         encoded_decoded_list = [
             torch.tensor([tokens])
-            for tokens in self._get_tokens(decoded_list, return_tensors=None)
+            for tokens in self.victim.get_tokens(decoded_list, return_tensors=None)
         ]
 
         # In the checks prepared above, we construct candidate full prompts by modifying
@@ -220,7 +239,7 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
             )
             for attack_text in candidate_attack_texts
         ]
-        candidate_full_prompt_tokens_list_alt = self._get_tokens(
+        candidate_full_prompt_tokens_list_alt = self.victim.get_tokens(
             candidate_full_prompt_list_alt, return_tensors=None
         )
 
@@ -301,72 +320,39 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
         self,
         text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
         considered_examples: Sequence[ExampleWithAttackIndices],
-    ) -> list[tuple[float, str]]:
+    ) -> tuple[list[tuple[float, str]], dict[str, Any]]:
         """Evaluates the candidates, running a forward pass for each prompt."""
         accumulated_scores: dict[str, list[float]] = defaultdict(list)
+        example_info: dict[str, Any] = {}
         for example in considered_examples:
-            scores = self._apply_replacements_and_eval_candidates_one_prompt(
+            scores, info = self._apply_replacements_and_eval_candidates_one_prompt(
                 text_replacement_pairs, example
             )
             for score, candidate in scores:
                 accumulated_scores[candidate].append(score)
+            if example_info:
+                example_info = {
+                    k: v + info[k] if v is not None else None
+                    for k, v in example_info.items()
+                }
+            else:
+                example_info = info
         final_scores = [
             (sum(scores), candidate) for candidate, scores in accumulated_scores.items()
         ]
-        return final_scores
+        return final_scores, example_info
 
     def _apply_replacements_and_eval_candidates_one_prompt(
         self,
         text_replacement_pairs: Sequence[tuple[str, ReplacementCandidate]],
         example: ExampleWithAttackIndices,
-    ) -> list[tuple[float, str]]:
-        attack_tokens_list = [
-            self._get_tokens(text, return_tensors=None)
-            for text, _ in text_replacement_pairs
-        ]
-
-        candidate_attack_texts = self.victim.batch_decode(
-            torch.cat(
-                [
-                    candidate.compute_tokens_after_replacement(
-                        torch.tensor(attack_tokens)
-                    )
-                    for attack_tokens, (_, candidate) in zip(
-                        attack_tokens_list, text_replacement_pairs
-                    )
-                ]
-            ),
-            skip_special_tokens=True,
+    ) -> tuple[list[tuple[float, str]], dict[str, Any]]:
+        return apply_replacements_and_eval_candidates(
+            text_replacement_pairs,
+            self.victim,
+            example,
+            self.scores_from_text_callback,
         )
-
-        # NOTE: we don't add the target to the prompt here; that'll be handled
-        # in the callback.
-        full_prompts = [
-            example.prompt_template.build_prompt(
-                attack_text=attack_text,
-                target="",
-            )
-            for attack_text in candidate_attack_texts
-        ]
-
-        goal_clf_labels = [example.clf_label] * len(candidate_attack_texts)
-        goal_gen_targets = [example.gen_target] * len(candidate_attack_texts)
-
-        callback_input = CallbackInput(
-            input_data=full_prompts,
-            clf_label_data=goal_clf_labels,
-            gen_target_data=goal_gen_targets,
-        )
-        callback_out = self.scores_from_text_callback(self.victim, callback_input)
-        losses = callback_out.losses
-
-        evaluated_candidates = []
-        for loss, text in zip(losses, candidate_attack_texts):
-            evaluated_candidates.append((float(loss), text))
-
-        assert len(evaluated_candidates) == len(text_replacement_pairs)
-
-        return evaluated_candidates
 
     @override
     def _get_candidate_texts_and_replacements(
@@ -410,10 +396,12 @@ class MultiPromptGCGRunner(MultiPromptSearchBasedRunner):
                 target="",
             )
 
-            full_prompt_tokens = self._get_tokens(full_prompt, return_tensors="pt")
+            full_prompt_tokens = self.victim.get_tokens(
+                full_prompt, return_tensors="pt"
+            )
             full_prompt_embeddings = self.victim.get_embeddings(full_prompt_tokens)
 
-            attack_tokens = self._get_tokens(attack_text, return_tensors="pt").to(
+            attack_tokens = self.victim.get_tokens(attack_text, return_tensors="pt").to(
                 self.victim.device
             )
             attack_onehot = self._get_attack_onehot(attack_tokens)

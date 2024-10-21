@@ -186,7 +186,9 @@ def _validate_tokens_input(input_data: InputData) -> torch.Tensor:
     return input_data
 
 
-def _validate_embeddings_input(input_data: InputData) -> dict[str, torch.Tensor]:
+def _validate_embeddings_input(
+    input_data: InputData, min_d_embed: int = 100
+) -> dict[str, torch.Tensor]:
     if not isinstance(input_data, dict):
         raise ValueError("Expected input_data to be a dict.")
     if input_data.keys() != {"input_ids", "embeddings"}:
@@ -205,7 +207,7 @@ def _validate_embeddings_input(input_data: InputData) -> dict[str, torch.Tensor]
         raise ValueError("Expected elements of input_data to be float.")
     if embeddings.ndim != 3:
         raise ValueError("Expected input_data to be 3D: (batch, seq_len, hidden_size).")
-    if not embeddings.shape[-1] > 100:
+    if not embeddings.shape[-1] > min_d_embed:
         raise ValueError(
             "Expected embedding dimension to be greater than 100."
             " (If your embeddings really are smaller than this, you may need to"

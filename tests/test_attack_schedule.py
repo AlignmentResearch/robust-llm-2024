@@ -1,5 +1,4 @@
 import pytest
-from omegaconf import OmegaConf
 
 from robust_llm.config.configs import (
     AdversarialTrainingConfig,
@@ -11,6 +10,7 @@ from robust_llm.config.configs import (
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.training.training_utils import AttackSchedule
+from robust_llm.utils import interpolate_config
 
 
 def test_init_with_end_and_rate():
@@ -118,7 +118,7 @@ def test_schedule_config(start: int | None, end: int | None, rate: float | None)
             n_val=2,
         ),
     )
-    interpolated = OmegaConf.to_object(OmegaConf.structured(exp_config))
+    interpolated = interpolate_config(exp_config)
     assert isinstance(interpolated, ExperimentConfig)
     assert interpolated.training is not None
     assert interpolated.training.adversarial is not None

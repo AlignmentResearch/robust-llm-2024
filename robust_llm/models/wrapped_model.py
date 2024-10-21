@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Optional, TypeVar, Union
+from typing import Any, Literal, Optional, TypeVar, Union, overload
 
 import torch
 import torch.distributed
@@ -1023,6 +1023,53 @@ class WrappedModel(ABC):
             )
         else:
             raise ValueError(f"Unknown padding_side value: {padding_side}")
+
+    @overload
+    def get_tokens(
+        self,
+        inputs: str | list[str],
+        return_tensors: Literal[None] = None,
+        add_special_and_chat: bool = False,
+    ) -> list[list[int]]: ...
+
+    @overload
+    def get_tokens(
+        self,
+        inputs: str | list[str],
+        return_tensors: Literal["pt"],
+        add_special_and_chat: bool = False,
+    ) -> torch.Tensor: ...
+
+    def get_tokens(
+        self,
+        inputs: str | list[str],
+        return_tensors: Literal[None, "pt"] = None,
+        add_special_and_chat: bool = False,
+    ) -> list[list[int]] | torch.Tensor:
+        """Tokenize the inputs and return the token ids.
+
+        Use tokenizer which is part of the wrapped model. Handle all the arguments we
+        have to add to the tokenizer.
+
+        Args:
+            inputs: The input text or list of texts to tokenize.
+            return_tensors: Whether to return tensors, and what type of tensors to
+                return.
+            add_special_and_chat: Whether to add special tokens and use chat template.
+        """
+        if isinstance(inputs, str):
+            inputs = [inputs]
+
+        encoded = self.tokenize(
+            inputs,
+            return_tensors=return_tensors,
+            add_special_tokens=add_special_and_chat,
+            use_chat_template=add_special_and_chat,
+        )
+        input_ids = encoded["input_ids"]
+        if isinstance(input_ids, torch.Tensor):
+            input_ids = input_ids.to(device=self.device)
+        return input_ids  # type: ignore  # mypy thinks it's EncodingFast | Any
 
     def decode(
         self,

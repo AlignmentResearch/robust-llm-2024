@@ -121,21 +121,26 @@ def successes_from_tokens_callback(
     return BinaryCallbackOutput(successes=successes, info={"logits": logits})
 
 
-@CallbackRegistry.register_callback(name="losses_from_embeds", return_type="tensor")
-def losses_from_embeds_callback(
+def _losses_from_embeds_callback(
     victim: WrappedModel,
     callback_input: CallbackInput,
     use_no_grad: bool = False,
+    min_d_embed: int = 100,
 ) -> TensorCallbackOutput:
     """Compute the losses from the embeddings input.
 
     TODO(GH#440): Make this work for more batch sizes greater than 1.
+
     Args:
         victim: The model to evaluate.
         callback_input: The input data and labels.
         use_no_grad: Whether to use torch.no_grad() when computing the losses.
+        min_d_embed: The minimum dimension of the embeddings. This is used to
+            validate the embeddings input.
     """
-    input_data = _validate_embeddings_input(callback_input.input_data)
+    input_data = _validate_embeddings_input(
+        callback_input.input_data, min_d_embed=min_d_embed
+    )
     label_data: LabelData
     if victim.inference_type == InferenceType.CLASSIFICATION:
         assert callback_input.clf_label_data is not None
@@ -164,6 +169,42 @@ def losses_from_embeds_callback(
     else:
         raise ValueError(f"Unknown/unsupported inference type: {victim.inference_type}")
     return TensorCallbackOutput(losses=losses)
+
+
+@CallbackRegistry.register_callback(name="losses_from_embeds", return_type="tensor")
+def losses_from_embeds_callback(
+    victim: WrappedModel,
+    callback_input: CallbackInput,
+    use_no_grad: bool = False,
+) -> TensorCallbackOutput:
+    """Compute the losses from the embeddings input.
+
+    Args:
+        victim: The model to evaluate.
+        callback_input: The input data and labels.
+        use_no_grad: Whether to use torch.no_grad() when computing the losses.
+    """
+    return _losses_from_embeds_callback(victim, callback_input, use_no_grad=use_no_grad)
+
+
+@CallbackRegistry.register_callback(
+    name="losses_from_small_embeds", return_type="tensor"
+)
+def losses_from_small_embeds_callback(
+    victim: WrappedModel,
+    callback_input: CallbackInput,
+    use_no_grad: bool = False,
+) -> TensorCallbackOutput:
+    """Compute the losses from the embeddings input.
+
+    Args:
+        victim: The model to evaluate.
+        callback_input: The input data and labels.
+        use_no_grad: Whether to use torch.no_grad() when computing the losses.
+    """
+    return _losses_from_embeds_callback(
+        victim, callback_input, use_no_grad=use_no_grad, min_d_embed=1
+    )
 
 
 @CallbackRegistry.register_callback(name="losses_from_text", return_type="tensor")

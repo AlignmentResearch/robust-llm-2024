@@ -1,6 +1,6 @@
 import abc
 from collections.abc import Sequence
-from typing import Any, Literal, overload
+from typing import Any
 
 import torch
 import torch.utils.data
@@ -12,6 +12,7 @@ from robust_llm.attacks.search_based.utils import (
     PreppedExample,
     ReplacementCandidate,
     create_onehot_embedding,
+    select_next_candidates,
 )
 from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.dist_utils import DistributedRNG
@@ -84,13 +85,10 @@ class MultiPromptSearchBasedRunner(abc.ABC):
     ) -> list[tuple[str, ReplacementCandidate]]:
         raise NotImplementedError("Not implemented in general for multi-prompt search")
 
-    def _select_next_candidates(self, candidates: list[tuple[float, str]]) -> list[str]:
-        """Selects text candidates for the next round, based on (score, text) pairs."""
-        sorted_candidates = list(sorted(candidates, key=lambda x: x[0]))
-        next_candidates = [
-            text for _, text in sorted_candidates[: self.n_best_candidates_to_keep]
-        ]
-        return next_candidates
+    def _select_next_candidates(
+        self, candidates: list[tuple[float, str]]
+    ) -> tuple[list[str], list[int]]:
+        return select_next_candidates(candidates, self.n_best_candidates_to_keep)
 
     @property
     @abc.abstractmethod
@@ -122,7 +120,7 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         """
         optional_character = "&" if n_attack_tokens % 2 == 1 else ""
         attack_text = "&@" * (n_attack_tokens // 2) + optional_character
-        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
+        attack_tokens = self.victim.get_tokens(attack_text, return_tensors="pt")
         assert len(attack_tokens[0]) == n_attack_tokens
 
         try:
@@ -174,64 +172,6 @@ class MultiPromptSearchBasedRunner(abc.ABC):
         # We exceeded the maximum number of trials, so we raise an exception.
         raise AttackTokenizationChangeException
 
-    @overload
-    def _get_tokens(
-        self,
-        inputs: str | list[str],
-        return_tensors: Literal[None] = None,
-        add_special_and_chat: bool = False,
-    ) -> list[list[int]]: ...
-
-    @overload
-    def _get_tokens(
-        self,
-        inputs: str | list[str],
-        return_tensors: Literal["pt"],
-        add_special_and_chat: bool = False,
-    ) -> torch.Tensor: ...
-
-    def _get_tokens(
-        self,
-        inputs: str | list[str],
-        return_tensors: Literal[None, "pt"] = None,
-        add_special_and_chat: bool = False,
-    ) -> list[list[int]] | torch.Tensor:
-        """Tokenize the inputs and return the token ids.
-
-        Use tokenizer which is part of the wrapped model. Handle all the arguments we
-        have to add to the tokenizer.
-
-        Args:
-            inputs: The input text or list of texts to tokenize.
-            return_tensors: Whether to return tensors, and what type of tensors to
-                return.
-            add_special_and_chat: Whether to add special tokens and use chat template.
-        """
-        if isinstance(inputs, str):
-            inputs = [inputs]
-
-        encoded = self.victim.tokenize(
-            inputs,
-            return_tensors=return_tensors,
-            add_special_tokens=add_special_and_chat,
-            use_chat_template=add_special_and_chat,
-        )
-        input_ids = encoded["input_ids"]
-        return input_ids  # type: ignore  # mypy thinks it's EncodingFast | Any
-
-    def _decode_tokens(
-        self,
-        inp: torch.Tensor,
-        skip_special_tokens: bool = True,
-        try_squeeze: bool = True,
-    ) -> str:
-        string = self.victim.decode_tokens(
-            inp,
-            skip_special_tokens=skip_special_tokens,
-            try_squeeze=try_squeeze,
-        )
-        return string
-
     def _get_attack_indices(
         self, attack_text: str, example: PreppedExample
     ) -> AttackIndices:
@@ -253,17 +193,17 @@ class MultiPromptSearchBasedRunner(abc.ABC):
             TargetTokenizationChangeException: If the tokenization changes after
                 concatenating the strings because of the target tokens.
         """
-        before_attack_tokens = self._get_tokens(
+        before_attack_tokens = self.victim.get_tokens(
             example.prompt_template.before_attack, return_tensors="pt"
         )
         attack_start = before_attack_tokens.shape[1]
         attack_end = self.n_attack_tokens + attack_start
 
-        after_attack_tokens = self._get_tokens(
+        after_attack_tokens = self.victim.get_tokens(
             example.prompt_template.after_attack, return_tensors="pt"
         )
         target_start = attack_end + after_attack_tokens.shape[1]
-        target_tokens = self._get_tokens(example.gen_target, return_tensors="pt")
+        target_tokens = self.victim.get_tokens(example.gen_target, return_tensors="pt")
         target_end = target_start + target_tokens.shape[1]
 
         attack_indices = AttackIndices(
@@ -278,8 +218,8 @@ class MultiPromptSearchBasedRunner(abc.ABC):
             attack_text=attack_text,
             target=example.gen_target,
         )
-        full_tokens = self._get_tokens(full_prompt, return_tensors="pt")
-        attack_tokens = self._get_tokens(attack_text, return_tensors="pt")
+        full_tokens = self.victim.get_tokens(full_prompt, return_tensors="pt")
+        attack_tokens = self.victim.get_tokens(attack_text, return_tensors="pt")
 
         attack_indices.assert_attack_and_target_tokens_validity(
             full_tokens, attack_tokens, target_tokens

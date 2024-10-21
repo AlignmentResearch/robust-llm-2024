@@ -1,7 +1,6 @@
 """Test that the various attacks don't crash."""
 
 import pytest
-from omegaconf import OmegaConf
 
 from robust_llm.config import (
     DatasetConfig,
@@ -13,6 +12,7 @@ from robust_llm.config import (
 from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAttackConfig
 from robust_llm.config.configs import EvaluationConfig
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
+from robust_llm.utils import interpolate_config
 
 NON_MODIFIABLE_WORDS_TEXT_ATTACKS = [
     "textfooler",
@@ -61,8 +61,7 @@ def _test_doesnt_crash(exp_config: ExperimentConfig) -> None:
     - Then we convert back to an ExperimentConfig object, and use
     that to run the pipeline.
     """
-    config = OmegaConf.to_object(OmegaConf.structured(exp_config))
-    assert isinstance(config, ExperimentConfig)
+    config = interpolate_config(exp_config)
     run_evaluation_pipeline(config)
 
 

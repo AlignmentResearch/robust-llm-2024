@@ -2,38 +2,18 @@
 
 import pytest
 import textattack.shared.utils
-from omegaconf import OmegaConf
 
-from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.config import (
     DatasetConfig,
     EnvironmentConfig,
     ExperimentConfig,
     ModelConfig,
     RandomTokenAttackConfig,
-    TextAttackAttackConfig,
 )
-from robust_llm.config.attack_configs import (
-    GCGAttackConfig,
-    LMAttackConfig,
-    MultipromptGCGAttackConfig,
-)
-from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
+from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAttackConfig
 from robust_llm.config.configs import EvaluationConfig
-from robust_llm.config.model_configs import GenerationConfig
-from robust_llm.models.model_utils import InferenceType
 from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
-
-NON_MODIFIABLE_WORDS_TEXT_ATTACKS = [
-    "textfooler",
-    "checklist",
-    "pso",
-]
-
-MODIFIABLE_WORDS_TEXT_ATTACKS = [
-    "bae",
-    "random_character_changes",
-]
+from robust_llm.utils import interpolate_config
 
 
 @pytest.fixture
@@ -52,6 +32,7 @@ def exp_config() -> ExperimentConfig:
             family="pythia",
             inference_type="classification",
             strict_load=True,
+            revision="98ffbf205cca9ddb27c200f10649e3e5fdb818f6",
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/PasswordMatch",
@@ -80,8 +61,7 @@ def _test_attack(
     # See GH#341 for more details.
     textattack.shared.utils.strings._flair_pos_tagger = None
 
-    config = OmegaConf.to_object(OmegaConf.structured(exp_config))
-    assert isinstance(config, ExperimentConfig)
+    config = interpolate_config(exp_config)
     results = run_evaluation_pipeline(config)
     actual = int(results["adversarial_eval/n_incorrect_post_attack"])
     print(f"Success rate: {actual}")
@@ -90,38 +70,27 @@ def _test_attack(
     return actual
 
 
-def _double_test_attack(
-    exp_config: ExperimentConfig,
-    success_rate_at_least: int = 0,
-) -> None:
-    """Test an attack twice to check result consistency"""
-    asr = _test_attack(exp_config, success_rate_at_least=success_rate_at_least)
-    _test_attack(
-        exp_config, success_rate_at_least=success_rate_at_least, exact_success_rate=asr
-    )
-
-
 @pytest.mark.multigpu  # Used as a test of multi-GPU classification eval
-def test_random_token(exp_config: ExperimentConfig) -> None:
+def test_random_token_asr(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=1,
     )
     exp_config.evaluation.num_iterations = 50
-    _double_test_attack(exp_config, success_rate_at_least=18)
+    _test_attack(exp_config, success_rate_at_least=18)
 
 
-def test_multiprompt_random_token(exp_config: ExperimentConfig) -> None:
+def test_multiprompt_random_token_asr(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
         n_attack_tokens=1,
         prompt_attack_mode="multi-prompt",
     )
     exp_config.evaluation.num_iterations = 250
-    _double_test_attack(exp_config, success_rate_at_least=45)
+    _test_attack(exp_config, success_rate_at_least=45)
 
 
-def test_gcg(exp_config: ExperimentConfig) -> None:
+def test_gcg_asr(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = GCGAttackConfig(
         n_attack_tokens=1,
@@ -129,131 +98,13 @@ def test_gcg(exp_config: ExperimentConfig) -> None:
     )
     exp_config.evaluation.num_iterations = 2
 
-    _double_test_attack(exp_config, success_rate_at_least=28)
+    _test_attack(exp_config, success_rate_at_least=28)
 
 
-def test_multiprompt_gcg(exp_config: ExperimentConfig) -> None:
+def test_multiprompt_gcg_asr(exp_config: ExperimentConfig) -> None:
     assert exp_config.evaluation is not None
     exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
         n_attack_tokens=5,
     )
     exp_config.evaluation.num_iterations = 10
-    _double_test_attack(exp_config, success_rate_at_least=12)
-
-
-def test_lm_attack_clf(exp_config: ExperimentConfig) -> None:
-    assert exp_config.evaluation is not None
-    exp_config.evaluation.evaluation_attack = LMAttackConfig(
-        adversary=ModelConfig(
-            name_or_path="EleutherAI/pythia-14m",
-            family="pythia",
-            inference_type=InferenceType.GENERATION.value,
-            strict_load=True,
-            generation_config=GenerationConfig(
-                min_new_tokens=10,
-                max_new_tokens=20,
-                do_sample=True,
-            ),
-        ),
-        adversary_input_templates=[
-            "{} Do something1!",
-            "{} Do something2!",
-        ],
-    )
-    exp_config.evaluation.num_iterations = 2
-    _double_test_attack(exp_config)
-
-
-def test_lm_attack_gen(exp_config: ExperimentConfig) -> None:
-    phone_number_in_generation_callback = AutoregressiveCallbackConfig(
-        callback_name="binary_univariate_fn_of_generation_from_text",
-        callback_return_type="binary",
-        scoring_fn="doesnt_contain_phone_number",
-        scoring_fn_arity=1,
-    )
-    assert exp_config.evaluation is not None
-    exp_config.dataset = DatasetConfig(
-        dataset_type="PureGeneration",
-        revision="main",
-        n_train=2,
-        n_val=2,
-        inference_type="generation",
-        classification_as_generation=False,
-    )
-    exp_config.model = ModelConfig(
-        name_or_path="EleutherAI/pythia-14m",
-        family="pythia",
-        inference_type="generation",
-        strict_load=True,
-        generation_config=GenerationConfig(
-            max_length=None,
-            min_new_tokens=10,
-            max_new_tokens=20,
-            do_sample=True,
-        ),
-    )
-    exp_config.evaluation.final_success_binary_callback = (
-        phone_number_in_generation_callback
-    )
-    exp_config.evaluation.evaluation_attack = LMAttackConfig(
-        adversary=ModelConfig(
-            name_or_path="EleutherAI/pythia-14m",
-            family="pythia",
-            inference_type=InferenceType.GENERATION.value,
-            strict_load=True,
-            generation_config=GenerationConfig(
-                max_length=None,
-                min_new_tokens=10,
-                max_new_tokens=20,
-                do_sample=True,
-            ),
-        ),
-        adversary_input_templates=[
-            "{} Do something!",
-        ],
-        victim_success_callback=phone_number_in_generation_callback,
-    )
-    exp_config.evaluation.num_iterations = 2
-    _double_test_attack(exp_config)
-
-
-def test_covers_text_attacks() -> None:
-    for attack_type in TEXT_ATTACK_ATTACK_TYPES:
-        assert (
-            attack_type in MODIFIABLE_WORDS_TEXT_ATTACKS
-            or attack_type in NON_MODIFIABLE_WORDS_TEXT_ATTACKS
-        )
-
-
-@pytest.mark.parametrize("text_attack_recipe", MODIFIABLE_WORDS_TEXT_ATTACKS)
-def test_modifiable_words_text_attack_doesnt_crash(
-    exp_config: ExperimentConfig, text_attack_recipe: str
-) -> None:
-    assert exp_config.evaluation is not None
-    exp_config.evaluation.evaluation_attack = TextAttackAttackConfig(
-        text_attack_recipe=text_attack_recipe,
-        num_modifiable_words_per_chunk=1,
-        query_budget=10,
-    )
-    exp_config.dataset.n_val = 2
-    _double_test_attack(exp_config)
-
-
-# These cases are special because they don't set num_modifiable_words_per_chunk,
-# but they run on the imdb dataset
-@pytest.mark.parametrize("text_attack_recipe", NON_MODIFIABLE_WORDS_TEXT_ATTACKS)
-def test_non_modifiable_words_text_attack_doesnt_crash(
-    exp_config: ExperimentConfig, text_attack_recipe: str
-) -> None:
-    assert exp_config.evaluation is not None
-    exp_config.model.name_or_path = (
-        "AlignmentResearch/robust_llm_pythia-14m_clf_imdb_v-ian-067_s-0"  # noqa: E501
-    )
-    exp_config.dataset.dataset_type = "AlignmentResearch/IMDB"
-    exp_config.evaluation.evaluation_attack = TextAttackAttackConfig(
-        text_attack_recipe=text_attack_recipe,
-        num_modifiable_words_per_chunk=None,
-        query_budget=10,
-    )
-    exp_config.dataset.n_val = 2
-    _double_test_attack(exp_config)
+    _test_attack(exp_config, success_rate_at_least=12)
