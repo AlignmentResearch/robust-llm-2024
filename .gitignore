@@ -196,6 +196,7 @@ cache/
 cache_csvs/
 notebooks/
 plots/
+notebooks/
 *.html
 *.pdf
 

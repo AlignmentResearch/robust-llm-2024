@@ -1,7 +1,7 @@
 import wandb
 
 from robust_llm.file_utils import compute_repo_path
-from robust_llm.wandb_utils.wandb_api_tools import parse_runs_to_dataframe
+from robust_llm.wandb_utils.wandb_api_tools import get_tracking_data_for_runs
 
 
 def search_wandb_runs():
@@ -13,7 +13,7 @@ def search_wandb_runs():
             "state": "finished",
         },
     )
-    return parse_runs_to_dataframe(runs)
+    return get_tracking_data_for_runs(runs)
 
 
 if __name__ == "__main__":

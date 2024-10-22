@@ -635,8 +635,10 @@ def _get_tracking_data_for_run(run: WandbRun) -> dict[str, Any]:
         "eval_round": revision.split("-")[-1] if revision is not None else None,
         "really_finished": run.summary.get("really_finished", False),
         "gpu_type": run.metadata.get("gpu", "Unknown"),
-        "gpu_count": run.metadata.get("gpu_count", "Unknown"),
-        "duration_seconds": run.summary.get("_runtime", "Unknown"),
+        "gpu_count": run.metadata.get("gpu_count", np.nan),
+        "duration_seconds": run.summary.get("_runtime", np.nan),
+        "created_at": run.created_at,
+        "state": run.state,
     }
     run_data.update(args)
     return run_data
@@ -649,6 +651,7 @@ def get_tracking_data_for_runs(runs: WandbRuns) -> pd.DataFrame:
         run_data = _get_tracking_data_for_run(run)
         data.append(run_data)
     df = pd.DataFrame(data)
+    assert not df.empty
     df["duration_hours"] = df.duration_seconds.astype(float).div(3600)
     host_df = df.groupby("host").duration_hours.aggregate(["max", "sum"])
     host_df.columns = ["max_duration_hours", "total_duration_hours"]

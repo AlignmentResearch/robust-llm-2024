@@ -1,6 +1,6 @@
 import wandb
 
-from robust_llm.wandb_utils.wandb_api_tools import parse_runs_to_dataframe
+from robust_llm.wandb_utils.wandb_api_tools import get_tracking_data_for_runs
 
 
 def search_wandb_runs():
@@ -9,7 +9,7 @@ def search_wandb_runs():
         "farai/robust-llm",
         filters={"config.hub_model_id": {"$regex": ".*_adv_tr.*"}, "state": "finished"},
     )
-    return parse_runs_to_dataframe(runs)
+    return get_tracking_data_for_runs(runs)
 
 
 if __name__ == "__main__":
