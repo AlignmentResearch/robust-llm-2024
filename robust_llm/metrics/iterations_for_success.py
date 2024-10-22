@@ -10,7 +10,6 @@ import concurrent.futures
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from pathlib import Path
 
 import pandas as pd
 
@@ -28,6 +27,7 @@ from robust_llm.scoring_callbacks.scoring_callback_utils import BinaryCallback
 from robust_llm.wandb_utils.wandb_api_tools import (
     RunInfo,
     get_adv_training_round_from_eval_run,
+    get_cache_root,
     get_model_size_and_seed_from_run,
     get_run_from_index,
     get_wandb_runs_by_index,
@@ -179,8 +179,8 @@ def compute_all_ifs_metrics(
         wandb_runs_by_index_tuples = wandb_runs_by_index_tuples[:debug_n_runs]
     asr_data = []
     ifs_data = []
-    asr_cache_dir = Path("~/.cache/rllm/asr_csvs").expanduser()
-    ifs_cache_dir = Path("~/.cache/rllm/ifs_csvs").expanduser()
+    asr_cache_dir = get_cache_root() / "asr_csvs"
+    ifs_cache_dir = get_cache_root() / "ifs_csvs"
     asr_cache_dir.mkdir(parents=True, exist_ok=True)
     ifs_cache_dir.mkdir(parents=True, exist_ok=True)
 

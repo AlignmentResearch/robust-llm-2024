@@ -15,9 +15,15 @@ commands:
     steps:
       - restore_cache:
           # To force cache validation, increase the version number N in "venv-vN" below
-          key: &venv-cache venv-v3-{{ checksum "pyproject.toml" }}
+          keys:
+            - &venv-cache-key venv-v3-{{ checksum "pyproject.toml" }}
+      - restore_cache:
+          keys:
+            # This CI cache saves the contents of wandb_utils.wandb_api_tools.get_cache_root().
+            # To force cache invalidation, change the version number here and below
+            - combined-local-cache-v1-
       - run:
-          name: Setup Virtual Environment
+          name: Setup Virtual Environment and Caching
           command: |
             # Store venv activate script in special CircleCI BASH_ENV
             # variable which will be automatically sourced before
@@ -42,7 +48,7 @@ commands:
       - save_cache:
           paths:
             - "venv"
-          key: *venv-cache
+          key: *venv-cache-key
 
       - run:
           name: print installed packages
@@ -168,12 +174,38 @@ jobs:
 
             # Ensure the output directory exists
             mkdir -p /tmp/test-reports
+            mkdir -p /tmp/cache
 
             # Run pytest with the split test functions
             pytest --cov=robust_llm --cov=tests --junitxml=/tmp/test-reports/junit.xml --durations=500 -vv $(echo "$FULLTESTPATHS" | tr '\n' ' ')
+
+            cp -r cache /tmp/cache/pytest_cache_${CIRCLE_NODE_INDEX}
       - codecov/upload
       - store-test-output
       - store-memory-monitor
+      - persist_to_workspace:
+          root: /tmp
+          paths:
+            - cache
+
+  combine-caches:
+    executor: python-executor
+    steps:
+      - attach_workspace:
+          at: /tmp
+      - run:
+          name: Combine caches
+          command: |
+            mkdir -p cache
+            for i in {0..3}; do
+              if [ -d "/tmp/cache/pytest_cache_$i" ]; then
+                cp -r /tmp/cache/pytest_cache_$i/* cache/
+              fi
+            done
+      - save_cache:
+          paths:
+            - "cache"
+          key: combined-local-cache-v1-{{ .Revision }}
 
   pytest-multigpu:
     executor: python-executor
@@ -272,6 +304,7 @@ jobs:
             flake8 --version
             flake8 . -v --exclude venv
 
+
 workflows:
   version: 2
   tests:
@@ -279,3 +312,6 @@ workflows:
       - pytest
       - pytest-multigpu
       - lint
+      - combine-caches:
+          requires:
+            - pytest

@@ -321,14 +321,12 @@ def get_model_size_and_seed_from_run(run: RunInfo) -> tuple[int, int]:
 def download_and_process_attack_data_table(
     artifact: wandb.Artifact,
     run_name: str,
-    cache_dir: str = "~/.cache/rllm",
 ):
     """Download an attack data table artifact to CACHE_DIR and return it as a DataFrame.
 
     Args:
         artifact: The wandb artifact to download.
         run_name: The name of the run on wandb.
-        cache_dir: The directory to cache the downloaded table.
 
     Returns:
         A tuple of (the index of the example in the dataset, the table as a DataFrame).
@@ -342,7 +340,6 @@ def download_and_process_attack_data_table(
     table_path = download_attack_data_table_if_not_cached(
         artifact,
         run_name,
-        cache_dir=cache_dir,
     )
 
     try:
@@ -358,14 +355,12 @@ def download_and_process_attack_data_table(
 def download_attack_data_table_if_not_cached(
     artifact: wandb.Artifact,
     run_name: str,
-    cache_dir: str = "~/.cache/rllm",
 ) -> Path:
     """Download an attack data table artifact to CACHE_DIR if not already cached.
 
     Args:
         artifact: The wandb artifact to download.
         run_name: The name of the run on wandb.
-        cache_dir: The directory to cache the downloaded table.
 
     Returns:
         The path to the download in the cache, or None.
@@ -374,13 +369,13 @@ def download_attack_data_table_if_not_cached(
     if not re_match:
         raise ValueError(f"{artifact.name=} does not match expected pattern")
 
-    cache_path = Path(cache_dir).expanduser().resolve()
-    cache_path.mkdir(parents=True, exist_ok=True)
     index = int(re_match.group(1))
-    table_path = cache_path / f"{run_name}/attack_data/example_{index}.table.json"
+    cache_path = get_cache_root() / "attack_tables" / run_name
+    cache_path.mkdir(parents=True, exist_ok=True)
+    table_path = cache_path / f"attack_data/example_{index}.table.json"
 
     if not table_path.exists() or table_path.stat().st_size == 0:
-        table_dir = artifact.download(root=str(cache_path / run_name))
+        table_dir = artifact.download(root=str(cache_path))
         assert str(table_path).startswith(table_dir)
 
     return table_path

@@ -50,6 +50,7 @@ if __name__ == "__main__":
     run = get_run_from_index(args.group_name, args.run_index)
     wandb_run = run.to_wandb()
     dataset_cfg = get_dataset_config_from_run(run)
+    wandb_run = run.to_wandb()
 
     for method in (
         _maybe_get_attack_data_from_storage,
