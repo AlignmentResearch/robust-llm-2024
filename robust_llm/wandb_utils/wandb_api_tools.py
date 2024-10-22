@@ -44,12 +44,6 @@ def try_get_run_from_id(run_id: str, retries: int = 5, backoff: int = 5) -> Wand
     raise ValueError(f"Failed to get run {run_id}")
 
 
-def _get_max_adv_training_round(run: WandbRun) -> int:
-    return run.summary.get(
-        "adv_training_round", run.summary.get("adversarial_training_round", 0)
-    )
-
-
 def try_get_runs_from_wandb(
     group_name: str, retries: int = 5, backoff: int = 5
 ) -> list[WandbRun]:
@@ -57,31 +51,15 @@ def try_get_runs_from_wandb(
         try:
             # setting per_page and order based on
             # https://github.com/wandb/wandb/issues/6614
-            runs = WANDB_API.runs(
-                path=PROJECT_NAME,
-                filters={"group": group_name},
-                per_page=1000,
-                order="+created_at",
-            )
-            name_to_run = dict()
-            for run in tqdm(runs, desc=f"Getting runs for {group_name}"):
-                # runs which have `really_finished`` are always good to use
-                # otherwise we take the run ID per run name with the most
-                # adversarial training rounds
-                if run.summary.get("really_finished") == 1:
-                    name_to_run[run.name] = run
-                    continue
-                max_round = _get_max_adv_training_round(run)
-                prev_furthest_run = name_to_run.get(run.name)
-                prev_furthest_round = (
-                    _get_max_adv_training_round(prev_furthest_run)
-                    if prev_furthest_run is not None
-                    else 0
+            return [
+                run
+                for run in WANDB_API.runs(
+                    path=PROJECT_NAME,
+                    filters={"group": group_name},
+                    per_page=1000,
+                    order="+created_at",
                 )
-                if max_round > prev_furthest_round:
-                    name_to_run[run.name] = run
-            run_list = list(name_to_run.values())
-            return run_list
+            ]
         except Exception as e:
             print(f"Error getting runs on attempt {attempt}: {e}")
             time.sleep(backoff * 2**attempt)
@@ -282,7 +260,9 @@ def get_run_from_index(
     runs = get_runs_for_group(group_name, use_cache=use_cache)
     target_run = None
     for run in runs:
-        if re.search(rf"-{run_index}$", run.name):
+        if re.search(rf"-{run_index}$", run.name) and run.summary.get(
+            "really_finished", False
+        ):
             target_run = run
     if target_run is None:
         raise ValueError(
@@ -305,7 +285,7 @@ def get_model_size_and_seed_from_run(run: RunInfo) -> tuple[int, int]:
     if ft_match is not None:
         return int(model_size), int(ft_match.group(1))
 
-    adv_seed_regex = r"^.*s-(\d+)_.*t-(\d+)$"
+    adv_seed_regex = r"^.*s-(\d+)_.*t-(\d+)"
     adv_match = re.match(adv_seed_regex, model_name)
     if adv_match is None or len(adv_match.groups()) != 2:
         raise ValueError(f"Could not extract seed from model name {model_name}")
@@ -430,28 +410,47 @@ def _get_full_history(run: RunInfo) -> pd.DataFrame:
     cache_path = get_history_cache_path(run.group, run.id)
     if not cache_path.exists():
         history = _safe_get_history(run)
-        assert not history.empty, f"Raw history is empty for run {run.id}"
         history.to_csv(cache_path, index=False)
         return history
-    return pd.read_csv(cache_path)
+    try:
+        return pd.read_csv(cache_path)
+    except pd.errors.EmptyDataError:
+        return pd.DataFrame()
 
 
-def _fix_deprecated_adversarial_training_round(history: pd.DataFrame):
-    if "adv_training_round" not in history and "adversarial_training_round" in history:
-        history["adv_training_round"] = history["train/total_flops"].notnull().cumsum()
-    history.adv_training_round = history.adv_training_round.where(
-        history.adv_training_round.notnull(),
-        (history.adv_training_round.bfill() - 1).clip(0, None),
+def _fix_flops_round_mapping(history: pd.DataFrame, run: RunInfo) -> pd.DataFrame:
+    if "adv_training_round" in history and "adversarial_training_round" not in history:
+        # We don't need to do anything in the case of an evaluation run
+        return history
+    elif "adv_training_round" in history:
+        # In older training runs, we had duplicate columns for adv training round
+        history.loc[history.adv_training_round.eq(0), "train/total_flops"] = 0
+        return history
+    elif len(history) <= 1 and (
+        "adversarial_training_round" not in history
+        or "train/total_flops" not in history
+    ):
+        # We didn't get far enough into the run to log anything useful
+        return pd.DataFrame()
+    has_dummy_round = (history.adversarial_training_round.min() == 0) and (
+        run.summary.get("experiment_yaml", {})
+        .get("training", {})
+        .get("adversarial", {})
+        .get("skip_first_training_round", False)
     )
-    assert history.adv_training_round.min() == 0, "adv_training_round is not 0-indexed"
-
-
-def _fix_round_0_flops(history: pd.DataFrame):
-    if "train/total_flops" in history and "adv_training_round" in history:
+    if has_dummy_round:
         history.loc[
-            history.adv_training_round.eq(0) & history["train/total_flops"].isnull(),
+            np.where(history["train/total_flops"].isnull())[0][-1],
             "train/total_flops",
         ] = 0
+    if bool(history["train/total_flops"].isnull().any()):
+        # We have a crash in the middle of training so no data for the last round
+        history["adv_training_round"] = history.adversarial_training_round.shift(1)
+        history = history.iloc[1:]
+    else:
+        history["adv_training_round"] = history.adversarial_training_round
+    assert history.adv_training_round.notnull().all()
+    return history
 
 
 def _filter_for_metrics(history: pd.DataFrame, metrics: list[str]):
@@ -465,9 +464,10 @@ def _filter_for_metrics(history: pd.DataFrame, metrics: list[str]):
 
 def _get_filtered_history(run: RunInfo, metrics: list[str]) -> pd.DataFrame:
     history = _get_full_history(run)
+    if history.empty:
+        return history
     assert not history.empty, f"Full history is empty for run {run.id}"
-    _fix_deprecated_adversarial_training_round(history)
-    _fix_round_0_flops(history)
+    history = _fix_flops_round_mapping(history, run)
     return _filter_for_metrics(history, metrics)
 
 
@@ -482,6 +482,8 @@ def get_enriched_history(
     if summary_keys is None:
         summary_keys = []
     history = _get_filtered_history(run, metrics)
+    if history.empty:
+        return history
     assert not history.empty, (
         f"Filtered history is empty for run={run.id}, "
         f"metrics={metrics}, summary_keys={summary_keys}"
@@ -555,7 +557,15 @@ def get_group_enriched_history(
                 except Exception as e:
                     print(f"An error occurred while processing a run: {e}")
 
-    return pd.concat(dfs, ignore_index=True)
+    df = pd.concat(dfs, ignore_index=True)
+    if "run_name" in df:
+        round_col = (
+            "adv_training_round"
+            if "adv_training_round" in df
+            else "adversarial_training_round"
+        )
+        df = df.drop_duplicates(subset=["run_name", round_col], keep="last")
+    return df
 
 
 def _get_tracking_data_for_run(run: WandbRun) -> dict[str, Any]:

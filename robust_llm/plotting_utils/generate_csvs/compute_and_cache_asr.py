@@ -30,6 +30,7 @@ def main(reverse: bool = False, max_workers: int = 12):
         "tom_008_eval_niki_152a_gcg_infix90",
         "tom_009_eval_niki_170_gcg",
         "tom_010_eval_niki_170_gcg_infix90",
+        "niki_iki_eval_niki_182_gcg",
     ]
     if reverse:
         GROUPS = list(reversed(GROUPS))

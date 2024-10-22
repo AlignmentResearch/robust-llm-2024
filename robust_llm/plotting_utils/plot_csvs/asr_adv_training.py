@@ -20,6 +20,7 @@ def main():
         ("gcg_gcg", "wl"),
         ("gcg_gcg_prefix", "imdb"),
         ("gcg_gcg_prefix", "spam"),
+        ("gcg_no_ramp_gcg", "imdb"),
     ]:
         for x in ("attack_flops_fraction_pretrain",):
             load_and_plot_asr(

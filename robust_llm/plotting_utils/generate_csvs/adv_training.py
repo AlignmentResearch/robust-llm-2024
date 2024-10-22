@@ -20,7 +20,12 @@ METRICS = [
 
 def main():
     attack = "gcg_gcg"
-    for dataset in ("imdb", "spam", "wl", "pm"):
+    for dataset in (
+        "imdb",
+        "spam",
+        "wl",
+        "pm",
+    ):
         save_adv_training_data(
             attack=attack,
             dataset=dataset,

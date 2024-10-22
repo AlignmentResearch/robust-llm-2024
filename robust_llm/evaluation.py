@@ -162,6 +162,7 @@ def do_adversarial_evaluation(
 
     if robustness_metric is not None:
         metrics |= robustness_metric.unwrap_metrics()
+        robustness_metric.export_wandb_table()
 
     if num_examples_to_log_detailed_info is not None and is_main_process():
         _log_examples_to_wandb(

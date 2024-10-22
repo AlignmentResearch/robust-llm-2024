@@ -28,6 +28,7 @@ def main():
         ("gcg_gcg_infix90", "spam"),
         ("gcg_gcg_prefix", "imdb"),
         ("gcg_gcg_prefix", "spam"),
+        ("gcg_no_ramp_gcg", "imdb"),
     ):
         save_adv_training_data(
             attack=attack,

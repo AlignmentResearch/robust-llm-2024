@@ -173,13 +173,21 @@ RUN_NAMES = {
             "merge_runs": "niki_171_adv_tr_gcg_pm_small",
         },
     },
+    "gcg_no_ramp_gcg": {
+        "imdb": {
+            "group_names": "niki_iki_eval_niki_182_gcg",
+            "merge_runs": "niki_182_adv_tr_no_ramp_small",
+        },
+    },
 }
 
 
 def get_run_names(attack: str, dataset: str) -> dict[str, Any]:
-    d = RUN_NAMES[attack][dataset]
-    assert isinstance(d, dict)
-    return d
+    attack_info = RUN_NAMES.get(attack)
+    assert isinstance(attack_info, dict)
+    dataset_info = attack_info.get(dataset)
+    assert isinstance(dataset_info, dict)
+    return dataset_info
 
 
 def get_offense_defense_ylabel_title(y_data_name: str, title: str) -> tuple[str, str]:

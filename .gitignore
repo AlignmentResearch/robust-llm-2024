@@ -193,6 +193,7 @@ trainer/
 
 # Plots
 cache/
+cache_csvs/
 notebooks/
 plots/
 *.html

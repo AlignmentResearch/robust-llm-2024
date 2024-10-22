@@ -1,8 +1,11 @@
 import time
 from dataclasses import dataclass
 
+import wandb
+
 from robust_llm import logger
 from robust_llm.attacks.attack import AttackOutput
+from robust_llm.logging_utils import wandb_log
 from robust_llm.metrics.average_initial_breach import (
     AIBMetricResults,
     compute_aib_from_attack_output,
@@ -58,6 +61,17 @@ class RobustnessMetricResults:
                     -1
                 ]
         return metrics
+
+    def export_wandb_table(self):
+        if self.asr_per_iteration is None:
+            return
+        table = wandb.Table(
+            data=[self.asr_per_iteration],
+            columns=[
+                f"asr@{iteration}" for iteration in range(len(self.asr_per_iteration))
+            ],
+        )
+        wandb_log({"asr_per_iteration": table}, commit=False)
 
 
 def maybe_compute_robustness_metrics(

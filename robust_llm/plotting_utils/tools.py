@@ -1063,7 +1063,7 @@ def _get_seed_from_name(name: str) -> int:
         assert "seed" in seed_str
         seed_num = int(seed_str.split("-")[-1])
     elif "_t-" in name:
-        seed_num = int(name.split("_t-")[-1])
+        seed_num = int(name.split("_t-")[-1].split("_")[0])
     else:
         seed_num = int(name.split("_s-")[-1])
     return seed_num

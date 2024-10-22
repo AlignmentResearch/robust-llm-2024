@@ -172,6 +172,11 @@ def compute_all_ifs_metrics(
         training round, and (decile, IFS) for IFS, (iteration, ASR) for ASR.
     """
     wandb_runs_by_index = get_wandb_runs_by_index(group_name)
+    wandb_runs_by_index = {
+        i: run
+        for i, run in wandb_runs_by_index.items()
+        if run.summary.get("really_finished")
+    }
     # Sort runs by name (which implicitly sorts by index)
     wandb_runs_by_index_tuples = sorted(wandb_runs_by_index.items())
     if debug_n_runs >= 0:

@@ -19,6 +19,7 @@ def main():
                     ("gcg_gcg_infix90", "spam"),
                     ("gcg_gcg_prefix", "imdb"),
                     ("gcg_gcg_prefix", "spam"),
+                    ("gcg_no_ramp_gcg", "imdb"),
                 ]:
                     load_and_plot_adv_training_plots(
                         attack=attack,
