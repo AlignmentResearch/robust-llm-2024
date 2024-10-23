@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import shutil
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
@@ -34,6 +35,8 @@ from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.training.training_utils import (
     AttackSchedule,
     construct_combined_dataset,
+    find_most_recent_checkpoint,
+    get_sorted_checkpoints,
 )
 from robust_llm.utils import deterministic_hash
 
@@ -343,6 +346,41 @@ class TrainingPipelineState:
                 f.write("")
         self.accelerator.wait_for_everyone()
 
+    def cleanup_checkpoints(self, path: Path):
+        """Delete old checkpoints to save disk space.
+
+        The process is: iterate in reverse order through the checkpoints, and
+        once we have found save_total_limit checkpoints that are safely saved,
+        we delete all older checkpoints.
+        """
+        # Only do file operations on the main process.
+        self.accelerator.wait_for_everyone()
+        if self.accelerator.is_main_process:
+
+            hex_hash = deterministic_hash(self.config)
+            path = path / hex_hash
+            if not path.exists():
+                return
+
+            save_total_limit = self.training_config.save_total_limit
+            safe_checkpoint_epochs: list[str] = []
+            log(f"Cleaning up checkpoints in {path}")
+            for subdir in get_sorted_checkpoints(path):
+                if len(safe_checkpoint_epochs) >= save_total_limit:
+                    assert hex_hash in str(subdir)
+                    assert subdir.name not in safe_checkpoint_epochs
+                    shutil.rmtree(subdir)
+                elif (subdir / "save_complete").exists():
+                    safe_checkpoint_epochs.append(subdir.name)
+                else:
+                    log(f"Deleting incomplete checkpoint: {subdir}")
+                    assert hex_hash in str(subdir)
+                    assert subdir.name not in safe_checkpoint_epochs
+                    shutil.rmtree(subdir)
+            log(f"Keeping checkpoints: {safe_checkpoint_epochs}")
+
+        self.accelerator.wait_for_everyone()
+
     def augment_dataset(self):
         """This is a placeholder for subclasses to override."""
         raise NotImplementedError
@@ -369,15 +407,6 @@ class TrainingPipelineState:
         path = path / hex_hash
 
         process_index = accelerator.process_index
-
-        def find_most_recent_checkpoint(path: Path) -> Path:
-            # Find the most recent epoch that is safely saved and load that
-            for subdir in sorted(path.iterdir(), reverse=True):
-                if (subdir / "save_complete").exists():
-                    log(f"Loading state from {subdir}")
-                    return subdir
-
-            raise FileNotFoundError(f"No saved state found for {path}.")
 
         subdir = find_most_recent_checkpoint(path)
 

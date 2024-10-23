@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from datasets import Dataset
 
 from robust_llm.config.configs import AttackScheduleConfig
+from robust_llm.logging_utils import log
 
 
 @dataclass
@@ -102,3 +104,17 @@ def construct_combined_dataset(
 
     # Create a new dataset from the records
     return Dataset.from_list(records)
+
+
+def get_sorted_checkpoints(path: Path) -> list[Path]:
+    return sorted(path.iterdir(), reverse=True)
+
+
+def find_most_recent_checkpoint(path: Path) -> Path:
+    # Find the most recent epoch that is safely saved and load that
+    for subdir in get_sorted_checkpoints(path):
+        if (subdir / "save_complete").exists():
+            log(f"Loading state from {subdir}")
+            return subdir
+
+    raise FileNotFoundError(f"No saved state found for {path}.")

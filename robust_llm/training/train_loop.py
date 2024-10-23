@@ -60,6 +60,7 @@ def run_train_loop(config: ExperimentConfig):
 
         if save_checkpoints:
             state.save(checkpoints_path)
+            state.cleanup_checkpoints(checkpoints_path)
 
         if state.should_save_trained_model():
             state.save_trained_model(models_path)
