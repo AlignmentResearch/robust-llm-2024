@@ -10,12 +10,10 @@ dataset:
   n_val: 200
 
 training:
-  logging_steps: 100
   save_to: BOTH
   num_train_epochs: 1
   learning_rate: 1e-5
   optimizer: "adafactor"
-  save_strategy: "no"
 
   adversarial:
     num_examples_to_generate_each_round: 200

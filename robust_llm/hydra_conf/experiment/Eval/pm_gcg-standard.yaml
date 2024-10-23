@@ -12,7 +12,7 @@ defaults:
 # to the `hydra_conf/attack` directory as well as configs stored with
 # `cs.store(group="attack")`) and place it at `evaluation.evaluation_attack`. In
 # particular, we are using the GCG attack as the evaluation attack.
-- /attack@evaluation.evaluation_attack: gcg-standard
+- /attack@evaluation.evaluation_attack: GCG
 - /model: EleutherAI/pythia-14m
 - _self_
 

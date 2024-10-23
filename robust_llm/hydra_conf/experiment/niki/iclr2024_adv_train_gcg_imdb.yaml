@@ -6,9 +6,6 @@ defaults:
 - /attack@evaluation.evaluation_attack: GCG
 - _self_
 
-environment:
-  deterministic: true
-
 training:
   adversarial:
     attack_schedule:

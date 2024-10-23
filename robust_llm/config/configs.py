@@ -96,11 +96,6 @@ class AdversarialTrainingConfig:
             weight to recency.
         num_adversarial_training_rounds:
             The number of adversarial training rounds to do.
-        skip_first_training_round:
-            Whether to skip the first training round or not.
-        use_balanced_sampling:
-            Whether to use balanced sampling for adversarial training, i.e., sample
-            alternately from the original and adversarial datasets.
         training_attack:
             Config for the attack to use in adversarial training.
         max_adv_data_proportion:
@@ -110,38 +105,29 @@ class AdversarialTrainingConfig:
             The maximum number of datapoints to use for adversarial training.
         adv_sampling_decay:
             The decay factor for the sampling probability of adversarial examples.
-        stopping_attack_success_rate:
-            The attack success rate on the validation dataset at which to stop
-            adversarial training.
-        target_adversarial_success_rate (float or None):
-            The attack success rate on adversarial examples to target during
-            adversarial training by modulating the iterations of the attack.
-            If None, the attack will run for a fixed number of iterations.
         attack_schedule:
             The linear schedule for increasing the number of attack iterations during
             adversarial training.
-        stopping_flops:
-            The number of FLOPs to use as a stopping criterion for adversarial training.
         evaluate_during_training:
-            Whether run adversarial evaluation on the model during adversarial training.
+            Whether to evaluate the model during adversarial training.
     """
 
     num_examples_to_generate_each_round: int = 500
     num_examples_to_log_to_wandb_each_round: int = 10
     loss_rank_weight: float = 0.0
     num_adversarial_training_rounds: int = 3
-    skip_first_training_round: bool = False
-    use_balanced_sampling: bool = False
+    # skip_first_training_round: bool = False
+    # use_balanced_sampling: bool = False
     training_attack: AttackConfig = field(default_factory=AttackConfig)
     max_adv_data_proportion: float = 0.5
     max_augmented_data_size: int = SI("${dataset.n_train}")
     adv_sampling_decay: float = 0.0
-    stopping_attack_success_rate: float = 0.0
-    target_adversarial_success_rate: Optional[float] = None
+    # stopping_attack_success_rate: float = 0.0
+    # target_adversarial_success_rate: Optional[float] = None
     attack_schedule: AttackScheduleConfig = field(
         default_factory=lambda: AttackScheduleConfig(start=10)
     )
-    stopping_flops: float = float("inf")
+    # stopping_flops: float = float("inf")
     evaluate_during_training: bool = False
 
     def __post_init__(self):
@@ -175,33 +161,9 @@ class TrainingConfig:
             consider are "constant", "constant_with_warmup", and "cosine".
             Full list here:
             At https://github.com/huggingface/transformers/blob/main/src/transformers/trainer_utils.py#L410
-        warmup_ratio: Ratio of total training steps to use for learning rate
-            warmup (when applicable to the LR scheduler).
         optimizer: The optimizer to use in training.
-        gradient_checkpointing: Whether to use gradient checkpointing.
-            This is a technique to reduce memory usage at the cost of some additional
-            computation during backpropagation.
-        group_by_length: Whether to group examples in batches by length, to
-            speed up training by reducing padding.
-        eval_steps: Number of update steps between two
-            evaluations. Will default to the same value as logging_steps if not set.
-            Should be an integer or a float in range [0,1). If smaller than 1, will
-            be interpreted as ratio of total training steps.
-        logging_steps: Number of update steps between two logs. Should
-            be an integer or a float in range [0,1). If smaller than 1, will be
-            interpreted as ratio of total training steps.
-        save_strategy: The checkpoint save strategy to adopt during training.
-            Possible values are:
-            - "no": No save is done during training.
-            - "epoch": Save is done at the end of each epoch.
-            - "steps": Save is done every save_steps.
-        save_steps: Number of updates steps before two checkpoint saves if
-            save_strategy="steps". Should be an integer or a float in range [0,1). If
-            smaller than 1, will be interpreted as ratio of total training steps.
         save_total_limit: The maximum number of checkpoints to keep. If more than
             save_total_limit checkpoints are saved, the oldest ones are deleted.
-        log_full_datasets_to_wandb: Whether to log full datasets to wandb. Off
-            by default, as it takes a lot of space.
         save_prefix: The parent directory to use for saving checkpoints.
         save_name: The name to use for saving checkpoints. If None, the name will be
             automatically generated.
@@ -217,16 +179,16 @@ class TrainingConfig:
     num_train_epochs: int = 3
     learning_rate: float = 5e-5
     lr_scheduler_type: str = "linear"
-    warmup_ratio: float = 0
+    # warmup_ratio: float = 0
     optimizer: str = "adamw_torch"
-    gradient_checkpointing: bool = False
-    group_by_length: bool = False
-    eval_steps: Optional[int] = None
-    logging_steps: int = 500
-    save_strategy: str = "steps"
-    save_steps: int = 500
+    # gradient_checkpointing: bool = False
+    # group_by_length: bool = False
+    # eval_steps: Optional[int] = None
+    # logging_steps: int = 500
+    # save_strategy: str = "steps"
+    # save_steps: int = 500
     save_total_limit: int = 2
-    log_full_datasets_to_wandb: bool = False
+    # log_full_datasets_to_wandb: bool = False
     save_prefix: str = get_save_root()
     save_name: Optional[str] = None
     save_to: SaveTo = SaveTo.BOTH

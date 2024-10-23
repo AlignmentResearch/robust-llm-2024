@@ -3,8 +3,8 @@ defaults:
 - short_adv_training_base
 - /dataset: EnronSpam/main
 - /model: EleutherAI/pythia-14m
-- /attack@training.adversarial.training_attack: random-token-len-10
-- /attack@evaluation.evaluation_attack: random-token-len-10
+- /attack@training.adversarial.training_attack: RANDOM_TOKEN
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
 - _self_
 
 training:

@@ -46,7 +46,6 @@ def test_training_pipeline_doesnt_crash():
         training=TrainingConfig(
             save_prefix="test_training_pipeline",
             save_to=SaveTo.NONE,
-            save_strategy="no",
             save_name="TEST_SAVE_NAME",
             # TODO(GH#990): Make lr scheduler configurable.
             lr_scheduler_type="constant",
@@ -88,7 +87,6 @@ def test_adv_training_pipeline_doesnt_crash():
         ),
         training=TrainingConfig(
             save_prefix="test_adv_training_pipeline",
-            save_strategy="no",
             save_to=SaveTo.NONE,
             save_name="TEST_SAVE_NAME",
             adversarial=AdversarialTrainingConfig(

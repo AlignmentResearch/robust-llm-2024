@@ -5,15 +5,10 @@ defaults:
 
 training:
   optimizer: "adafactor"
-  # With an effective batch size of 8, logging_steps=240 should run eval
-  # (20000/8)/240 ~= 10 times (since eval_steps is set to logging_steps by
-  # default).
-  logging_steps: 240
-  save_to: BOTH
+  save_to: HF_ELSE_DISK
   num_train_epochs: 3
   learning_rate: 1e-5
   lr_scheduler_type: "linear"
-  save_strategy: "no"
 
 dataset:
   n_train: 20_000

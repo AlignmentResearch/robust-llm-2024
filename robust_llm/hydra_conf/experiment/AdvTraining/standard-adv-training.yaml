@@ -6,12 +6,10 @@ defaults:
 
 training:
   optimizer: "adafactor"
-  logging_steps: 240  # Matches Training/standard-ft.yaml
-  save_to: BOTH
+  save_to: HF_ELSE_DISK
   num_train_epochs: 1
   learning_rate: 1e-5
   lr_scheduler_type: "constant"
-  save_strategy: "steps"
   adversarial:
     num_examples_to_generate_each_round: 200
     max_augmented_data_size: 1000
@@ -19,7 +17,6 @@ training:
     max_adv_data_proportion: 0.8
     loss_rank_weight: 0.5
     adv_sampling_decay: 0.005
-    skip_first_training_round: true
 
 dataset:
   n_train: 20_000
