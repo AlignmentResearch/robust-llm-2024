@@ -19,6 +19,8 @@ from transformers import (
     PreTrainedTokenizerBase,
 )
 
+from robust_llm.config.model_configs import ModelConfig
+
 if TYPE_CHECKING:
     from robust_llm.models import WrappedModel
 
@@ -485,3 +487,20 @@ def remove_padding_tokens(
         The list of texts with padding tokens removed.
     """
     return [text.replace(tokenizer.pad_token, "") for text in texts]
+
+
+def compute_batch_sizes_from_config(config: ModelConfig):
+    """Computes the train and eval minibatch sizes from the config."""
+
+    max_mb_size = max(
+        1, int(config.max_minibatch_size * config.env_minibatch_multiplier)
+    )
+    train_mb_size = max(
+        1,
+        min(
+            int(max_mb_size * config.train_minibatch_multiplier),
+            config.effective_batch_size,
+        ),
+    )
+    eval_mb_size = max(1, int(max_mb_size * config.eval_minibatch_multiplier))
+    return train_mb_size, eval_mb_size

@@ -40,6 +40,7 @@ from robust_llm.models.model_utils import (
     InferenceType,
     SuppressPadTokenWarning,
     build_dataloader,
+    compute_batch_sizes_from_config,
     dict_to_device,
     load_hf_model,
     maybe_no_grad,
@@ -506,17 +507,7 @@ class WrappedModel(ABC):
         except KeyError:
             raise ValueError(f"Unsupported model family: {config.family}")
 
-        max_mb_size = max(
-            1, int(config.max_minibatch_size * config.env_minibatch_multiplier)
-        )
-        train_mb_size = max(
-            1,
-            min(
-                int(max_mb_size * config.train_minibatch_multiplier),
-                config.effective_batch_size,
-            ),
-        )
-        eval_mb_size = max(1, int(max_mb_size * config.eval_minibatch_multiplier))
+        train_mb_size, eval_mb_size = compute_batch_sizes_from_config(config)
         # Loads the tokenizer with right padding. We'll load the tokenizer
         # with left padding lazily if we need it.
         right_tokenizer = subcls.load_tokenizer(config)

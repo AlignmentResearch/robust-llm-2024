@@ -17,28 +17,27 @@ from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training.state_classes import (
     OPTIMIZER_MAP,
-    AdversarialTrainingState,
+    AdversarialPipelineState,
     DatasetState,
     ModelState,
     RNGState,
     TrainingPipelineState,
     TrainingState,
+    build_lr_scheduler,
 )
 
 # Avoid spam from map/filter in datasets library.
 disable_progress_bar()
 
 
-def run_train_loop(config: ExperimentConfig):
+def run_train_loop(config: ExperimentConfig, accelerator: Accelerator):
     """Main training loop.
 
     Args:
         config: The configuration for the training run.
+        accelerator: The Accelerator object to use for training.
     """
     assert config.training is not None
-    if config.training.lr_scheduler_type != "constant":
-        raise NotImplementedError("TODO(GH#990): Implement learning rate scheduling.")
-    accelerator = Accelerator(cpu=config.environment.device == "cpu")
 
     # TODO(ian): Maybe separate resuming and saving
     resume_from_checkpoint = config.environment.allow_checkpointing
@@ -129,8 +128,11 @@ def initialize_state(
         model_state.wrapped_model.model.parameters(),
         lr=training_config.learning_rate,
     )
+
+    lr_scheduler = build_lr_scheduler(optimizer, config, accelerator)
     training_state = TrainingState(
         optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
     )
 
     rng_state = RNGState(
@@ -176,13 +178,15 @@ def get_state_subclass(config: ExperimentConfig) -> type[TrainingPipelineState]:
     """Get the state subclass for this experiment."""
     assert config.training is not None
     if config.training.adversarial is not None:
-        return AdversarialTrainingState
+        return AdversarialPipelineState
     return TrainingPipelineState
 
 
 def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
     optimizer = state.training_state.optimizer
-    model = state.model_state.wrapped_model.model
+    lr_scheduler = state.training_state.lr_scheduler
+    victim = state.model_state.wrapped_model
+    model = victim.model
     optimizer.zero_grad()
 
     if state.should_augment_dataset():
@@ -226,13 +230,18 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
         log(f"Backward flops: {backward_flops.flops:.2E}")
 
         optimizer.step()
+        lr_scheduler.step()
         optimizer.zero_grad()
 
         gathered_loss = state.accelerator.gather(outputs.loss)
         assert isinstance(gathered_loss, torch.Tensor)
         average_loss = gathered_loss.mean()
         wandb_log(
-            {"loss": average_loss.item(), "flops": state.flops},
+            {
+                "loss": average_loss.item(),
+                "learning_rate": lr_scheduler.get_last_lr()[0],
+                "flops": state.flops,
+            },
             commit=True,
         )
         log(

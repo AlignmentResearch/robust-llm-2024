@@ -5,6 +5,7 @@ import json
 import shutil
 from dataclasses import dataclass, field
 from functools import partial
+from math import ceil
 from pathlib import Path
 from typing import TypeVar
 from venv import logger
@@ -15,6 +16,7 @@ import wandb
 from accelerate import Accelerator
 from datasets import Dataset
 from torch.optim.adamw import AdamW
+from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
 from transformers import PreTrainedTokenizerBase
 from transformers.optimization import Adafactor
@@ -23,13 +25,14 @@ from typing_extensions import override
 from robust_llm.attacks.attack import AttackOutput
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.batch_job_utils import zero_pad
-from robust_llm.config.configs import ExperimentConfig, SaveTo, TrainingConfig
+from robust_llm.config.configs import ExperimentConfig, SaveTo
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.dist_utils import DistributedRNG
 from robust_llm.logging_utils import log, wandb_log
 from robust_llm.metrics.metrics import maybe_compute_robustness_metrics
 from robust_llm.models.model_disk_utils import generate_model_save_path
+from robust_llm.models.model_utils import compute_batch_sizes_from_config
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.dataset_utils import cast_and_concatenate
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
@@ -50,6 +53,45 @@ OPTIMIZER_MAP = {
     # Hardcoded kwargs copied from huggingface Trainer.
     "adafactor": partial(Adafactor, scale_parameter=False, relative_step=False),
 }
+
+
+def build_lr_scheduler(
+    optimizer: Optimizer, config: ExperimentConfig, accelerator: Accelerator
+):
+    """Build a learning rate scheduler from the training config."""
+    train_mb_size, _ = compute_batch_sizes_from_config(config.model)
+    training_config = config.training
+    assert training_config is not None
+    # Adjust the train_mb_size to not be larger than the dataset that's used
+    # in each process.
+    dataset_size = config.dataset.n_train
+    train_mb_size = min(
+        dataset_size // accelerator.num_processes,
+        train_mb_size,
+    )
+    num_batches = ceil(dataset_size / train_mb_size)
+    # Adjust the number of batches to account for the number of processes.
+    num_batches = num_batches // accelerator.num_processes
+    num_epochs = training_config.num_train_epochs
+
+    if training_config.lr_scheduler_type == "constant":
+        return torch.optim.lr_scheduler.LambdaLR(optimizer, lambda _: 1.0)
+    elif training_config.lr_scheduler_type == "linear":
+        if training_config.adversarial is not None:
+            raise NotImplementedError(
+                "TODO(GH#990): Implement linear LR schedule for adv training."
+            )
+        return torch.optim.lr_scheduler.LinearLR(
+            optimizer,
+            start_factor=1,
+            end_factor=0.0,
+            total_iters=num_epochs * num_batches,
+        )
+    else:
+        raise ValueError(
+            f"Unsupported lr_scheduler_type: {training_config.lr_scheduler_type}"
+        )
+
 
 StateT = TypeVar("StateT", bound="TrainingPipelineState")
 
@@ -192,25 +234,35 @@ class ModelState:
 class TrainingState:
     # TODO(GH#990): Add learning rate schedule.
     optimizer: Optimizer
+    lr_scheduler: LRScheduler
 
     def save(self, path: Path, process_index: int):
         torch.save(self.optimizer.state_dict(), path / f"optimizer_{process_index}.pt")
+        torch.save(
+            self.lr_scheduler.state_dict(), path / f"lr_scheduler_{process_index}.pt"
+        )
 
     @staticmethod
     def load(
         path: Path,
         process_index: int,
         model_state: ModelState,
-        training_config: TrainingConfig,
+        config: ExperimentConfig,
+        accelerator: Accelerator,
     ):
+        training_config = config.training
+        assert training_config is not None
         optimizer_path = path / f"optimizer_{process_index}.pt"
+        scheduler_path = path / f"lr_scheduler_{process_index}.pt"
         # Ignore the type since it doesn't understand partial
         optimizer = OPTIMIZER_MAP[training_config.optimizer](  # type: ignore
             model_state.wrapped_model.model.parameters(),
             lr=training_config.learning_rate,
         )
         optimizer.load_state_dict(torch.load(optimizer_path))
-        return TrainingState(optimizer=optimizer)
+        lr_scheduler = build_lr_scheduler(optimizer, config, accelerator)
+        lr_scheduler.load_state_dict(torch.load(scheduler_path))
+        return TrainingState(optimizer=optimizer, lr_scheduler=lr_scheduler)
 
 
 @dataclass
@@ -437,10 +489,12 @@ class TrainingPipelineState:
         )
 
         # Load the optimizer state afterwards since it depends on the model.
-        training_config = config.training
-        assert training_config is not None
         training_state = TrainingState.load(
-            subdir, process_index, model_state, training_config
+            subdir,
+            process_index,
+            model_state=model_state,
+            config=config,
+            accelerator=accelerator,
         )
 
         return cls(
@@ -513,7 +567,7 @@ class TrainingPipelineState:
 
 
 @dataclass
-class AdversarialTrainingState(TrainingPipelineState):
+class AdversarialPipelineState(TrainingPipelineState):
     """State for adversarial training."""
 
     def __post_init__(self):

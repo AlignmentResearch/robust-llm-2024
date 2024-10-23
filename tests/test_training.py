@@ -23,6 +23,7 @@ def test_training_pipeline_doesnt_crash():
         experiment_type="training",
         environment=EnvironmentConfig(
             test_mode=True,
+            allow_checkpointing=False,  # Otherwise checkpoints might already exist.
         ),
         evaluation=EvaluationConfig(),
         model=ModelConfig(
@@ -60,6 +61,7 @@ def test_adv_training_pipeline_doesnt_crash():
         experiment_type="training",
         environment=EnvironmentConfig(
             test_mode=True,
+            allow_checkpointing=False,  # Otherwise checkpoints might already exist.
         ),
         evaluation=EvaluationConfig(
             num_iterations=2,

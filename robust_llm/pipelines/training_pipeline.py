@@ -1,5 +1,6 @@
 """Pipeline for adversarial training."""
 
+from accelerate import Accelerator
 from omegaconf import OmegaConf
 
 from robust_llm import logger
@@ -10,6 +11,7 @@ from robust_llm.utils import maybe_make_deterministic
 
 
 def run_training_pipeline(args: ExperimentConfig) -> None:
+    accelerator = Accelerator(cpu=args.environment.device == "cpu")
     maybe_make_deterministic(
         args.environment.deterministic, args.environment.cublas_config
     )
@@ -25,6 +27,6 @@ def run_training_pipeline(args: ExperimentConfig) -> None:
     logger.info("%s\n", OmegaConf.to_yaml(args))
 
     # set_seed(seed=args.training.seed, deterministic=args.environment.deterministic)
-    run_train_loop(args)
+    run_train_loop(args, accelerator)
 
     logging_context.cleanup()

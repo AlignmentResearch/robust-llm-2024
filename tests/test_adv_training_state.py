@@ -16,7 +16,7 @@ from robust_llm.config.configs import (
 )
 from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models.wrapped_model import FlopCount
-from robust_llm.training.state_classes import AdversarialTrainingState, ModelState
+from robust_llm.training.state_classes import AdversarialPipelineState, ModelState
 from robust_llm.training.training_utils import construct_combined_dataset
 
 
@@ -24,6 +24,10 @@ from robust_llm.training.training_utils import construct_combined_dataset
 def config():
     return ExperimentConfig(
         experiment_type="training",
+        environment=EnvironmentConfig(
+            test_mode=True,
+            allow_checkpointing=False,  # Otherwise checkpoints might already exist.
+        ),
         training=TrainingConfig(
             adversarial=AdversarialTrainingConfig(
                 num_adversarial_training_rounds=3,
@@ -42,9 +46,6 @@ def config():
         ),
         evaluation=EvaluationConfig(
             evaluation_attack=RandomTokenAttackConfig(),
-        ),
-        environment=EnvironmentConfig(
-            test_mode=True,
         ),
     )
 
@@ -90,7 +91,7 @@ def wrapped_model():
 
 @pytest.fixture
 def state(config, accelerator, wrapped_model):
-    state = AdversarialTrainingState(
+    state = AdversarialPipelineState(
         epoch=0,
         accelerator=accelerator,
         config=config,

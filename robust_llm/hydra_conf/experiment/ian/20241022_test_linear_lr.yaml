@@ -1,0 +1,26 @@
+# @package _global_
+defaults:
+- /training: DEFAULT
+- /environment: DEFAULT
+- /model: EleutherAI/pythia-14m
+- /dataset: PasswordMatch/stable
+- _self_
+
+environment:
+  resume_mode: "once"
+
+training:
+  optimizer: "adafactor"
+  logging_steps: 240  # Matches Training/standard-ft.yaml
+  save_to: HF_ELSE_DISK
+  num_train_epochs: 5
+  learning_rate: 1e-5
+  # lr_scheduler_type: "constant"
+  lr_scheduler_type: "linear"
+  save_name: "20241018_test_refactor"
+
+dataset:
+  n_train: 2000
+  n_val: 40
+
+experiment_type: "training"
