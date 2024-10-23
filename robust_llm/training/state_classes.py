@@ -20,6 +20,7 @@ from transformers import PreTrainedTokenizerBase
 from transformers.optimization import Adafactor
 from typing_extensions import override
 
+from robust_llm.attacks.attack import AttackOutput
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.batch_job_utils import zero_pad
 from robust_llm.config.configs import ExperimentConfig, SaveTo, TrainingConfig
@@ -27,11 +28,15 @@ from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.dist_utils import DistributedRNG
 from robust_llm.logging_utils import log, wandb_log
+from robust_llm.metrics.metrics import maybe_compute_robustness_metrics
 from robust_llm.models.model_disk_utils import generate_model_save_path
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.dataset_utils import cast_and_concatenate
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
+from robust_llm.scoring_callbacks.build_scoring_callback import (
+    build_binary_scoring_callback,
+)
 from robust_llm.training.training_utils import (
     AttackSchedule,
     construct_combined_dataset,
@@ -550,6 +555,7 @@ class AdversarialTrainingState(TrainingPipelineState):
         return self.epoch != 0 and (self.is_new_round() or self.training_is_finished())
 
     def generate_adv_examples(self) -> Dataset:
+        self.model_state.wrapped_model.model.eval()
         num_rounds = self.adv_config.num_adversarial_training_rounds
         num_examples = self.adv_config.num_examples_to_generate_each_round
 
@@ -575,10 +581,26 @@ class AdversarialTrainingState(TrainingPipelineState):
             attack_out = attack.get_attacked_dataset(input_rllm_dataset, n_its=n_its)
         log(f"Attack flops: {attack_flops.flops:.2E} flops.")
         self.flops += attack_flops.flops
+        self._compute_metrics_on_adv_examples(attack_out)
 
         adv_examples = attack_out.dataset.as_adversarial_examples().for_training()
         log(f"Generated {len(adv_examples)} adversarial examples.")
         return adv_examples
+
+    def _compute_metrics_on_adv_examples(self, attack_out: AttackOutput):
+        # Logging success from generating adv examples
+        assert self.config.evaluation is not None
+        cb_config = self.config.evaluation.final_success_binary_callback
+        callback = build_binary_scoring_callback(cb_config)
+        attack_metrics = maybe_compute_robustness_metrics(
+            compute_robustness_metric=self.config.evaluation.compute_robustness_metric,
+            attack_out=attack_out,
+            success_callback=callback,
+            model=self.model_state.wrapped_model,
+        )
+        if attack_metrics is not None:
+            wandb_log(attack_metrics.unwrap_metrics(prefix="train"), commit=False)
+            attack_metrics.export_wandb_table()
 
     @override
     def get_revision(self) -> str:

@@ -1,9 +1,11 @@
 # @package _global_
 defaults:
+- /environment: DEFAULT
 - /training: DEFAULT
 - /training/adversarial: DEFAULT
+- /evaluation: DEFAULT
 - /attack@training.adversarial.training_attack: RANDOM_TOKEN
-- /environment: DEFAULT
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
 - /model: EleutherAI/pythia-14m
 - /dataset: PasswordMatch/stable
 - _self_

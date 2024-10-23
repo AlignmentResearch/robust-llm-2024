@@ -9,6 +9,8 @@ from robust_llm.config.attack_configs import RandomTokenAttackConfig
 from robust_llm.config.configs import (
     AdversarialTrainingConfig,
     AttackScheduleConfig,
+    EnvironmentConfig,
+    EvaluationConfig,
     ExperimentConfig,
     TrainingConfig,
 )
@@ -37,6 +39,12 @@ def config():
                 training_attack=RandomTokenAttackConfig(),
             ),
             num_train_epochs=5,
+        ),
+        evaluation=EvaluationConfig(
+            evaluation_attack=RandomTokenAttackConfig(),
+        ),
+        environment=EnvironmentConfig(
+            test_mode=True,
         ),
     )
 

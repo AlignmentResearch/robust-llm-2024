@@ -205,6 +205,7 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
             state.accelerator,
             batch,
         )
+        model.train()
         with state.model_state.wrapped_model.flop_count_context() as forward_flops:
             outputs = model(**batch)
         state.flops += forward_flops.flops
