@@ -271,6 +271,7 @@ class TrainingPipelineState:
     model_state: ModelState
     training_state: TrainingState
     rng_state: RNGState
+    flops: float
 
     def __post_init__(self):
         # To avoid issues in type checking, assert that the training config is
@@ -334,6 +335,7 @@ class TrainingPipelineState:
         if self.accelerator.is_main_process:
             state_dict = {
                 "epoch": epoch,
+                "flops": self.flops,
             }
             with open(path / "state.json", "w") as f:
                 json.dump(state_dict, f)
@@ -414,6 +416,7 @@ class TrainingPipelineState:
             state_dict = json.load(f)
 
         epoch = state_dict["epoch"]
+        flops = state_dict["flops"]
         assert zero_pad(epoch) == subdir.name.split("_")[-1]
 
         model_state = ModelState.load(subdir, process_index, config.model, accelerator)
@@ -436,13 +439,14 @@ class TrainingPipelineState:
         )
 
         return cls(
-            epoch=state_dict["epoch"],
+            epoch=epoch,
             accelerator=accelerator,
             config=config,
             dataset_state=dataset_state,
             model_state=model_state,
             training_state=training_state,
             rng_state=rng_state,
+            flops=flops,
         )
 
     def get_revision(self) -> str:
@@ -454,12 +458,11 @@ class TrainingPipelineState:
 
         save_to = self.training_config.save_to
         model_name = self.training_config.save_name
-        assert model_name is not None
         revision = self.get_revision()
         if save_to == SaveTo.NONE:
-            logger.info(
-                "Not saving the model/tokenizer since no save path was specified"
-            )
+            logger.info("Not saving the model/tokenizer since save_to=none")
+            return
+        assert model_name is not None
         if save_to in (SaveTo.DISK, SaveTo.BOTH):
             self._save_model_to_disk(models_path, model_name, revision)
         if save_to in (SaveTo.HF, SaveTo.BOTH):
@@ -568,7 +571,11 @@ class AdversarialTrainingState(TrainingPipelineState):
         n_its = attack_schedule[self.training_round]
         log(f"Generating {num_examples} adversarial examples with {n_its} iterations.")
 
-        attack_out = attack.get_attacked_dataset(input_rllm_dataset, n_its=n_its)
+        with self.model_state.wrapped_model.flop_count_context() as attack_flops:
+            attack_out = attack.get_attacked_dataset(input_rllm_dataset, n_its=n_its)
+        log(f"Attack flops: {attack_flops.flops:.2E} flops.")
+        self.flops += attack_flops.flops
+
         adv_examples = attack_out.dataset.as_adversarial_examples().for_training()
         log(f"Generated {len(adv_examples)} adversarial examples.")
         return adv_examples

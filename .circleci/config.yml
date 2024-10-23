@@ -21,7 +21,7 @@ commands:
           keys:
             # This CI cache saves the contents of wandb_utils.wandb_api_tools.get_cache_root().
             # To force cache invalidation, change the version number here and below
-            - combined-local-cache-v1-
+            - combined-local-cache-v2-
       - run:
           name: Setup Virtual Environment and Caching
           command: |
@@ -205,7 +205,7 @@ jobs:
       - save_cache:
           paths:
             - "cache"
-          key: combined-local-cache-v1-{{ .Revision }}
+          key: combined-local-cache-v2-{{ .Revision }}
 
   pytest-multigpu:
     executor: python-executor

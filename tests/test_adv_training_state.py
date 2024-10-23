@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -12,7 +13,8 @@ from robust_llm.config.configs import (
     TrainingConfig,
 )
 from robust_llm.dist_utils import DistributedRNG
-from robust_llm.training.state_classes import AdversarialTrainingState
+from robust_llm.models.wrapped_model import FlopCount
+from robust_llm.training.state_classes import AdversarialTrainingState, ModelState
 from robust_llm.training.training_utils import construct_combined_dataset
 
 
@@ -48,15 +50,47 @@ def accelerator():
 
 
 @pytest.fixture
-def state(config, accelerator):
+def wrapped_model():
+    class MockModel(MagicMock):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.flop_count = 0
+            self.n_forward_calls = 0
+            self.n_backward_calls = 0
+
+        @contextmanager
+        def flop_count_context(self):
+            flop_count = FlopCount(
+                flops=self.flop_count,
+                forward_calls=self.n_forward_calls,
+                backward_calls=self.n_backward_calls,
+            )
+            yield flop_count
+            # The update doesn't change any values since we want to maintain zero
+            flop_count.update(
+                flops=self.flop_count,
+                forward_calls=self.n_forward_calls,
+                backward_calls=self.n_backward_calls,
+            )
+
+    mock_model = MockModel()
+    mock_model.n_params = 0  # Ensure parameter count is zero
+    mock_model.compute_flops.return_value = 0
+
+    return mock_model
+
+
+@pytest.fixture
+def state(config, accelerator, wrapped_model):
     state = AdversarialTrainingState(
         epoch=0,
         accelerator=accelerator,
         config=config,
         dataset_state=MagicMock(),
-        model_state=MagicMock(),
+        model_state=ModelState(wrapped_model=wrapped_model),
         training_state=MagicMock(),
         rng_state=MagicMock(),
+        flops=0,
     )
     state.dataset_state.append_to_adv_dataset = MagicMock()  # type: ignore
     state.dataset_state.append_to_adv_dataset.return_value = state.dataset_state

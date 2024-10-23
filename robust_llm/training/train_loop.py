@@ -168,6 +168,7 @@ def initialize_state(
         model_state=model_state,
         training_state=training_state,
         rng_state=rng_state,
+        flops=0,
     )
 
 
@@ -204,7 +205,10 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
             state.accelerator,
             batch,
         )
-        outputs = model(**batch)
+        with state.model_state.wrapped_model.flop_count_context() as forward_flops:
+            outputs = model(**batch)
+        state.flops += forward_flops.flops
+        log(f"Forward flops: {forward_flops.flops:.2E}")
 
         # TODO(ian): Work out if I can put this loss calc somewhere nicer.
         logits = outputs["logits"]
@@ -215,7 +219,11 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
         losses += batch_losses
 
         # TODO(ian): Work out if we should use a different loss (gathered?).
-        state.accelerator.backward(outputs.loss)
+        with state.model_state.wrapped_model.flop_count_context() as backward_flops:
+            state.accelerator.backward(outputs.loss)
+        state.flops += backward_flops.flops
+        log(f"Backward flops: {backward_flops.flops:.2E}")
+
         optimizer.step()
         optimizer.zero_grad()
 
@@ -223,7 +231,7 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
         assert isinstance(gathered_loss, torch.Tensor)
         average_loss = gathered_loss.mean()
         wandb_log(
-            {"loss": average_loss.item()},
+            {"loss": average_loss.item(), "flops": state.flops},
             commit=True,
         )
         log(
