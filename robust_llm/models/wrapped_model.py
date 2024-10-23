@@ -52,7 +52,7 @@ from robust_llm.models.prompt_templates import (
     Conversation,
     PromptTemplate,
 )
-from robust_llm.utils import is_correctly_padded
+from robust_llm.utils import is_correctly_padded, print_time
 
 Prompt = TypeVar("Prompt", str, list[str])
 
@@ -403,6 +403,7 @@ class WrappedModel(ABC):
         return decorator
 
     @classmethod
+    @print_time()
     def from_config(
         cls,
         config: ModelConfig,

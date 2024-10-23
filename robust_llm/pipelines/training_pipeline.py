@@ -7,9 +7,10 @@ from robust_llm import logger
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.logging_utils import LoggingContext
 from robust_llm.training.train_loop import run_train_loop
-from robust_llm.utils import maybe_make_deterministic
+from robust_llm.utils import maybe_make_deterministic, print_time
 
 
+@print_time()
 def run_training_pipeline(args: ExperimentConfig) -> None:
     accelerator = Accelerator(cpu=args.environment.device == "cpu")
     maybe_make_deterministic(

@@ -9,6 +9,7 @@ from robust_llm.rllm_datasets.supported_datasets import (
     StrongREJECTDataset,
     WordLengthDataset,
 )
+from robust_llm.utils import print_time
 
 SUPPORTED_DATASETS: dict[str, type[RLLMDataset]] = {
     "AlignmentResearch/IMDB": IMDBDataset,
@@ -22,6 +23,7 @@ SUPPORTED_DATASETS: dict[str, type[RLLMDataset]] = {
 }
 
 
+@print_time()
 def load_rllm_dataset(dataset_config: DatasetConfig, split: str) -> RLLMDataset:
     """Loads a dataset from huggingface based on its name."""
     dataset_type = dataset_config.dataset_type

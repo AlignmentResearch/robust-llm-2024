@@ -1,4 +1,3 @@
-import time
 from dataclasses import dataclass
 
 import wandb
@@ -16,6 +15,7 @@ from robust_llm.metrics.iterations_for_success import (
 )
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.scoring_callbacks.scoring_callback_utils import BinaryCallback
+from robust_llm.utils import print_time
 
 
 @dataclass
@@ -74,6 +74,7 @@ class RobustnessMetricResults:
         wandb_log({"asr_per_iteration": table}, commit=False)
 
 
+@print_time()
 def maybe_compute_robustness_metrics(
     compute_robustness_metric: bool,
     attack_out: AttackOutput,
@@ -84,7 +85,6 @@ def maybe_compute_robustness_metrics(
         return None
     # TODO(ian): Don't redundantly compute this and the ASR.
     # TODO(ian): Remove the try: except by making it work for all attacks.
-    time_start = time.perf_counter()
     ifs_metric = None
     aib_metric = None
     try:
@@ -106,8 +106,4 @@ def maybe_compute_robustness_metrics(
             f" implemented for this attack yet: {e}"
         )
     results = RobustnessMetricResults(ifs_results=ifs_metric, aib_results=aib_metric)
-    time_end = time.perf_counter()
-    logger.info(
-        f"Time taken for robustness metrics computation: {time_end - time_start:.2f}s"
-    )
     return results

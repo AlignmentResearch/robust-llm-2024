@@ -46,7 +46,7 @@ from robust_llm.training.training_utils import (
     find_most_recent_checkpoint,
     get_sorted_checkpoints,
 )
-from robust_llm.utils import deterministic_hash
+from robust_llm.utils import deterministic_hash, print_time
 
 OPTIMIZER_MAP = {
     "adamw_torch": AdamW,
@@ -363,6 +363,7 @@ class TrainingPipelineState:
         # Get the full dataset using the index map from the dataset state.
         return self.dataset_state.clean_dataset.for_training()
 
+    @print_time()
     def save(self, path: Path):
         self.accelerator.wait_for_everyone()
         process_index = self.accelerator.process_index
@@ -511,6 +512,7 @@ class TrainingPipelineState:
     def get_revision(self) -> str:
         return "main"
 
+    @print_time()
     def save_trained_model(self, models_path: Path) -> None:
         # Make sure everything is in sync before saving.
         self.accelerator.wait_for_everyone()
@@ -739,6 +741,7 @@ class AdversarialPipelineState(TrainingPipelineState):
         return self.is_new_round()
 
     @override
+    @print_time()
     def augment_dataset(self):
         """Augment the dataset with adversarial examples.
 

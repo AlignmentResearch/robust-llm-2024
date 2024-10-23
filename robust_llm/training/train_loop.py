@@ -25,6 +25,7 @@ from robust_llm.training.state_classes import (
     TrainingState,
     build_lr_scheduler,
 )
+from robust_llm.utils import print_time
 
 # Avoid spam from map/filter in datasets library.
 disable_progress_bar()
@@ -55,7 +56,8 @@ def run_train_loop(config: ExperimentConfig, accelerator: Accelerator):
     )
 
     while not state.training_is_finished():
-        state = train_one_epoch(state)
+        with print_time(f"train_one_epoch (epoch {state.epoch})"):
+            state = train_one_epoch(state)
 
         if save_checkpoints:
             state.save(checkpoints_path)
@@ -74,6 +76,7 @@ def run_train_loop(config: ExperimentConfig, accelerator: Accelerator):
             )
 
 
+@print_time()
 def get_first_state(
     config: ExperimentConfig,
     accelerator: Accelerator,

@@ -6,10 +6,11 @@ import os
 import shutil
 import time
 from collections.abc import Iterator, Sequence
+from contextlib import ContextDecorator
 from dataclasses import fields
 from datetime import datetime
 from functools import cached_property
-from typing import Optional, Sized, TypeVar
+from typing import Callable, Optional, Sized, TypeVar
 
 import torch
 import torch.utils.data
@@ -222,3 +223,52 @@ def is_correctly_padded(mask: torch.Tensor, padding_side: str) -> bool:
             )
 
     return True
+
+
+class print_time(ContextDecorator):
+    """Logs the time some code takes to execute.
+
+    Usage:
+        >>> with print_time("hello world"):
+        ...    time.sleep(1)
+        ...
+        Time (hello world): 1.00s
+
+        >>> @print_time()
+        ... def my_func():
+        ...    time.sleep(1)
+        ...
+        >>> my_func()
+        Time (my_func): 1.00s
+    """
+
+    def __init__(self, label: str | None = None):
+        self.label = label
+
+    def __call__(self, func: Callable):
+        # If this class is used as a decorator (not as a `with` block) then this
+        # __call__ method is invoked. We can use the function name as the label.
+        if self.label is None:
+            self.label = func.__qualname__
+        return super().__call__(func)
+
+    def __enter__(self):
+        self.start_time = time.perf_counter()
+        return self
+
+    def __exit__(self, *exc):
+        elapsed_time = time.perf_counter() - self.start_time
+        label = f"({self.label})" if self.label else ""
+
+        if elapsed_time >= 3600:
+            time_str = (
+                f"{int(elapsed_time//3600)}h{int(elapsed_time%3600//60)}m"
+                f"{elapsed_time%60:.0f}s"
+            )
+        elif elapsed_time >= 60:
+            time_str = f"{int(elapsed_time//60)}m{elapsed_time%60:.0f}s"
+        else:
+            time_str = f"{elapsed_time:.2f}s"
+
+        logger.info(f"Time {label}: {time_str}")
+        return False

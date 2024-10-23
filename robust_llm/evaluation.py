@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import csv
-import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Optional
@@ -27,8 +26,10 @@ from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.scoring_callbacks import BinaryCallback, CallbackInput
 from robust_llm.scoring_callbacks.scoring_callback_utils import BinaryCallbackOutput
+from robust_llm.utils import print_time
 
 
+@print_time()
 def do_adversarial_evaluation(
     victim: WrappedModel,
     dataset: RLLMDataset,
@@ -189,6 +190,7 @@ def do_adversarial_evaluation(
     return metrics
 
 
+@print_time()
 def pre_attack_evaluation(
     victim: WrappedModel,
     dataset: RLLMDataset,
@@ -201,17 +203,15 @@ def pre_attack_evaluation(
         clf_label_data=dataset.ds["clf_label"],
         gen_target_data=dataset.ds["gen_target"],
     )
-    time_start = time.perf_counter()
     pre_attack_out = final_success_binary_callback(
         victim,
         callback_input,
     )
-    time_end = time.perf_counter()
-    logger.info(f"Time taken for pre-attack evaluation: {time_end - time_start:.2f}s")
     pre_attack_out.maybe_log_info("pre_attack_callback", commit=should_commit)
     return pre_attack_out
 
 
+@print_time()
 def attack_dataset(
     victim: WrappedModel,
     dataset_to_attack: RLLMDataset,
@@ -219,7 +219,6 @@ def attack_dataset(
     n_its: int,
     resume_from_checkpoint: bool,
 ) -> tuple[AttackOutput, int]:
-    time_start = time.perf_counter()
     with victim.flop_count_context() as attack_flops:
         attack_out = attack.get_attacked_dataset(
             dataset=dataset_to_attack,
@@ -229,11 +228,10 @@ def attack_dataset(
             # training.
             resume_from_checkpoint=resume_from_checkpoint,
         )
-    time_end = time.perf_counter()
-    logger.info(f"Time taken for attack: {time_end - time_start:.2f}s")
     return attack_out, attack_flops.flops
 
 
+@print_time()
 def maybe_save_attack_data(
     victim: WrappedModel,
     attack_out: AttackOutput,
@@ -277,6 +275,7 @@ def maybe_save_attack_data(
             artifact.save()
 
 
+@print_time()
 def post_attack_evaluation(
     victim: WrappedModel,
     attacked_dataset: RLLMDataset,
@@ -293,13 +292,10 @@ def post_attack_evaluation(
         clf_label_data=attacked_dataset.ds["attacked_clf_label"],
         gen_target_data=attacked_dataset.ds["attacked_gen_target"],
     )
-    time_start = time.perf_counter()
     post_attack_out = final_success_binary_callback(
         victim,
         callback_input,
     )
-    time_end = time.perf_counter()
-    logger.info(f"Time taken for post-attack callback: {time_end - time_start:.2f}s")
     post_attack_out.maybe_log_info("post_attack_callback", commit=should_commit)
     return post_attack_out
 
@@ -328,6 +324,7 @@ def _maybe_record_defense_specific_metrics(
     return metrics
 
 
+@print_time()
 def _log_examples_to_wandb(
     original_texts: Sequence[str],
     original_labels: Sequence[int],
@@ -393,6 +390,7 @@ def _log_examples_to_wandb(
     wandb_log({"adversarial_eval/examples": table}, commit=False)
 
 
+@print_time()
 def maybe_log_adversarial_eval_table(
     victim: WrappedModel,
     metrics: dict[str, Any],
