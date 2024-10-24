@@ -203,13 +203,8 @@ class LoggingContext:
             if isinstance(handler, logging.FileHandler):
                 handler.flush()
 
-        if is_main_process():
-            assert wandb.run is not None
-            wandb.run.save(self.args.environment.logging_filename)
-
     def _setup_logging(self) -> None:
         logging_level = self.args.environment.logging_level
-        logging_filename = self.args.environment.logging_filename
         # Create logger and formatter
         self.logger.propagate = False
         self.logger.setLevel(logging.DEBUG)
@@ -225,14 +220,8 @@ class LoggingContext:
         console_handler.setLevel(logging_level)
         console_handler.setFormatter(formatter)
 
-        # Create file handler.
-        file_handler = logging.FileHandler(logging_filename)
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(formatter)
-
         # Add three handlers to logger
         self.logger.addHandler(console_handler)
-        self.logger.addHandler(file_handler)
 
     def wandb_initialize(self) -> None:
         """Initializes wandb run and does appropriate setup.
@@ -285,7 +274,7 @@ class LoggingContext:
     def setup(self) -> None:
         if is_main_process():
             self.wandb_initialize()
-            self._setup_logging()
+        self._setup_logging()
 
     def cleanup(self) -> None:
         self.save_logs()

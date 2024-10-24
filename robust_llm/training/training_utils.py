@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+import transformers
 from datasets import Dataset
+from torch.utils.data import DataLoader
 
 from robust_llm.config.configs import AttackScheduleConfig
 from robust_llm.logging_utils import log
+from robust_llm.models.wrapped_model import WrappedModel
 
 
 @dataclass
@@ -118,3 +121,28 @@ def find_most_recent_checkpoint(path: Path) -> Path:
             return subdir
 
     raise FileNotFoundError(f"No saved state found for {path}.")
+
+
+def prepare_dataloader(victim: WrappedModel, dataset: Dataset) -> DataLoader:
+    # Computation taken from the old training.py.
+    batch_size = min(
+        len(dataset) // victim.num_processes,
+        victim.train_minibatch_size,
+    )
+
+    tokenizer = victim.right_tokenizer
+    data_collator = transformers.DataCollatorWithPadding(tokenizer=tokenizer)
+    current_columns = dataset.column_names
+    columns_to_keep = ["input_ids", "label"]
+    columns_to_remove = [col for col in current_columns if col not in columns_to_keep]
+    dataset = dataset.map(
+        lambda x: {k: v for k, v in x.items() if k in columns_to_keep},
+        remove_columns=columns_to_remove,
+    )
+
+    dataloader = DataLoader(
+        dataset,  # type: ignore  # HF datasets can actually be used here.
+        batch_size=batch_size,
+        collate_fn=data_collator,
+    )
+    return dataloader

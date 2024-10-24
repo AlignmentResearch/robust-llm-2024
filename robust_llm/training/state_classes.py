@@ -25,10 +25,12 @@ from typing_extensions import override
 from robust_llm.attacks.attack import AttackOutput
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.batch_job_utils import zero_pad
+from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.config.configs import ExperimentConfig, SaveTo
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.dist_utils import DistributedRNG
+from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import log, wandb_log
 from robust_llm.metrics.metrics import maybe_compute_robustness_metrics
 from robust_llm.models.model_disk_utils import generate_model_save_path
@@ -40,6 +42,7 @@ from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 from robust_llm.scoring_callbacks.build_scoring_callback import (
     build_binary_scoring_callback,
 )
+from robust_llm.scoring_callbacks.scoring_callback_utils import CallbackInput
 from robust_llm.training.training_utils import (
     AttackSchedule,
     construct_combined_dataset,
@@ -105,6 +108,8 @@ class DatasetState:
     Attributes:
         clean_dataset:
             The clean dataset used for training.
+        val_dataset:
+            The validation dataset used for training.
         adv_dataset:
             The adversarial dataset used for training.
         adv_losses:
@@ -119,6 +124,7 @@ class DatasetState:
     """
 
     clean_dataset: RLLMDataset
+    val_dataset: RLLMDataset
     adv_dataset: Dataset | None
     adv_losses: dict[int, float] = field(default_factory=dict)
     clean_index_map: dict[int, int] = field(default_factory=dict)
@@ -153,6 +159,8 @@ class DatasetState:
     ):
         clean_dataset = load_rllm_dataset(dataset_config, split="train")
         clean_dataset = clean_dataset.tokenize(tokenizer)
+        val_dataset = load_rllm_dataset(dataset_config, split="validation")
+        val_dataset = val_dataset.tokenize(tokenizer)
 
         dataset_path = path / "dataset"
         adv_dataset_path = dataset_path / f"adv_dataset_{process_index}"
@@ -181,6 +189,7 @@ class DatasetState:
 
         return DatasetState(
             clean_dataset=clean_dataset,
+            val_dataset=val_dataset,
             adv_dataset=adv_dataset,
             adv_losses=adv_losses,
             clean_index_map=clean_index_map,
@@ -197,6 +206,7 @@ class DatasetState:
 
         return DatasetState(
             clean_dataset=self.clean_dataset,
+            val_dataset=self.val_dataset,
             adv_dataset=new_adv_dataset,
             adv_losses=self.adv_losses,
             clean_index_map=self.clean_index_map,
@@ -375,11 +385,18 @@ class TrainingPipelineState:
 
         # Make the directory on a single process.
         if self.accelerator.is_main_process:
+            if path.exists():
+                if not (path / "save_complete").exists():
+                    log(f"Deleting incomplete checkpoint: {path}")
+                    shutil.rmtree(path)
+                else:
+                    raise FileExistsError(f"Path {path} already exists. Aborting save.")
             try:
                 path.mkdir(parents=True)
             except FileExistsError as e:
                 raise FileExistsError(
-                    f"Path {path} already exists. Aborting save."
+                    f"Path {path} already exists even though it shouldn't."
+                    " Maybe a race condition?"
                 ) from e
 
         # Wait for main process to finish making the directory.
@@ -447,6 +464,44 @@ class TrainingPipelineState:
 
     def process_outputs(self, outputs):
         """Do any processing of the model outputs that is necessary."""
+
+    def should_evaluate(self) -> bool:
+        """Whether to evaluate the model at this epoch.
+
+        For plain finetuning, we evaluate every epoch.
+        """
+        return True
+
+    def evaluate(self, local_files_path: Path):
+        """Evaluate the model at this epoch.
+
+        For plain finetuning, we compute accuracy on the eval
+        set.
+        TODO(ian): Add support for more metrics, generative tasks, etc.
+        """
+        dataset = self.dataset_state.val_dataset
+        victim = self.model_state.wrapped_model
+        # TODO(ian): Reusing the success callback for now, but this is not very general.
+        success_callback = build_binary_scoring_callback(
+            CallbackConfig(
+                callback_name="successes_from_text",
+                callback_return_type="binary",
+            ),
+        )
+        callback_input = CallbackInput(
+            # TODO(ian): Work out where to apply chat template.
+            input_data=victim.maybe_apply_user_template(dataset.ds["text"]),
+            clf_label_data=dataset.ds["clf_label"],
+            gen_target_data=dataset.ds["gen_target"],
+        )
+        pre_attack_out = success_callback(
+            victim,
+            callback_input,
+        )
+        pre_attack_successes = pre_attack_out.successes
+        accuracy = sum(pre_attack_successes) / len(pre_attack_successes)
+        log(f"Accuracy on validation set at epoch {self.epoch}: {accuracy}")
+        wandb_log({"eval/accuracy": accuracy}, commit=True)
 
     @classmethod
     def load(
@@ -597,6 +652,14 @@ class AdversarialPipelineState(TrainingPipelineState):
         epochs_per_round = self.training_config.num_train_epochs
         return self.epoch % epochs_per_round == 0
 
+    def is_last_epoch_of_round(self) -> bool:
+        """Is this the last epoch of an adversarial training round?
+
+        This is used to determine when to evaluate.
+        """
+        epochs_per_round = self.training_config.num_train_epochs
+        return self.epoch % epochs_per_round == epochs_per_round - 1
+
     @override
     def training_is_finished(self) -> bool:
         num_rounds = self.adv_config.num_adversarial_training_rounds
@@ -660,7 +723,7 @@ class AdversarialPipelineState(TrainingPipelineState):
 
     @override
     def get_revision(self) -> str:
-        return f"adv-round-{self.training_round}"
+        return f"adv-training-round-{self.training_round}"
 
     @override
     def get_full_dataset(self) -> Dataset:
@@ -809,3 +872,45 @@ class AdversarialPipelineState(TrainingPipelineState):
             if adv_index is not None:
                 state.dataset_state.adv_losses[adv_index] = loss.item()
         return state
+
+    def should_evaluate(self) -> bool:
+        """Whether to evaluate the model at this epoch.
+
+        For adv training, we evaluate after every round
+        """
+        evaluate_during_training = self.adv_config.evaluate_during_training
+        return evaluate_during_training and self.is_last_epoch_of_round()
+
+    @override
+    def evaluate(self, local_files_path: Path):
+        victim = self.model_state.wrapped_model
+        victim.eval()
+
+        if self.adv_config.evaluate_during_training:
+            eval_config = self.config.evaluation
+            assert eval_config is not None
+
+            attack = create_attack(
+                attack_config=eval_config.evaluation_attack,
+                run_name="default-run",  # TODO: work out if we should keep run_name
+                logging_name="TODO: Remove this",  # This is unused
+                victim=self.model_state.wrapped_model,
+            )
+            cb_config = eval_config.final_success_binary_callback
+            callback = build_binary_scoring_callback(cb_config)
+
+            compute_robustness_metric = eval_config.compute_robustness_metric
+            do_adversarial_evaluation(
+                victim=victim,
+                dataset=self.dataset_state.val_dataset,
+                attack=attack,
+                n_its=eval_config.num_iterations,
+                final_success_binary_callback=callback,
+                num_examples_to_log_detailed_info=eval_config.num_examples_to_log_detailed_info,  # noqa: E501
+                adv_training_round=self.training_round,
+                local_files_path=local_files_path,
+                # We don't use checkpointing of attacks during adversarial training
+                resume_from_checkpoint=False,
+                compute_robustness_metric=compute_robustness_metric,
+                upload_artifacts=False,
+            )

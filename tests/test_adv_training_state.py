@@ -138,9 +138,9 @@ def test_should_save_trained_model(state):
 
 
 def test_get_revision(state):
-    assert state.get_revision() == "adv-round-0"
+    assert state.get_revision() == "adv-training-round-0"
     state.epoch = 5
-    assert state.get_revision() == "adv-round-1"
+    assert state.get_revision() == "adv-training-round-1"
 
 
 def test_should_augment_dataset(state):

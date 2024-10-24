@@ -4,11 +4,9 @@ from pathlib import Path
 
 import torch
 import torch.nn.functional as F
-import transformers
 from accelerate import Accelerator
 from datasets import Dataset
 from datasets.utils.logging import disable_progress_bar
-from torch.utils.data import DataLoader
 
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.dist_utils import DistributedRNG, pad_batch_across_processes
@@ -25,6 +23,7 @@ from robust_llm.training.state_classes import (
     TrainingState,
     build_lr_scheduler,
 )
+from robust_llm.training.training_utils import prepare_dataloader
 from robust_llm.utils import print_time
 
 # Avoid spam from map/filter in datasets library.
@@ -148,6 +147,9 @@ def initialize_state(
 
     clean_dataset = load_rllm_dataset(config.dataset, split="train")
     clean_dataset = clean_dataset.tokenize(model_state.wrapped_model.right_tokenizer)
+    val_dataset = load_rllm_dataset(config.dataset, split="validation")
+    val_dataset = val_dataset.tokenize(model_state.wrapped_model.right_tokenizer)
+
     if training_config.adversarial is not None:
         clean_ds = clean_dataset.for_training()
         adversarial_ds = Dataset.from_dict(
@@ -158,6 +160,7 @@ def initialize_state(
 
     dataset_state = DatasetState(
         clean_dataset=clean_dataset,
+        val_dataset=val_dataset,
         adv_dataset=adversarial_ds,
         # TODO(ian): Work out if we should shuffle the clean dataset at the start.
         # I don't think we need to because the datasets we have on huggingface are
@@ -195,7 +198,8 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
     if state.should_augment_dataset():
         state.augment_dataset()
 
-    dataloader = _prepare_dataloader(state)
+    dataset = state.get_full_dataset()
+    dataloader = prepare_dataloader(victim, dataset)
 
     dataloader, model, optimizer = state.accelerator.prepare(
         dataloader,
@@ -241,9 +245,9 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
         average_loss = gathered_loss.mean()
         wandb_log(
             {
-                "loss": average_loss.item(),
-                "learning_rate": lr_scheduler.get_last_lr()[0],
-                "flops": state.flops,
+                "train/loss": average_loss.item(),
+                "train/learning_rate": lr_scheduler.get_last_lr()[0],
+                "train/flops": state.flops,
             },
             commit=True,
         )
@@ -258,32 +262,10 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
             f"Expected {len(losses)=}"
             f" to equal {dataloader.total_dataset_length=}"  # type: ignore
         )
+
+    # Do various evaluations at the end of some epochs.
+    if state.should_evaluate():
+        state.evaluate(local_files_path=Path(state.config.environment.save_root))
+
     state.update_after_epoch(losses)
     return state
-
-
-def _prepare_dataloader(state: TrainingPipelineState) -> DataLoader:
-    ds = state.get_full_dataset()
-    # Computation taken from the old training.py.
-    victim = state.model_state.wrapped_model
-    batch_size = min(
-        len(ds) // victim.num_processes,
-        victim.train_minibatch_size,
-    )
-
-    tokenizer = victim.right_tokenizer
-    data_collator = transformers.DataCollatorWithPadding(tokenizer=tokenizer)
-    current_columns = ds.column_names
-    columns_to_keep = ["input_ids", "label"]
-    columns_to_remove = [col for col in current_columns if col not in columns_to_keep]
-    ds = ds.map(
-        lambda x: {k: v for k, v in x.items() if k in columns_to_keep},
-        remove_columns=columns_to_remove,
-    )
-
-    dataloader = DataLoader(
-        ds,  # type: ignore  # HF datasets can actually be used here.
-        batch_size=batch_size,
-        collate_fn=data_collator,
-    )
-    return dataloader
