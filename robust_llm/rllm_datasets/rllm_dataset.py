@@ -12,6 +12,7 @@ from transformers import PreTrainedTokenizerBase
 
 from robust_llm import logger
 from robust_llm.config.configs import DatasetConfig
+from robust_llm.config.constants import SHARED_DATA_DIR
 from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.dataset_utils import (
@@ -221,20 +222,28 @@ class RLLMDataset(ABC):
         Returns:
             The loaded dataset split.
         """
-        ds = datasets.load_dataset(
-            path=cfg.dataset_type,
-            name=cfg.config_name,
-            revision=revision,
-            # We use slice splits to load a subset of the dataset.
-            # https://huggingface.co/docs/datasets/en/loading#slice-splits
-            split=f"{split}[:{n_examples}]",
-            # We set 'reuse_cache_if_exists' to reuse the downloaded file from
-            # HFHub for unit tests, but *not* reuse cached dataset operations.
-            # Ideally we'd use 'force_redownload' to make sure every run happens
-            # under the same conditions (no cache), but this is a compromise for
-            # unit test speed.
-            download_mode="reuse_cache_if_exists",
-        )
+        try:
+            ds = datasets.load_dataset(
+                path=cfg.dataset_type,
+                name=cfg.config_name,
+                revision=revision,
+                # We use slice splits to load a subset of the dataset.
+                # https://huggingface.co/docs/datasets/en/loading#slice-splits
+                split=f"{split}[:{n_examples}]",
+                # We set 'reuse_cache_if_exists' to reuse the downloaded file from
+                # HFHub for unit tests, but *not* reuse cached dataset operations.
+                # Ideally we'd use 'force_redownload' to make sure every run happens
+                # under the same conditions (no cache), but this is a compromise for
+                # unit test speed.
+                download_mode="reuse_cache_if_exists",
+            )
+        except Exception as e:
+            logger.error(f"Error loading dataset {cfg.dataset_type}: {str(e)}")
+            logger.info("Loading dataset from disk.")
+            ds = datasets.load_from_disk(
+                f"/{SHARED_DATA_DIR}/datasets/{cfg.dataset_type}/{revision}/{split}"
+            )
+            ds = ds[:n_examples]
         assert isinstance(ds, Dataset)
         if len(ds) == 0:
             raise ValueError(
