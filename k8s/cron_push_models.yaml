@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: push-models
+spec:
+  schedule: "0 0 * * *"  # every day at midnight
+  jobTemplate:
+    metadata:
+      labels:
+        kueue.x-k8s.io/queue-name: farai
+        cronjob-name: push-models
+    spec:
+      suspend: true
+      template:
+        spec:
+          priorityClassName: normal-batch
+          volumes:
+            - name: robust-llm-storage
+              persistentVolumeClaim:
+                claimName: az-robust-llm
+          containers:
+            - name: batch-job
+              image: "ghcr.io/alignmentresearch/robust-llm:2024-09-06-19-54-30-ian-update-hf-hub"
+              command:
+                - bash
+                - -c
+                - |
+                  git clone https://github.com/AlignmentResearch/robust-llm.git && cd robust-llm && git submodule update --recursive && echo "this should run scripts/tom/push_models_to_hub.py but please run it manually instead for now because it's basically not battle-tested at all"
+              resources:
+                requests:
+                  cpu: 1
+                limits:
+                  memory: "16G"
+                  nvidia.com/gpu: 0
+              volumeMounts:
+                - name: robust-llm-storage
+                  mountPath: /robust_llm_data
+              env:
+                - name: GIT_ASKPASS
+                  value: "true"
+                - name: GITHUB_PAT
+                  valueFrom:
+                    secretKeyRef:
+                      name: github-credentials
+                      key: pat
+                - name: GIT_CONFIG_PARAMETERS
+                  value: "'credential.https://github.com.username=$(GITHUB_PAT)'"
+                - name: HF_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: huggingface
+                      key: token
+          # Never restart the pod. If the job retries, it will do so in a new pod.
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: docker
+      backoffLimit: 0
+      # Don't count pod disruption such as preemption towards backoff target.
+      # These are dependent on cluster weather, and not our code. See
+      # https://kubernetes.io/docs/concepts/workloads/controllers/job/#pod-failure-policy
+      podFailurePolicy:
+        rules:
+        - action: Ignore
+          onPodConditions:
+          - type: DisruptionTarget
+            status: "True"
