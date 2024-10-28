@@ -342,9 +342,10 @@ class WrappedModel(ABC):
             state_dict=state_dict,
             safe_serialization=False,
         )
-        self.right_tokenizer.save_pretrained(
-            save_directory=output_dir,
-        )
+        if self.accelerator.is_main_process:
+            self.right_tokenizer.save_pretrained(
+                save_directory=output_dir,
+            )
         mark_model_save_as_finished(model_save_directory=output_dir)
 
     def _push_to_hub_once(

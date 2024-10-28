@@ -20,8 +20,7 @@ OVERRIDE_ARGS_LIST = [
             f"tom_scratch_clf_{DATASET}_{MODEL}_s-{SEED}_adv_tr_{ATTACK}_t-{SEED}"
         ),
         "environment.allow_checkpointing": False,
-        "training.save_strategy": "no",
-        "training.save_to": "HF_ELSE_DISK",
+        "training.save_to": "DISK",
         "training.seed": SEED,
         "dataset.n_train": 10,
         "evaluation.num_iterations": 0,
