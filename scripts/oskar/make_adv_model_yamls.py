@@ -12,7 +12,7 @@ defaults:
 - /model/Default/clf/base@_here_
 - _self_
 
-name_or_path: "AlignmentResearch/robust_llm__clf_{dataset}_pythia-{size}_s-{seed}_adv_tr_{attack}_t-{seed}"
+name_or_path: "AlignmentResearch/robust_llm_clf_{dataset}_pythia-{size}_s-{seed}_adv_tr_{attack}_t-{seed}"
 """  # noqa: E501
 
 
