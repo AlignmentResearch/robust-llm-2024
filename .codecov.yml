@@ -18,6 +18,8 @@ coverage:
       default:
         # Require that at least 50% of new code is covered by tests.
         target: 50%
+        branches:
+          - "!main"
 
 github_checks:
   # Remove codecov warning on GitHub PR web interface

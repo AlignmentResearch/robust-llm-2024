@@ -310,8 +310,18 @@ workflows:
   tests:
     jobs:
       - pytest
-      - pytest-multigpu
       - lint
       - combine-caches:
           requires:
             - pytest
+
+  expensive-tests:
+    when:
+      or:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - matches:
+            pattern: .*\[run-full-tests\].*
+            # I don't see pipeline.git.commit in the docs but it works.
+            value: << pipeline.git.commit.subject >>
+    jobs:
+      - pytest-multigpu
