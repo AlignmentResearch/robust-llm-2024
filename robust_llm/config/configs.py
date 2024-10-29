@@ -33,6 +33,9 @@ class EnvironmentConfig:
             Choose among logging.DEBUG, logging.INFO,
             logging.WARNING, logging.ERROR, logging.CRITICAL.
         logging_filename: If set, logs will be saved to this file.
+        wandb_info_filename: Log the W&B run name + ID to this file. Use this if
+          you need to programatically get the run name and ID after running
+          a job.
         allow_checkpointing: Whether to allow checkpointing during training and also
             attacks that support it.
         resume_mode: How often to resume from checkpoint during training.
@@ -54,6 +57,7 @@ class EnvironmentConfig:
     minibatch_multiplier: float = 1.0
     logging_level: int = logging.INFO
     logging_filename: str = "robust_llm.log"
+    wandb_info_filename: str | None = None
     allow_checkpointing: bool = True
     resume_mode: str = "once"
     deterministic: bool = True

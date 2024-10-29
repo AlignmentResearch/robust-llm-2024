@@ -48,6 +48,21 @@ def memory_str_to_bytes(memory: str) -> int:
     raise ValueError(f"Unexpected memory string: {memory}")
 
 
+def get_run_base_command(num_gpus: int, profiling_dir: Path | None) -> str:
+    base_command = (
+        "accelerate launch --config_file=accelerate_config.yaml"
+        f" --num_processes={num_gpus}"
+        if num_gpus > 1
+        else "python"
+    )
+    if profiling_dir is not None:
+        base_command += (
+            f" robust_llm/run_with_profiling.py --save-directory {profiling_dir}"
+            " -- python"
+        )
+    return base_command
+
+
 def run_multiple(
     experiment_name: str,
     hydra_config: str,
@@ -64,6 +79,7 @@ def run_multiple(
     skip_runs_mask: Sequence[bool] | None = None,
     use_cluster_storage: bool = True,
     wandb_mode: str = "online",
+    profiling_dir: Path | None = Path("/robust_llm_data/profiles/"),
     dry_run: bool = False,
     skip_git_checks: bool = False,
     unique_identifier: str | None = None,
@@ -95,11 +111,20 @@ def run_multiple(
             jobs.
         use_cluster_storage: Mounts cluster storage to the job if true.
         wandb_mode: Value to give the WANDB_MODE environment variable.
+        profiling_dir: If not None, save profiling data to this directory.
         dry_run: if True, only print the k8s job yaml files without launching them.
         skip_git_checks: if True, skip the remote push and the check for dirty git repo.
         unique_identifier: A unique identifier to append to the k8s job names
             to avoid name conflicts. If None, a random identifier will be generated.
     """
+    if (not use_cluster_storage) and profiling_dir is not None:
+        profiling_dir_parts = profiling_dir.parts
+        if len(profiling_dir_parts) > 1 and profiling_dir_parts[1] == "robust_llm_data":
+            print(
+                "Warning: Disabling cluster storage will prevent profiling data"
+                " from being saved."
+            )
+            profiling_dir = None
 
     n_max_parallel = ensure_list(n_max_parallel, len(override_args_list))
     cpu = ensure_list(cpu, len(override_args_list))
@@ -120,15 +145,11 @@ def run_multiple(
     unique_identifier = unique_identifier or generate_chars(length=4)
 
     hyphened_name = experiment_name.replace("_", "-")
+
     runs = [
         (
             FlamingoRun(
-                base_command=(
-                    "accelerate launch --config_file=accelerate_config.yaml"
-                    f" --num_processes={gpu[i]}"
-                    if gpu[i] > 1
-                    else "python"
-                ),
+                base_command=get_run_base_command(gpu[i], profiling_dir),
                 script_path=script_path,
                 hydra_config=hydra_config,
                 experiment_name=experiment_name,
@@ -210,6 +231,7 @@ class FlamingoRun:
                 raise ValueError("override_args are invalid, aborting.") from e
 
     def format_args(self) -> dict[str, Union[str, int]]:
+        """Get the args that are directly substituted into the k8s job template."""
         return {
             f.name: getattr(self, f.name)
             for f in dataclasses.fields(self)
