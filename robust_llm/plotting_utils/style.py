@@ -27,8 +27,9 @@ def name_to_dataset(name: str) -> str:
         raise ValueError(f"Unknown dataset name: {name}")
 
 
-def set_plot_style(style: str) -> None:
+def set_style(style: str) -> None:
     match style:
+        # `paper` was used here for ICLR 2024
         case "paper":
             plt.rcParams.update(
                 {
@@ -65,6 +66,18 @@ def set_plot_style(style: str) -> None:
                 {
                     "font.family": "sans-serif",  # Use a sans-serif font
                     "font.sans-serif": ["Arial"],
+                    "font.size": 9,  # General font size
+                    "axes.titlesize": 10,  # Title font size
+                    "axes.labelsize": 9,  # X and Y label font size
+                    "xtick.labelsize": 8,  # X tick label font size
+                    "ytick.labelsize": 8,  # Y tick label font size
+                    "legend.fontsize": 8,  # Legend font size
+                }
+            )
+        case "arxiv":
+            plt.rcParams.update(
+                {
+                    "font.family": "sans-serif",  # Use a sans-serif font
                     "font.size": 9,  # General font size
                     "axes.titlesize": 10,  # Title font size
                     "axes.labelsize": 9,  # X and Y label font size

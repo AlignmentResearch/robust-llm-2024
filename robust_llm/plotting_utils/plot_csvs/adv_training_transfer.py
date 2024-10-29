@@ -1,12 +1,14 @@
 """Adversarial training transfer plots."""
 
-from robust_llm.plotting_utils.style import set_plot_style
+import argparse
+
+from robust_llm.plotting_utils.style import set_style
 from robust_llm.plotting_utils.tools import load_and_plot_adv_training_plots
 
-set_plot_style("paper")
 
+def main(style):
+    set_style(style)
 
-def main():
     for x_data_name in ("defense_flops_fraction_pretrain",):
         for legend in (True, False):
             for iteration in (12, 128):
@@ -28,8 +30,12 @@ def main():
                         color_data_name="num_params",
                         legend=legend,
                         y_data_name=f"metrics_asr_at_{iteration}",
+                        style=style,
                     )
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Adversarial training transfer plots.")
+    parser.add_argument("--style", type=str, default="paper", help="Plot style to use")
+    args = parser.parse_args()
+    main(args.style)

@@ -1,8 +1,10 @@
 """Plot attack scaling using Ian's finetuned evals"""
 
+import argparse
+
 import pandas as pd
 
-from robust_llm.plotting_utils.style import set_plot_style
+from robust_llm.plotting_utils.style import set_style
 from robust_llm.plotting_utils.tools import (
     DEFAULT_SMOOTHING,
     PlotMetadata,
@@ -10,8 +12,6 @@ from robust_llm.plotting_utils.tools import (
     postprocess_attack_compute,
     read_csv_and_metadata,
 )
-
-set_plot_style("paper")
 
 
 def plot_asr_for_group(
@@ -22,6 +22,7 @@ def plot_asr_for_group(
     x: str = "iteration_x_flops",
     y: str = "logit_asr",
     smoothing: int = DEFAULT_SMOOTHING,
+    style: str = "paper",
 ):
     postprocess_attack_compute(df, attack, dataset)
     plot_attack_scaling_base(
@@ -33,19 +34,32 @@ def plot_asr_for_group(
         smoothing=smoothing,
         x=x,
         y=y,
+        style=style,
     )
 
 
-def main():
+def main(style: str):
+    set_style(style)
     for attack in ("gcg", "rt"):
-        for dataset in ("imdb", "pm", "wl", "spam"):
+        for dataset in ("imdb", "pm", "wl", "spam", "helpful", "harmless"):
             df, metadata = read_csv_and_metadata("asr", attack, dataset, "finetuned")
             for x in ("attack_flops_fraction_pretrain",):
                 for y in ("logit_asr",):
                     plot_asr_for_group(
-                        df, metadata=metadata, attack=attack, dataset=dataset, x=x, y=y
+                        df,
+                        metadata=metadata,
+                        attack=attack,
+                        dataset=dataset,
+                        x=x,
+                        y=y,
+                        style=style,
                     )
 
 
-if __name__ == "_main__":
-    main()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Plot attack scaling using Ian's finetuned evals"
+    )
+    parser.add_argument("--style", type=str, default="paper", help="Plot style to use")
+    args = parser.parse_args()
+    main(args.style)

@@ -1,15 +1,17 @@
 """Plot attack scaling using Tom's transfer evals."""
 
-from robust_llm.plotting_utils.style import set_plot_style
-from robust_llm.plotting_utils.tools import load_and_plot_asr
+import argparse
 
-# Set the plot style
-set_plot_style("paper")
+from robust_llm.plotting_utils.style import set_style
+from robust_llm.plotting_utils.tools import load_and_plot_asr
 
 ROUNDS = [0, 1e-4, 1e-3, 5e-3, -1]
 
 
-def main():
+def main(style):
+    # Set the plot style
+    set_style(style)
+
     for attack, dataset in [
         ("rt_gcg", "imdb"),
         ("rt_gcg", "spam"),
@@ -28,8 +30,14 @@ def main():
                 dataset=dataset,
                 rounds=ROUNDS,
                 x=x,
+                style=style,
             )
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Plot attack scaling using Tom's transfer evals."
+    )
+    parser.add_argument("--style", type=str, default="paper", help="Plot style to use")
+    args = parser.parse_args()
+    main(args.style)

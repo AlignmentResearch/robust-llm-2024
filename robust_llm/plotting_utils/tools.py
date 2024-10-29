@@ -26,11 +26,7 @@ from robust_llm.plotting_utils.constants import (
 from robust_llm.plotting_utils.experiments.pretrain_compute_per_model import (
     ESTIMATED_PRETRAIN_COMPUTE,
 )
-from robust_llm.plotting_utils.style import (
-    name_to_attack,
-    name_to_dataset,
-    set_plot_style,
-)
+from robust_llm.plotting_utils.style import name_to_attack, name_to_dataset, set_style
 from robust_llm.plotting_utils.utils import (
     add_model_idx_inplace,
     drop_duplicates,
@@ -463,6 +459,7 @@ def load_and_plot_adv_training_plots(
     check_seeds: int | None = None,
     y_data_name: str = "adversarial_eval_attack_success_rate",
     smoothing: int = DEFAULT_SMOOTHING,
+    style: str = "paper",
 ):
     """
     Make adversarial training plots for given runs, pulling data from W&B.
@@ -482,6 +479,7 @@ def load_and_plot_adv_training_plots(
             and that those are the correct actual seed numbers.
         y_data_name: The name of the data to use for the y-axis.
         smoothing: The amount of Laplace smoothing to apply to y-values.
+        style: The style to use for the plot.
     """
     data, metadata = read_csv_and_metadata("adv_training", attack, dataset)
     draw_plot_adv_training(
@@ -499,6 +497,7 @@ def load_and_plot_adv_training_plots(
         smoothing=smoothing,
         xscale=xscale,
         yscale=yscale,
+        style=style,
     )
 
 
@@ -598,7 +597,9 @@ def extract_seed_from_name(name):
     return seed
 
 
-def set_up_paper_plot(fig, ax, diagonal_gridlines: bool = False) -> None:
+def set_up_paper_plot(
+    fig, ax, diagonal_gridlines: bool = False, style: str = "paper"
+) -> None:
     fig.set_size_inches(3.5, 2.5)
     if diagonal_gridlines:
         for pos in np.linspace(-2, 1, 30):
@@ -627,7 +628,7 @@ def set_up_paper_plot(fig, ax, diagonal_gridlines: bool = False) -> None:
     ax.tick_params(axis="both", which="major", length=6, width=1)
     ax.tick_params(axis="both", which="minor", length=4, width=0.5)
     ax.set_axisbelow(True)
-    set_plot_style("paper")
+    set_style(style)
 
 
 def _get_n_parameter_updates(data: pd.DataFrame) -> None:
@@ -736,6 +737,7 @@ def _draw_plot_adv_training(
     yscale: str | None = None,
     add_parity_line: bool = False,
     diagonal_gridlines: bool = False,
+    style: str = "paper",
 ):
     title = f"{name_to_attack(attack)}, {name_to_dataset(dataset)}"
     data = data.copy()
@@ -748,7 +750,7 @@ def _draw_plot_adv_training(
     data["adv_training_round"] += 1
 
     fig, ax = plt.subplots()
-    set_up_paper_plot(fig, ax, diagonal_gridlines=diagonal_gridlines)
+    set_up_paper_plot(fig, ax, diagonal_gridlines=diagonal_gridlines, style=style)
     ax.set_xlabel(AXIS_LABELS[x_data_name])
     if x_data_name == "num_params":
         plt.xscale("log")
@@ -863,6 +865,7 @@ def _draw_plot_adv_training(
         set_yticks_for_logit(ax)
     create_path_and_savefig(
         fig,
+        style,
         "adv_training",
         attack,
         dataset,
@@ -893,6 +896,7 @@ def draw_plot_adv_training(
     smoothing: int = DEFAULT_SMOOTHING,
     add_parity_line: bool = False,
     diagonal_gridlines: bool = False,
+    style: str = "paper",
 ):
     if xlim is not None and data["adv_training_round"].max() + 1 < xlim[1]:
         raise ValueError(
@@ -924,6 +928,7 @@ def draw_plot_adv_training(
         smoothing=smoothing,
         add_parity_line=add_parity_line,
         diagonal_gridlines=diagonal_gridlines,
+        style=style,
     )
 
 
@@ -967,6 +972,7 @@ def draw_scatterplot(
     ytransform: str | None = None,
     y_data_name: str = "adversarial_eval_attack_success_rate",
     smoothing: int = DEFAULT_SMOOTHING,
+    style: str = "paper",
 ):
     data = orig_data.copy()
     if smoothing != 0:
@@ -1025,10 +1031,11 @@ def draw_scatterplot(
     if ytransform == "logit":
         set_yticks_for_logit(ax)
 
-    set_up_paper_plot(fig, ax)
+    set_up_paper_plot(fig, ax, style=style)
 
     if isinstance(save_as, str):
         save_as = (save_as,)
+    save_as = [style] + list(save_as)
     create_path_and_savefig(fig, *save_as)
 
 
@@ -1157,6 +1164,7 @@ def draw_min_max_median_plot(
     ytransform: str | None = None,
     y_data_name: str = "adversarial_eval_attack_success_rate",
     smoothing: int = DEFAULT_SMOOTHING,
+    style: str = "paper",
 ):
     data = orig_data.copy()
     print("Found", len(data), "runs to use for the min/max/median plot")
@@ -1223,7 +1231,7 @@ def draw_min_max_median_plot(
         zorder=5,
     )
 
-    set_up_paper_plot(fig, ax)
+    set_up_paper_plot(fig, ax, style=style)
     if ytransform == "logit":
         set_yticks_for_logit(ax)
 
@@ -1233,6 +1241,7 @@ def draw_min_max_median_plot(
 
     if isinstance(save_as, str):
         save_as = (save_as,)
+    save_as = [style] + list(save_as)
 
     create_path_and_savefig(
         fig,
@@ -1260,6 +1269,7 @@ def draw_min_max_median_plot_by_round(
     y_data_name: str = "adversarial_eval_attack_success_rate",
     rounds: list[int] | None = None,
     smoothing: int = DEFAULT_SMOOTHING,
+    style: str = "paper",
 ):
     data = orig_data.copy()
     data = data.loc[data[y_data_name].notnull()]
@@ -1338,7 +1348,7 @@ def draw_min_max_median_plot_by_round(
             zorder=5,
         )
 
-    set_up_paper_plot(fig, ax)
+    set_up_paper_plot(fig, ax, style=style)
 
     # Adjust legend
     if legend:
@@ -1383,6 +1393,7 @@ def draw_min_max_median_plot_by_round(
 
     if isinstance(save_as, str):
         save_as = (save_as,)
+    save_as = [style] + list(save_as)
 
     create_path_and_savefig(
         fig,
@@ -1410,6 +1421,7 @@ def draw_min_max_median_plot_by_dataset(
     y_data_name: str = "adversarial_eval_attack_success_rate",
     smoothing: int = DEFAULT_SMOOTHING,
     legend_loc: str = "lower left",
+    style: str = "paper",
 ):
     data = orig_data.copy()
     data = data.loc[data[y_data_name].notnull()]
@@ -1486,7 +1498,7 @@ def draw_min_max_median_plot_by_dataset(
             legend=False,
         )
 
-    set_up_paper_plot(fig, ax)
+    set_up_paper_plot(fig, ax, style=style)
 
     # Adjust legend
     if legend:
@@ -1531,6 +1543,7 @@ def draw_min_max_median_plot_by_dataset(
 
     if isinstance(save_as, str):
         save_as = (save_as,)
+    save_as = [style] + list(save_as)
 
     create_path_and_savefig(
         fig,
@@ -1760,6 +1773,7 @@ def plot_attack_scaling_base(
     x: str = "attack_flops_fraction_pretrain",
     y: str = "logit_asr",
     color_data_name: str = "num_params",
+    style: str = "paper",
 ) -> None:
     """Common method used by finetuning and adversarial attack scaling plots"""
     df = orig_df.copy()
@@ -1774,7 +1788,7 @@ def plot_attack_scaling_base(
         df["logit_asr"] = TRANSFORMS["logit"](df.asr)
 
     fig, ax = plt.subplots()
-    set_up_paper_plot(fig, ax)
+    set_up_paper_plot(fig, ax, style=style)
     palette = get_color_palette(df, color_data_name)
     sns.lineplot(
         data=df,
@@ -1827,6 +1841,7 @@ def plot_attack_scaling_base(
         )
     create_path_and_savefig(
         fig,
+        style,
         "asr",
         attack,
         dataset,
@@ -1842,6 +1857,7 @@ def plot_attack_scaling_base(
     create_legend(color_data_name, ax, legend_handles, outside=False)
     create_path_and_savefig(
         fig,
+        style,
         "asr",
         attack,
         dataset,
@@ -1967,6 +1983,7 @@ def load_and_plot_asr(
     y: str = "logit_asr",
     smoothing: int = DEFAULT_SMOOTHING,
     datapoints: int | None = None,
+    style: str = "paper",
 ):
     for round in rounds:
         asr_data, metadata = read_csv_and_metadata(
@@ -1988,6 +2005,7 @@ def load_and_plot_asr(
             x=x,
             y=y,
             smoothing=smoothing,
+            style=style,
         )
 
 
@@ -2130,6 +2148,7 @@ def load_and_plot_offense_defense_plots(
     yscale: str = "log",
     add_parity_line: bool = False,
     diagonal_gridlines: bool = False,
+    style: str = "paper",
 ):
     adv_data, metadata = read_csv_and_metadata("offense_defense", attack, dataset)
     draw_plot_adv_training(
@@ -2150,6 +2169,7 @@ def load_and_plot_offense_defense_plots(
         yscale=yscale,
         add_parity_line=add_parity_line,
         diagonal_gridlines=diagonal_gridlines,
+        style=style,
     )
 
 

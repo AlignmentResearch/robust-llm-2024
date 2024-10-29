@@ -1,3 +1,5 @@
+import argparse
+
 import pandas as pd
 
 from robust_llm.plotting_utils.style import name_to_attack, name_to_dataset
@@ -8,7 +10,7 @@ from robust_llm.plotting_utils.tools import (
 )
 
 
-def main():
+def main(style: str = "paper"):
     ROUNDS = [0, 1, 2, 3, 4, 9, 29]
     all_data = []
     metadata = None
@@ -31,6 +33,7 @@ def main():
                             rounds=ROUNDS,
                             ytransform=ytransform,
                             y_data_name=y_data_name,
+                            style=style,
                         )
             adv_data["attack"] = attack
             adv_data["dataset"] = dataset
@@ -50,8 +53,17 @@ def main():
                         ytransform=ytransform,
                         y_data_name=y_data_name,
                         legend=legend,
+                        style=style,
                     )
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Adversarial training plots")
+    parser.add_argument(
+        "--style",
+        type=str,
+        default="paper",
+        help="Style to be used for plotting",
+    )
+    args = parser.parse_args()
+    main(args.style)

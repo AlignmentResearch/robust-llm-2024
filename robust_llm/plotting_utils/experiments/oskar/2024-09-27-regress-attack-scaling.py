@@ -8,11 +8,11 @@ from matplotlib.ticker import ScalarFormatter
 
 from robust_llm.file_utils import compute_repo_path
 from robust_llm.plotting_utils.constants import AXIS_LABELS
-from robust_llm.plotting_utils.style import set_plot_style
+from robust_llm.plotting_utils.style import set_style
 from robust_llm.plotting_utils.tools import create_path_and_savefig, set_up_paper_plot
 
 # %%
-set_plot_style("paper")
+set_style("paper")
 
 
 # %%

@@ -1,14 +1,14 @@
 """Generate offense-defense plots for the paper."""
 
+import argparse
+
 import pandas as pd
 
-from robust_llm.plotting_utils.style import set_plot_style
+from robust_llm.plotting_utils.style import set_style
 from robust_llm.plotting_utils.tools import load_and_plot_offense_defense_plots
 
 pd.set_option("display.max_columns", 100)
 pd.set_option("display.max_colwidth", 255)
-# Set the plot style
-set_plot_style("paper")
 
 # Include the name for easier debugging
 summary_keys = [
@@ -25,7 +25,10 @@ METRICS = [
 ]
 
 
-def main():
+def main(style):
+    # Set the plot style
+    set_style(style)
+
     for x_data_name, xscale, y_data_name, yscale in (
         (
             "train_total_flops",
@@ -71,8 +74,14 @@ def main():
                         yscale=yscale,
                         add_parity_line=add_parity_line,
                         diagonal_gridlines=diagonal_gridlines,
+                        style=style,
                     )
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Generate offense-defense plots for the paper."
+    )
+    parser.add_argument("--style", type=str, default="paper", help="Plot style to use")
+    args = parser.parse_args()
+    main(args.style)

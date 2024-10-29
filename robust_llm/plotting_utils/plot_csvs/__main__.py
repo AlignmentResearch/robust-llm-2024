@@ -1,3 +1,5 @@
+import argparse
+
 from robust_llm.plotting_utils.plot_csvs.adv_training import main as adv_training_main
 from robust_llm.plotting_utils.plot_csvs.adv_training_transfer import (
     main as adv_training_transfer_main,
@@ -15,12 +17,52 @@ from robust_llm.plotting_utils.plot_csvs.post_adv_training import (
     main as post_adv_training_main,
 )
 
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run plotting utilities with a specified style."
+    )
+    parser.add_argument(
+        "--style",
+        type=str,
+        required=True,
+        help="Style to be passed to each plotting function",
+    )
+    parser.add_argument(
+        "--plots",
+        type=str,
+        nargs="+",
+        choices=[
+            "adv_training_transfer",
+            "adv_training",
+            "asr_adv_training",
+            "asr_finetuned",
+            "asr_slopes",
+            "finetuned",
+            "offense_defense",
+            "post_adv_training",
+        ],
+        required=True,
+        help="List of plot types to generate",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    adv_training_transfer_main()
-    adv_training_main()
-    asr_adv_training_main()
-    asr_finetuned_main()
-    asr_slopes_main()
-    finetuned_main()
-    offense_defense_main()
-    post_adv_training_main()
+    args = parse_args()
+    if "adv_training_transfer" in args.plots:
+        adv_training_transfer_main(args.style)
+    if "adv_training" in args.plots:
+        adv_training_main(args.style)
+    if "asr_adv_training" in args.plots:
+        asr_adv_training_main(args.style)
+    if "asr_finetuned" in args.plots:
+        asr_finetuned_main(args.style)
+    if "asr_slopes" in args.plots:
+        asr_slopes_main(args.style)
+    if "finetuned" in args.plots:
+        finetuned_main(args.style)
+    if "offense_defense" in args.plots:
+        offense_defense_main(args.style)
+    if "post_adv_training" in args.plots:
+        post_adv_training_main(args.style)

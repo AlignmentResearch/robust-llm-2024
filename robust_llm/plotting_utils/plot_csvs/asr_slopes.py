@@ -1,14 +1,15 @@
 """Plot slopes of slopes for attack scaling"""
 
+import argparse
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.formula.api as smf
-from matplotlib.ticker import ScalarFormatter
 
 from robust_llm.plotting_utils.constants import AXIS_LABELS
-from robust_llm.plotting_utils.style import set_plot_style
+from robust_llm.plotting_utils.style import name_to_attack, name_to_dataset, set_style
 from robust_llm.plotting_utils.tools import (
     create_path_and_savefig,
     postprocess_attack_compute,
@@ -16,10 +17,8 @@ from robust_llm.plotting_utils.tools import (
     set_up_paper_plot,
 )
 
-set_plot_style("paper")
 
-
-def regress_attack_scaling(attack: str, dataset: str, round: str):
+def regress_attack_scaling(attack: str, dataset: str, round: str, style: str = "paper"):
     df, metadata = read_csv_and_metadata("asr", attack, dataset, round)
     postprocess_attack_compute(df, attack, dataset)
     df = df.loc[np.isfinite(df.logit_asr)]
@@ -35,7 +34,7 @@ def regress_attack_scaling(attack: str, dataset: str, round: str):
     )
 
     fig, ax = plt.subplots(figsize=(8, 8))
-    set_up_paper_plot(fig, ax)
+    set_up_paper_plot(fig, ax, style=style)
 
     # Perform linear regression
     model = smf.ols("gradient ~ np.log10(num_params)", data=grad_df).fit()
@@ -46,14 +45,16 @@ def regress_attack_scaling(attack: str, dataset: str, round: str):
     r_squared = model.rsquared
 
     description = (
-        r"$\mathrm{logit}_{10}$(Attack Success Rate) vs."
-        "\n"
+        r"$\mathrm{logit}_{10}$(Attack Success Rate)"
+        "\nvs. "
         r"$\log_{10}$(Attack Compute)"
     )
     fig.suptitle(
-        f"{attack}/{dataset}".upper() + f" Regression slopes of {description}, "
+        f"{name_to_attack(attack)}/{name_to_dataset(dataset)} "
+        + f"Regression slopes of {description}, "
         "split by model size ",
         fontsize=8,
+        y=1.01,
     )
 
     # Plot the data and regression line
@@ -72,9 +73,6 @@ def regress_attack_scaling(attack: str, dataset: str, round: str):
     ax.set_xscale("log")
     ax.set_xlabel(AXIS_LABELS["num_params"])
     ax.set_ylabel(f"Slope of {description}")
-    # Set y-axis to scientific notation
-    ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-    ax.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
     # Add equation and R² inside the plot
     ax.text(
         0.05,
@@ -89,6 +87,7 @@ def regress_attack_scaling(attack: str, dataset: str, round: str):
 
     create_path_and_savefig(
         fig,
+        style,
         "asr",
         attack,
         dataset,
@@ -102,7 +101,10 @@ def regress_attack_scaling(attack: str, dataset: str, round: str):
     )
 
 
-def main():
+def main(style: str = "paper"):
+
+    set_style(style)
+
     for attack in ["gcg", "gcg_gcg", "rt"]:
         for dataset in ["imdb", "spam", "pm", "wl", "helpful", "harmless"]:
             if dataset in ["helpful", "harmless"] and attack == "gcg_gcg":
@@ -120,8 +122,13 @@ def main():
                 ]
             )
             for round in rounds:
-                regress_attack_scaling(attack, dataset, round)
+                regress_attack_scaling(attack, dataset, round, style=style)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Plot slopes of slopes for attack scaling"
+    )
+    parser.add_argument("--style", type=str, default="paper", help="Plot style to use")
+    args = parser.parse_args()
+    main(args.style)
