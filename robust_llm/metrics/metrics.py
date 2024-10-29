@@ -13,6 +13,10 @@ from robust_llm.metrics.iterations_for_success import (
     IFSMetricResults,
     compute_iterations_for_success,
 )
+from robust_llm.metrics.log_prob_metrics import (
+    LogProbMetricResults,
+    compute_log_prob_metrics,
+)
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.scoring_callbacks.scoring_callback_utils import BinaryCallback
 from robust_llm.utils import print_time
@@ -22,6 +26,7 @@ from robust_llm.utils import print_time
 class RobustnessMetricResults:
     ifs_results: IFSMetricResults | None
     aib_results: AIBMetricResults | None
+    log_prob_results: LogProbMetricResults | None
 
     @property
     def asr_per_iteration(self) -> list[float] | None:
@@ -60,6 +65,11 @@ class RobustnessMetricResults:
                 metrics[f"{prefix}/asr@{total_iterations-1}"] = self.asr_per_iteration[
                     -1
                 ]
+        if self.log_prob_results is not None:
+            for i, mean_log_prob in enumerate(self.log_prob_results.mean_log_probs):
+                metrics[f"{prefix}/mean_log_prob@{i}"] = mean_log_prob
+            for i, log_mean_prob in enumerate(self.log_prob_results.log_mean_probs):
+                metrics[f"{prefix}/log_mean_prob@{i}"] = log_mean_prob
         return metrics
 
     def export_wandb_table(self):
@@ -87,6 +97,7 @@ def maybe_compute_robustness_metrics(
     # TODO(ian): Remove the try: except by making it work for all attacks.
     ifs_metric = None
     aib_metric = None
+    log_prob_metrics = None
     try:
         ifs_metric = compute_iterations_for_success(
             attack_out=attack_out,
@@ -105,5 +116,20 @@ def maybe_compute_robustness_metrics(
             "Error computing average initial breach, might not be"
             f" implemented for this attack yet: {e}"
         )
-    results = RobustnessMetricResults(ifs_results=ifs_metric, aib_results=aib_metric)
+    try:
+        log_prob_metrics = compute_log_prob_metrics(
+            attack_out=attack_out,
+            success_callback=success_callback,
+            model=model,
+        )
+    except Exception as e:
+        logger.error(
+            "Error computing log prob metrics, might not be"
+            f" implemented for this attack yet: {e}"
+        )
+    results = RobustnessMetricResults(
+        ifs_results=ifs_metric,
+        aib_results=aib_metric,
+        log_prob_results=log_prob_metrics,
+    )
     return results
