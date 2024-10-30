@@ -381,13 +381,17 @@ class TrainingPipelineState:
         hex_hash = deterministic_hash(self.config)
         epoch = self.epoch
         path = path / hex_hash / f"epoch_{zero_pad(epoch)}"
-        log(f"Saving checkpoint to {path}")
+        log(f"Saving checkpoint to {path}", main_process_only=False)
 
         # Make the directory on a single process.
         if self.accelerator.is_main_process:
             if path.exists():
                 if not (path / "save_complete").exists():
-                    log(f"Deleting incomplete checkpoint: {path}")
+                    log(
+                        f"Deleting incomplete checkpoint: {path}",
+                        main_process_only=False,
+                    )
+                    assert hex_hash in str(path)
                     shutil.rmtree(path)
                 else:
                     raise FileExistsError(f"Path {path} already exists. Aborting save.")
@@ -441,7 +445,7 @@ class TrainingPipelineState:
 
             save_total_limit = self.training_config.save_total_limit
             safe_checkpoint_epochs: list[str] = []
-            log(f"Cleaning up checkpoints in {path}")
+            log(f"Cleaning up checkpoints in {path}", main_process_only=False)
             for subdir in get_sorted_checkpoints(path):
                 if len(safe_checkpoint_epochs) >= save_total_limit:
                     assert hex_hash in str(subdir)
@@ -450,11 +454,17 @@ class TrainingPipelineState:
                 elif (subdir / "save_complete").exists():
                     safe_checkpoint_epochs.append(subdir.name)
                 else:
-                    log(f"Deleting incomplete checkpoint: {subdir}")
+                    log(
+                        f"Deleting incomplete checkpoint: {subdir}",
+                        main_process_only=False,
+                    )
                     assert hex_hash in str(subdir)
                     assert subdir.name not in safe_checkpoint_epochs
                     shutil.rmtree(subdir)
-            log(f"Keeping checkpoints: {safe_checkpoint_epochs}")
+            log(
+                f"Keeping checkpoints: {safe_checkpoint_epochs}",
+                main_process_only=False,
+            )
 
         self.accelerator.wait_for_everyone()
 
@@ -698,7 +708,7 @@ class AdversarialPipelineState(TrainingPipelineState):
 
         with self.model_state.wrapped_model.flop_count_context() as attack_flops:
             attack_out = attack.get_attacked_dataset(input_rllm_dataset, n_its=n_its)
-        log(f"Attack flops: {attack_flops.flops:.2E} flops.")
+        log(f"Attack flops: {attack_flops.flops:.2E} flops.", level="debug")
         self.flops += attack_flops.flops
         self._compute_metrics_on_adv_examples(attack_out)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import torch
@@ -10,7 +11,12 @@ from datasets.utils.logging import disable_progress_bar
 
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.dist_utils import DistributedRNG, pad_batch_across_processes
-from robust_llm.logging_utils import log, wandb_log
+from robust_llm.logging_utils import (
+    TRAIN_LOG_INTERVAL_SECS,
+    format_training_status,
+    log,
+    wandb_log,
+)
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.training.state_classes import (
@@ -109,7 +115,7 @@ def _get_first_state(
                 config=config, path=base_path, accelerator=accelerator
             )
         except FileNotFoundError:
-            log("No saved state found. Starting from scratch.")
+            log("No saved state found. Starting from scratch.", main_process_only=False)
 
     return initialize_state(config, accelerator=accelerator)
 
@@ -208,6 +214,9 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
     )
 
     # Train for one epoch.
+    start_time = time.perf_counter()
+    last_log_time = start_time
+    n_batches = len(dataloader)
     # TODO(ian): Work out if I can put these losses somewhere nicer.
     losses: list[torch.Tensor] = []
     for i, batch in enumerate(dataloader):
@@ -220,7 +229,6 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
         with state.model_state.wrapped_model.flop_count_context() as forward_flops:
             outputs = model(**batch)
         state.flops += forward_flops.flops
-        log(f"Forward flops: {forward_flops.flops:.2E}")
 
         # TODO(ian): Work out if I can put this loss calc somewhere nicer.
         logits = outputs["logits"]
@@ -234,7 +242,6 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
         with state.model_state.wrapped_model.flop_count_context() as backward_flops:
             state.accelerator.backward(outputs.loss)
         state.flops += backward_flops.flops
-        log(f"Backward flops: {backward_flops.flops:.2E}")
 
         optimizer.step()
         lr_scheduler.step()
@@ -251,10 +258,22 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
             },
             commit=True,
         )
-        log(
-            f"Epoch {state.epoch}, batch {i}: "
-            f"Mean loss across processes: {average_loss.item()}"
-        )
+        # Log if it has been at least TRAIN_LOG_INTERVAL_SECS seconds.
+        current_time = time.perf_counter()
+        if (
+            current_time - last_log_time >= TRAIN_LOG_INTERVAL_SECS
+            or i == n_batches - 1  # Always log at the end of the epoch.
+        ):
+            elapsed = current_time - start_time
+            status = format_training_status(
+                epoch=state.epoch,
+                batch=i + 1,
+                total_batches=n_batches,
+                loss=average_loss.item(),
+                elapsed_secs=elapsed,
+            )
+            log(status)
+            last_log_time = current_time
 
     # dataloader does have a property called total_dataset_length.
     if len(losses) != dataloader.total_dataset_length:  # type: ignore

@@ -26,6 +26,9 @@ LOGGING_LEVELS = {
     logging.CRITICAL,
 }
 
+# How often to log training metrics to INFO
+TRAIN_LOG_INTERVAL_SECS = 30
+
 
 @dataclass
 class LoggingCounter:
@@ -364,7 +367,7 @@ def wandb_log(d: dict, commit: bool) -> None:
 
 def log(
     message: str,
-    main_process_only: bool = False,
+    main_process_only: bool = True,
     level: str = "info",
     colors: bool = True,
     accelerator: Accelerator | None = None,
@@ -416,3 +419,40 @@ def log(
 # Blue for process 0, yellow for process 1, etc
 COLOR_MAP = ["\033[94m", "\033[93m", "\033[92m", "\033[91m", "\033[95m"]
 COLOR_END = "\033[0m"
+
+
+def format_time(seconds: float) -> str:
+    """Format seconds into human readable string like '1h 23m' or '5m 27s'"""
+    if seconds < 60:
+        return f"{seconds:.0f}s"
+    minutes = seconds / 60
+    if minutes < 60:
+        return f"{int(minutes)}m {int(seconds % 60)}s"
+    return f"{int(minutes/60)}h {int(minutes%60)}m"
+
+
+def format_training_status(
+    epoch: int, batch: int, total_batches: int, loss: float, elapsed_secs: float
+) -> str:
+    """Progress bar adapted from Claude."""
+    progress = batch / total_batches
+    filled = int(20 * progress)
+    bar = "█" * filled + "░" * (20 - filled)
+
+    # Linear estimate of time remaining
+    if progress > 0:
+        secs_per_batch = elapsed_secs / batch
+        remaining_secs = secs_per_batch * (total_batches - batch)
+        time_info = (
+            f"│ {format_time(elapsed_secs)} elapsed │ "
+            f"ETA: {format_time(remaining_secs)}"
+        )
+    else:
+        time_info = f"│ {format_time(elapsed_secs)} elapsed"
+
+    return (
+        f"Epoch {epoch:3d} │ {bar} │ "
+        f"{progress:>3.0%} │ "
+        f"Loss: {loss:.4e} "
+        f"{time_info}"
+    )

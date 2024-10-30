@@ -48,28 +48,29 @@ class RobustnessMetricResults:
 
     def unwrap_metrics(self, prefix: str = "metrics") -> dict[str, float | int | None]:
         metrics: dict[str, float | int | None] = {}
+
         if self.aib_per_decile is not None:
             for decile in range(11):
                 metrics[f"{prefix}/aib@{decile/10}"] = self.aib_per_decile[decile]
+
         if self.ifs_per_decile is not None:
             for decile in range(11):
                 metrics[f"{prefix}/ifs@{decile/10}"] = self.ifs_per_decile[decile]
+
         if self.asr_per_iteration is not None:
             total_iterations = len(self.asr_per_iteration)
-            # Record ~10 iterations
-            step = max(1, total_iterations // 10)
-            for i in range(0, total_iterations, step):
+            # Record all iterations to avoid unnecessary recomputation
+            for i in range(total_iterations):
                 metrics[f"{prefix}/asr@{i}"] = self.asr_per_iteration[i]
-            # Ensure the last iteration is always included
-            if (total_iterations - 1) % step != 0:
-                metrics[f"{prefix}/asr@{total_iterations-1}"] = self.asr_per_iteration[
-                    -1
-                ]
+            # Record the final iteration as a summary
+            metrics[f"{prefix}/asr@final"] = self.asr_per_iteration[-1]
+
         if self.log_prob_results is not None:
             for i, mean_log_prob in enumerate(self.log_prob_results.mean_log_probs):
                 metrics[f"{prefix}/mean_log_prob@{i}"] = mean_log_prob
             for i, log_mean_prob in enumerate(self.log_prob_results.log_mean_probs):
                 metrics[f"{prefix}/log_mean_prob@{i}"] = log_mean_prob
+
         return metrics
 
     def export_wandb_table(self):
