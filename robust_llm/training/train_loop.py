@@ -36,7 +36,9 @@ from robust_llm.utils import print_time
 disable_progress_bar()
 
 
-def run_train_loop(config: ExperimentConfig, accelerator: Accelerator):
+def run_train_loop(
+    config: ExperimentConfig, accelerator: Accelerator
+) -> TrainingPipelineState:
     """Main training loop.
 
     Args:
@@ -79,6 +81,7 @@ def run_train_loop(config: ExperimentConfig, accelerator: Accelerator):
                 path=checkpoints_path,
                 accelerator=accelerator,
             )
+    return state
 
 
 @print_time()
