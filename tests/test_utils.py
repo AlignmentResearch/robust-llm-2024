@@ -1,11 +1,13 @@
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 import torch
 from hypothesis import assume, given
 from hypothesis import strategies as st
 from transformers import AutoTokenizer
 
+from robust_llm.experiment_utils import get_all_n_rounds_to_evaluate
 from robust_llm.utils import (
     BalancedSampler,
     is_correctly_padded,
@@ -148,3 +150,31 @@ def test_is_correctly_padded_false():
 def test_nested_list_to_tuple():
     nested = [[1, 2], [3, 4]]
     assert nested_list_to_tuple(nested) == ((1, 2), (3, 4))
+
+
+@pytest.mark.parametrize(
+    "attack, start_rounds, middle_rounds, end_rounds",
+    [
+        ("rt", 1, 9, 0),
+        ("gcg", 1, 9, 0),
+        ("rt", 0, 10, 0),
+        ("gcg", 0, 10, 0),
+        ("rt", 10, 8, 5),
+        ("gcg", 10, 8, 5),
+    ],
+)
+def test_get_all_n_rounds_to_evaluate(attack, start_rounds, middle_rounds, end_rounds):
+    n_rounds = get_all_n_rounds_to_evaluate(
+        attack, start_rounds, middle_rounds, end_rounds
+    )
+    assert len(n_rounds) == 10
+    max_adv_tr_rounds = 250 if attack == "rt" else 60
+    n_adv_tr_rounds = [
+        np.clip(x, 5, max_adv_tr_rounds) for x in [953, 413, 163, 59, 21, 8, 6, 3, 1, 1]
+    ]
+    for i, rounds in enumerate(n_rounds):
+        assert len(rounds) == len(set(rounds))
+        assert all(0 <= round <= max_adv_tr_rounds for round in rounds)
+        assert len(rounds) == min(
+            start_rounds + middle_rounds + end_rounds, n_adv_tr_rounds[i] + 1
+        )

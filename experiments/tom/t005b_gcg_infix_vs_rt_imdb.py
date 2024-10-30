@@ -3,11 +3,11 @@
 from pathlib import Path
 from typing import Iterable
 
-import numpy as np
 from huggingface_hub import HfApi
 from huggingface_hub.utils import RepositoryNotFoundError, RevisionNotFoundError
 
 from robust_llm.batch_job_utils import run_multiple
+from robust_llm.experiment_utils import get_all_n_rounds_to_evaluate
 
 PROJECT = "AlignmentResearch/robust_llm"
 BASE_MODELS = [
@@ -48,43 +48,6 @@ def check_model_is_on_hfhub(model_path: str, revision: str) -> bool:
         )
         return _check_model_is_on_hfhub_impl(model_path, revision)
     return False
-
-
-def get_tr_rounds_to_eval(max_adv_tr_rounds: int) -> list[list[int]]:
-    n_adv_tr_rounds = [
-        np.clip(x, 5, max_adv_tr_rounds) for x in [953, 413, 163, 59, 21, 8, 6, 3]
-    ]
-
-    # how many adv training rounds to sample from start, middle, and end
-    NUM_START_ROUNDS = 10
-    NUM_MIDDLE_ROUNDS = 8
-    NUM_END_ROUNDS = 5
-    return [
-        [
-            x
-            for x in sorted(
-                set(
-                    np.concatenate(
-                        [
-                            np.arange(NUM_START_ROUNDS + 1),
-                            # evenly spaced points in log space. stop is
-                            # inclusive (not exclusive like arange). set() will
-                            # de-dupe the endpoints
-                            np.geomspace(
-                                start=NUM_START_ROUNDS,
-                                stop=n_rounds + 1 - NUM_END_ROUNDS,
-                                num=NUM_MIDDLE_ROUNDS + 2,
-                                dtype=int,
-                            ),
-                            np.arange(n_rounds + 1 - NUM_END_ROUNDS, n_rounds + 1),
-                        ],
-                    )
-                )
-            )
-            if 0 <= x <= n_rounds
-        ]
-        for n_rounds in n_adv_tr_rounds
-    ]
 
 
 def launch(
@@ -132,9 +95,7 @@ def launch(
     seeds = [(i, i) for i in range(5)] if correct_seeds else [(0, i) for i in range(5)]
     if seed_range is not None:
         seeds = [seeds[i] for i in seed_range]
-    tr_rounds_to_eval = get_tr_rounds_to_eval(
-        max_adv_tr_rounds=250 if adv_train_attack == "rt" else 60
-    )
+    tr_rounds_to_eval = get_all_n_rounds_to_evaluate(adv_train_attack)
 
     base_overrides: dict[str, str | int | float] = {}
     if eval_attack == "gcg":
