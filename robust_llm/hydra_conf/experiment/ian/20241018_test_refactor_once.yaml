@@ -34,3 +34,4 @@ dataset:
   n_val: 40
 
 experiment_type: "training"
+run_name: "20241018_test_refactor_once"

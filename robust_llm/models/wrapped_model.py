@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import json
 import shutil
 import tempfile
 import time
@@ -16,9 +17,12 @@ from typing import Any, Literal, Optional, TypeVar, Union, overload
 
 import torch
 import torch.distributed
+import torch.distributed as dist
 import transformers
 from accelerate import Accelerator
+from torch.distributed.fsdp import FullStateDictConfig
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp import StateDictType
 from transformers import (
     BatchEncoding,
     PretrainedConfig,
@@ -333,18 +337,56 @@ class WrappedModel(ABC):
         output_dir: Path,
     ):
         """Save the model and tokenizer to a local directory"""
-        assert self.accelerator is not None
-        state_dict = self.accelerator.get_state_dict(self.model)
-        self.model.save_pretrained(
-            save_directory=output_dir,
-            save_function=self.accelerator.save,
-            is_main_process=self.accelerator.is_main_process,
-            state_dict=state_dict,
-            safe_serialization=False,
+        if not dist.is_initialized():
+            self._save_local(state_dict=self.model.state_dict(), output_dir=output_dir)
+            return
+        # Configure FSDP state dict settings
+        state_dict_config = FullStateDictConfig(
+            offload_to_cpu=True,
+            rank0_only=True,
         )
-        if self.accelerator.is_main_process:
-            self.right_tokenizer.save_pretrained(
-                save_directory=output_dir,
+
+        with FSDP.state_dict_type(
+            self.model,
+            StateDictType.FULL_STATE_DICT,
+            state_dict_config,
+        ):
+            state_dict = self.model.state_dict()
+
+            if is_main_process():
+                self._save_local(state_dict=state_dict, output_dir=output_dir)
+
+        # Ensure all processes sync up
+        if dist.is_initialized():
+            dist.barrier()
+
+    def _save_local(
+        self,
+        state_dict: dict[str, torch.Tensor],
+        output_dir: Path,
+    ):
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save with proper serialization settings
+        torch.save(
+            state_dict,
+            output_dir / "pytorch_model.bin",
+        )
+
+        # Save other files
+        self.model.config.save_pretrained(output_dir)
+        self.right_tokenizer.save_pretrained(
+            save_directory=output_dir,
+        )
+
+        # Create index file
+        with open(output_dir / "pytorch_model.bin.index.json", "w") as f:
+            json.dump(
+                {
+                    "metadata": {"format": "pt"},
+                    "weight_map": {"": "pytorch_model.bin"},
+                },
+                f,
             )
         mark_model_save_as_finished(model_save_directory=output_dir)
 

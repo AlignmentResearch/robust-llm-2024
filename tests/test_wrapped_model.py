@@ -1,7 +1,10 @@
 import dataclasses
+import shutil
+from pathlib import Path
 
 import pytest
 import torch
+from accelerate import Accelerator
 from transformers import LlamaForCausalLM, LlamaTokenizer
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
@@ -206,3 +209,37 @@ def test_generate_equivalence():
         "generation_config": model.transformers_generation_config,
     }
     assert model.generate(**mb_inputs).shape == model.generate(**mb_inputs).shape
+
+
+@pytest.mark.multigpu
+def test_save_load_model():
+    cfg = ModelConfig(
+        name_or_path="EleutherAI/pythia-14m",
+        family="pythia",
+        revision="main",
+        inference_type="generation",
+        max_minibatch_size=4,
+        eval_minibatch_multiplier=1,
+        env_minibatch_multiplier=0.5,
+        seed=42,
+        generation_config=GenerationConfig(
+            max_new_tokens=50, do_sample=True, temperature=10.0
+        ),
+    )
+    accelerator = Accelerator(cpu=not torch.cuda.is_available())
+    model = WrappedModel.from_config(cfg, accelerator=accelerator)
+    path = Path("artifacts/test_model")
+    if path.exists() and accelerator.is_main_process:
+        shutil.rmtree(path)
+    model.save_local(path)
+
+    cfg.name_or_path = str(path)
+    loaded_model = WrappedModel.from_config(cfg, accelerator=accelerator)
+    if accelerator.is_main_process:
+        shutil.rmtree(path)
+
+    example_prompt = "Hello, my dog is cute"
+    encoding = loaded_model.tokenize(example_prompt, return_tensors="pt")
+    assert torch.allclose(
+        model.forward(**encoding).logits, loaded_model.forward(**encoding).logits
+    )

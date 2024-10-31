@@ -531,12 +531,10 @@ class TrainingPipelineState:
         deserializing. This is fine because the configs are necessarily
         identical, given that we look it up by hash value.
         """
-        hex_hash = deterministic_hash(config)
-        path = path / hex_hash
-
+        checkpoint_path = get_checkpoint_path(path, config)
         process_index = accelerator.process_index
 
-        subdir = find_most_recent_checkpoint(path)
+        subdir = find_most_recent_checkpoint(checkpoint_path)
 
         with open(subdir / "state.json", "r") as f:
             state_dict = json.load(f)
