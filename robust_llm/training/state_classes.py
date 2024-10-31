@@ -378,52 +378,54 @@ class TrainingPipelineState:
         self.accelerator.wait_for_everyone()
         process_index = self.accelerator.process_index
 
-        hex_hash = deterministic_hash(self.config)
         epoch = self.epoch
-        path = path / hex_hash / f"epoch_{zero_pad(epoch)}"
-        log(f"Saving checkpoint to {path}", main_process_only=False)
+        checkpoint_path = get_checkpoint_path(path, self.config)
+        epoch_path = checkpoint_path / f"epoch_{zero_pad(epoch)}"
+        log(f"Saving checkpoint to {epoch_path}", main_process_only=False)
 
         # Make the directory on a single process.
         if self.accelerator.is_main_process:
-            if path.exists():
-                if not (path / "save_complete").exists():
+            if epoch_path.exists():
+                if not (epoch_path / "save_complete").exists():
                     log(
-                        f"Deleting incomplete checkpoint: {path}",
+                        f"Deleting incomplete checkpoint: {epoch_path}",
                         main_process_only=False,
                     )
-                    assert hex_hash in str(path)
-                    shutil.rmtree(path)
+                    assert checkpoint_path in epoch_path.parents
+                    shutil.rmtree(epoch_path)
                 else:
-                    raise FileExistsError(f"Path {path} already exists. Aborting save.")
+                    raise FileExistsError(
+                        f"Path {epoch_path} already exists. Aborting save."
+                    )
             try:
-                path.mkdir(parents=True)
+                epoch_path.mkdir(parents=True)
             except FileExistsError as e:
                 raise FileExistsError(
-                    f"Path {path} already exists even though it shouldn't."
+                    f"Path {epoch_path} already exists even though it shouldn't."
                     " Maybe a race condition?"
                 ) from e
 
         # Wait for main process to finish making the directory.
         self.accelerator.wait_for_everyone()
 
-        self.model_state.save(path, process_index)
-        self.training_state.save(path, process_index)
-        self.dataset_state.save(path, process_index)
-        self.rng_state.save(path, process_index, self.accelerator)
+        self.model_state.save(epoch_path, process_index)
+        self.training_state.save(epoch_path, process_index)
+        self.dataset_state.save(epoch_path, process_index)
+        self.rng_state.save(epoch_path, process_index, self.accelerator)
 
         if self.accelerator.is_main_process:
             state_dict = {
                 "epoch": epoch,
                 "flops": self.flops,
             }
-            with open(path / "state.json", "w") as f:
+            with open(epoch_path / "state.json", "w") as f:
                 json.dump(state_dict, f)
 
         # Touch a file to indicate that the save is complete and that this
         # checkpoint can be used for loading.
         self.accelerator.wait_for_everyone()
         if self.accelerator.is_main_process:
-            with open(path / "save_complete", "w") as f:
+            with open(epoch_path / "save_complete", "w") as f:
                 f.write("")
         self.accelerator.wait_for_everyone()
 
@@ -438,17 +440,18 @@ class TrainingPipelineState:
         self.accelerator.wait_for_everyone()
         if self.accelerator.is_main_process:
 
-            hex_hash = deterministic_hash(self.config)
-            path = path / hex_hash
-            if not path.exists():
+            checkpoint_path = get_checkpoint_path(path, self.config)
+            if not checkpoint_path.exists():
                 return
 
             save_total_limit = self.training_config.save_total_limit
             safe_checkpoint_epochs: list[str] = []
-            log(f"Cleaning up checkpoints in {path}", main_process_only=False)
-            for subdir in get_sorted_checkpoints(path):
+            log(
+                f"Cleaning up checkpoints in {checkpoint_path}", main_process_only=False
+            )
+            for subdir in get_sorted_checkpoints(checkpoint_path):
                 if len(safe_checkpoint_epochs) >= save_total_limit:
-                    assert hex_hash in str(subdir)
+                    assert checkpoint_path in subdir.parents
                     assert subdir.name not in safe_checkpoint_epochs
                     shutil.rmtree(subdir)
                 elif (subdir / "save_complete").exists():
@@ -458,7 +461,7 @@ class TrainingPipelineState:
                         f"Deleting incomplete checkpoint: {subdir}",
                         main_process_only=False,
                     )
-                    assert hex_hash in str(subdir)
+                    assert checkpoint_path in subdir.parents
                     assert subdir.name not in safe_checkpoint_epochs
                     shutil.rmtree(subdir)
             log(
@@ -924,3 +927,17 @@ class AdversarialPipelineState(TrainingPipelineState):
                 compute_robustness_metric=compute_robustness_metric,
                 upload_artifacts=False,
             )
+
+
+def get_checkpoint_path(base_path: Path, config: ExperimentConfig) -> Path:
+    """Get the deterministic path for saving/loading checkpoints.
+
+    This is designed to mirror wandb, so e.g. the run
+    ian-135b-ft-pythia-harmless-0000 in group
+    ian_135b_ft_pythia_harmless would have a path like
+    /path/to/checkpoints/ian_135b_ft_pythia_harmless/ian-135b-ft-pythia-harmless-0000/abcdef1234.../
+    """  # noqa: E501
+    hex_hash = deterministic_hash(config)
+    group_name = config.experiment_name
+    run_name = config.run_name
+    return base_path / group_name / run_name / hex_hash
