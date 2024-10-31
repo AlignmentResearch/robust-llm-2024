@@ -11,6 +11,9 @@ dataset:
   n_val: 500
 
 evaluation:
-  num_iterations: 128
+  num_iterations: 64
+  evaluation_attack:
+    perturb_position_min: 0.9
+    perturb_position_max: 0.9
 
 experiment_type: "evaluation"

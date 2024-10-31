@@ -11,6 +11,6 @@ dataset:
   n_val: 500
 
 evaluation:
-  num_iterations: 100
+  num_iterations: 128
 
 experiment_type: "evaluation"
