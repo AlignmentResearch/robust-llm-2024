@@ -123,6 +123,14 @@ def find_most_recent_checkpoint(path: Path) -> Path:
     raise FileNotFoundError(f"No saved state found for {path}.")
 
 
+def find_completed_checkpoints(path: Path) -> list[Path]:
+    return [
+        subdir
+        for subdir in get_sorted_checkpoints(path)
+        if (subdir / "save_complete").exists()
+    ]
+
+
 def prepare_dataloader(victim: WrappedModel, dataset: Dataset) -> DataLoader:
     # Computation taken from the old training.py.
     batch_size = min(
