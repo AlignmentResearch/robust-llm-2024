@@ -21,7 +21,18 @@ commands:
           keys:
             # This CI cache saves the contents of wandb_utils.wandb_api_tools.get_cache_root().
             # To force cache invalidation, change the version number here and below
-            - combined-local-cache-v2-
+            - combined-local-cache-v3-
+      - run:
+          name: Set cache status
+          # Record to bash variable if we are using the cache or not
+          command: |
+            if [ -d "cache" ]; then
+              echo "Combined cache restored successfully, skipping persistence"
+              echo 'export NEEDS_CACHE_UPDATE="false"' >> "$BASH_ENV"
+            else
+              echo "Combined cache version changed or missing, will persist workspace"
+              echo 'export NEEDS_CACHE_UPDATE="true"' >> "$BASH_ENV"
+            fi
       - run:
           name: Setup Virtual Environment and Caching
           command: |
@@ -179,7 +190,19 @@ jobs:
             # Run pytest with the split test functions
             pytest --cov=robust_llm --cov=tests --junitxml=/tmp/test-reports/junit.xml --durations=500 -vv $(echo "$FULLTESTPATHS" | tr '\n' ' ')
 
-            cp -r cache /tmp/cache/pytest_cache_${CIRCLE_NODE_INDEX}
+            if [ "$NEEDS_CACHE_UPDATE" = "true" ]; then
+              echo "Copying wandb files to /tmp/cache to persist them across jobs"
+              for dir in attack_tables wandb-run-summaries asr_csvs ifs_csvs; do
+                if [ -d "cache/$dir" ]; then
+                  if [ ! -d "/tmp/cache/pytest_cache_${CIRCLE_NODE_INDEX}"]; then
+                    mkdir -p /tmp/cache/pytest_cache_${CIRCLE_NODE_INDEX}
+                  fi
+                  echo "Copying $dir to /tmp/cache/pytest_cache_${CIRCLE_NODE_INDEX}/$dir"
+                  mkdir -p /tmp/cache/pytest_cache_${CIRCLE_NODE_INDEX}/$dir
+                  cp -r "cache/$dir" /tmp/cache/pytest_cache_${CIRCLE_NODE_INDEX}/$dir
+                fi
+              done
+            fi
       - codecov/upload
       - store-test-output
       - store-memory-monitor
@@ -196,16 +219,21 @@ jobs:
       - run:
           name: Combine caches
           command: |
+            if [ ! -d "/tmp/cache" ]; then
+              echo "Cache not found (this is expected if it has already been saved)"
+              circleci-agent step halt
+            fi
             mkdir -p cache
             for i in {0..3}; do
               if [ -d "/tmp/cache/pytest_cache_$i" ]; then
+                echo "Copying cache from /tmp/cache/pytest_cache_$i to cache/"
                 cp -r /tmp/cache/pytest_cache_$i/* cache/
               fi
             done
       - save_cache:
           paths:
             - "cache"
-          key: combined-local-cache-v2-{{ .Revision }}
+          key: combined-local-cache-v3-{{ .Revision }}
 
   pytest-multigpu:
     executor: python-executor
