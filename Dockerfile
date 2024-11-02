@@ -38,9 +38,12 @@ RUN curl -fsSL https://code-server.dev/install.sh | sh
 ENV PATH="/home/coder/.local/bin:${PATH}"
 RUN code-server --install-extension ms-python.python
 RUN code-server --install-extension ms-pyright.pyright
-RUN code-server --install-extension github.copilot
 RUN code-server --install-extension ms-python.black-formatter
-
+# URL is from https://marketplace.visualstudio.com/items?itemName=GitHub.copilot&ssr=false#version-history
+RUN wget https://marketplace.visualstudio.com/_apis/public/gallery/publishers/GitHub/vsextensions/copilot/1.243.1189/vspackage --output-document copilot.vsix.gz \
+    && gzip --decompress copilot.vsix.gz \
+    && code-server --install-extension copilot.vsix \
+    && rm copilot.vsix
 
 # Copy the venv with built packages from compile stage
 COPY --from=compile /usr/local/venv /usr/local/venv
