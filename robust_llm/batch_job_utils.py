@@ -56,9 +56,9 @@ def get_run_base_command(num_gpus: int, profiling_dir: Path | None) -> str:
         else "python"
     )
     if profiling_dir is not None:
-        base_command += (
-            f" robust_llm/run_with_profiling.py --save-directory {profiling_dir}"
-            " -- python"
+        base_command = (
+            "robust_llm/profiling/run_with_profiling.py"
+            f" --save-directory {profiling_dir} -- {base_command}"
         )
     return base_command
 

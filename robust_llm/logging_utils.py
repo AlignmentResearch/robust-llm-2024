@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-import accelerate.utils
 import wandb
 import yaml
 from accelerate import Accelerator
@@ -262,6 +261,12 @@ class LoggingContext:
         self.local_files_path.mkdir(exist_ok=True, parents=True)
         wandb_log({"local_files_path": str(self.local_files_path)}, commit=False)
 
+        if config.environment.wandb_info_filename is not None:
+            with open(config.environment.wandb_info_filename, "w") as f:
+                f.write(
+                    json.dumps({"wandb_run_name": run.name, "wandb_run_id": run.id})
+                )
+
     def maybe_log_model_info(self, model_family: str, model_size: int) -> None:
         """Logs model info to wandb for use in plots.
 
@@ -280,25 +285,6 @@ class LoggingContext:
         if is_main_process():
             self.wandb_initialize()
         self._setup_logging()
-
-        # hack: It would make more sense for wandb_info_filename to be the same
-        # across all processes. Then just the main process, which is the only
-        # one that knows the wandb run info, would write to it within
-        # wandb_initialize().
-        # However, run_with_profiling.py sets this param differently across each
-        # accelerate process to avoid using the accelerate library, as it causes
-        # an error (see comment in that file).
-        # So we have each process write to its own wandb_info_filename here.
-        run_name, run_id = accelerate.utils.gather_object(
-            [(None, None) if wandb.run is None else (wandb.run.name, wandb.run.id)]
-        )[0]
-        assert run_name != "" and run_id != ""
-        config = self.args
-        if config.environment.wandb_info_filename is not None:
-            with open(config.environment.wandb_info_filename, "w") as f:
-                f.write(
-                    json.dumps({"wandb_run_name": run_name, "wandb_run_id": run_id})
-                )
 
     def cleanup(self) -> None:
         self.save_logs()

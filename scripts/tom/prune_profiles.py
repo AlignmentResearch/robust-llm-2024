@@ -26,7 +26,7 @@ def should_delete_profile(run_id: str) -> bool:
 def process_profiles(profile_dir: Path, dry_run: bool) -> None:
     for file in profile_dir.iterdir():
         if file.name.endswith(".speedscope.json"):
-            run_id = file.name.split("-")[-2]  # Run ID is in the filename
+            run_id = file.name.split("-")[-1].split(".")[0]  # Run ID is in the filename
             assert len(run_id) == 8 and run_id.isalnum(), f"Invalid run ID: {run_id}"
 
             if should_delete_profile(run_id):
