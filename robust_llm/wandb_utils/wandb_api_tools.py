@@ -491,6 +491,21 @@ def maybe_unzip_attack_data_tables(run_name: str) -> bool:
     return False
 
 
+def download_artifact_with_retry(
+    artifact: wandb.Artifact,
+    root: str,
+    retries: int = 5,
+    backoff: int = 5,
+):
+    for attempt in range(retries):
+        try:
+            return artifact.download(root=root)
+        except Exception as e:
+            print(f"Error downloading artifact on attempt {attempt}: {e}")
+            time.sleep(backoff * 2**attempt)
+    raise ValueError(f"Failed to download artifact {artifact.name}")
+
+
 def download_attack_data_table_if_not_cached(
     artifact: wandb.Artifact,
     run_name: str,
@@ -514,7 +529,7 @@ def download_attack_data_table_if_not_cached(
     table_path = cache_path / f"attack_data/example_{index}.table.json"
 
     if not table_path.exists() or table_path.stat().st_size == 0:
-        table_dir = artifact.download(root=str(cache_path))
+        table_dir = download_artifact_with_retry(artifact, str(cache_path))
         assert str(table_path).startswith(table_dir)
 
     return table_path

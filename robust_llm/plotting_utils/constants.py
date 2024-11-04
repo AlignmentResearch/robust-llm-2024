@@ -82,6 +82,12 @@ AXIS_LABELS = {
     "logit_metrics_asr_at_72": "Attack Success Rate",
     "logit_metrics_asr_at_120": "Attack Success Rate",
     "logit_metrics_asr_at_128": "Attack Success Rate",
+    "mean_log_prob": "Mean Log Probability",
+    "log_mean_prob": "log(Mean Probability)",
+    "mean_logit_prob": "Mean Log Probability (Logit)",
+    "logit_mean_prob": "logit(Mean Attack Success Probability)",
+    "mean_loss": "Mean Cross Entropy Loss",
+    "asp": "Mean Attack Success Probability",
 }
 LOG_SCALE_VARIABLES = [
     "num_params",

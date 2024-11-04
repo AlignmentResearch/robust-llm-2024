@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from robust_llm.plotting_utils.tools import (
     export_csv_and_metadata,
-    get_cached_asr_data,
+    get_cached_asr_logprob_data,
     prepare_adv_training_data,
 )
 
@@ -68,7 +68,7 @@ def save_asr_for_group(
 
 def main():
     for group in tqdm(GROUPS):
-        df = get_cached_asr_data(group)
+        df = get_cached_asr_logprob_data(group)
         if df.empty:
             print(f"Group {group} does not exist")
             continue

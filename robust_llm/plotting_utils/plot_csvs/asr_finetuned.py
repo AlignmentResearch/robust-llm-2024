@@ -20,7 +20,8 @@ def plot_asr_for_group(
     attack: str,
     dataset: str,
     x: str = "iteration_x_flops",
-    y: str = "logit_asr",
+    y_data_name: str = "asr",
+    y_transform: str = "logit",
     smoothing: int = DEFAULT_SMOOTHING,
     style: str = "paper",
 ):
@@ -32,8 +33,9 @@ def plot_asr_for_group(
         dataset=dataset,
         round_info="finetuned",
         smoothing=smoothing,
-        x=x,
-        y=y,
+        x_data_name=x,
+        y_data_name=y_data_name,
+        y_transform=y_transform,
         style=style,
     )
 
@@ -44,14 +46,19 @@ def main(style: str):
         for dataset in ("imdb", "pm", "wl", "spam", "helpful", "harmless"):
             df, metadata = read_csv_and_metadata("asr", attack, dataset, "finetuned")
             for x in ("attack_flops_fraction_pretrain",):
-                for y in ("logit_asr",):
+                for y_transf, y_data in [
+                    ("logit", "asr"),
+                    ("comp_exp", "log_mean_prob"),
+                    ("negative", "mean_log_prob"),
+                ]:
                     plot_asr_for_group(
                         df,
                         metadata=metadata,
                         attack=attack,
                         dataset=dataset,
                         x=x,
-                        y=y,
+                        y_data_name=y_data,
+                        y_transform=y_transf,
                         style=style,
                     )
 

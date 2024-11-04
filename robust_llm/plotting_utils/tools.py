@@ -50,7 +50,23 @@ TRANSFORMS: dict[str, Callable] = {
     "logit": lambda x: np.log10(x / (1 - x)),
     "sigmoid": lambda x: 1 / (1 + np.exp(-x)),
     "none": lambda x: x,
+    "negative": lambda x: -x,
+    "comp_exp": lambda x: 1 - np.exp(x),
+    "log_to_logit": lambda x: np.log10(1 - np.exp(x)) - np.log10(np.exp(x)),
 }
+
+
+def name_transformed_data(data_name: str, transform: str) -> str:
+    if transform == "none":
+        return data_name
+    elif transform == "negative" and "mean_log_prob" in data_name:
+        return data_name.replace("log_prob", "loss")
+    elif transform == "comp_exp" and "log_mean_prob" in data_name:
+        return data_name.replace("log_mean_prob", "asp")
+    elif transform == "log_to_logit":
+        return data_name.replace("log", "logit")
+    else:
+        return f"{transform}_{data_name}"
 
 
 def get_csv_root():
@@ -323,7 +339,7 @@ def make_finetuned_data(
             use_group_cache=use_group_cache,
         )
         postprocess_data(run)
-        run_asr = get_unstacked_cached_asr_data(group)
+        run_asr = get_unstacked_cached_attack_data(group)
         run = run.merge(
             run_asr,
             on=["model_idx", "seed_idx", "adv_training_round"],
@@ -805,9 +821,7 @@ def _draw_plot_adv_training(
 
     plt.title(title)
     y_name_clean = y_data_name.replace("adversarial_eval_", "").replace("metrics_", "")
-    y_transf_data_name = (
-        f"{y_transform}_{y_name_clean}" if y_transform != "none" else y_name_clean
-    )
+    y_transf_data_name = name_transformed_data(y_name_clean, y_transform)
     data[y_transf_data_name] = TRANSFORMS[y_transform](data[y_data_name])
     if data[y_transf_data_name].dtype == "O":
         data[y_transf_data_name] = data[y_transf_data_name].astype(float)
@@ -961,84 +975,6 @@ def create_path_and_savefig(
     return save_path
 
 
-def draw_scatterplot(
-    orig_data: pd.DataFrame,
-    title: str,
-    save_as: iter_str | str,
-    custom_ys=None,
-    custom_xs_and_ys=None,
-    check_seeds: int | None = None,
-    ylim: tuple[float, float] | None = None,
-    ytransform: str | None = None,
-    y_data_name: str = "adversarial_eval_attack_success_rate",
-    smoothing: int = DEFAULT_SMOOTHING,
-    style: str = "paper",
-):
-    data = orig_data.copy()
-    if smoothing != 0:
-        apply_laplace_smoothing(data, y_data_name, smoothing)
-    fig, ax = plt.subplots()
-
-    plt.xscale("log")
-    plt.title(title)
-    plt.xlabel(AXIS_LABELS["num_params"])
-    plt.ylabel(AXIS_LABELS[y_data_name])
-    if ytransform is None:
-        data["y_value"] = data[y_data_name]
-    else:
-        data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
-    if ylim is not None:
-        plt.ylim(ylim)
-
-    relevant_data = data[["num_params", "y_value"]]
-
-    if check_seeds is not None:
-        _check_correct_num_seeds(
-            relevant_data, num_seeds=check_seeds, adversarial=False
-        )
-
-    # Add the custom xs and ys
-    # xs are "num_params"
-    # ys are values
-    if custom_xs_and_ys is not None or custom_ys is not None:
-        assert custom_xs_and_ys is None or custom_ys is None
-        print("Adding custom data to the plot")
-        if custom_ys is not None:
-            xs = MODEL_SIZES[-len(custom_ys) :]
-        elif custom_xs_and_ys is not None:
-            xs, custom_ys = zip(*custom_xs_and_ys)  # type: ignore
-        else:
-            raise ValueError("should not happen")
-
-        new_data = pd.DataFrame({"num_params": xs, "y_value": custom_ys})
-        new_data = new_data[relevant_data.columns]
-        relevant_data = pd.concat([relevant_data, new_data], ignore_index=True)
-
-    if check_seeds is not None:
-        _check_correct_num_seeds(
-            relevant_data, num_seeds=check_seeds, adversarial=False
-        )
-
-    sns.scatterplot(
-        data=pd.melt(relevant_data, ["num_params"]),  # type: ignore
-        x="num_params",
-        y="value",
-        hue="variable",
-        marker="o",
-        legend=False,
-        alpha=0.5,
-    )
-    if ytransform == "logit":
-        set_yticks_for_logit(ax)
-
-    set_up_paper_plot(fig, ax, style=style)
-
-    if isinstance(save_as, str):
-        save_as = (save_as,)
-    save_as = [style] + list(save_as)
-    create_path_and_savefig(fig, *save_as)
-
-
 def _maybe_get_custom_xs_and_maybe_ys(relevant_data, custom_ys, custom_xs_and_ys):
     # Add the custom xs and ys
     # xs are "num_params"
@@ -1180,9 +1116,7 @@ def draw_min_max_median_plot(
         y_transf_data_name = y_data_name
     else:
         data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
-        y_transf_data_name = (
-            f"{ytransform}_{y_data_name}" if ytransform != "none" else y_data_name
-        )
+        y_transf_data_name = name_transformed_data(y_data_name, ytransform)
     if ylim is not None:
         plt.ylim(ylim)
     elif ytransform == "none" and ("asr" in y_data_name or "success" in y_data_name):
@@ -1287,9 +1221,7 @@ def draw_min_max_median_plot_by_round(
         y_transf_data_name = y_data_name
     else:
         data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
-        y_transf_data_name = (
-            f"{ytransform}_{y_data_name}" if ytransform != "none" else y_data_name
-        )
+        y_transf_data_name = name_transformed_data(y_data_name, ytransform)
     plt.xlabel(AXIS_LABELS["num_params"])
     plt.ylabel(AXIS_LABELS[y_transf_data_name])
     if ylim is not None:
@@ -1439,11 +1371,9 @@ def draw_min_max_median_plot_by_dataset(
         y_transf_data_name = y_data_name
     else:
         data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
-        y_transf_data_name = (
-            f"{ytransform}_{y_data_name}" if ytransform != "none" else y_data_name
-        )
+        y_transf_data_name = name_transformed_data(y_data_name, ytransform)
     plt.xlabel(AXIS_LABELS["num_params"])
-    plt.ylabel(AXIS_LABELS[y_data_name])
+    plt.ylabel(AXIS_LABELS[y_transf_data_name])
     if ylim is not None:
         plt.ylim(ylim)
 
@@ -1770,8 +1700,9 @@ def plot_attack_scaling_base(
     dataset: str,
     round_info: str,
     smoothing: int = DEFAULT_SMOOTHING,
-    x: str = "attack_flops_fraction_pretrain",
-    y: str = "logit_asr",
+    x_data_name: str = "attack_flops_fraction_pretrain",
+    y_data_name: str = "asr",
+    y_transform: str = "logit",
     color_data_name: str = "num_params",
     style: str = "paper",
 ) -> None:
@@ -1779,27 +1710,25 @@ def plot_attack_scaling_base(
     df = orig_df.copy()
     if smoothing != 0:
         apply_laplace_smoothing(df, "asr", smoothing)
-    if "flops" in x:
+    if "flops" in x_data_name or "prob" in y_data_name:
         df = df.loc[df.iteration.gt(0)]
     add_columns_for_attack_scaling(df)
-    if y == "sigmoid_asr":
-        df["sigmoid_asr"] = 1 / (1 + np.exp(-df.asr))
-    if y == "logit_asr":
-        df["logit_asr"] = TRANSFORMS["logit"](df.asr)
+    y_transf_data_name = name_transformed_data(y_data_name, y_transform)
+    df[y_transf_data_name] = TRANSFORMS[y_transform](df[y_data_name])
 
     fig, ax = plt.subplots()
     set_up_paper_plot(fig, ax, style=style)
     palette = get_color_palette(df, color_data_name)
     sns.lineplot(
         data=df,
-        x=x,
-        y=y,
+        x=x_data_name,
+        y=y_transf_data_name,
         hue=color_data_name,
         ax=ax,
         palette=palette,
         legend=False,  # We will add the legend later manually
     )
-    if x != "iteration":
+    if x_data_name != "iteration":
         # The only case where we don't want log scale is plotting iterations directly
         ax.set_xscale("log")
     # Manually set the ylim here
@@ -1807,22 +1736,22 @@ def plot_attack_scaling_base(
         dataset in ["imdb", "spam"]
         and round_info == "finetuned"
         and attack == "gcg"
-        and y == "logit_asr"
+        and y_transf_data_name == "logit_asr"
     ):
         ax.set_ylim(-2.4, 2.4)
     elif (
         dataset in ["helpful", "harmless"]
         and round_info == "finetuned"
         and attack == "gcg"
-        and y == "logit_asr"
+        and y_transf_data_name == "logit_asr"
     ):
         ax.set_ylim(-0.8, 2.5)
-    elif y == "asr":
+    elif y_transf_data_name == "asr":
         ax.set_ylim(0, 1)
-    if y == "logit_asr":
+    if y_transf_data_name == "logit_asr":
         set_yticks_for_logit(ax)
-    ax.set_xlabel(AXIS_LABELS[x])
-    ax.set_ylabel(AXIS_LABELS[y])
+    ax.set_xlabel(AXIS_LABELS[x_data_name])
+    ax.set_ylabel(AXIS_LABELS[y_transf_data_name])
 
     round_pretty = round_info
     if "bps" in round_info:
@@ -1846,8 +1775,8 @@ def plot_attack_scaling_base(
         attack,
         dataset,
         round_info,
-        x,
-        y,
+        x_data_name,
+        y_transf_data_name,
         f"smoothing-{smoothing}",
         "no_legend",
         close=False,
@@ -1862,8 +1791,8 @@ def plot_attack_scaling_base(
         attack,
         dataset,
         round_info,
-        x,
-        y,
+        x_data_name,
+        y_data_name,
         f"smoothing-{smoothing}",
         "legend",
         data=df,
@@ -1903,15 +1832,49 @@ def get_cached_asr_data(
     return df
 
 
-def get_unstacked_cached_asr_data(group_name: str, for_offense_defense: bool = False):
-    df = get_cached_asr_data(group_name, for_offense_defense)
-    # Assuming your DataFrame is named 'df'
-    df_unstacked = df.set_index(
-        ["model_size", "seed_idx", "adv_training_round", "model_idx", "iteration"]
-    )["asr"].unstack()
+def get_cached_logprob_data(group_name: str) -> pd.DataFrame:
+    root = compute_repo_path()
+    path = os.path.join(root, "cache_csvs", f"logprob_{group_name}.csv")
+    if os.path.exists(path):
+        return pd.read_csv(path)
+    else:
+        return pd.DataFrame()
 
-    # Rename the columns to the desired format
-    df_unstacked.columns = [f"asr_at_{col}" for col in df_unstacked.columns]
+
+def get_cached_asr_logprob_data(
+    group_name: str, for_offense_defense: bool = False
+) -> pd.DataFrame:
+    asr_data = get_cached_asr_data(group_name, for_offense_defense)
+    logprob_data = get_cached_logprob_data(group_name)
+    if logprob_data.empty:
+        return asr_data
+    logprob_data.iteration += 1
+    df = asr_data.merge(
+        logprob_data,
+        on=["model_idx", "seed_idx", "iteration"],
+        validate="1:1",
+        suffixes=("", "_logprob"),
+    )
+    return df
+
+
+def get_unstacked_cached_attack_data(
+    group_name: str, for_offense_defense: bool = False
+):
+    df = get_cached_asr_logprob_data(group_name, for_offense_defense)
+    unstacked_data = []
+    for field in ("asr", "log_mean_prob", "mean_log_prob"):
+        if field not in df:
+            continue
+        unstacked = df.set_index(
+            ["model_size", "seed_idx", "adv_training_round", "model_idx", "iteration"]
+        )[field].unstack()
+
+        # Rename the columns to the desired format
+        unstacked.columns = [f"{field}_at_{col}" for col in unstacked.columns]
+
+        unstacked_data.append(unstacked)
+    df_unstacked = pd.concat(unstacked_data, axis=1)
 
     # Reset the index to bring back the other columns as regular columns
     df_unstacked = df_unstacked.reset_index()
@@ -2002,8 +1965,8 @@ def load_and_plot_asr(
             attack,
             dataset,
             round_to_str(round),
-            x=x,
-            y=y,
+            x_data_name=x,
+            y_data_name=y,
             smoothing=smoothing,
             style=style,
         )
