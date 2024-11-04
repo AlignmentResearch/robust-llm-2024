@@ -4,7 +4,11 @@ import concurrent.futures
 import csv
 import json
 import re
+import shutil
 import time
+import uuid
+import zipfile
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -32,6 +36,17 @@ def get_cache_root() -> Path:
     if not path.exists():
         path.mkdir(parents=True)
     return path
+
+
+def get_attack_tables_cache_root() -> Path:
+    path = get_cache_root() / "attack_tables"
+    if not path.exists():
+        path.mkdir(parents=True)
+    return path
+
+
+def get_attack_tables_index_path() -> Path:
+    return get_attack_tables_cache_root() / "index.json"
 
 
 def try_get_run_from_id(run_id: str, retries: int = 5, backoff: int = 5) -> WandbRun:
@@ -120,6 +135,7 @@ def get_attack_data_tables(
     run: RunInfo, max_workers: int = 4
 ) -> dict[int, pd.DataFrame]:
     wandb_run = run.to_wandb()
+    maybe_unzip_attack_data_tables(wandb_run.name)
     dfs = _maybe_get_attack_data_from_storage(wandb_run)
     if dfs is not None:
         return dfs
@@ -332,6 +348,149 @@ def download_and_process_attack_data_table(
     return index, df
 
 
+def zip_attack_data_tables(only_prefix: str | None = None):
+    """Zip JSON files from cache/attack_tables to save disk space and remove originals.
+
+    We iterate through `cache/attack_tables` for directories which have names
+    like `ian-113-rt-pythia-spam-0048`. We zip these directories based on the
+    common prefix `ian-113-rt-pythia-spam` and write what we have done to `index.json`
+    in the same directory. After successful zipping, original directories are removed.
+
+    Arguments:
+        only_prefix: If set, only zip directories with this
+            prefix. This is useful if a group is actively in use.
+    """
+
+    tables_dir = get_attack_tables_cache_root()
+    index_path = get_attack_tables_index_path()
+    prefix_groups = defaultdict(list)
+
+    # Group directories by prefix
+    for path in tables_dir.iterdir():
+        if not path.is_dir():
+            continue
+        prefix = "-".join(path.name.split("-")[:-1])
+        if only_prefix is None or prefix == only_prefix:
+            prefix_groups[prefix].append(path)
+
+    index = {}
+    for prefix, paths in prefix_groups.items():
+        if len(paths) == 1:
+            continue
+
+        uuid_str = str(uuid.uuid4())
+        zip_path = tables_dir / f"{prefix}-{uuid_str}.zip"
+        print(f"Zipping {len(paths)} dirs to {zip_path}")
+
+        try:
+            # Create zip file
+            with zipfile.ZipFile(zip_path, "w") as zipf:
+                for path in paths:
+                    zipf.write(path, arcname=path.name)
+
+            # Verify zip file integrity
+            with zipfile.ZipFile(zip_path, "r") as zipf:
+                if zipf.testzip() is not None:
+                    raise zipfile.BadZipFile("Zip file verification failed")
+
+            # If zip is valid, remove original directories
+            for path in paths:
+                try:
+                    shutil.rmtree(path)
+                    print(f"Removed original directory: {path}")
+                except Exception as e:
+                    print(f"Warning: Failed to remove directory {path}: {e}")
+
+            # Update index
+            index[zip_path.name] = [p.name for p in paths]
+
+        except (Exception, KeyboardInterrupt) as e:
+            print(f"Error processing {prefix}: {e}")
+            # If zip creation fails, remove the partial zip file
+            if zip_path.exists():
+                zip_path.unlink()
+            continue
+
+    # Update index file
+    if index_path.exists():
+        with open(index_path) as f:
+            index.update(json.load(f))
+
+    with open(index_path, "w") as f:
+        json.dump(index, f, indent=2)
+
+
+def maybe_unzip_attack_data_tables(run_name: str) -> bool:
+    """Unzip attack data tables containing the specified run_name and remove the zip.
+
+    Args:
+        run_name: Name of the run to extract
+
+    Returns:
+        bool: True if extraction was successful, False otherwise
+    """
+    index_path = get_attack_tables_cache_root() / "index.json"
+    if not index_path.exists():
+        return False
+
+    try:
+        with open(index_path, "r") as f:
+            index = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Error reading index file: {e}")
+        return False
+
+    for name, paths in index.items():
+        if run_name in paths:
+            zip_path = get_attack_tables_cache_root() / name
+            if not zip_path.exists():
+                print(f"Warning: Zip file {zip_path} listed in index but not found")
+                continue
+
+            try:
+                # First verify zip file integrity
+                with zipfile.ZipFile(zip_path, "r") as zipf:
+                    if zipf.testzip() is not None:
+                        print(f"Warning: Zip file {zip_path} is corrupted")
+                        continue
+
+                # Extract files
+                with zipfile.ZipFile(zip_path, "r") as zipf:
+                    zipf.extractall(get_attack_tables_cache_root())
+                print(f"Unzipped {zip_path}")
+
+                # Verify all files were extracted
+                all_files_exist = all(
+                    (get_attack_tables_cache_root() / path).exists() for path in paths
+                )
+
+                if all_files_exist:
+                    # Remove zip file after successful extraction
+                    zip_path.unlink()
+                    print(f"Removed zip file {zip_path}")
+
+                    # Update index file to remove the entry
+                    del index[name]
+                    with open(index_path, "w") as f:
+                        json.dump(index, f, indent=2)
+
+                    return True
+                else:
+                    print("Warning: Not all files were extracted successfully")
+                    return False
+
+            except zipfile.BadZipFile:
+                print(f"Error: {zip_path} is not a valid zip file")
+            except PermissionError:
+                print(f"Error: Permission denied when accessing {zip_path}")
+            except Exception as e:
+                print(f"Error processing {zip_path}: {e}")
+            return False
+
+    print(f"No zip file found containing {run_name}")
+    return False
+
+
 def download_attack_data_table_if_not_cached(
     artifact: wandb.Artifact,
     run_name: str,
@@ -350,7 +509,7 @@ def download_attack_data_table_if_not_cached(
         raise ValueError(f"{artifact.name=} does not match expected pattern")
 
     index = int(re_match.group(1))
-    cache_path = get_cache_root() / "attack_tables" / run_name
+    cache_path = get_attack_tables_cache_root() / run_name
     cache_path.mkdir(parents=True, exist_ok=True)
     table_path = cache_path / f"attack_data/example_{index}.table.json"
 
