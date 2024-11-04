@@ -62,6 +62,11 @@ def run_train_loop(
         resume_from_checkpoint,
     )
 
+    # Handle the case of resuming from the final checkpoint.
+    if state.training_is_finished() and state.should_save_trained_model():
+        state.save_trained_model(models_path)
+        return state
+
     while not state.training_is_finished():
         with print_time(f"train_one_epoch (epoch {state.epoch})"):
             state = train_one_epoch(state)
