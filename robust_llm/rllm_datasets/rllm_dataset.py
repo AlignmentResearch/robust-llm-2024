@@ -243,7 +243,8 @@ class RLLMDataset(ABC):
             ds = datasets.load_from_disk(
                 f"/{SHARED_DATA_DIR}/datasets/{cfg.dataset_type}/{revision}/{split}"
             )
-            ds = ds[:n_examples]
+            assert isinstance(ds, Dataset)
+            ds = ds.select(range(n_examples))
         assert isinstance(ds, Dataset)
         if len(ds) == 0:
             raise ValueError(
