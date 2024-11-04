@@ -539,7 +539,8 @@ def get_wandb_running_finished_runs(experiment_name: str) -> list[str]:
 
 @functools.cache
 def wandb_api() -> wandb.Api:
-    return wandb.Api()
+    # Default timeout is shorter than 30 seconds and fails sometimes.
+    return wandb.Api(timeout=30)
 
 
 def generate_chars(length: int = 4, seed: int | None = None) -> str:

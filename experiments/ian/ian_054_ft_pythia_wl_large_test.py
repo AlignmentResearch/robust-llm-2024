@@ -19,7 +19,7 @@ OVERRIDE_ARGS_LIST = [
         "training.force_name_to_save": target_model_name.format(seed),
         "training.seed": seed,
     }
-    for seed in SEEDS  # This will iterate through seeds *second*
+    for seed in SEEDS  # This will run everything for a seed, then move to next seed
     for (
         base_model_name,
         target_model_name,

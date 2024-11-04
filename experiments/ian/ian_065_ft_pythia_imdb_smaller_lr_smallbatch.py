@@ -65,7 +65,7 @@ OVERRIDE_TUPLES = [
         n_gpus,
         memory,
     )
-    for seed in SEEDS  # This will iterate through seeds *second*
+    for seed in SEEDS  # This will run everything for a seed, then move to next seed
     for (
         base_model_name,
         target_model_name,

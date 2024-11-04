@@ -29,7 +29,6 @@ BASE_FT_GPU_MEMORY_CLUSTER = [
 ]
 
 SEEDS = [0, 1, 2, 3, 4]
-# SEEDS = [0]
 
 OVERRIDE_TUPLES = [
     (
@@ -46,7 +45,7 @@ OVERRIDE_TUPLES = [
         memory,
         cluster,
     )
-    for seed in SEEDS  # This will iterate through seeds *second*
+    for seed in SEEDS  # This will run everything for a seed, then move to next seed
     for (
         base_model_name,
         target_model_name,
@@ -72,4 +71,7 @@ if __name__ == "__main__":
         override_args_list=OVERRIDE_ARGS_LIST,
         memory=MEMORY,
         container_tag="2024-08-07-backoff",
+        priority="normal-batch",
+        # Disabling profiling for now because it obscures exit codes
+        profiling_dir=None,
     )
