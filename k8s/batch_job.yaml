@@ -32,9 +32,8 @@ spec:
             - -c
             # nvidia-smi checks that GPU is available since we've had GPU
             # outages before that make the job silently run on CPU.
-            # TODO(tomtseng): update image and remove `pip install py-spy`
             - |
-              nvidia-smi && git clone https://github.com/AlignmentResearch/robust-llm.git && cd robust-llm && git checkout {COMMIT_HASH} && git submodule update --recursive && pip install py-spy && {COMMAND}
+              nvidia-smi && git clone https://github.com/AlignmentResearch/robust-llm.git && cd robust-llm && git checkout {COMMIT_HASH} && git submodule update --recursive && {COMMAND}
           resources:
             requests:
               cpu: {CPU}

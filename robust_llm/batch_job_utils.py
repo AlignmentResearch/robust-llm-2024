@@ -32,7 +32,7 @@ with JOB_TEMPLATE_PATH.open() as f:
 # Container tag to use by default for jobs. Update this when uploading a
 # new version of the canonical Docker image. (Avoid reusing tags as
 # older versions of that image may be cached on K8s nodes.)
-DEFAULT_CONTAINER_TAG = "2024-08-07-backoff"
+DEFAULT_CONTAINER_TAG = "2024-11-03-14-15-57-main"
 
 
 def memory_str_to_bytes(memory: str) -> int:
