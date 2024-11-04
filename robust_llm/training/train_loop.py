@@ -222,61 +222,59 @@ def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
     n_batches = len(dataloader)
     # TODO(ian): Work out if I can put these losses somewhere nicer.
     losses: list[torch.Tensor] = []
-    for i, batch in enumerate(dataloader):
-        batch = pad_batch_across_processes(
-            state.model_state.wrapped_model.right_tokenizer,
-            state.accelerator,
-            batch,
-        )
-        model.train()
-        with state.model_state.wrapped_model.flop_count_context() as forward_flops:
-            outputs = model(**batch)
-        state.flops += forward_flops.flops
-
-        # TODO(ian): Work out if I can put this loss calc somewhere nicer.
-        logits = outputs["logits"]
-        labels = batch["labels"]
-        logits, labels = state.accelerator.gather_for_metrics((logits, labels))
-        batch_losses = F.cross_entropy(logits, labels, reduction="none")
-
-        losses += batch_losses
-
-        # TODO(ian): Work out if we should use a different loss (gathered?).
-        with state.model_state.wrapped_model.flop_count_context() as backward_flops:
-            state.accelerator.backward(outputs.loss)
-        state.flops += backward_flops.flops
-
-        optimizer.step()
-        lr_scheduler.step()
-        optimizer.zero_grad()
-
-        gathered_loss = state.accelerator.gather(outputs.loss)
-        assert isinstance(gathered_loss, torch.Tensor)
-        average_loss = gathered_loss.mean()
-        wandb_log(
-            {
-                "train/loss": average_loss.item(),
-                "train/learning_rate": lr_scheduler.get_last_lr()[0],
-                "train/flops": state.flops,
-            },
-            commit=True,
-        )
-        # Log if it has been at least TRAIN_LOG_INTERVAL_SECS seconds.
-        current_time = time.perf_counter()
-        if (
-            current_time - last_log_time >= TRAIN_LOG_INTERVAL_SECS
-            or i == n_batches - 1  # Always log at the end of the epoch.
-        ):
-            elapsed = current_time - start_time
-            status = format_training_status(
-                epoch=state.epoch,
-                batch=i + 1,
-                total_batches=n_batches,
-                loss=average_loss.item(),
-                elapsed_secs=elapsed,
+    with state.model_state.wrapped_model.flop_count_context() as epoch_flops:
+        for i, batch in enumerate(dataloader):
+            batch = pad_batch_across_processes(
+                state.model_state.wrapped_model.right_tokenizer,
+                state.accelerator,
+                batch,
             )
-            log(status)
-            last_log_time = current_time
+            model.train()
+            outputs = model(**batch)
+
+            # TODO(ian): Work out if I can put this loss calc somewhere nicer.
+            logits = outputs["logits"]
+            labels = batch["labels"]
+            logits, labels = state.accelerator.gather_for_metrics((logits, labels))
+            batch_losses = F.cross_entropy(logits, labels, reduction="none")
+
+            losses += batch_losses
+
+            # TODO(ian): Work out if we should use a different loss (gathered?).
+            state.accelerator.backward(outputs.loss)
+
+            optimizer.step()
+            lr_scheduler.step()
+            optimizer.zero_grad()
+
+            gathered_loss = state.accelerator.gather(outputs.loss)
+            assert isinstance(gathered_loss, torch.Tensor)
+            average_loss = gathered_loss.mean()
+            wandb_log(
+                {
+                    "train/loss": average_loss.item(),
+                    "train/learning_rate": lr_scheduler.get_last_lr()[0],
+                },
+                commit=True,
+            )
+            # Log if it has been at least TRAIN_LOG_INTERVAL_SECS seconds.
+            current_time = time.perf_counter()
+            if (
+                current_time - last_log_time >= TRAIN_LOG_INTERVAL_SECS
+                or i == n_batches - 1  # Always log at the end of the epoch.
+            ):
+                elapsed = current_time - start_time
+                status = format_training_status(
+                    epoch=state.epoch,
+                    batch=i + 1,
+                    total_batches=n_batches,
+                    loss=average_loss.item(),
+                    elapsed_secs=elapsed,
+                )
+                log(status)
+                last_log_time = current_time
+    state.flops += epoch_flops.flops
+    wandb_log({"train/flops": state.flops}, commit=False)
 
     # dataloader does have a property called total_dataset_length.
     if len(losses) != dataloader.total_dataset_length:  # type: ignore

@@ -34,7 +34,12 @@ from transformers.modeling_outputs import ModelOutput
 
 from robust_llm import logger
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
-from robust_llm.dist_utils import DistributedRNG, is_main_process
+from robust_llm.dist_utils import (
+    DistributedRNG,
+    broadcast_int,
+    broadcast_long,
+    is_main_process,
+)
 from robust_llm.models.model_disk_utils import (
     get_model_load_path,
     mark_model_save_as_finished,
@@ -144,10 +149,13 @@ class WrappedModel(ABC):
         self.generation_config = generation_config
         self.system_prompt = system_prompt
         self.seed = seed
-        self.flop_count = 0
-        self.n_forward_calls = 0
-        self.n_backward_calls = 0
-        self.input_shapes: list[tuple] = []
+
+        # N.B. to avoid double counting, these are only updated in the main process
+        self._flop_count = 0
+        self._n_forward_calls = 0
+        self._n_backward_calls = 0
+        self._input_shapes: list[tuple] = []
+
         self.register_hooks()
         self._skip_hooks = False
 
@@ -216,8 +224,8 @@ class WrappedModel(ABC):
             inputs = self.accelerator.gather_for_metrics(inputs)
             if not is_main_process():
                 return
-        self.n_forward_calls += 1
-        self.input_shapes.append(inputs[0].shape)
+        self._n_forward_calls += 1
+        self._input_shapes.append(inputs[0].shape)
         self._input_dict = {"input_ids": inputs[0]}
         self.update_flop_count(
             input_dict=self._input_dict,
@@ -230,7 +238,7 @@ class WrappedModel(ABC):
             return
         if not is_main_process():
             return
-        self.n_backward_calls += 1
+        self._n_backward_calls += 1
         self.update_flop_count(
             input_dict=self._input_dict,
             backward=True,
@@ -263,7 +271,7 @@ class WrappedModel(ABC):
         N.B. should gather_for_metrics before calling this function.
         """
         assert is_main_process()
-        self.flop_count += self.compute_flops(
+        self._flop_count += self.compute_flops(
             input_dict=input_dict,
             backward=backward,
         )
@@ -272,9 +280,21 @@ class WrappedModel(ABC):
     def n_params(self) -> int:
         return self._n_params
 
+    def broadcast_int(self, data: int | None) -> int:
+        if self.accelerator is None:
+            assert data is not None
+            return data
+        return broadcast_int(data, self.accelerator)
+
+    def broadcast_long(self, data: int | None) -> int:
+        if self.accelerator is None:
+            assert data is not None
+            return data
+        return broadcast_long(data, self.accelerator)
+
     @contextmanager
     def flop_count_context(self):
-        """Tracks FLOP count changes.
+        """Main entrypoint for tracking FLOPs, broadcasting to all processes.
 
         Use `with model.flop_count_context() as flop_count`, then access
         `flop_count.flops` after the `with` block.
@@ -282,17 +302,17 @@ class WrappedModel(ABC):
         out = None  # Initialize out with a default value
         try:
             out = FlopCount(
-                flops=self.flop_count,
-                forward_calls=self.n_forward_calls,
-                backward_calls=self.n_backward_calls,
+                flops=self.broadcast_long(self._flop_count),
+                forward_calls=self.broadcast_int(self._n_forward_calls),
+                backward_calls=self.broadcast_int(self._n_backward_calls),
             )
             yield out
         finally:
             if out is not None:  # Check if out was successfully created
                 out.update(
-                    flops=self.flop_count,
-                    forward_calls=self.n_forward_calls,
-                    backward_calls=self.n_backward_calls,
+                    flops=self.broadcast_long(self._flop_count),
+                    forward_calls=self.broadcast_int(self._n_forward_calls),
+                    backward_calls=self.broadcast_int(self._n_backward_calls),
                 )
 
     @contextmanager

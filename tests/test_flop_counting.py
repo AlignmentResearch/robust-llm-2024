@@ -28,7 +28,7 @@ def wrapped_model(model_config):
 
 
 def test_flop_tracked_model_initialization(wrapped_model: WrappedModel):
-    assert wrapped_model.flop_count == 0
+    assert wrapped_model._flop_count == 0
 
 
 def test_flop_tracked_model_compute_flops(wrapped_model: WrappedModel):
@@ -40,7 +40,7 @@ def test_flop_tracked_model_compute_flops(wrapped_model: WrappedModel):
 def test_flop_tracked_model_update_flop_count(wrapped_model: WrappedModel):
     input_dict = {"input_ids": torch.randint(0, 1024, (1, 1))}
     wrapped_model.update_flop_count(input_dict)
-    assert wrapped_model.flop_count == FORWARD_FLOP_COUNT
+    assert wrapped_model._flop_count == FORWARD_FLOP_COUNT
 
 
 def test_flop_count_context(wrapped_model: WrappedModel):
@@ -72,32 +72,32 @@ def test_backward_flop_count_increment(wrapped_model: WrappedModel):
     wrapped_model.train()
     input_dict = {"input_ids": torch.randint(0, 1024, (1, 1))}
     out = wrapped_model(**input_dict)
-    forward_flop_count = wrapped_model.flop_count
+    forward_flop_count = wrapped_model._flop_count
     assert forward_flop_count == FORWARD_FLOP_COUNT
     loss = out.logits.sum()
     loss.backward()
-    assert wrapped_model.flop_count > forward_flop_count
-    assert wrapped_model.flop_count == 84406272
+    assert wrapped_model._flop_count > forward_flop_count
+    assert wrapped_model._flop_count == 84406272
 
 
 def test_call_count_increment(wrapped_model: WrappedModel):
     wrapped_model.train()
     input_dict = {"input_ids": torch.randint(0, 1024, (1, 1))}
-    assert wrapped_model.n_forward_calls == 0
+    assert wrapped_model._n_forward_calls == 0
     out = wrapped_model(**input_dict)
-    assert wrapped_model.n_forward_calls == 1
+    assert wrapped_model._n_forward_calls == 1
     loss = out.logits.sum()
-    assert wrapped_model.n_backward_calls == 0
+    assert wrapped_model._n_backward_calls == 0
     loss.backward()
-    assert wrapped_model.n_backward_calls == 1
+    assert wrapped_model._n_backward_calls == 1
 
 
 def test_input_shapes(wrapped_model: WrappedModel):
     wrapped_model.train()
     input_dict = {"input_ids": torch.randint(0, 1024, (1, 1))}
-    assert wrapped_model.n_forward_calls == 0
+    assert wrapped_model._n_forward_calls == 0
     wrapped_model(**input_dict)
-    assert wrapped_model.input_shapes == [(1, 1)]
+    assert wrapped_model._input_shapes == [(1, 1)]
 
 
 # TODO: run this with multi-GPU
@@ -118,4 +118,4 @@ def test_flops_with_dataloader(minibatch_size: int, model_config: ModelConfig):
         out = wrapped_model(**batch)
         loss = out.logits.sum()
         loss.backward()
-    assert wrapped_model.flop_count == 506437632 * 2
+    assert wrapped_model._flop_count == 506437632 * 2

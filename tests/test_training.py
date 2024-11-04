@@ -153,8 +153,7 @@ def test_training_pipeline_final_state():
     assert final_state.rng_state.torch_rng_state.shape[0] == 5056
     assert final_state.rng_state.torch_rng_state.min() == 0
     assert final_state.rng_state.torch_rng_state.max() == 255
-    if is_main_process():
-        assert final_state.flops == pytest.approx(1.785e11, rel=0.05)
+    assert final_state.flops == pytest.approx(1.785e11, rel=0.05)
 
 
 @pytest.mark.multigpu
@@ -273,8 +272,7 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
         4474,
         4499,
     ]
-    if is_main_process():
-        assert pytest.approx(1.06e12, rel=0.06) == initial_run_state.flops
+    assert initial_run_state.flops == pytest.approx(1.06e12, rel=0.06)
 
     # Clear captured output from initial run
     initial_stdout = capsys.readouterr()[-1]
