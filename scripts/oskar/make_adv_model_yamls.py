@@ -12,17 +12,33 @@ defaults:
 - /model/Default/clf/base@_here_
 - _self_
 
-name_or_path: "AlignmentResearch/robust_llm_clf_{dataset}_pythia-{size}_s-{seed}_adv_tr_{attack}_t-{seed}"
+name_or_path: "AlignmentResearch/robust_llm_clf_{version}_{dataset}_pythia-{size}_s-{seed}_adv_tr_{attack}_t-{seed}"
 """  # noqa: E501
+
+CANONICAL_VERSIONS = {
+    "gcg": {
+        "imdb": dict.fromkeys(["6.9b", "12b"], "oskar-015a"),
+        "spam": dict.fromkeys(["6.9b", "12b"], "oskar-015b"),
+        "pm": dict.fromkeys(["6.9b", "12b"], "oskar-015c"),
+        "wl": dict.fromkeys(["6.9b", "12b"], "oskar-015d"),
+        "helpful": dict.fromkeys(["6.9b", "12b"], "oskar-015e"),
+        "harmless": dict.fromkeys(["6.9b", "12b"], "oskar-015f"),
+    }
+}
 
 
 def create_yaml_file(size, attack, dataset, seed):
+    version = CANONICAL_VERSIONS.get(attack, {}).get(dataset, {}).get(size)
+    if version is None:
+        return
     repo_path = compute_repo_path()
     filename = Path(
         f"{repo_path}/robust_llm/hydra_conf/model/AdvTrained/clf/{attack}/{dataset}/pythia-{size}-s{seed}.yaml"  # noqa: E501
     )
     filename.parent.mkdir(parents=True, exist_ok=True)
-    content = template.format(size=size, dataset=dataset, seed=seed, attack=attack)
+    content = template.format(
+        size=size, dataset=dataset, seed=seed, attack=attack, version=version
+    )
 
     with open(filename, "w") as file:
         file.write(content)
