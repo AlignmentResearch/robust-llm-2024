@@ -5,9 +5,6 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing import Any
 
-from accelerate import Accelerator
-from accelerate.utils import gather_object
-
 from robust_llm.utils import auto_repr, div_maybe_nan
 
 
@@ -261,21 +258,3 @@ class DefendedAttackResults(AttackResults):
                 )
             ),
         }
-
-
-def assert_same_data_between_processes(
-    accelerator: Accelerator, data: Sequence[Any]
-) -> None:
-    length = len(data)
-    # We use 'gather_object' rather than 'gather_for_metrics' because we want to see
-    # all the data gathered, especially repeats. (In theory 'gather_for_metrics'
-    # should also work here, but we were having issues with flaky tests on CircleCI.)
-    data_gathered = gather_object(data)
-    for i in range(accelerator.num_processes):
-        start = i * length
-        end = (i + 1) * length
-        assert data_gathered[start:end] == data, (
-            f"Data from process {i} does not match original.\n"
-            f"Original (len {length}): {data}\n"
-            f"Process {i} ({start=}, {end=}): {data_gathered[start:end]}\n"
-        )

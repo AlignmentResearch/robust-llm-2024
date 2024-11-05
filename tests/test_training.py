@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +18,7 @@ from robust_llm.config.configs import (
     TrainingConfig,
 )
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.dist_utils import is_main_process
+from robust_llm.dist_utils import dist_rmtree, is_main_process
 from robust_llm.pipelines.training_pipeline import run_training_pipeline
 from robust_llm.training.state_classes import (
     AdversarialPipelineState,
@@ -203,8 +202,7 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
     checkpoint_dir = get_checkpoint_path(
         Path(interpolated.environment.save_root) / "checkpoints", interpolated
     )
-    if checkpoint_dir.exists() and is_main_process():
-        shutil.rmtree(checkpoint_dir)
+    dist_rmtree(checkpoint_dir)
 
     # Initial run and state validation
     initial_run_state = run_training_pipeline(interpolated)
@@ -283,8 +281,7 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
     assert checkpoint_dir.exists()
     completed_checkpoints = find_completed_checkpoints(checkpoint_dir)
     for subdir in completed_checkpoints[:-1]:
-        if is_main_process():
-            shutil.rmtree(subdir)
+        dist_rmtree(subdir)
 
     # Rerun from the previous checkpoint
     rerun_state = run_training_pipeline(interpolated)

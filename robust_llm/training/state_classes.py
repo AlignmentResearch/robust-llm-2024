@@ -29,7 +29,7 @@ from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.config.configs import ExperimentConfig, SaveTo
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.dist_utils import DistributedRNG
+from robust_llm.dist_utils import DistributedRNG, assert_same_data_between_processes
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import log, wandb_log
 from robust_llm.metrics.metrics import maybe_compute_robustness_metrics
@@ -346,6 +346,13 @@ class TrainingPipelineState:
         training_config = self.config.training
         assert training_config is not None
         self.training_config = training_config
+        self.check_same_state_across_processes()
+
+    def check_same_state_across_processes(self):
+        assert_same_data_between_processes(
+            self.accelerator,
+            [self.epoch, self.flops, self.training_state.lr_scheduler.get_last_lr()[0]],
+        )
 
     def update_after_epoch(self, losses: list[torch.Tensor]) -> TrainingPipelineState:
         self.epoch += 1

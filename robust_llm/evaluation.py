@@ -14,11 +14,8 @@ from robust_llm import logger
 from robust_llm.attacks.attack import Attack, AttackOutput
 from robust_llm.defenses.defense import FilteringDefendedModel
 from robust_llm.defenses.perplexity import PerplexityDefendedModel
-from robust_llm.dist_utils import is_main_process
-from robust_llm.evaluation_utils import (
-    AttackResults,
-    assert_same_data_between_processes,
-)
+from robust_llm.dist_utils import assert_same_data_between_processes, is_main_process
+from robust_llm.evaluation_utils import AttackResults
 from robust_llm.file_utils import ATTACK_DATA_NAME
 from robust_llm.logging_utils import WandbTable, wandb_log
 from robust_llm.metrics import maybe_compute_robustness_metrics

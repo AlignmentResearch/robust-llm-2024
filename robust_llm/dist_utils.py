@@ -1,11 +1,15 @@
 """Utility functions for working with torch.distributed/accelerate."""
 
+import shutil
+from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
 import torch.distributed as dist
 from accelerate import Accelerator
+from accelerate.utils import gather_object
 from transformers import PreTrainedTokenizerBase
 
 INT_TO_DTYPE = {
@@ -338,3 +342,28 @@ def pad_batch_across_processes(
         "attention_mask": attention_mask,
         "labels": batch["labels"],
     }
+
+
+def assert_same_data_between_processes(
+    accelerator: Accelerator, data: Sequence[Any]
+) -> None:
+    length = len(data)
+    # We use 'gather_object' rather than 'gather_for_metrics' because we want to see
+    # all the data gathered, especially repeats. (In theory 'gather_for_metrics'
+    # should also work here, but we were having issues with flaky tests on CircleCI.)
+    data_gathered = gather_object(data)
+    for i in range(accelerator.num_processes):
+        start = i * length
+        end = (i + 1) * length
+        assert data_gathered[start:end] == data, (
+            f"Data from process {i} does not match original.\n"
+            f"Original (len {length}): {data}\n"
+            f"Process {i} ({start=}, {end=}): {data_gathered[start:end]}\n"
+        )
+
+
+def dist_rmtree(path: Path):
+    if is_main_process() and path.exists():
+        shutil.rmtree(path)
+    if dist.is_initialized():
+        dist.barrier()
