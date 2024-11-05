@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -10,14 +11,19 @@ from contextlib import ContextDecorator
 from dataclasses import fields
 from datetime import datetime
 from functools import cached_property
-from typing import Callable, Optional, Sized, TypeVar
+from typing import TYPE_CHECKING, Callable, Optional, Sized, TypeVar
 
 import torch
 import torch.utils.data
 from omegaconf import OmegaConf
 
 from robust_llm import logger
+
+# type checking
 from robust_llm.dist_utils import DistributedRNG
+
+if TYPE_CHECKING:
+    from robust_llm.config.configs import ExperimentConfig
 
 T = TypeVar("T")
 
@@ -51,6 +57,51 @@ def remove_directory(to_remove: str, retries: int = 5, sleep: int = 1) -> None:
                 time.sleep(sleep_seconds)
             else:
                 raise e
+
+
+def deterministic_hash_config(
+    config: ExperimentConfig,
+    excluded_keys: tuple[str] | None = ("environment.wandb_info_filename",),
+) -> str:
+    """Compute a deterministic hash of a config, possible excluding some keys."""
+
+    # Convert config to dict, then remove excluded keys
+    dict_cfg = dataclasses.asdict(config)
+    assert isinstance(dict_cfg, dict)
+    flat_cfg = flatten_dict(dict_cfg)
+
+    # Remove excluded keys that might make the hash non-deterministic between
+    # identical runs.
+    if excluded_keys is not None:
+        flat_cfg = {
+            key: value for key, value in flat_cfg.items() if key not in excluded_keys
+        }
+
+    return deterministic_hash(flat_cfg)
+
+
+def flatten_dict(d: dict, parent_key="", sep=".") -> dict:
+    """
+    Flatten a nested dictionary by concatenating nested keys with a separator.
+
+    Args:
+        d (dict): The dictionary to flatten
+        parent_key (str): The parent key for nested dictionaries (used in recursion)
+        sep (str): The separator to use between nested keys
+
+    Returns:
+        dict: A flattened dictionary
+    """
+    items: list = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+
+        if isinstance(v, dict):
+            items.extend(flatten_dict(v, new_key, sep).items())
+        else:
+            items.append((new_key, v))
+
+    return dict(items)
 
 
 def deterministic_hash(obj: object) -> str:

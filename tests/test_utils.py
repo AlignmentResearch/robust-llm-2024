@@ -1,3 +1,4 @@
+import dataclasses
 from unittest.mock import patch
 
 import numpy as np
@@ -7,9 +8,21 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 from transformers import AutoTokenizer
 
+from robust_llm.config.configs import (
+    EnvironmentConfig,
+    EvaluationConfig,
+    ExperimentConfig,
+    SaveTo,
+    TrainingConfig,
+)
+from robust_llm.config.dataset_configs import DatasetConfig
+from robust_llm.config.model_configs import ModelConfig
 from robust_llm.experiment_utils import get_all_n_rounds_to_evaluate
 from robust_llm.utils import (
     BalancedSampler,
+    deterministic_hash,
+    deterministic_hash_config,
+    flatten_dict,
     is_correctly_padded,
     nested_list_to_tuple,
     remove_directory,
@@ -179,3 +192,65 @@ def test_get_all_n_rounds_to_evaluate(attack, start_rounds, middle_rounds, end_r
         assert len(rounds) == min(
             start_rounds + middle_rounds + end_rounds, n_adv_tr_rounds[i]
         )
+
+
+def test_hash():
+    cfg1 = ExperimentConfig(
+        experiment_type="training",
+        environment=EnvironmentConfig(
+            test_mode=True,
+            allow_checkpointing=False,  # Otherwise checkpoints might already exist.
+            wandb_info_filename="THIS IS FILE 1",
+        ),
+        evaluation=EvaluationConfig(),
+        model=ModelConfig(
+            name_or_path="EleutherAI/pythia-14m",
+            family="pythia",
+            # We have to set this explicitly because we are not loading with Hydra,
+            # so interpolation doesn't happen.
+            inference_type="classification",
+            max_minibatch_size=4,
+            eval_minibatch_multiplier=1,
+            env_minibatch_multiplier=0.5,
+            effective_batch_size=4,
+        ),
+        dataset=DatasetConfig(
+            dataset_type="AlignmentResearch/IMDB",
+            revision="2.1.0",
+            n_train=5,
+            n_val=2,
+        ),
+        training=TrainingConfig(
+            save_prefix="test_training_pipeline",
+            save_to=SaveTo.NONE,
+            save_name="TEST_SAVE_NAME",
+            # TODO(GH#990): Make lr scheduler configurable.
+            lr_scheduler_type="constant",
+        ),
+    )
+
+    # Replace just the wandb_info_filename.
+    cfg2 = dataclasses.replace(
+        cfg1,
+        environment=dataclasses.replace(
+            cfg1.environment,
+            wandb_info_filename="THIS IS FILE 2",
+        ),
+    )
+
+    assert deterministic_hash_config(cfg1) == deterministic_hash_config(cfg1)
+    assert deterministic_hash_config(cfg2) == deterministic_hash_config(cfg2)
+    assert deterministic_hash_config(cfg1) == deterministic_hash_config(cfg2)
+
+    assert deterministic_hash(cfg1) == deterministic_hash(cfg1)
+    assert deterministic_hash(cfg2) == deterministic_hash(cfg2)
+    assert deterministic_hash(cfg1) != deterministic_hash(cfg2)
+
+
+def test_flatten_dict():
+    d = {
+        "a": 1,
+        "b": {"c": 2, "d": {"e": 3}},
+        "f": {"g": 4},
+    }
+    assert flatten_dict(d) == {"a": 1, "b.c": 2, "b.d.e": 3, "f.g": 4}

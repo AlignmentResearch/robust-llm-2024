@@ -49,7 +49,7 @@ from robust_llm.training.training_utils import (
     find_most_recent_checkpoint,
     get_sorted_checkpoints,
 )
-from robust_llm.utils import deterministic_hash, print_time
+from robust_llm.utils import deterministic_hash_config, print_time
 
 OPTIMIZER_MAP = {
     "adamw_torch": AdamW,
@@ -424,6 +424,11 @@ class TrainingPipelineState:
             state_dict = {
                 "epoch": epoch,
                 "flops": self.flops,
+                # Save the config as a dictionary. We don't load this config
+                # since subclasses are lost, it's just here for debugging.
+                # We use default=str to serialize enums and other objects, since
+                # we aren't intending to deserialize this.
+                "config": json.dumps(dataclasses.asdict(self.config), default=str),
             }
             with open(epoch_path / "state.json", "w") as f:
                 json.dump(state_dict, f)
@@ -942,7 +947,7 @@ def get_checkpoint_path(base_path: Path, config: ExperimentConfig) -> Path:
     ian_135b_ft_pythia_harmless would have a path like
     /path/to/checkpoints/ian_135b_ft_pythia_harmless/ian-135b-ft-pythia-harmless-0000/abcdef1234.../
     """  # noqa: E501
-    hex_hash = deterministic_hash(config)
+    hex_hash = deterministic_hash_config(config)
     group_name = config.experiment_name
     run_name = config.run_name
     return base_path / group_name / run_name / hex_hash
