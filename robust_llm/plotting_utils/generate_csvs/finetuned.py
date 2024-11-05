@@ -2,7 +2,14 @@
 
 from robust_llm.plotting_utils.tools import make_finetuned_data
 
-metrics = ["adversarial_eval/attack_success_rate", "model_size", "adv_training_round"]
+metrics = [
+    "adversarial_eval/attack_success_rate",
+    "adversarial_eval/pre_attack_accuracy",
+    "adversarial_eval/n_correct_post_attack",
+    "adversarial_eval/n_examples",
+    "model_size",
+    "adv_training_round",
+]
 summary_keys = [
     "experiment_yaml.model.name_or_path",
     "experiment_yaml.dataset.n_val",

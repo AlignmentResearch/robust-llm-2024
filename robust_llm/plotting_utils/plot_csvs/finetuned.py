@@ -99,6 +99,37 @@ def main(style):
                     smoothing=0 if "prob" in y_data_name else 1,
                 )
 
+    # Pre attack accuracy
+    gcg_dataset = concat_data.loc[concat_data.attack.eq("gcg")]
+    draw_min_max_median_plot_by_dataset(
+        gcg_dataset,
+        metadata=metadata,
+        title="Pre-Attack Accuracy",
+        y_data_name="adversarial_eval_pre_attack_accuracy",
+        ytransform="none",
+        save_as=("finetuned", "pre_attack_accuracy", "all"),
+        legend=True,
+        style=style,
+        smoothing=1,
+        ylim=(0, 1),
+    )
+
+    # Post attack accuracy
+    for attack, attack_df in concat_data.groupby("attack"):
+        draw_min_max_median_plot_by_dataset(
+            attack_df,
+            metadata=metadata,
+            title=f"Post-Attack Accuracy ({str(attack).upper()})",
+            y_data_name="post_attack_accuracy",
+            ytransform="none",
+            save_as=("finetuned", f"post_{str(attack)}_attack_accuracy", "all"),
+            legend=True,
+            legend_loc="upper left",
+            style=style,
+            smoothing=1,
+            ylim=(0, 1),
+        )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plot finetuned robustness vs. size")

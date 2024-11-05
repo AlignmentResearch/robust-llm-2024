@@ -326,7 +326,7 @@ def make_finetuned_data(
         eval_summary_keys = (eval_summary_keys,) * len(group_names)
     assert len(eval_summary_keys) == len(group_names)
 
-    print("Plotting with data from ", group_names)
+    print("Making a CSV with data from ", group_names)
 
     runs = []
     for group, metric_list, summary_key_list in zip(
@@ -1587,7 +1587,12 @@ def postprocess_data(df, adjust_flops_for_n_val: bool = False):
         df["seed_idx"] = df.model_name_or_path.apply(_get_seed_from_name)
     if "seed_idx" in df:
         df.seed_idx = df.seed_idx.astype(int)
+
     df["pretraining_fraction"] = df["model_name_or_path"].map(_get_pretraining_fraction)
+
+    df["post_attack_accuracy"] = (
+        df["adversarial_eval/n_correct_post_attack"] / df["adversarial_eval/n_examples"]
+    )
 
 
 def prepare_asr_data(

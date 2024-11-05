@@ -44,6 +44,8 @@ DEFAULT_SMOOTHING = 1
 
 AXIS_LABELS = {
     "adversarial_eval_attack_success_rate": "Attack Success Rate",
+    "adversarial_eval_pre_attack_accuracy": "Pre-Attack Accuracy",
+    "post_attack_accuracy": "Post-Attack Accuracy",
     "logit_adversarial_eval_attack_success_rate": "Attack Success Rate",
     "logit_asr": "Attack Success Rate",
     "log_asr": "log(Attack Success Rate)",

@@ -98,6 +98,8 @@ def sample_data():
             "metric_2": [0.3, 0.4],
             "_step": [1, 2],
             "seed_idx": [1, 2],
+            "adversarial_eval/n_correct_post_attack": [10, 20],
+            "adversarial_eval/n_examples": [200, 200],
         }
     )
 
