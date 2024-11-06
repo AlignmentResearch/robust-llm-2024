@@ -844,4 +844,5 @@ def get_tracking_data_for_runs(runs: WandbRuns) -> pd.DataFrame:
         )
     if df.h100_hours.isnull().any():
         print(f"Warning {df.h100_hours.isnull().sum()} runs are missing cost data.")
+    df.really_finished = df.really_finished.astype(bool)
     return df
