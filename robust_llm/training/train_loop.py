@@ -203,6 +203,7 @@ def get_state_subclass(config: ExperimentConfig) -> type[TrainingPipelineState]:
 
 
 def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
+    state.log_epoch()
     optimizer = state.training_state.optimizer
     lr_scheduler = state.training_state.lr_scheduler
     victim = state.model_state.wrapped_model

@@ -645,6 +645,9 @@ class TrainingPipelineState:
         if wandb.run is not None:
             wandb.run.summary["saved_hf_name"] = hf_name
 
+    def log_epoch(self):
+        wandb_log({"epoch": self.epoch}, commit=False)
+
 
 @dataclass
 class AdversarialPipelineState(TrainingPipelineState):
@@ -935,3 +938,12 @@ class AdversarialPipelineState(TrainingPipelineState):
                 compute_robustness_metric=compute_robustness_metric,
                 upload_artifacts=False,
             )
+
+    def log_epoch(self):
+        wandb_log(
+            {
+                "epoch": self.epoch,
+                "adversarial_training_round": self.training_round,
+            },
+            commit=False,
+        )

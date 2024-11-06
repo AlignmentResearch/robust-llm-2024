@@ -14,7 +14,7 @@ from robust_llm.config.constants import get_save_root
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.defense_configs import DefenseConfig
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.utils import deterministic_hash
+from robust_llm.utils import deterministic_hash_config
 
 
 @dataclass
@@ -289,7 +289,7 @@ def get_checkpoint_path(base_path: Path, config: ExperimentConfig) -> Path:
     ian_135b_ft_pythia_harmless would have a path like
     /path/to/checkpoints/ian_135b_ft_pythia_harmless/ian-135b-ft-pythia-harmless-0000/abcdef1234.../
     """  # noqa: E501
-    hex_hash = deterministic_hash(config)
+    hex_hash = deterministic_hash_config(config)
     group_name = config.experiment_name
     run_name = config.run_name
     return base_path / group_name / run_name / hex_hash
