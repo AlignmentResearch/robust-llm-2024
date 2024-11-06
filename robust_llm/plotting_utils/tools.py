@@ -469,6 +469,7 @@ def load_and_plot_adv_training_plots(
     color_data_name: str = "num_params",
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
+    y_transform: str = "logit",
     xscale: str | None = None,
     yscale: str | None = None,
     legend: bool = False,
@@ -476,6 +477,7 @@ def load_and_plot_adv_training_plots(
     y_data_name: str = "adversarial_eval_attack_success_rate",
     smoothing: int = DEFAULT_SMOOTHING,
     style: str = "paper",
+    title: str | None = None,
 ):
     """
     Make adversarial training plots for given runs, pulling data from W&B.
@@ -487,6 +489,7 @@ def load_and_plot_adv_training_plots(
         color_data_name: The name of the data to use for the different colors.
         xlim: The x-axis limits.
         ylim: The y-axis limits.
+        y_transform: The transformation to apply to the y-axis.
         xscale: The scale of the x-axis.
         yscale: The scale of the y-axis.
         legend: Whether to include the legend in the plot.
@@ -496,6 +499,7 @@ def load_and_plot_adv_training_plots(
         y_data_name: The name of the data to use for the y-axis.
         smoothing: The amount of Laplace smoothing to apply to y-values.
         style: The style to use for the plot.
+        title: The title of the plot. Automatically generated if not provided.
     """
     data, metadata = read_csv_and_metadata("adv_training", attack, dataset)
     draw_plot_adv_training(
@@ -507,6 +511,7 @@ def load_and_plot_adv_training_plots(
         dataset=dataset,
         xlim=xlim,
         ylim=ylim,
+        y_transform=y_transform,
         legend=legend,
         check_seeds=check_seeds,
         y_data_name=y_data_name,
@@ -514,6 +519,7 @@ def load_and_plot_adv_training_plots(
         xscale=xscale,
         yscale=yscale,
         style=style,
+        title=title,
     )
 
 
@@ -744,6 +750,7 @@ def _draw_plot_adv_training(
     attack: str,
     dataset: str,
     y_data_name: str = "adversarial_eval_attack_success_rate",
+    title: str | None = None,
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
     legend: bool = False,
@@ -755,7 +762,8 @@ def _draw_plot_adv_training(
     diagonal_gridlines: bool = False,
     style: str = "paper",
 ):
-    title = f"{name_to_attack(attack)}, {name_to_dataset(dataset)}"
+    if title is None:
+        title = f"{name_to_attack(attack)}, {name_to_dataset(dataset)}"
     data = data.copy()
     orig_len = len(data)
     data = data.loc[data[y_data_name].notnull()]
@@ -830,7 +838,9 @@ def _draw_plot_adv_training(
         try:
             ax.set_ylabel(AXIS_LABELS[y_transf_data_name])
         except KeyError:
-            ax.set_ylabel(y_transf_data_name.replace("_", " ").title())
+            label = y_transf_data_name.replace("_", " ").title()
+            print("Couldn't find a label for", y_transf_data_name, ", so using", label)
+            ax.set_ylabel(label)
     if ylim is not None:
         plt.ylim(ylim)
     elif y_transform == "none" and ("asr" in y_data_name or "success" in y_data_name):
@@ -887,6 +897,11 @@ def _draw_plot_adv_training(
         y_transf_data_name,
         f"smoothing-{smoothing}",
         "legend" if legend else "no_legend",
+        (
+            f"ylim_{str(ylim[0]).replace('.', 'p')}_{str(ylim[1]).replace('.', 'p')}"
+            if ylim is not None
+            else None
+        ),
         data=data if legend else None,
         metadata=metadata if legend else None,
     )
@@ -911,6 +926,7 @@ def draw_plot_adv_training(
     add_parity_line: bool = False,
     diagonal_gridlines: bool = False,
     style: str = "paper",
+    title: str | None = None,
 ):
     if xlim is not None and data["adv_training_round"].max() + 1 < xlim[1]:
         raise ValueError(
@@ -943,6 +959,7 @@ def draw_plot_adv_training(
         add_parity_line=add_parity_line,
         diagonal_gridlines=diagonal_gridlines,
         style=style,
+        title=title,
     )
 
 
@@ -1590,9 +1607,13 @@ def postprocess_data(df, adjust_flops_for_n_val: bool = False):
 
     df["pretraining_fraction"] = df["model_name_or_path"].map(_get_pretraining_fraction)
 
-    df["post_attack_accuracy"] = (
-        df["adversarial_eval/n_correct_post_attack"] / df["adversarial_eval/n_examples"]
-    )
+    # We only need to do this if it's an eval run, not a training run
+    if "adversarial_eval/n_correct_post_attack" in df:
+        assert "adversarial_eval/n_examples" in df
+        df["post_attack_accuracy"] = (
+            df["adversarial_eval/n_correct_post_attack"]
+            / df["adversarial_eval/n_examples"]
+        )
 
 
 def prepare_asr_data(
