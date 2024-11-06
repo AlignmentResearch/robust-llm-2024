@@ -2,6 +2,7 @@
 
 import pytest
 
+from robust_llm.__main__ import run
 from robust_llm.config import (
     DatasetConfig,
     EnvironmentConfig,
@@ -11,7 +12,6 @@ from robust_llm.config import (
 )
 from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAttackConfig
 from robust_llm.config.configs import EvaluationConfig
-from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 from robust_llm.utils import interpolate_config
 
 NON_MODIFIABLE_WORDS_TEXT_ATTACKS = [
@@ -53,7 +53,7 @@ def exp_config() -> ExperimentConfig:
 
 
 def _test_doesnt_crash(exp_config: ExperimentConfig) -> None:
-    """Small wrapper around run_evaluation_pipeline.
+    """Small wrapper around run.
 
     This runs interpolation on the config.
     - First we convert to an OmegaConf structured config, which enables
@@ -62,7 +62,7 @@ def _test_doesnt_crash(exp_config: ExperimentConfig) -> None:
     that to run the pipeline.
     """
     config = interpolate_config(exp_config)
-    run_evaluation_pipeline(config)
+    run(config)
 
 
 def test_doesnt_crash_gen_as_clf_random_token(exp_config: ExperimentConfig) -> None:

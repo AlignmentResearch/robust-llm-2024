@@ -1,9 +1,5 @@
 """Pipeline to evaluate a fixed model under attack."""
 
-from accelerate import Accelerator
-from omegaconf import OmegaConf
-
-from robust_llm import logger
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.defenses import make_defended_model
@@ -12,32 +8,19 @@ from robust_llm.logging_utils import LoggingContext
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks import build_binary_scoring_callback
-from robust_llm.utils import maybe_make_deterministic, print_time
+from robust_llm.utils import print_time
 
 
 @print_time()
-def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
+def run_evaluation_pipeline(args: ExperimentConfig, accelerator) -> dict[str, float]:
     assert args.evaluation is not None
-    use_cpu = args.environment.device == "cpu"
-    maybe_make_deterministic(
-        args.environment.deterministic, args.environment.cublas_config
-    )
-
-    accelerator = Accelerator(cpu=use_cpu)
-
-    logging_context = LoggingContext(
-        args=args,
-    )
-    logging_context.setup()
-
-    logger.info("Configuration arguments:\n")
-    logger.info("%s\n", OmegaConf.to_yaml(args))
-
     validation = load_rllm_dataset(args.dataset, split="validation")
     num_classes = validation.num_classes
 
     victim = WrappedModel.from_config(args.model, accelerator, num_classes)
     victim.eval()
+
+    logging_context = LoggingContext.get_instance(args, set_up_step_metrics=False)
     logging_context.maybe_log_model_info(
         model_size=victim.n_params,
         model_family=victim.family,
@@ -93,7 +76,5 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
         compute_robustness_metric=args.evaluation.compute_robustness_metric,
         upload_artifacts=args.evaluation.upload_artifacts,
     )
-
-    logging_context.cleanup()
 
     return results

@@ -173,7 +173,11 @@ def log_config_to_wandb(config: ExperimentConfig) -> None:
 
 class LoggingContext:
     """
-    Class to set up and clean up experiment logging to console, file, and wandb.
+    Logging context manager for setting up and cleaning up logging.
+
+    Singleton class to set up and clean up experiment logging to console, file,
+    and wandb. Ensures only one logging context exists throughout the
+    application.
 
     Args:
         is_main_process: whether this process is the main process
@@ -187,6 +191,14 @@ class LoggingContext:
             TODO: #348 - recording of `model_size` would ideally be done elsewhere
     """
 
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(
         self,
         args: ExperimentConfig,
@@ -194,13 +206,16 @@ class LoggingContext:
         model_family: Optional[str] = None,
         model_size: Optional[int] = None,
     ) -> None:
-        self.logger = logger
-        self.args = args
-        self.set_up_step_metrics = set_up_step_metrics
-        self.model_family = model_family
-        self.model_size = model_size
-        self.local_files_path: Path | None = None
-        disable_progress_bar()
+        # Only initialize once
+        if not LoggingContext._initialized:
+            self.logger = logger
+            self.args = args
+            self.set_up_step_metrics = set_up_step_metrics
+            self.model_family = model_family
+            self.model_size = model_size
+            self.local_files_path: Path | None = None
+            disable_progress_bar()
+            LoggingContext._initialized = True
 
     def save_logs(self) -> None:
         for handler in self.logger.handlers:
@@ -224,7 +239,7 @@ class LoggingContext:
         console_handler.setLevel(logging_level)
         console_handler.setFormatter(formatter)
 
-        # Add three handlers to logger
+        # Add handler to logger
         self.logger.addHandler(console_handler)
 
     def wandb_initialize(self) -> None:
@@ -290,6 +305,27 @@ class LoggingContext:
         self.save_logs()
         if is_main_process():
             self.wandb_cleanup()
+
+    @classmethod
+    def get_instance(cls, *args, **kwargs):
+        """
+        Get the singleton instance of LoggingContext.
+
+        Creates a new instance if one doesn't exist.
+        """
+        if cls._instance is None:
+            cls._instance = LoggingContext(*args, **kwargs)
+        return cls._instance
+
+    @classmethod
+    def reset(cls):
+        """
+        Reset the singleton instance.
+
+        Useful for testing purposes.
+        """
+        cls._instance = None
+        cls._initialized = False
 
 
 class WandbTable:

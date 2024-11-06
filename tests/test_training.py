@@ -7,6 +7,7 @@ import pytest
 import torch
 from datasets import Dataset
 
+from robust_llm.__main__ import run
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
 from robust_llm.config.configs import (
     AdversarialTrainingConfig,
@@ -19,7 +20,6 @@ from robust_llm.config.configs import (
 )
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.dist_utils import dist_rmtree, is_main_process
-from robust_llm.pipelines.training_pipeline import run_training_pipeline
 from robust_llm.training.state_classes import (
     AdversarialPipelineState,
     TrainingPipelineState,
@@ -119,10 +119,12 @@ def test_training_pipeline_final_state():
             # We have to set this explicitly because we are not loading with Hydra,
             # so interpolation doesn't happen.
             inference_type="classification",
-            max_minibatch_size=4,
+            max_minibatch_size=2,
             eval_minibatch_multiplier=1,
-            env_minibatch_multiplier=0.5,
-            effective_batch_size=4,
+            # We must set env_minibatch_multiplier to 1.0 to avoid it being changed by
+            # safe_run_pipeline, which would change the hash.
+            env_minibatch_multiplier=1.0,
+            effective_batch_size=2,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
@@ -139,7 +141,7 @@ def test_training_pipeline_final_state():
         ),
     )
     assert config.training is not None
-    final_state = run_training_pipeline(config)
+    final_state = run(config)
     assert isinstance(final_state, TrainingPipelineState)
     assert final_state.epoch == config.training.num_train_epochs
     assert final_state.config == config
@@ -173,10 +175,12 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
             name_or_path="AlignmentResearch/robust_llm_pythia-14m_clf_imdb_v-ian-067_s-0",  # noqa: E501
             family="pythia",
             inference_type="classification",
-            max_minibatch_size=4,
+            max_minibatch_size=2,
             eval_minibatch_multiplier=1,
-            env_minibatch_multiplier=0.5,
-            effective_batch_size=4,
+            # We must set env_minibatch_multiplier to 1.0 to avoid it being changed by
+            # safe_run_pipeline, which would change the hash.
+            env_minibatch_multiplier=1.0,
+            effective_batch_size=2,
         ),
         dataset=DatasetConfig(
             dataset_type="AlignmentResearch/IMDB",
@@ -205,7 +209,7 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
     dist_rmtree(checkpoint_dir)
 
     # Initial run and state validation
-    initial_run_state = run_training_pipeline(interpolated)
+    initial_run_state = run(interpolated)
     assert isinstance(initial_run_state, AdversarialPipelineState)
 
     # Validate final state
@@ -284,7 +288,7 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
         dist_rmtree(subdir)
 
     # Rerun from the previous checkpoint
-    rerun_state = run_training_pipeline(interpolated)
+    rerun_state = run(interpolated)
     rerun_stdout = capsys.readouterr()[-1]
     assert isinstance(rerun_stdout, str)
 

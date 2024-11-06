@@ -2,6 +2,7 @@
 
 import pytest
 
+from robust_llm.__main__ import run
 from robust_llm.config import (
     DatasetConfig,
     EnvironmentConfig,
@@ -13,7 +14,6 @@ from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAtta
 from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
 from robust_llm.config.configs import EvaluationConfig
 from robust_llm.config.model_configs import GenerationConfig
-from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 from robust_llm.utils import interpolate_config
 
 NON_MODIFIABLE_WORDS_TEXT_ATTACKS = [
@@ -73,7 +73,7 @@ def _test_doesnt_crash(exp_config: ExperimentConfig) -> None:
     that to run the pipeline.
     """
     config = interpolate_config(exp_config)
-    run_evaluation_pipeline(config)
+    run(config)
 
 
 def test_doesnt_crash_autoregressive_gen_random_token(

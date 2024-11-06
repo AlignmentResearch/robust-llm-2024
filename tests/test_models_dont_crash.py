@@ -12,6 +12,7 @@ import pytest
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM, PreTrainedModel
 
+from robust_llm.__main__ import run
 from robust_llm.config.attack_configs import GCGAttackConfig
 from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
 from robust_llm.config.configs import (
@@ -22,7 +23,6 @@ from robust_llm.config.configs import (
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
-from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 from robust_llm.utils import interpolate_config
 
 
@@ -122,7 +122,7 @@ def _test_attack(exp_config: ExperimentConfig) -> None:
     # Patch the load_hf_model function to return a small model.
     with patch("robust_llm.models.wrapped_model.load_hf_model", mock_load_hf_model):
         config = interpolate_config(exp_config)
-        run_evaluation_pipeline(config)
+        run(config)
 
 
 def test_gemma1p1(exp_config: ExperimentConfig):

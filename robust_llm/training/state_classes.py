@@ -389,6 +389,7 @@ class TrainingPipelineState:
         checkpoint_path = get_checkpoint_path(path, self.config)
         epoch_path = checkpoint_path / f"epoch_{zero_pad(epoch)}"
         log(f"Saving checkpoint to {epoch_path}", main_process_only=False)
+        log(f"Saving checkpoint to {epoch_path}", level="print")
 
         # Make the directory on a single process.
         if self.accelerator.is_main_process:

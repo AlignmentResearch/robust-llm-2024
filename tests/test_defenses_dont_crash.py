@@ -2,6 +2,7 @@
 
 import pytest
 
+from robust_llm.__main__ import run
 from robust_llm.config import (
     DatasetConfig,
     EnvironmentConfig,
@@ -15,7 +16,6 @@ from robust_llm.config.defense_configs import (
     PerplexityDefenseConfig,
     RetokenizationDefenseConfig,
 )
-from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 from robust_llm.utils import interpolate_config
 
 
@@ -54,7 +54,7 @@ def exp_config() -> ExperimentConfig:
 
 
 def _run_evaluation_pipeline(exp_config: ExperimentConfig) -> None:
-    """Small wrapper around run_evaluation_pipeline to run interpolation.
+    """Small wrapper around run to do interpolation.
 
     - First we convert to an OmegaConf structured config, which enables
     interpolation.
@@ -62,7 +62,7 @@ def _run_evaluation_pipeline(exp_config: ExperimentConfig) -> None:
     that to run the pipeline.
     """
     config = interpolate_config(exp_config)
-    run_evaluation_pipeline(config)
+    run(config)
 
 
 def test_doesnt_crash_perplexity_defense(

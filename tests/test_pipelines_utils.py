@@ -1,6 +1,7 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import torch
+from accelerate import Accelerator
 
 from robust_llm.config.configs import (
     DatasetConfig,
@@ -49,10 +50,15 @@ def test_victim_num_classes():
 
 
 def test_safe_run_pipeline():
-    def pipeline_fn(config: ExperimentConfig):
-        if config.model.max_minibatch_size >= 16:
-            raise torch.cuda.OutOfMemoryError("CUDA out of memory")
-        return WrappedModel.from_config(config.model, accelerator=None)
+    def pipeline_fn(config: ExperimentConfig, accelerator: Accelerator):
+        try:
+            print(config.model.max_minibatch_size)
+            if config.model.max_minibatch_size >= 16:
+                raise torch.cuda.OutOfMemoryError("CUDA out of memory")
+            return WrappedModel.from_config(config.model, accelerator=None)
+        except Exception as e:
+            print(f"Got exception {e}")
+            raise e
 
     args = ExperimentConfig(
         experiment_type="evaluation",
@@ -78,7 +84,8 @@ def test_safe_run_pipeline():
         patch("torch.cuda.empty_cache"),
         patch("accelerate.utils.memory.should_reduce_batch_size", return_value=True),
     ):
-        model = safe_run_pipeline(pipeline_fn, args)
+        accelerator = MagicMock()
+        model = safe_run_pipeline(pipeline_fn, args, accelerator=accelerator)
     assert args.model.max_minibatch_size == 8
     assert args.model.env_minibatch_multiplier == 1
     assert isinstance(model, WrappedModel)

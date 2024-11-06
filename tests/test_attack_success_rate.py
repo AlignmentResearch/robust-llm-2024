@@ -3,6 +3,7 @@
 import pytest
 import textattack.shared.utils
 
+from robust_llm.__main__ import run
 from robust_llm.config import (
     DatasetConfig,
     EnvironmentConfig,
@@ -12,7 +13,6 @@ from robust_llm.config import (
 )
 from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAttackConfig
 from robust_llm.config.configs import EvaluationConfig
-from robust_llm.pipelines.evaluation_pipeline import run_evaluation_pipeline
 from robust_llm.utils import interpolate_config
 
 
@@ -62,7 +62,7 @@ def _test_attack(
     textattack.shared.utils.strings._flair_pos_tagger = None
 
     config = interpolate_config(exp_config)
-    results = run_evaluation_pipeline(config)
+    results = run(config)
     actual = int(results["adversarial_eval/n_incorrect_post_attack"])
     print(f"Success rate: {actual}")
     assert actual >= success_rate_at_least
