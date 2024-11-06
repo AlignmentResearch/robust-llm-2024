@@ -2,7 +2,6 @@
 defaults:
 - /dataset: WordLength/stable
 - /evaluation: DEFAULT
-- /environment: no-checkpointing
 - /attack@evaluation.evaluation_attack: RANDOM_TOKEN
 - _self_
 

@@ -1,8 +1,8 @@
 # @package _global_
 defaults:
-- /dataset: EnronSpam/stable
+- /dataset: Harmless/stable
 - /evaluation: DEFAULT
-- /attack@evaluation.evaluation_attack: RANDOM_TOKEN
+- /attack@evaluation.evaluation_attack: GCG
 - _self_
 
 dataset:
@@ -10,6 +10,6 @@ dataset:
   n_val: 500
 
 evaluation:
-  num_iterations: 12800
+  num_iterations: 128
 
 experiment_type: "evaluation"

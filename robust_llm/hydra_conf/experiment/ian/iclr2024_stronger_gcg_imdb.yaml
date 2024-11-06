@@ -2,7 +2,6 @@
 defaults:
 - /dataset: IMDB/stable
 - /evaluation: DEFAULT
-- /environment: no-checkpointing
 - /attack@evaluation.evaluation_attack: GCG
 - _self_
 
