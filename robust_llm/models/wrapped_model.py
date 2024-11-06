@@ -37,7 +37,7 @@ from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.dist_utils import (
     DistributedRNG,
     broadcast_int,
-    broadcast_long,
+    broadcast_int128,
     is_main_process,
 )
 from robust_llm.models.model_disk_utils import (
@@ -286,11 +286,11 @@ class WrappedModel(ABC):
             return data
         return broadcast_int(data, self.accelerator)
 
-    def broadcast_long(self, data: int | None) -> int:
+    def broadcast_int128(self, data: int | None) -> int:
         if self.accelerator is None:
             assert data is not None
             return data
-        return broadcast_long(data, self.accelerator)
+        return broadcast_int128(data, self.accelerator)
 
     @contextmanager
     def flop_count_context(self):
@@ -302,7 +302,7 @@ class WrappedModel(ABC):
         out = None  # Initialize out with a default value
         try:
             out = FlopCount(
-                flops=self.broadcast_long(self._flop_count),
+                flops=self.broadcast_int128(self._flop_count),
                 forward_calls=self.broadcast_int(self._n_forward_calls),
                 backward_calls=self.broadcast_int(self._n_backward_calls),
             )
@@ -310,7 +310,7 @@ class WrappedModel(ABC):
         finally:
             if out is not None:  # Check if out was successfully created
                 out.update(
-                    flops=self.broadcast_long(self._flop_count),
+                    flops=self.broadcast_int128(self._flop_count),
                     forward_calls=self.broadcast_int(self._n_forward_calls),
                     backward_calls=self.broadcast_int(self._n_backward_calls),
                 )

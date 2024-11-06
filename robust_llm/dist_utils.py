@@ -148,7 +148,7 @@ def broadcast_int128(
 ) -> int:
     """Broadcasts a 128-bit integer by splitting into list[int32]."""
     if not dist.is_initialized():
-        assert isinstance(data, list)
+        assert isinstance(data, int)
         return data
 
     if is_main_process():
