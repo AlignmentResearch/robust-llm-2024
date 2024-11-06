@@ -4,12 +4,12 @@ from accelerate import Accelerator
 from omegaconf import OmegaConf
 
 from robust_llm import logger
+from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.config.configs import ExperimentConfig
 from robust_llm.defenses import make_defended_model
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import LoggingContext
 from robust_llm.models import WrappedModel
-from robust_llm.pipelines.utils import prepare_attack
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks import build_binary_scoring_callback
 from robust_llm.utils import maybe_make_deterministic, print_time
@@ -43,10 +43,10 @@ def run_evaluation_pipeline(args: ExperimentConfig) -> dict[str, float]:
         model_family=victim.family,
     )
 
-    attack = prepare_attack(
-        args=args,
+    attack = create_attack(
+        exp_config=args,
         victim=victim,
-        training=False,
+        is_training=False,
     )
 
     global_step_count = 0

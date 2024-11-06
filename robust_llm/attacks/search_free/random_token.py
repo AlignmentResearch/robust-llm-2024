@@ -3,6 +3,7 @@ from typing import Any
 from robust_llm.attacks.attack import PromptAttackMode
 from robust_llm.attacks.search_free.search_free import SearchFreeAttack
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
 from robust_llm.scoring_callbacks import build_binary_scoring_callback
@@ -22,27 +23,27 @@ class RandomTokenAttack(SearchFreeAttack):
 
     def __init__(
         self,
-        attack_config: RandomTokenAttackConfig,
+        exp_config: ExperimentConfig,
         victim: WrappedModel,
-        run_name: str,
-        logging_name: str | None = None,
+        is_training: bool,
     ) -> None:
         """Constructor for RandomTokenAttack.
 
         Args:
-            attack_config: Config of the attack.
-            victim: The WrappedModel to be attacked.
-            run_name: The name of the run.
-            logging_name: The name of the logger.
+            exp_config: ExperimentConfig object containing the configuration for the
+                attack.
+            victim: The model to be attacked.
+            is_training: Whether the attack is being used for training or evaluation.
         """
-        super().__init__(
-            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
+        super().__init__(exp_config, victim=victim, is_training=is_training)
+        assert isinstance(self.attack_config, RandomTokenAttackConfig)
+
+        self.n_attack_tokens = self.attack_config.n_attack_tokens
+
+        self.prompt_attack_mode = PromptAttackMode(
+            self.attack_config.prompt_attack_mode
         )
-
-        self.n_attack_tokens = attack_config.n_attack_tokens
-
-        self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
-        cb_config = attack_config.victim_success_callback
+        cb_config = self.attack_config.victim_success_callback
         self.victim_success_callback = build_binary_scoring_callback(cb_config)
         self._shared_attack_tokens: list[list[int]] = []
 

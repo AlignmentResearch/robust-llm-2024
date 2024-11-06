@@ -5,6 +5,7 @@ from typing_extensions import override
 
 from robust_llm.attacks.search_free.search_free import SearchFreeAttack
 from robust_llm.config.attack_configs import LMAttackConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
@@ -23,15 +24,17 @@ class ZeroShotLMAttack(SearchFreeAttack):
 
     def __init__(
         self,
-        attack_config: LMAttackConfig,
+        exp_config: ExperimentConfig,
         victim: WrappedModel,
-        run_name: str,
-        logging_name: str | None = None,
+        is_training: bool,
     ) -> None:
         super().__init__(
-            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
+            exp_config,
+            victim=victim,
+            is_training=is_training,
         )
-
+        attack_config = self.attack_config
+        assert isinstance(attack_config, LMAttackConfig)
         self.adversary = WrappedModel.from_config(
             attack_config.adversary, accelerator=victim.accelerator
         )

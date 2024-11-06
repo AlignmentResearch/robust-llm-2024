@@ -26,7 +26,7 @@ from robust_llm.attacks.attack import AttackOutput
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.batch_job_utils import zero_pad
 from robust_llm.config.callback_configs import CallbackConfig
-from robust_llm.config.configs import ExperimentConfig, SaveTo
+from robust_llm.config.configs import ExperimentConfig, SaveTo, get_checkpoint_path
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.dist_utils import DistributedRNG, assert_same_data_between_processes
@@ -49,7 +49,7 @@ from robust_llm.training.training_utils import (
     find_most_recent_checkpoint,
     get_sorted_checkpoints,
 )
-from robust_llm.utils import deterministic_hash_config, print_time
+from robust_llm.utils import print_time
 
 OPTIMIZER_MAP = {
     "adamw_torch": AdamW,
@@ -709,10 +709,9 @@ class AdversarialPipelineState(TrainingPipelineState):
         # TODO(ian): Maybe pass an RNG object here? So we don't use the same seed
         # and sequence for each round.
         attack = create_attack(
-            attack_config=self.adv_config.training_attack,
-            run_name="default-run",  # TODO: work out if we should keep run_name
-            logging_name="TODO: Remove this",  # This is unused
+            exp_config=self.config,
             victim=self.model_state.wrapped_model,
+            is_training=True,
         )
 
         attack_schedule = AttackSchedule(self.adv_config.attack_schedule, num_rounds)
@@ -914,10 +913,9 @@ class AdversarialPipelineState(TrainingPipelineState):
             assert eval_config is not None
 
             attack = create_attack(
-                attack_config=eval_config.evaluation_attack,
-                run_name="default-run",  # TODO: work out if we should keep run_name
-                logging_name="TODO: Remove this",  # This is unused
-                victim=self.model_state.wrapped_model,
+                exp_config=self.config,
+                victim=victim,
+                is_training=False,
             )
             cb_config = eval_config.final_success_binary_callback
             callback = build_binary_scoring_callback(cb_config)
@@ -937,17 +935,3 @@ class AdversarialPipelineState(TrainingPipelineState):
                 compute_robustness_metric=compute_robustness_metric,
                 upload_artifacts=False,
             )
-
-
-def get_checkpoint_path(base_path: Path, config: ExperimentConfig) -> Path:
-    """Get the deterministic path for saving/loading checkpoints.
-
-    This is designed to mirror wandb, so e.g. the run
-    ian-135b-ft-pythia-harmless-0000 in group
-    ian_135b_ft_pythia_harmless would have a path like
-    /path/to/checkpoints/ian_135b_ft_pythia_harmless/ian-135b-ft-pythia-harmless-0000/abcdef1234.../
-    """  # noqa: E501
-    hex_hash = deterministic_hash_config(config)
-    group_name = config.experiment_name
-    run_name = config.run_name
-    return base_path / group_name / run_name / hex_hash

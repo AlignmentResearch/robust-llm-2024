@@ -6,6 +6,7 @@ import pytest
 import wandb
 from accelerate import Accelerator
 
+from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.attacks.search_free.lm_attack_few_shot import FewShotLMAttack
 from robust_llm.config.attack_configs import FewShotLMAttackConfig
 from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
@@ -19,7 +20,6 @@ from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.pipelines.evaluation_pipeline import do_adversarial_evaluation
-from robust_llm.pipelines.utils import prepare_attack
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.scoring_callbacks import CallbackRegistry
 from robust_llm.scoring_callbacks.scoring_fn_utils import ScoringFnRegistry
@@ -133,10 +133,10 @@ def test_few_shot_calls(exp_config: ExperimentConfig) -> None:
 
     victim = WrappedModel.from_config(exp_config.model, accelerator, num_classes)
 
-    attack = prepare_attack(
-        args=exp_config,
+    attack = create_attack(
+        exp_config=exp_config,
         victim=victim,
-        training=False,
+        is_training=False,
     )
     assert isinstance(attack, FewShotLMAttack)
 

@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Optional
 
 import torch
@@ -13,6 +14,7 @@ from robust_llm.config.constants import get_save_root
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.defense_configs import DefenseConfig
 from robust_llm.config.model_configs import ModelConfig
+from robust_llm.utils import deterministic_hash
 
 
 @dataclass
@@ -277,3 +279,17 @@ cs.store(name="DEFAULT", group="environment", node=EnvironmentConfig)
 cs.store(name="DEFAULT", group="training", node=TrainingConfig)
 cs.store(name="DEFAULT", group="evaluation", node=EvaluationConfig)
 cs.store(name="DEFAULT", group="training/adversarial", node=AdversarialTrainingConfig)
+
+
+def get_checkpoint_path(base_path: Path, config: ExperimentConfig) -> Path:
+    """Get the deterministic path for saving/loading checkpoints.
+
+    This is designed to mirror wandb, so e.g. the run
+    ian-135b-ft-pythia-harmless-0000 in group
+    ian_135b_ft_pythia_harmless would have a path like
+    /path/to/checkpoints/ian_135b_ft_pythia_harmless/ian-135b-ft-pythia-harmless-0000/abcdef1234.../
+    """  # noqa: E501
+    hex_hash = deterministic_hash(config)
+    group_name = config.experiment_name
+    run_name = config.run_name
+    return base_path / group_name / run_name / hex_hash

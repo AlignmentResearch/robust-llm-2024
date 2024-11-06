@@ -16,7 +16,8 @@ from robust_llm.attacks.search_based.utils import (
     PreppedExample,
     get_chunking_for_search_based,
 )
-from robust_llm.config.attack_configs import AttackConfig, SearchBasedAttackConfig
+from robust_llm.config.attack_configs import SearchBasedAttackConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -47,14 +48,11 @@ class SearchBasedAttack(Attack):
 
     def __init__(
         self,
-        attack_config: AttackConfig,
+        exp_config: ExperimentConfig,
         victim: WrappedModel,
-        run_name: str,
-        logging_name: str | None = None,
+        is_training: bool,
     ) -> None:
-        super().__init__(
-            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
-        )
+        super().__init__(exp_config, victim=victim, is_training=is_training)
         self.attack_state = SearchBasedAttackState(rng_state=self.rng.getstate())
 
     @override

@@ -5,6 +5,7 @@ import pytest
 import wandb
 from accelerate import Accelerator
 
+from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.attacks.search_free.lm_attack_zero_shot import ZeroShotLMAttack
 from robust_llm.config.attack_configs import LMAttackConfig
 from robust_llm.config.configs import (
@@ -17,7 +18,6 @@ from robust_llm.config.model_configs import GenerationConfig, ModelConfig
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.pipelines.evaluation_pipeline import do_adversarial_evaluation
-from robust_llm.pipelines.utils import prepare_attack
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
@@ -103,10 +103,10 @@ def test_adversary_input_zs(exp_config: ExperimentConfig) -> None:
 
     victim = WrappedModel.from_config(config.model, accelerator, num_classes)
 
-    attack = prepare_attack(
-        args=config,
+    attack = create_attack(
+        exp_config=config,
         victim=victim,
-        training=False,
+        is_training=False,
     )
     assert isinstance(attack, ZeroShotLMAttack)
 
@@ -185,10 +185,10 @@ def test_wrong_chunks_dataset_zs(exp_config: ExperimentConfig) -> None:
 
     victim = WrappedModel.from_config(config.model, accelerator, num_classes)
 
-    attack = prepare_attack(
-        args=config,
+    attack = create_attack(
+        exp_config=config,
         victim=victim,
-        training=False,
+        is_training=False,
     )
     assert isinstance(attack, ZeroShotLMAttack)
 

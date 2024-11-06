@@ -32,6 +32,7 @@ from typing_extensions import override
 
 from robust_llm.attacks.attack import Attack, AttackOutput
 from robust_llm.config.attack_configs import TextAttackAttackConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.defenses.defense import DefendedModel
 from robust_llm.models import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
@@ -166,22 +167,19 @@ class TextAttackAttack(Attack):
 
     def __init__(
         self,
-        attack_config: TextAttackAttackConfig,
+        exp_config: ExperimentConfig,
         victim: WrappedModel,
-        run_name: str,
-        logging_name: str | None = None,
+        is_training: bool,
     ) -> None:
         """Constructor for TextAttackAttack.
 
         Args:
-            attack_config: config of the attack
-            victim: wrapped victim model
-            run_name: name of the run
-            logging_name: name of the logger
+            exp_config: ExperimentConfig object containing the configuration for the
+                attack.
+            victim: The model to be attacked.
+            is_training: Whether the attack is being used for training or evaluation.
         """
-        super().__init__(
-            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
-        )
+        super().__init__(exp_config, victim=victim, is_training=is_training)
 
         assert isinstance(
             victim.model, (transformers.PreTrainedModel, DefendedModel)
@@ -196,7 +194,8 @@ class TextAttackAttack(Attack):
         # We use the right_tokenizer because we want to use right-padding for
         # classification.
         wrapped_model = LanguageModelWrapper(victim.model, victim.right_tokenizer)
-
+        attack_config = self.attack_config
+        assert isinstance(attack_config, TextAttackAttackConfig)
         self.num_modifiable_words_per_chunk = (
             attack_config.num_modifiable_words_per_chunk
         )

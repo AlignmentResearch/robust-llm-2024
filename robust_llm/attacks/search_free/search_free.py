@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from datasets import Dataset
 from torch import Tensor
@@ -16,7 +16,8 @@ from robust_llm.attacks.attack import (
     AttackState,
     PromptAttackMode,
 )
-from robust_llm.config.attack_configs import AttackConfig, SearchFreeAttackConfig
+from robust_llm.config.attack_configs import SearchFreeAttackConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
 from robust_llm.models.prompt_templates import AttackChunks
 from robust_llm.models.wrapped_model import WrappedModel
@@ -60,18 +61,17 @@ class SearchFreeAttack(Attack, ABC):
 
     def __init__(
         self,
-        attack_config: AttackConfig,
+        exp_config: ExperimentConfig,
         victim: WrappedModel,
-        run_name: str,
-        logging_name: Optional[str] = None,
+        is_training: bool,
     ) -> None:
-        super().__init__(
-            attack_config, victim=victim, run_name=run_name, logging_name=logging_name
-        )
+        super().__init__(exp_config, victim=victim, is_training=is_training)
         self.attack_state = SearchFreeAttackState(rng_state=self.rng.getstate())
-        assert isinstance(attack_config, SearchFreeAttackConfig)
-        self.prompt_attack_mode = PromptAttackMode(attack_config.prompt_attack_mode)
-        cb_config = attack_config.victim_success_callback
+        assert isinstance(self.attack_config, SearchFreeAttackConfig)
+        self.prompt_attack_mode = PromptAttackMode(
+            self.attack_config.prompt_attack_mode
+        )
+        cb_config = self.attack_config.victim_success_callback
         self.victim_success_callback = build_scoring_callback(cb_config)
 
     @override

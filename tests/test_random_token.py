@@ -15,6 +15,7 @@ from transformers import AutoTokenizer
 from robust_llm.attacks.search_free.random_token import RandomTokenAttack
 from robust_llm.attacks.search_free.search_free import get_first_attack_success_index
 from robust_llm.config.attack_configs import RandomTokenAttackConfig
+from robust_llm.config.configs import EvaluationConfig, ExperimentConfig
 from robust_llm.rllm_datasets.modifiable_chunk_spec import (
     ChunkType,
     ModifiableChunkSpec,
@@ -22,10 +23,15 @@ from robust_llm.rllm_datasets.modifiable_chunk_spec import (
 
 
 @pytest.fixture
-def random_token_config():
-    return RandomTokenAttackConfig(
-        n_attack_tokens=3,
-        save_total_limit=0,
+def random_token_config() -> ExperimentConfig:
+    return ExperimentConfig(
+        experiment_type="evaluation",
+        evaluation=EvaluationConfig(
+            evaluation_attack=RandomTokenAttackConfig(
+                n_attack_tokens=3,
+                save_total_limit=0,
+            )
+        ),
     )
 
 
@@ -44,13 +50,13 @@ def tokenizer():
 
 
 def test_build_random_token_attack(random_token_config):
-    attack = RandomTokenAttack(random_token_config, MagicMock(), "test-run")
+    attack = RandomTokenAttack(random_token_config, MagicMock(), False)
     assert attack.n_attack_tokens == 3
 
 
 def test_n_random_token_ids_with_exclusions(random_token_config, mocked_victim):
     n_tokens = 100
-    attack = RandomTokenAttack(random_token_config, mocked_victim, "test-run")
+    attack = RandomTokenAttack(random_token_config, mocked_victim, False)
     exclusions = [0, 1, 2, 3, 4, 5]
     tokens = attack._n_random_token_ids_with_exclusions(n_tokens, exclusions)
     assert len(tokens) == n_tokens
@@ -82,8 +88,15 @@ def test_get_text_for_chunk(random_token_config, mocked_victim, tokenizer):
         "transformers.GPT2TokenizerFast.all_special_ids", new_callable=PropertyMock
     ) as mock_specials:
         mock_specials.return_value = excluded_token_ids
-        config = dataclasses.replace(random_token_config, n_attack_tokens=10)
-        attack = RandomTokenAttack(config, mocked_victim, "test-run")
+        assert random_token_config.evaluation is not None
+        attack_config = dataclasses.replace(
+            random_token_config.evaluation.evaluation_attack, n_attack_tokens=10
+        )
+        config = dataclasses.replace(
+            random_token_config,
+            evaluation=EvaluationConfig(evaluation_attack=attack_config),
+        )
+        attack = RandomTokenAttack(config, mocked_victim, False)
 
     chunk_text = "Chunk text"
 
@@ -128,7 +141,7 @@ def test_get_attacked_input(random_token_config, mocked_victim, tokenizer):
     TODO (ian): Write tests with a custom tokenizer?
     """
     mocked_victim.right_tokenizer = tokenizer
-    attack = RandomTokenAttack(random_token_config, mocked_victim, "test-run")
+    attack = RandomTokenAttack(random_token_config, mocked_victim, False)
     chunked_datapoint = ["a", "b", "c"]
     example = {
         "chunked_text": chunked_datapoint,

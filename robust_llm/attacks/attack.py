@@ -4,19 +4,35 @@ import os
 import shutil
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from typing_extensions import override
 
-from robust_llm import logger
-from robust_llm.config.configs import AttackConfig
+from robust_llm.config.configs import (
+    AttackConfig,
+    ExperimentConfig,
+    get_checkpoint_path,
+)
 from robust_llm.dist_utils import DistributedRNG, is_main_process
+from robust_llm.logging_utils import log
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
 ATTACK_STATE_NAME = "attack_state.json"
 CONFIG_NAME = "config.json"
+STATES_NAME = "attack_states"
+
+
+def extract_attack_config(args: ExperimentConfig, training: bool) -> AttackConfig:
+    if training:
+        assert args.training is not None
+        assert args.training.adversarial is not None
+        return args.training.adversarial.training_attack
+    else:
+        assert args.evaluation is not None
+        return args.evaluation.evaluation_attack
 
 
 @dataclass
@@ -133,40 +149,33 @@ class Attack(abc.ABC):
     Attributes:
         CAN_CHECKPOINT: Whether the attack type supports checkpointing.
         attack_config: Configuration for the attack.
-        logging_name: Name of the attack, for the purposes of logging. Possible
-            examples include "training_attack" or "validation_attack".
     """
 
     CAN_CHECKPOINT: bool
 
     def __init__(
         self,
-        attack_config: AttackConfig,
+        exp_config: ExperimentConfig,
         victim: WrappedModel,
-        run_name: str,
-        logging_name: Optional[str] = None,
+        is_training: bool,
     ) -> None:
         """Constructor for the Attack class.
 
         Args:
-        attack_config: Configuration for the attack.
-        victim: The model to be attacked.
-        run_name: Name of the run, for the purposes of saving checkpoints.
-            This is unrelated to the wandb `name` used elsewhere.
-        logging_name: Name of the attack, for the purposes of logging. Possible
-            examples include "training_attack" or "validation_attack".
+            exp_config: ExperimentConfig object containing the configuration for the
+                attack.
+            victim: The model to be attacked.
+            is_training: Whether the attack is being used for training or evaluation.
         """
         assert victim.accelerator is not None, "Accelerator must be provided"
-        self.attack_config = attack_config
+        self.exp_config = exp_config
+        self.attack_config = extract_attack_config(exp_config, is_training)
         self.victim = victim
-        self.run_name = run_name
-        self.rng = DistributedRNG(attack_config.seed, victim.accelerator)
-        self.logging_name = logging_name
+        self.rng = DistributedRNG(self.attack_config.seed, victim.accelerator)
         self.attack_state = AttackState(rng_state=self.rng.getstate())
         save_limit_gt_0 = self.attack_config.save_total_limit > 0
-        run_name_not_default = self.run_name != "default-run"
         self.can_checkpoint = (
-            save_limit_gt_0 and run_name_not_default and self.CAN_CHECKPOINT
+            save_limit_gt_0 and self.CAN_CHECKPOINT and not is_training
         )
 
     @abc.abstractmethod
@@ -194,8 +203,10 @@ class Attack(abc.ABC):
                     metrics) about the attack.
         """
 
-    def states_directory(self) -> str:
-        return os.path.join(self.attack_config.save_prefix, self.run_name)
+    def states_directory(self) -> Path:
+        return get_checkpoint_path(
+            Path(self.attack_config.save_prefix) / STATES_NAME, self.exp_config
+        )
 
     def list_checkpoints(self) -> list[str]:
         """Lists valid checkpoints, newest first."""
@@ -221,7 +232,7 @@ class Attack(abc.ABC):
         output_dir = os.path.join(
             self.states_directory(), f"checkpoint-{self.attack_state.example_index}"
         )
-        logger.debug(f"Saving state to {output_dir}")
+        log(f"Saving state to {output_dir}")
         os.makedirs(output_dir)
         with open(os.path.join(output_dir, ATTACK_STATE_NAME), "w") as f:
             json.dump(asdict(self.attack_state), f)
@@ -270,7 +281,7 @@ class Attack(abc.ABC):
                     f"Config mismatch: {key} is {getattr(self.attack_config, key)} "
                     f"but should be {value}"
                 )
-            logger.info(f"Loaded state from {state_path}")
+            log(f"Loaded state from {state_path}", main_process_only=False)
             return True
         return False
 

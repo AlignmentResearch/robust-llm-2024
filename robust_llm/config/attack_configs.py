@@ -6,6 +6,7 @@ from omegaconf import MISSING
 
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.config.callback_configs import CallbackConfig
+from robust_llm.config.constants import get_save_root
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.model_utils import InferenceType
 
@@ -47,7 +48,7 @@ class AttackConfig:
     train_frequency: Optional[int] = None
     log_frequency: Optional[int] = 1
     victim_inference_batch_size: int = 8
-    save_prefix: str = "attack_states"
+    save_prefix: str = get_save_root()
     save_steps: int = 100
     save_total_limit: int = 1
     perturb_position_min: float = 1.0

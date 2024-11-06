@@ -1,4 +1,6 @@
-from robust_llm.attacks.attack import Attack, IdentityAttack
+from typing import Type
+
+from robust_llm.attacks.attack import Attack, IdentityAttack, extract_attack_config
 from robust_llm.attacks.search_based.multiprompt_search_based import (
     MultiPromptSearchBasedAttack,
 )
@@ -17,71 +19,37 @@ from robust_llm.config.attack_configs import (
     RandomTokenAttackConfig,
     TextAttackAttackConfig,
 )
-from robust_llm.config.configs import AttackConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.models import WrappedModel
 
 
 def create_attack(
-    attack_config: AttackConfig,
-    run_name: str,
-    logging_name: str,
+    exp_config: ExperimentConfig,
     victim: WrappedModel,
+    is_training: bool,
 ) -> Attack:
     """Returns an attack object of a proper type."""
     # This match-case statement uses class patterns, as described in this SO
     # answer: https://stackoverflow.com/a/67524642
+    attack_config = extract_attack_config(exp_config, is_training)
+    cls: Type[Attack]
     match attack_config:
         # Baseline attacks
         case IdentityAttackConfig():
-            return IdentityAttack(
-                attack_config=attack_config,
-                victim=victim,
-                run_name=run_name,
-                logging_name=logging_name,
-            )
+            cls = IdentityAttack
         case RandomTokenAttackConfig():
-            return RandomTokenAttack(
-                attack_config=attack_config,
-                victim=victim,
-                run_name=run_name,
-                logging_name=logging_name,
-            )
-        # Search-based attacks
+            cls = RandomTokenAttack
         case BeamSearchAttackConfig() | GCGAttackConfig():
-            return SearchBasedAttack(
-                attack_config=attack_config,
-                victim=victim,
-                run_name=run_name,
-                logging_name=logging_name,
-            )
+            cls = SearchBasedAttack
         case FewShotLMAttackConfig():
-            return FewShotLMAttack(
-                attack_config=attack_config,
-                victim=victim,
-                run_name=run_name,
-                logging_name=logging_name,
-            )
+            cls = FewShotLMAttack
         case LMAttackConfig():
-            return ZeroShotLMAttack(
-                attack_config=attack_config,
-                victim=victim,
-                run_name=run_name,
-                logging_name=logging_name,
-            )
+            cls = ZeroShotLMAttack
         case MultipromptGCGAttackConfig():
-            return MultiPromptSearchBasedAttack(
-                attack_config=attack_config,
-                victim=victim,
-                run_name=run_name,
-                logging_name=logging_name,
-            )
+            cls = MultiPromptSearchBasedAttack
         # Word-swapping attacks
         case TextAttackAttackConfig():
-            return TextAttackAttack(
-                attack_config=attack_config,
-                victim=victim,
-                run_name=run_name,
-                logging_name=logging_name,
-            )
+            cls = TextAttackAttack
         case _:
             raise ValueError(f"Type of attack config {attack_config} not recognized.")
+    return cls(exp_config, victim=victim, is_training=is_training)

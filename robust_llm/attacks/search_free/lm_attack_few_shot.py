@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Any, Optional
+from typing import Any
 
 import torch
 from typing_extensions import override
@@ -11,6 +11,7 @@ from robust_llm.attacks.search_free.search_free import (
     get_first_attack_success_index,
 )
 from robust_llm.config.attack_configs import FewShotLMAttackConfig
+from robust_llm.config.configs import ExperimentConfig
 from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.modifiable_chunk_spec import ChunkType
@@ -41,13 +42,13 @@ class FewShotLMAttack(SearchFreeAttack):
 
     def __init__(
         self,
-        attack_config: FewShotLMAttackConfig,
+        exp_config: ExperimentConfig,
         victim: WrappedModel,
-        run_name: str,
-        logging_name: Optional[str] = None,
+        is_training: bool,
     ) -> None:
-        super().__init__(attack_config, victim, run_name, logging_name=logging_name)
-
+        super().__init__(exp_config, victim=victim, is_training=is_training)
+        attack_config = self.attack_config
+        assert isinstance(attack_config, FewShotLMAttackConfig)
         self.n_turns = attack_config.n_turns
         self.few_shot_score_template = attack_config.few_shot_score_template
         self.initial_adversary_prefix = (
@@ -56,14 +57,21 @@ class FewShotLMAttack(SearchFreeAttack):
             else attack_config.adversary_prefix
         )
         self.adversary_input_templates = attack_config.adversary_input_templates
-        zero_shot_config = deepcopy(attack_config)
+        zero_shot_attack_config = deepcopy(attack_config)
         # We don't want to reinsert the data or reapply the chat template on every turn.
-        zero_shot_config.use_raw_adversary_input = True
+        zero_shot_attack_config.use_raw_adversary_input = True
+        zero_shot_config = deepcopy(exp_config)
+        if is_training:
+            assert zero_shot_config.training is not None
+            assert zero_shot_config.training.adversarial is not None
+            zero_shot_config.training.adversarial.training_attack = (
+                zero_shot_attack_config
+            )
+        else:
+            assert zero_shot_config.evaluation is not None
+            zero_shot_config.evaluation.evaluation_attack = zero_shot_attack_config
         self.zero_shot_attack = ZeroShotLMAttack(
-            zero_shot_config,
-            victim=victim,
-            run_name=run_name,
-            logging_name=logging_name,
+            zero_shot_config, victim=victim, is_training=is_training
         )
 
     @property
