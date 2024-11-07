@@ -524,7 +524,7 @@ class WrappedModel(ABC):
             "AlignmentResearch/robust_llm_"
         ).removeprefix("AlignmentResearch/")
         disk_path = get_model_load_path(
-            storage_path=Path(config.load_prefix),
+            models_path=Path(config.load_prefix) / "models",
             model_name=model_name,
             revision=config.revision,
         )

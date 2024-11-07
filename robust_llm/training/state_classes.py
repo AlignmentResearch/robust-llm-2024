@@ -618,7 +618,7 @@ class TrainingPipelineState:
 
     def _save_model_to_disk(self, models_path: Path, model_name: str, revision: str):
         output_dir = generate_model_save_path(
-            storage_path=models_path,
+            models_path=models_path,
             model_name=model_name,
             revision=revision,
         )

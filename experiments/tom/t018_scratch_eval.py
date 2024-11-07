@@ -21,7 +21,7 @@ OVERRIDE_ARGS_LIST = [
             f"AlignmentResearch/robust_llm_tom_scratch_clf_{DATASET}_{MODEL}"
             f"_s-{SEED}_adv_tr_{ATTACK}_t-{SEED}"
         ),
-        "model.revision": f"adv-round-{ADV_TRAIN_ROUND}",
+        "model.revision": f"adv-training-round-{ADV_TRAIN_ROUND}",
         "evaluation.num_iterations": 1,
         "dataset.n_val": 20,
     },

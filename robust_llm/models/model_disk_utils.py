@@ -14,8 +14,8 @@ from robust_llm import logger
 from robust_llm.file_utils import get_current_git_commit_hash
 
 
-def get_revision_path(storage_path: Path, model_name: str, revision: str) -> Path:
-    return storage_path / "models" / model_name / revision
+def get_revision_path(models_path: Path, model_name: str, revision: str) -> Path:
+    return models_path / model_name / revision
 
 
 def get_now_timestamp_str() -> str:
@@ -28,9 +28,7 @@ def timestamp_str_to_datetime(timestamp_string: str) -> datetime.datetime:
     )
 
 
-def generate_model_save_path(
-    storage_path: Path, model_name: str, revision: str
-) -> Path:
+def generate_model_save_path(models_path: Path, model_name: str, revision: str) -> Path:
     """Generates a path at which to save a model.
 
     Models are saved in a subdirectory with a random string appended to avoid
@@ -46,7 +44,7 @@ def generate_model_save_path(
       would be fine.
 
     Args:
-        storage_path: Directory used for all project storage.
+        models_path: Directory used for model storage.
         model_name: Name of the model being saved.
         revision: Revision of the model being saved.
     """
@@ -55,7 +53,7 @@ def generate_model_save_path(
     subdirectory = f"{timestamp}-{random_string}"
     return (
         get_revision_path(
-            storage_path=storage_path, model_name=model_name, revision=revision
+            models_path=models_path, model_name=model_name, revision=revision
         )
         / subdirectory
     )
@@ -117,25 +115,23 @@ def get_model_versions_by_recency(
 
 
 def get_model_load_path(
-    storage_path: Path, model_name: str, revision: str
+    models_path: Path, model_name: str, revision: str
 ) -> Path | None:
     """Returns the path to the most recent version of the model.
 
     Args:
-        storage_path: Directory used for all project storage.
+        models_path: Directory used for model storage.
         model_name: Name of the model being loaded.
         revision: Revision of the model being loaded.
 
     Returns:
         Path, or None if no model is found.
     """
+    revision_path = get_revision_path(
+        models_path=models_path, model_name=model_name, revision=revision
+    )
     try:
-        return next(
-            get_model_versions_by_recency(
-                get_revision_path(
-                    storage_path=storage_path, model_name=model_name, revision=revision
-                )
-            )
-        )
+        return next(get_model_versions_by_recency(revision_path))
     except StopIteration:
+        logger.info(f"No model found at {revision_path}")
         return None

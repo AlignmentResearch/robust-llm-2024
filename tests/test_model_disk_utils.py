@@ -14,14 +14,14 @@ def test_get_model_load_path(tmp_path):
     Also indirectly tests generate_model_save_path() and
     mark_model_save_as_finished().
     """
-    storage_path = tmp_path
+    models_path = tmp_path
     model_name = "test-model"
     revision = "test-revision"
 
     # Loading a non-existent model should fail.
     assert (
         get_model_load_path(
-            storage_path=storage_path, model_name=model_name, revision=revision
+            models_path=models_path, model_name=model_name, revision=revision
         )
         is None
     )
@@ -32,7 +32,7 @@ def test_get_model_load_path(tmp_path):
             mock_datetime.now.return_value = datetime.datetime(2024, 1, 1, i, 0, 0)
             model_versions.append(
                 generate_model_save_path(
-                    storage_path=storage_path, model_name=model_name, revision=revision
+                    models_path=models_path, model_name=model_name, revision=revision
                 )
             )
 
@@ -43,7 +43,7 @@ def test_get_model_load_path(tmp_path):
     # still fail.
     assert (
         get_model_load_path(
-            storage_path=storage_path, model_name=model_name, revision=revision
+            models_path=models_path, model_name=model_name, revision=revision
         )
         is None
     )
@@ -53,7 +53,7 @@ def test_get_model_load_path(tmp_path):
     mark_model_save_as_finished(model_save_directory=model_versions[0])
     assert (
         get_model_load_path(
-            storage_path=storage_path, model_name=model_name, revision=revision
+            models_path=models_path, model_name=model_name, revision=revision
         )
         == model_versions[0]
     )
@@ -63,7 +63,7 @@ def test_get_model_load_path(tmp_path):
     mark_model_save_as_finished(model_save_directory=model_versions[1])
     assert (
         get_model_load_path(
-            storage_path=storage_path, model_name=model_name, revision=revision
+            models_path=models_path, model_name=model_name, revision=revision
         )
         == model_versions[1]
     )
