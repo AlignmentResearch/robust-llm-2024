@@ -12,3 +12,6 @@ robust_llm/plotting_utils/experiments
 
 # Exclude the cache_csvs directory
 cache_csvs/
+
+# Exclude the scripts directory
+scripts/

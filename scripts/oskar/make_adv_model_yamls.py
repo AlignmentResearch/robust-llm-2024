@@ -37,7 +37,11 @@ def create_yaml_file(size, attack, dataset, seed):
     )
     filename.parent.mkdir(parents=True, exist_ok=True)
     content = template.format(
-        size=size, dataset=dataset, seed=seed, attack=attack, version=version
+        version=version,
+        dataset=dataset,
+        size=size,
+        seed=seed,
+        attack=attack,
     )
 
     with open(filename, "w") as file:
