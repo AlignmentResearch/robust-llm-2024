@@ -173,7 +173,7 @@ if __name__ == "__main__":
         type=int,
         # Default py-spy value is 100, but we reduce it drastically to reduce
         # the disk space of the profile.
-        default=4,
+        default=1,
         help="The sampling rate for py-spy in samples per second.",
     )
     parser.add_argument(
