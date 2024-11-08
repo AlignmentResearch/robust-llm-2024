@@ -294,6 +294,7 @@ class LoggingContext:
     def wandb_cleanup() -> None:
         """Does necessary cleanup for wandb before the experiment ends."""
         wandb_set_really_finished()
+        wandb.summary["finish_reason"] = "completed"
         wandb.finish()
 
     def setup(self) -> None:

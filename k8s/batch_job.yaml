@@ -32,8 +32,27 @@ spec:
             - -c
             # nvidia-smi checks that GPU is available since we've had GPU
             # outages before that make the job silently run on CPU.
+            # exec makes sure that parallel becomes PID 1 in the container so
+            # that it receives signals from Kubernetes. --term-seq then tells
+            # parallel to send SIGTERM to the processes when parallel is
+            # interrupted and then wait 30s before sending SIGKILL.
+            # We use a temporary file to read the commands from because piping
+            # them from stdin didn't work well with exec.
+            # We use _PARALLELDELIMITER_ as the delimiter for parallel to avoid
+            # issues with newlines in the command and \0 being lost when writing to file.
+            # --halt soon,fail=1 is there because 'parallel' was not exiting even when
+            # both processes it ran had failed.
             - |
-              nvidia-smi && git clone https://github.com/AlignmentResearch/robust-llm.git && cd robust-llm && git checkout {COMMIT_HASH} && git submodule update --recursive && {COMMAND}
+              set -euo pipefail
+              nvidia-smi && \
+              git clone https://github.com/AlignmentResearch/robust-llm.git && \
+              cd robust-llm && \
+              git checkout {COMMIT_HASH} && \
+              git submodule update --recursive && \
+              tmpfile=$(mktemp) && \
+              echo -ne {COMMAND} > "$tmpfile" && \
+              exec parallel -u --halt soon,fail=1 --delimiter _PARALLELDELIMITER_ --term-seq TERM,30000,KILL,25 --arg-file "$tmpfile"
+
           resources:
             requests:
               cpu: {CPU}

@@ -45,10 +45,19 @@ def handle_signals():
 
     def signal_handler(signum, frame):
         signal_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
-        logger.warning(f"\n\nReceived {signal_name}. Shutting down...\n\n")
+        if signal_name == "SIGTERM":
+            logger.warning(
+                "\n\nReceived SIGTERM."
+                " This suggests the pod was either"
+                " preempted, evicted, or its job was killed."
+                " Shutting down...\n\n"
+            )
+        else:
+            logger.warning(f"\n\nReceived {signal_name}. Shutting down...\n\n")
 
         if not dist.is_initialized() or dist.get_rank() == 0:
             logger.info("Marking run as failed")
+            wandb.summary["finish_reason"] = signal_name
             wandb.finish(exit_code=1)
         sys.exit(1)
 
@@ -101,7 +110,14 @@ def run(cfg: ExperimentConfig):
     # Run the relevant pipeline
     run_pipeline = EXPERIMENT_TYPE_TO_PIPELINE[cfg.experiment_type]
     with handle_signals():
-        pipe_out = safe_run_pipeline(run_pipeline, cfg, accelerator)
+        try:
+            pipe_out = safe_run_pipeline(run_pipeline, cfg, accelerator)
+        except Exception as e:
+            logger.error("Pipeline failed with exception: %s", e)
+            if accelerator.is_main_process:
+                wandb.summary["finish_reason"] = type(e).__name__
+                wandb.finish(exit_code=1)
+            raise e
 
     logging_context.cleanup()
     return pipe_out

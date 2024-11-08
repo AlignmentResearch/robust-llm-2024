@@ -322,15 +322,12 @@ def create_job_for_multiple_runs(
             *aux_args,
         ]
         single_commands.append(shlex.join(split_command))
-    # Use \0 separator instead of \n (with --null) as adding newlines will
-    # break when integrated into the K8s YAML template.
-    concat_commands = "\\0".join(single_commands)
-    num_jobs = len(single_commands)
-    # Uses GNU parallel to run all jobs simultaneously
-    command = (
-        f'echo -ne "{concat_commands}"'
-        f" | parallel --line-buffer --null --jobs {num_jobs}"
-    )
+    # Uses GNU parallel to run all jobs simultaneously.
+    # We use a custom delimiter separating the commands to avoid issues with
+    # newlines in the command.
+    # (This previously used \0 as the null delimiter, but that wasn't working
+    # when I write to and restore the command from a file.)
+    concat_commands = "_PARALLELDELIMITER_".join(single_commands)
 
     combined_run_args = get_job_args_from_runs(runs)
     job = JOB_TEMPLATE.format(
@@ -339,7 +336,7 @@ def create_job_for_multiple_runs(
         WANDB_ENTITY=entity,
         WANDB_PROJECT=project,
         WANDB_MODE=wandb_mode,
-        COMMAND=command,
+        COMMAND=concat_commands,
         **combined_run_args,
     )
     if not use_cluster_storage:

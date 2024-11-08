@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+- /experiment/niki/iclr2024_adv_train_gcg_helpful
+- /model: Default/clf/helpful/pythia-14m-s0
+
+training:
+  save_name: "DUMMY_SAVE_NAME_20241106_simulate_crash"
+  save_to: NONE
+  seed: 0
+  adversarial:
+    num_adversarial_training_rounds: 10
+
+environment:
+  allow_checkpointing: True
+
+experiment_name: "20241106_simulate_crash"
