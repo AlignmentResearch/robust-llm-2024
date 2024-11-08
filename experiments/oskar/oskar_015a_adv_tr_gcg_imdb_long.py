@@ -44,6 +44,7 @@ OVERRIDE_TUPLES = [
             ),
             "training.adversarial.num_adversarial_training_rounds": N_ADV_TR_ROUNDS,
             "training.seed": finetune_seed,
+            "training.save_to": "DISK",
             "environment.allow_checkpointing": True,
         },
         n_gpus,

@@ -18,7 +18,7 @@ CLUSTER_NAME = "h100"
 MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
     (
         "pythia-6.9b",
-        3,
+        4,
         "200G",
         CLUSTER_NAME,
         1,
@@ -44,8 +44,8 @@ OVERRIDE_TUPLES = [
             ),
             "training.adversarial.num_adversarial_training_rounds": n_adv_tr_rounds,
             "training.seed": finetune_seed,
+            "training.save_to": "DISK",
             "environment.allow_checkpointing": True,
-            "training.save_strategy": "steps",
         },
         n_gpus,
         memory,
