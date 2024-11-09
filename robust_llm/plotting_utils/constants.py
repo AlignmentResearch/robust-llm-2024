@@ -165,7 +165,10 @@ RUN_NAMES = {
     },
     "gcg_gcg": {
         "imdb": {
-            "group_names": ("tom_007_eval_niki_152_gcg", "tom_007_eval_niki_152a_gcg"),
+            "group_names": (
+                "tom_007_eval_niki_152_gcg",
+                "tom_007_eval_niki_152a_gcg",
+            ),
             "merge_runs": (
                 "niki_152a_adv_tr_gcg_imdb_small",
                 "niki_152_adv_tr_gcg_imdb_small",
@@ -182,6 +185,26 @@ RUN_NAMES = {
         "pm": {
             "group_names": "tom_013_eval_niki_171_gcg",
             "merge_runs": "niki_171_adv_tr_gcg_pm_small",
+        },
+    },
+    "gcg_gcg_match_seed": {
+        "imdb": {
+            "group_names": ("oskar_019b_suffix_eval_adv_tr_gcg_imdb_small",),
+            "merge_runs": (
+                "niki_152a_adv_tr_gcg_imdb_small",
+                "niki_152_adv_tr_gcg_imdb_small",
+                # "ian_141_rerun_adv_tr_gcg_imdb_small", # Flops data unuseable
+            ),
+        },
+    },
+    "gcg_gcg_infix90_match_seed": {
+        "imdb": {
+            "group_names": ("oskar_019a_infix_eval_adv_tr_gcg_imdb_small",),
+            "merge_runs": (
+                "niki_152a_adv_tr_gcg_imdb_small",
+                "niki_152_adv_tr_gcg_imdb_small",
+                # "ian_141_rerun_adv_tr_gcg_imdb_small", # Flops data unuseable
+            ),
         },
     },
     "gcg_no_ramp_gcg": {

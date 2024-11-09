@@ -24,6 +24,7 @@ def main():
         ("rt_gcg", "spam"),
         ("rt_gcg", "wl"),
         ("rt_gcg", "pm"),
+        ("gcg_gcg_infix90_match_seed", "imdb"),
         ("gcg_gcg_infix90", "imdb"),
         ("gcg_gcg_infix90", "spam"),
         ("gcg_gcg_prefix", "imdb"),

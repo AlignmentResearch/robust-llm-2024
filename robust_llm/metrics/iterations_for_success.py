@@ -7,9 +7,11 @@ over the whole dataset. We use ASR=0%, 10%, 20%, ..., 100% as thresholds.
 
 import argparse
 import concurrent.futures
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 
@@ -131,6 +133,12 @@ def compute_ifs_metric_from_wandb(group_name: str, run_index: str) -> IFSMetricR
 
 
 def compute_ifs_metric_from_wandb_run(run: RunInfo) -> IFSMetricResults:
+    # Some runs have an `asr_per_iteration` table
+    # e.g. https://wandb.ai/farai/robust-llm/runs/z646n999
+    table = maybe_compute_ifs_metric_from_asr_per_iteration_table(run)
+    if table is not None:
+        return table
+
     attack_output = get_attack_output_from_wandb_run(run)
 
     tic = time.perf_counter()
@@ -138,6 +146,24 @@ def compute_ifs_metric_from_wandb_run(run: RunInfo) -> IFSMetricResults:
     toc = time.perf_counter()
     print(f"Computed Iterations For Success metric in {toc - tic:.2f} seconds")
     return results
+
+
+def maybe_compute_ifs_metric_from_asr_per_iteration_table(
+    run: RunInfo,
+) -> IFSMetricResults | None:
+    wandb_run = run.to_wandb()
+    for artifact in wandb_run.logged_artifacts():
+        if "asr_per_iteration" in artifact.name:
+            root = artifact.download()
+            path = Path(root) / "asr_per_iteration.table.json"
+            with open(path) as file:
+                json_dict = json.load(file)
+            df = pd.DataFrame(json_dict["data"], columns=json_dict["columns"])
+            df_as_list = df.squeeze().tolist()
+            asrs = ASRMetricResults(asr_per_iteration=df_as_list)
+            results = compute_iterations_for_success_from_asrs(asrs)
+            return results
+    return None
 
 
 def compute_ifs_in_thread(run: RunInfo) -> tuple[IFSMetricResults, int, int, int]:

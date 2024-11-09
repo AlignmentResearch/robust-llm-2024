@@ -5,7 +5,7 @@ import argparse
 from robust_llm.plotting_utils.style import set_style
 from robust_llm.plotting_utils.tools import load_and_plot_asr
 
-ROUNDS = [0, 1e-4, 1e-3, 5e-3, -1]
+ROUNDS = [1e-4, 1e-3, 5e-3, -1]
 
 
 def main(style):

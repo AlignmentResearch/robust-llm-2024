@@ -10,6 +10,8 @@ from robust_llm.metrics.iterations_for_success import compute_all_ifs_metrics
 def main(reverse: bool = False, max_workers: int = 12):
     disable_progress_bar()
     GROUPS = [
+        "oskar_019a_infix_eval_adv_tr_gcg_imdb_small",
+        "oskar_019b_suffix_eval_adv_tr_gcg_imdb_small",
         "ian_102a_gcg_pythia_harmless",
         "ian_103a_gcg_pythia_helpful",
         "ian_104a_rt_pythia_harmless",

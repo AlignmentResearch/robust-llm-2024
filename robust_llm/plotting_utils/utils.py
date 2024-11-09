@@ -68,7 +68,8 @@ def drop_duplicates(
     dups = df.duplicated(subset=keys)
     if dups.any():
         print(
-            f"\033[91mWARNING: Dropping {len(df[dups]) // 2} duplicates in {name}\033[0m"  # noqa: E501
+            f"\033[91mWARNING: Dropping {len(df[dups]) // 2} duplicates in "
+            f"{name} with identical keys={keys}, keeping {keep}\033[0m"
         )
         df = df.drop_duplicates(subset=keys, keep=keep)  # type: ignore
     return df

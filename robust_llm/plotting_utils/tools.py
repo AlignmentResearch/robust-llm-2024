@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import warnings
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -387,10 +388,14 @@ def load_flops_data(
         ],
         metrics=[
             "train/total_flops",
+            "train/flops",
             "adv_training_round",
         ],
         use_group_cache=use_group_cache,
     )
+    # In the training pipeline refactor, `train/total_flops` was renamed to
+    # `train/flops`
+    data = data.rename(columns={"train_flops": "train_total_flops"})
     data["model_key"] = data.training_force_name_to_save.where(
         data.training_force_name_to_save.notnull(), data.training_save_name
     )
@@ -478,6 +483,7 @@ def load_and_plot_adv_training_plots(
     smoothing: int = DEFAULT_SMOOTHING,
     style: str = "paper",
     title: str | None = None,
+    color_data: pd.Series | None = None,
 ):
     """
     Make adversarial training plots for given runs, pulling data from W&B.
@@ -500,6 +506,10 @@ def load_and_plot_adv_training_plots(
         smoothing: The amount of Laplace smoothing to apply to y-values.
         style: The style to use for the plot.
         title: The title of the plot. Automatically generated if not provided.
+        color_data: The data to use for the color mapping. This is useful if
+            the data only contains a subset of the models so we want to
+            inform matplotlib of the full range of models which need to be
+            assigned colors.
     """
     data, metadata = read_csv_and_metadata("adv_training", attack, dataset)
     draw_plot_adv_training(
@@ -520,6 +530,7 @@ def load_and_plot_adv_training_plots(
         yscale=yscale,
         style=style,
         title=title,
+        color_data=color_data,
     )
 
 
@@ -582,6 +593,34 @@ def _prepare_adv_training_data(
     return run_info_df  # type: ignore
 
 
+def match_ft_seed_to_adv(model_key: str):
+    """Match the fine-tuning seed to the adversarial training seed."""
+    # model_key='clf_imdb_pythia-31m_s-0_adv_tr_gcg_t-4'
+    adv_seed = model_key.split("_t-")[-1]
+    ft_seed = model_key.split("_s-")[1].split("_")[0]
+    return model_key.replace(f"_s-{ft_seed}", f"_s-{adv_seed}")
+
+
+def hack_together_new_evals_old_flops(adv_data, train_data):
+    """Manually edit old flops data to match new evals data.
+
+    Some runs, e.g. https://wandb.ai/farai/robust-llm/runs/7c3lhlpe
+    do not have usable flops data. We can manually edit the old flops data
+    so that it matches the new evals data. The problem is that we logged
+    the flops after each batch, did not log the adversarial training round
+    at all, and on top of that we resumed from checkpoint so the flops data is
+    spread across wandb runs. The FLOPs should be the same as the old runs
+    as it's just a different seed so we use those instead.
+    """
+    if set(adv_data.model_key) == set(train_data.model_key):
+        return train_data
+    matched_seeds_train_data = train_data.copy()
+    matched_seeds_train_data.model_key = matched_seeds_train_data.model_key.apply(
+        match_ft_seed_to_adv
+    )
+    return pd.concat([train_data, matched_seeds_train_data], ignore_index=True)
+
+
 def prepare_adv_training_data(
     group_names: iter_str | str,
     summary_keys: list[str],
@@ -606,6 +645,7 @@ def prepare_adv_training_data(
             "AlignmentResearch/", ""
         ).str.replace("robust_llm_", "")
         train_data = load_flops_data(merge_runs, use_group_cache=use_group_cache)
+        train_data = hack_together_new_evals_old_flops(adv_data, train_data)
         adv_data = merge_adv_and_train_data(adv_data, train_data)
         assert_flops_data_not_missing(adv_data, train_data)
     return adv_data
@@ -672,15 +712,14 @@ def _get_n_parameter_updates(data: pd.DataFrame) -> None:
     )
 
 
-def get_color_palette(data: pd.DataFrame, color_data_name: str) -> dict:
+def get_color_palette(data: pd.Series | pd.DataFrame, color_data_name: str) -> dict:
+    color_data = data[color_data_name] if isinstance(data, pd.DataFrame) else data
     if color_data_name == "num_params":
         palette_color = "viridis"
     else:
         palette_color = "magma"
-    palette = sns.color_palette(
-        palette_color, data[color_data_name].nunique()  # type: ignore
-    )
-    palette_dict = dict(zip(sorted(data[color_data_name].unique()), palette))
+    palette = sns.color_palette(palette_color, color_data.nunique())  # type: ignore
+    palette_dict = dict(zip(sorted(color_data.unique()), palette))
     return palette_dict
 
 
@@ -761,6 +800,7 @@ def _draw_plot_adv_training(
     add_parity_line: bool = False,
     diagonal_gridlines: bool = False,
     style: str = "paper",
+    color_data: pd.Series | None = None,
 ):
     if title is None:
         title = f"{name_to_attack(attack)}, {name_to_dataset(dataset)}"
@@ -786,24 +826,9 @@ def _draw_plot_adv_training(
     elif x_data_name == "train_total_flops":
         data = data.loc[data.train_total_flops.gt(0)]
         # Handle slight deviations in FLOPs
-        data["train_total_flops"] = (
-            data.groupby(["num_params", "adv_training_round"])["train_total_flops"]
-            .transform("mean")
-            .astype(int)
-        )
+        x_data_name = "mean_train_total_flops"
     elif x_data_name == "defense_flops_fraction_pretrain":
         data = data.loc[data.train_total_flops.gt(0)]
-        # Handle slight deviations in FLOPs
-        data["train_total_flops"] = (
-            data.groupby(["num_params", "adv_training_round"])["train_total_flops"]
-            .transform("mean")
-            .astype(int)
-        )
-        data["pretrain_compute"] = data.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
-        data["defense_flops_fraction_pretrain"] = (
-            data.train_total_flops / data.pretrain_compute
-        )
-        plt.xscale("log")
     else:
         raise ValueError(f"We don't yet support {x_data_name} on the x-axis")
 
@@ -825,7 +850,9 @@ def _draw_plot_adv_training(
         plt.xlim(xlim)
     if yscale is not None:
         plt.yscale(yscale)
-    palette_dict = get_color_palette(data, color_data_name)
+    palette_dict = get_color_palette(
+        color_data if color_data is not None else data, color_data_name
+    )
 
     plt.title(title)
     y_name_clean = y_data_name.replace("adversarial_eval_", "").replace("metrics_", "")
@@ -900,7 +927,7 @@ def _draw_plot_adv_training(
         (
             f"ylim_{str(ylim[0]).replace('.', 'p')}_{str(ylim[1]).replace('.', 'p')}"
             if ylim is not None
-            else None
+            else "auto"
         ),
         data=data if legend else None,
         metadata=metadata if legend else None,
@@ -927,6 +954,7 @@ def draw_plot_adv_training(
     diagonal_gridlines: bool = False,
     style: str = "paper",
     title: str | None = None,
+    color_data: pd.Series | None = None,
 ):
     if xlim is not None and data["adv_training_round"].max() + 1 < xlim[1]:
         raise ValueError(
@@ -960,6 +988,7 @@ def draw_plot_adv_training(
         diagonal_gridlines=diagonal_gridlines,
         style=style,
         title=title,
+        color_data=color_data,
     )
 
 
@@ -977,6 +1006,7 @@ def create_path_and_savefig(
     clip: bool = False,
 ) -> Path:
     assert isinstance(fig, Figure)
+    assert all(isinstance(n, str) for n in nested)
     repo_path = compute_repo_path()
     directory = Path(repo_path) / "plots" / "/".join(nested[:-1])
     directory.mkdir(parents=True, exist_ok=True)
@@ -1933,6 +1963,13 @@ def save_asr_data(
     )
 
     asr_data = prepare_asr_data(adv_data)
+    if asr_data.iteration.max() > n_iterations:
+        warnings.warn(
+            f"Found iterations higher than {n_iterations}. Dropping those rows. "
+            f"Groups: {group_names}, attack: {attack}, dataset: {dataset}."
+        )
+        asr_data = asr_data.loc[asr_data.iteration.le(n_iterations)]
+    assert not asr_data.asr.isnull().any()
     for round in rounds:
         round_df = restrict_asr_to_round(
             asr_data,
@@ -1969,7 +2006,8 @@ def load_and_plot_asr(
     dataset: str,
     rounds: list[int | float],
     x: str = "iteration_flops",
-    y: str = "logit_asr",
+    y: str = "asr",
+    y_transform: str = "logit",
     smoothing: int = DEFAULT_SMOOTHING,
     datapoints: int | None = None,
     style: str = "paper",
@@ -1993,6 +2031,7 @@ def load_and_plot_asr(
             round_to_str(round),
             x_data_name=x,
             y_data_name=y,
+            y_transform=y_transform,
             smoothing=smoothing,
             style=style,
         )

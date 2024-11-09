@@ -6,12 +6,13 @@ from robust_llm.plotting_utils.style import name_to_attack, name_to_dataset, set
 from robust_llm.plotting_utils.tools import load_and_plot_adv_training_plots
 
 
-def main(style):
+def main(style, skip_clean=False):
     set_style(style)
-    for x_data_name in ("defense_flops_fraction_pretrain",):
+    for x_data_name in ("defense_flops_fraction_pretrain", "train_total_flops"):
         for legend in (True, False):
-            for iteration in (12, 128):
+            for iteration in (128,):
                 for attack, dataset in [
+                    ("gcg_gcg_match_seed", "imdb"),
                     ("gcg_gcg", "imdb"),
                     ("gcg_gcg", "spam"),
                     ("gcg_gcg", "wl"),
@@ -29,7 +30,7 @@ def main(style):
 
                     # Plot the clean performance too,
                     # as well all the post-attack accuracy
-                    if iteration == 128:
+                    if not skip_clean:
                         d_name = name_to_dataset(dataset)
                         a_name = name_to_attack(attack)
                         for y_transform in ["none", "logit"]:
@@ -90,5 +91,10 @@ if __name__ == "__main__":
         default="paper",
         help="Style to be used for plotting",
     )
+    parser.add_argument(
+        "--skip_clean",
+        action="store_true",
+        help="Whether to include clean performance in the plots",
+    )
     args = parser.parse_args()
-    main(args.style)
+    main(args.style, args.skip_clean)

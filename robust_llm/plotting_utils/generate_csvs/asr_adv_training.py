@@ -40,7 +40,7 @@ def main():
             n_models=10,
             n_seeds=5,
             check_seeds=False,
-            n_iterations=128,
+            n_iterations=64 if "infix" in attack else 128,
             rounds=ROUNDS,
             **get_run_names(attack, dataset),
         )

@@ -22,21 +22,27 @@ METRICS = [
 
 
 def main():
-    attack = "gcg_gcg"
-    for dataset in (
-        "imdb",
-        "spam",
-        "wl",
-        "pm",
+    for attack in (
+        "gcg_gcg_match_seed",
+        "gcg_gcg",
     ):
-        save_adv_training_data(
-            attack=attack,
-            dataset=dataset,
-            summary_keys=summary_keys,
-            metrics=METRICS,
-            use_group_cache=True,
-            **get_run_names(attack, dataset),
-        )
+        for dataset in (
+            "imdb",
+            "spam",
+            "wl",
+            "pm",
+        ):
+            if "match_seed" in attack and dataset != "imdb":
+                # We re-ran some IMDB adv training with ft_seed==adv_seed
+                continue
+            save_adv_training_data(
+                attack=attack,
+                dataset=dataset,
+                summary_keys=summary_keys,
+                metrics=METRICS,
+                use_group_cache=True,
+                **get_run_names(attack, dataset),
+            )
 
 
 if __name__ == "__main__":
