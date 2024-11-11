@@ -70,6 +70,8 @@ class RobustnessMetricResults:
                 metrics[f"{prefix}/mean_log_prob@{i}"] = mean_log_prob
             for i, log_mean_prob in enumerate(self.log_prob_results.log_mean_probs):
                 metrics[f"{prefix}/log_mean_prob@{i}"] = log_mean_prob
+            for i, mean_logit in enumerate(self.log_prob_results.mean_logits):
+                metrics[f"{prefix}/mean_logit@{i}"] = mean_logit
 
         return metrics
 
