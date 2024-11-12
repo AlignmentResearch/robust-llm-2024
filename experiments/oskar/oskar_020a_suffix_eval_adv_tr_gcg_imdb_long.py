@@ -38,12 +38,7 @@ SEEDS = [0, 1, 2]
 OVERRIDE_TUPLES = [
     (
         {
-            "+model": f"Default/clf/{DATASET}/{model}-s{seed}",
-            "model.name_or_path": (
-                "AlignmentResearch/robust_llm_"
-                f"clf_{DATASET}_{model}_s-{seed}"
-                f"_adv_tr_{ATTACK}_t-{seed}"
-            ),
+            "+model": f"AdvTrained/clf/{ATTACK}/{DATASET}/{model}-s{seed}",
             "model.revision": f"adv-training-round-{evaluation_round}",
             "evaluation.num_iterations": 128,
         },
