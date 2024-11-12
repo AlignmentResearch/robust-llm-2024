@@ -6,8 +6,8 @@ from omegaconf import MISSING
 
 from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.config.callback_configs import CallbackConfig
-from robust_llm.config.constants import get_save_root
 from robust_llm.config.model_configs import ModelConfig
+from robust_llm.file_utils import get_save_root
 from robust_llm.models.model_utils import InferenceType
 
 

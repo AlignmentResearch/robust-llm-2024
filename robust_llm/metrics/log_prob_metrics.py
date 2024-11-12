@@ -2,6 +2,7 @@ import argparse
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 import torch
@@ -24,9 +25,9 @@ from robust_llm.utils import print_time
 from robust_llm.wandb_utils.wandb_api_tools import (
     RunInfo,
     get_adv_training_round_from_eval_run,
-    get_cache_root,
     get_model_size_and_seed_from_run,
     get_run_from_index,
+    get_save_root,
     get_wandb_runs_by_index,
 )
 
@@ -257,7 +258,7 @@ def compute_all_logprob_metrics(
         # DEBUG: just trying a few.
         wandb_runs_by_index_tuples = wandb_runs_by_index_tuples[:debug_n_runs]
     logprob_data = []
-    logprob_cache_dir = get_cache_root() / "logprob_csvs"
+    logprob_cache_dir = Path(get_save_root()) / "logprob_csvs"
     logprob_cache_dir.mkdir(parents=True, exist_ok=True)
 
     # Load cached results first

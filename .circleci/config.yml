@@ -19,7 +19,7 @@ commands:
             - &venv-cache-key venv-v3-{{ checksum "pyproject.toml" }}
       - restore_cache:
           keys:
-            # This CI cache saves the contents of wandb_utils.wandb_api_tools.get_cache_root().
+            # This CI cache saves the contents of the wandb cache.
             # To force cache invalidation, change the version number here and below
             - combined-local-cache-v3-
       - run:

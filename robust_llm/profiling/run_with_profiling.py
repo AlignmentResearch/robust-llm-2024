@@ -33,6 +33,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from robust_llm.config.constants import SHARED_DATA_DIR
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -165,7 +167,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save-directory",
         type=Path,
-        default=Path("/robust_llm_data/profiles/"),
+        default=Path(SHARED_DATA_DIR) / "profiles",
         help="Directory to save the profiling data",
     )
     parser.add_argument(

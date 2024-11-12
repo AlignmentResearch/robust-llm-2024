@@ -10,10 +10,10 @@ from omegaconf import MISSING, SI
 
 from robust_llm.config.attack_configs import AttackConfig
 from robust_llm.config.callback_configs import CallbackConfig
-from robust_llm.config.constants import get_save_root
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.defense_configs import DefenseConfig
 from robust_llm.config.model_configs import ModelConfig
+from robust_llm.file_utils import get_save_root
 from robust_llm.utils import deterministic_hash_config
 
 

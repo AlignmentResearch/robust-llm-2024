@@ -21,6 +21,7 @@ from hydra.errors import HydraException
 from names_generator import generate_name
 
 from robust_llm.config.configs import ExperimentConfig
+from robust_llm.config.constants import SHARED_DATA_DIR
 from robust_llm.utils import ask_for_confirmation
 
 T = TypeVar("T")
@@ -79,7 +80,7 @@ def run_multiple(
     skip_runs_mask: Sequence[bool] | None = None,
     use_cluster_storage: bool = True,
     wandb_mode: str = "online",
-    profiling_dir: Path | None = Path("/robust_llm_data/profiles/"),
+    profiling_dir: Path | None = Path(SHARED_DATA_DIR) / "profiles",
     dry_run: bool = False,
     skip_git_checks: bool = False,
     unique_identifier: str | None = None,

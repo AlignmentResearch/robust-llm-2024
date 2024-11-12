@@ -22,24 +22,14 @@ from wandb.apis.public.runs import Run as WandbRun
 from wandb.apis.public.runs import Runs as WandbRuns
 
 from robust_llm.config.dataset_configs import DatasetConfig
-from robust_llm.file_utils import ATTACK_DATA_NAME, compute_repo_path
+from robust_llm.file_utils import ATTACK_DATA_NAME, get_save_root
 from robust_llm.wandb_utils.constants import PROJECT_NAME
 
 WANDB_API = wandb.Api(timeout=90)
 
 
-def get_cache_root() -> Path:
-    root = Path("/robust_llm_data")
-    if not root.exists():
-        root = Path(compute_repo_path())
-    path = root / "cache"
-    if not path.exists():
-        path.mkdir(parents=True)
-    return path
-
-
 def get_attack_tables_cache_root() -> Path:
-    path = get_cache_root() / "attack_tables"
+    path = Path(get_save_root()) / "attack_tables"
     if not path.exists():
         path.mkdir(parents=True)
     return path
@@ -165,7 +155,7 @@ def get_attack_data_tables(
 
 
 def get_summary_cache_path_for_group(group: str) -> Path:
-    return get_cache_root() / "wandb-run-summaries" / group
+    return Path(get_save_root()) / "wandb-run-summaries" / group
 
 
 def _get_attack_data_from_csv(
@@ -221,7 +211,7 @@ def get_summary_cache_path(group: str, run_id: str) -> Path:
 
 
 def get_history_cache_path(group: str, run_id: str) -> Path:
-    root = get_cache_root() / "wandb-run-histories" / group
+    root = Path(get_save_root()) / "wandb-run-histories" / group
     if not root.exists():
         root.mkdir(parents=True)
     return root / f"{run_id}.csv"
@@ -249,7 +239,7 @@ def get_runs_for_group(group_name: str, use_cache: bool = True) -> list[RunInfo]
 
 
 def get_summary_from_id(run_id: str) -> RunInfo:
-    cache_path = get_cache_root() / "wandb-run-summaries" / f"{run_id}.json"
+    cache_path = Path(get_save_root()) / "wandb-run-summaries" / f"{run_id}.json"
     if not cache_path.exists():
         run = try_get_run_from_id(run_id)
         return cache_run_and_return_info(run)

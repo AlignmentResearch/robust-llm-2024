@@ -41,8 +41,8 @@ from robust_llm.wandb_utils.constants import (
     SUMMARY_KEYS,
 )
 from robust_llm.wandb_utils.wandb_api_tools import (
-    get_cache_root,
     get_group_enriched_history,
+    get_save_root,
 )
 
 iter_str = tuple[str, ...] | list[str]
@@ -71,7 +71,7 @@ def name_transformed_data(data_name: str, transform: str) -> str:
 
 
 def get_csv_root():
-    return get_cache_root() / "plot_csvs"
+    return Path(get_save_root()) / "plot_csvs"
 
 
 def _get_csv_path(*save_as) -> Path:

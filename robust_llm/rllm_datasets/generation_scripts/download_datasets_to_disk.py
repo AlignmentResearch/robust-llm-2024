@@ -8,6 +8,8 @@ import datasets
 from huggingface_hub import HfApi
 from tqdm import tqdm
 
+from robust_llm.config.constants import SHARED_DATA_DIR
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -105,7 +107,7 @@ def download_dataset_revisions(dataset_name: str, base_save_path: Path) -> bool:
 
 
 def main() -> None:
-    SHARED_DATASET_DIR = Path("/robust_llm_data/datasets")
+    SHARED_DATASET_DIR = Path(SHARED_DATA_DIR) / "datasets"
     DATASETS = [
         "AlignmentResearch/WordLength",
         "AlignmentResearch/IMDB",
