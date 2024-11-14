@@ -1,7 +1,6 @@
 import abc
 import json
 import os
-import shutil
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -15,7 +14,7 @@ from robust_llm.config.configs import (
     ExperimentConfig,
     get_checkpoint_path,
 )
-from robust_llm.dist_utils import DistributedRNG, is_main_process
+from robust_llm.dist_utils import DistributedRNG, dist_rmtree, is_main_process
 from robust_llm.logging_utils import log
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
@@ -253,7 +252,7 @@ class Attack(abc.ABC):
         """Delete old checkpoints if necessary to stay within save_total_limit."""
         for i, path in enumerate(self.list_checkpoints()):
             if i >= self.attack_config.save_total_limit and is_main_process():
-                shutil.rmtree(os.path.join(self.states_directory(), path))
+                dist_rmtree(os.path.join(self.states_directory(), path))
 
     def maybe_load_state(self) -> bool:
         """Loads the most recent state from disk if one exists.

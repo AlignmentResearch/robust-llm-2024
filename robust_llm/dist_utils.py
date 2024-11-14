@@ -1,9 +1,12 @@
 """Utility functions for working with torch.distributed/accelerate."""
 
 import shutil
+import time
+import traceback
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import torch
@@ -11,6 +14,8 @@ import torch.distributed as dist
 from accelerate import Accelerator
 from accelerate.utils import gather_object
 from transformers import PreTrainedTokenizerBase
+
+from robust_llm import logger
 
 INT_TO_DTYPE = {
     0: torch.float32,
@@ -362,8 +367,72 @@ def assert_same_data_between_processes(
         )
 
 
-def dist_rmtree(path: Path):
-    if is_main_process() and path.exists():
+def rmtree_if_exists(path: Path):
+    if path.exists():
         shutil.rmtree(path)
-    if dist.is_initialized():
-        dist.barrier()
+
+
+def dist_rmtree(path: str | Path, retries: int = 5, cooldown_seconds: float = 5):
+    if isinstance(path, str):
+        path = Path(path)
+    return try_except_main_process_loop(
+        retries=retries,
+        cooldown_seconds=cooldown_seconds,
+        accelerator=None,
+        func=rmtree_if_exists,
+        path=path,
+    )
+
+
+def try_except_main_process_loop(
+    retries: int,
+    cooldown_seconds: float,
+    accelerator: Accelerator | None,
+    func: Callable,
+    *args,
+    **kwargs,
+):
+    """Run a main process only function with retries and error handling.
+
+    N.B. `func` must not gather or wait for other processes!
+    """
+    if accelerator is None:
+        accelerator = Accelerator()
+    assert retries >= 0
+    attempts = retries + 1
+    logger.debug(f"Running {func.__name__} with retries and error handling.")
+    device = accelerator.device
+    is_main_process = accelerator.is_main_process
+    last_error = None
+    for attempt in range(attempts):
+        logger.debug(f"{func.__name__} attempt {attempt + 1}/{attempts}")
+        error_occurred = torch.tensor(0, device=device)
+        if dist.is_initialized():
+            dist.barrier()
+        try:
+            if is_main_process:
+                func(*args, **kwargs)
+        except Exception as e:
+            last_error = e
+            warnings.warn(
+                f"Failed {func.__name__} on attempt {attempt + 1} of {attempts}: "
+                f"{e}\n{traceback.format_exc()}",
+                stacklevel=2,
+            )
+            error_occurred = torch.tensor(1, device=device)
+        logger.debug(f"Local error code: {error_occurred.item()}")
+        if dist.is_initialized():
+            logger.debug("Waiting for all error codes...")
+            dist.barrier()
+            logger.debug("Broadcasting error codes...")
+            dist.broadcast(error_occurred, src=0)
+            logger.debug(f"Error code: {error_occurred.item()}")
+        if error_occurred.item() == 0:
+            logger.debug(f"{func.__name__} successful.")
+            return
+        if attempt + 1 < attempts:
+            time.sleep(cooldown_seconds * 2**attempt)
+    if last_error is not None:
+        raise last_error
+    else:
+        raise RuntimeError(f"Failed {func.__name__} after {attempts} attempts.")

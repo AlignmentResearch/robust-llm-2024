@@ -3,10 +3,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import json
-import shutil
 import tempfile
-import time
-import traceback
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
@@ -38,7 +35,9 @@ from robust_llm.dist_utils import (
     DistributedRNG,
     broadcast_int,
     broadcast_int128,
+    dist_rmtree,
     is_main_process,
+    try_except_main_process_loop,
 )
 from robust_llm.models.model_disk_utils import (
     get_model_load_path,
@@ -324,6 +323,7 @@ class WrappedModel(ABC):
         finally:
             self._skip_hooks = False
 
+    @print_time()
     def push_to_hub(
         self,
         repo_id: str,
@@ -333,52 +333,55 @@ class WrappedModel(ABC):
         local_dir: Path | None = None,
     ):
         """Pushes the model and tokenizer to the hub with retries."""
-        assert self.accelerator is not None
-        for attempt in range(retries):
-            try:
-                self._push_to_hub_once(
-                    repo_id=repo_id,
-                    revision=revision,
-                    local_dir=local_dir,
-                )
-                return
-            except Exception as e:
-                warnings.warn(
-                    f"Failed to push to hub on attempt {attempt + 1} of {retries}: "
-                    f"{e}\n{traceback.format_exc()}",
-                    stacklevel=2,
-                )
-            if attempt + 1 < retries:
-                time.sleep(cooldown_seconds * 2**attempt)
-        raise RuntimeError(f"Failed to push to hub after {retries} attempts.")
+        save_dir = local_dir or Path(tempfile.mkdtemp())
+        self.save_local(save_dir, retries=retries, cooldown_seconds=cooldown_seconds)
 
+        assert self.accelerator is not None
+        try_except_main_process_loop(
+            retries=retries,
+            cooldown_seconds=cooldown_seconds,
+            accelerator=self.accelerator,
+            func=self._push_to_hub_once,
+            repo_id=repo_id,
+            revision=revision,
+            save_dir=save_dir,
+            # cleanup files if not using a permanent directory
+            cleanup=local_dir is None,
+        )
+
+    @print_time()
     def save_local(
         self,
         output_dir: Path,
+        retries: int,
+        cooldown_seconds: float,
     ):
         """Save the model and tokenizer to a local directory"""
-        if not dist.is_initialized():
-            self._save_local(state_dict=self.model.state_dict(), output_dir=output_dir)
-            return
-        # Configure FSDP state dict settings
-        state_dict_config = FullStateDictConfig(
-            offload_to_cpu=True,
-            rank0_only=True,
-        )
+        if dist.is_initialized():
+            assert self.accelerator is not None
+            # Configure FSDP state dict settings
+            state_dict_config = FullStateDictConfig(
+                offload_to_cpu=True,
+                rank0_only=True,
+            )
 
-        with FSDP.state_dict_type(
-            self.model,
-            StateDictType.FULL_STATE_DICT,
-            state_dict_config,
-        ):
+            with FSDP.state_dict_type(
+                self.model,
+                StateDictType.FULL_STATE_DICT,
+                state_dict_config,
+            ):
+                state_dict = self.model.state_dict()
+        else:
             state_dict = self.model.state_dict()
 
-            if is_main_process():
-                self._save_local(state_dict=state_dict, output_dir=output_dir)
-
-        # Ensure all processes sync up
-        if dist.is_initialized():
-            dist.barrier()
+        try_except_main_process_loop(
+            retries=retries,
+            cooldown_seconds=cooldown_seconds,
+            accelerator=self.accelerator,
+            func=self._save_local,
+            state_dict=state_dict,
+            output_dir=output_dir,
+        )
 
     def _save_local(
         self,
@@ -410,44 +413,41 @@ class WrappedModel(ABC):
             )
         mark_model_save_as_finished(model_save_directory=output_dir)
 
+    @print_time()
     def _push_to_hub_once(
         self,
         repo_id: str,
         revision: Optional[str],
-        local_dir: Path | None = None,
+        save_dir: Path,
+        cleanup: bool = True,
     ):
         """Makes one attempt to push the model and tokenizer to the hub.
 
         Args:
             repo_id: The ID of the huggingface hub repo to push to.
             revision: The revision to push to.
-            local_dir: The local directory to save the model and tokenizer to.
-                If None, a temporary directory will be created.
+            save_dir: The directory to save the model and tokenizer to.
+            cleanup: If this is True, we will delete the save_dir
         """
-        save_dir = local_dir or Path(tempfile.mkdtemp())
-        self.save_local(save_dir)
-
         # Now separately push to hub, using an internal transformers
         # function. We have to use an internal function because both
         # `push_to_hub` and `save_pretrained` do not give enough flexibility
         # when using FSDP: `push_to_hub` doesn't let you pass in a
         # state_dict and `save_pretrained` doesn't let you pass in a
         # tag/revision for the repo.
-        assert self.accelerator is not None
-        if is_main_process():
-            repo_id = self.model._create_repo(repo_id)
-            revision = revision or "main"
-            self.model._upload_modified_files(
-                working_dir=save_dir,
-                repo_id=repo_id,
-                files_timestamps=dict(),
-                commit_message="Pushing model and tokenizer to hub",
-                revision=revision,  # type: ignore  # bad hinting in transformers
-            )
-
-            # Only clean up if we didn't want to keep the local directory.
-            if local_dir is None and is_main_process():
-                shutil.rmtree(save_dir)
+        repo_id = self.model._create_repo(repo_id)
+        revision = revision or "main"
+        self.model._upload_modified_files(
+            working_dir=save_dir,
+            repo_id=repo_id,
+            files_timestamps=dict(),
+            commit_message="Pushing model and tokenizer to hub",
+            revision=revision,  # type: ignore  # bad hinting in transformers
+        )
+        # Only clean up if we didn't want to keep the local directory.
+        if cleanup:
+            logger.debug(f"Removing temp directory: {save_dir}")
+            dist_rmtree(save_dir)
 
     @classmethod
     def register_subclass(cls, name):

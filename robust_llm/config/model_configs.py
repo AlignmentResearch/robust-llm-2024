@@ -6,7 +6,8 @@ import torch
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING, SI, OmegaConf
 
-from robust_llm.config.constants import MODEL_FAMILIES, SHARED_DATA_DIR
+from robust_llm.config.constants import MODEL_FAMILIES
+from robust_llm.file_utils import SHARED_DATA_DIR
 
 # This is a custom resolver that allows us to e.g. set batch sizes
 # as multiples of each other.

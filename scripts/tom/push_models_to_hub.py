@@ -13,7 +13,6 @@ import argparse
 import datetime
 import logging
 import os
-import shutil
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -23,6 +22,7 @@ from huggingface_hub import HfApi
 from tqdm import tqdm
 from transformers.utils.logging import disable_progress_bar
 
+from robust_llm.dist_utils import dist_rmtree
 from robust_llm.models.model_disk_utils import (
     get_model_versions_by_recency,
     get_now_timestamp_str,
@@ -205,7 +205,7 @@ def process_revision(
                     # Deleting the directory is a race if some job is currently
                     # loading it from disk. Hopefully the job just throws an
                     # exception and restarts in this case.
-                    shutil.rmtree(version)
+                    dist_rmtree(version)
 
         if delete_empty_dirs:
             if not any(revision_path.iterdir()):

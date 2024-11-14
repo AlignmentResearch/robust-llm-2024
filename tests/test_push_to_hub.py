@@ -55,7 +55,8 @@ def mock_model() -> DummyWrappedModel:
         eval_minibatch_size=2,
         family="dummy",
     )
-    model.save_local = MagicMock()  # type: ignore[method-assign]
+    model._save_local = MagicMock()  # type: ignore[method-assign]
+    model._save_local.__name__ = "_save_local"
     model.model.push_to_hub = MagicMock()
     model.model._create_repo = MagicMock()
     model.model._upload_modified_files = MagicMock()
@@ -63,7 +64,7 @@ def mock_model() -> DummyWrappedModel:
 
 
 def test_push_to_hub_success(mock_model: DummyWrappedModel):
-    mock_model.save_local.side_effect = None
+    mock_model._save_local.side_effect = None
     mock_model.model._create_repo.side_effect = lambda repo_id: repo_id
     mock_model.model._upload_modified_files.side_effect = None
 
@@ -72,25 +73,25 @@ def test_push_to_hub_success(mock_model: DummyWrappedModel):
 
 
 def test_push_to_hub_retry_success(mock_model: DummyWrappedModel):
-    mock_model.save_local.side_effect = [Exception("Fail"), None]
+    mock_model._save_local.side_effect = [Exception("Fail"), None]
     mock_model.model._create_repo.side_effect = lambda repo_id: repo_id
     mock_model.model._upload_modified_files.side_effect = None
 
     mock_model.push_to_hub("repo_id", "revision", retries=3, cooldown_seconds=0.1)
-    assert mock_model.save_local.call_count == 2
+    assert mock_model._save_local.call_count == 2
 
 
 def test_push_to_hub_failure(mock_model: DummyWrappedModel):
-    mock_model.save_local.side_effect = Exception("Fail")
+    mock_model._save_local.side_effect = Exception("Fail")
     mock_model.model._create_repo.side_effect = lambda repo_id: repo_id
     mock_model.model._upload_modified_files.side_effect = None
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(Exception, match="Fail"):
         mock_model.push_to_hub("repo_id", "revision", retries=3, cooldown_seconds=0.1)
 
 
 def test_push_to_hub_warnings(mock_model: DummyWrappedModel):
-    mock_model.save_local.side_effect = [Exception("Fail"), None]
+    mock_model._save_local.side_effect = [Exception("Fail"), None]
     mock_model.model._create_repo.side_effect = lambda repo_id: repo_id
     mock_model.model._upload_modified_files.side_effect = None
 

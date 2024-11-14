@@ -12,8 +12,8 @@ from transformers import PreTrainedTokenizerBase
 
 from robust_llm import logger
 from robust_llm.config.configs import DatasetConfig
-from robust_llm.config.constants import SHARED_DATA_DIR
 from robust_llm.dist_utils import DistributedRNG
+from robust_llm.file_utils import SHARED_DATA_DIR
 from robust_llm.models.model_utils import InferenceType
 from robust_llm.rllm_datasets.dataset_utils import (
     EXPECTED_COLUMNS,

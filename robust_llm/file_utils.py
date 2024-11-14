@@ -2,9 +2,8 @@ from pathlib import Path
 
 import git.repo
 
-from robust_llm.config.constants import SHARED_DATA_DIR
-
 ATTACK_DATA_NAME = "attack_data.csv"
+SHARED_DATA_DIR = "/robust_llm_data"
 
 
 def get_git_repo() -> git.repo.base.Repo:

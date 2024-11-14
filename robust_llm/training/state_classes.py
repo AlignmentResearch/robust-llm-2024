@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import shutil
 from dataclasses import dataclass, field
 from functools import partial
 from math import ceil
@@ -29,7 +28,13 @@ from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.config.configs import ExperimentConfig, SaveTo, get_checkpoint_path
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.dist_utils import DistributedRNG, assert_same_data_between_processes
+from robust_llm.dist_utils import (
+    DistributedRNG,
+    assert_same_data_between_processes,
+    dist_rmtree,
+    rmtree_if_exists,
+    try_except_main_process_loop,
+)
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import log, wandb_log
 from robust_llm.metrics.metrics import maybe_compute_robustness_metrics
@@ -68,9 +73,12 @@ def build_lr_scheduler(
     # Adjust the train_mb_size to not be larger than the dataset that's used
     # in each process.
     dataset_size = config.dataset.n_train
-    train_mb_size = min(
-        dataset_size // accelerator.num_processes,
-        train_mb_size,
+    train_mb_size = max(
+        1,
+        min(
+            dataset_size // accelerator.num_processes,
+            train_mb_size,
+        ),
     )
     num_batches = ceil(dataset_size / train_mb_size)
     # Adjust the number of batches to account for the number of processes.
@@ -218,8 +226,12 @@ class DatasetState:
 class ModelState:
     wrapped_model: WrappedModel
 
-    def save(self, path: Path, process_index: int):
-        self.wrapped_model.save_local(path / "model")
+    def save(
+        self, path: Path, process_index: int, retries: int, cooldown_seconds: float
+    ):
+        self.wrapped_model.save_local(
+            path / "model", retries=retries, cooldown_seconds=cooldown_seconds
+        )
 
     @staticmethod
     def load(
@@ -400,7 +412,7 @@ class TrainingPipelineState:
                         main_process_only=False,
                     )
                     assert checkpoint_path in epoch_path.parents
-                    shutil.rmtree(epoch_path)
+                    dist_rmtree(epoch_path)
                 else:
                     raise FileExistsError(
                         f"Path {epoch_path} already exists. Aborting save."
@@ -416,7 +428,12 @@ class TrainingPipelineState:
         # Wait for main process to finish making the directory.
         self.accelerator.wait_for_everyone()
 
-        self.model_state.save(epoch_path, process_index)
+        self.model_state.save(
+            epoch_path,
+            process_index,
+            retries=self.training_config.upload_retries,
+            cooldown_seconds=self.training_config.upload_cooldown,
+        )
         self.training_state.save(epoch_path, process_index)
         self.dataset_state.save(epoch_path, process_index)
         self.rng_state.save(epoch_path, process_index, self.accelerator)
@@ -442,47 +459,48 @@ class TrainingPipelineState:
                 f.write("")
         self.accelerator.wait_for_everyone()
 
-    def cleanup_checkpoints(self, path: Path):
+    def _cleanup_checkpoints(self, path: Path):
         """Delete old checkpoints to save disk space.
 
         The process is: iterate in reverse order through the checkpoints, and
         once we have found save_total_limit checkpoints that are safely saved,
         we delete all older checkpoints.
         """
-        # Only do file operations on the main process.
-        self.accelerator.wait_for_everyone()
-        if self.accelerator.is_main_process:
+        checkpoint_path = get_checkpoint_path(path, self.config)
+        if not checkpoint_path.exists():
+            return
 
-            checkpoint_path = get_checkpoint_path(path, self.config)
-            if not checkpoint_path.exists():
-                return
+        save_total_limit = self.training_config.save_total_limit
+        safe_checkpoint_epochs: list[str] = []
+        log(f"Cleaning up checkpoints in {checkpoint_path}", main_process_only=False)
+        for subdir in get_sorted_checkpoints(checkpoint_path):
+            if len(safe_checkpoint_epochs) >= save_total_limit:
+                assert checkpoint_path in subdir.parents
+                assert subdir.name not in safe_checkpoint_epochs
+                rmtree_if_exists(subdir)
+            elif (subdir / "save_complete").exists():
+                safe_checkpoint_epochs.append(subdir.name)
+            else:
+                log(
+                    f"Deleting incomplete checkpoint: {subdir}",
+                    main_process_only=False,
+                )
+                assert checkpoint_path in subdir.parents
+                assert subdir.name not in safe_checkpoint_epochs
+                rmtree_if_exists(subdir)
+        log(
+            f"Keeping checkpoints: {safe_checkpoint_epochs}",
+            main_process_only=False,
+        )
 
-            save_total_limit = self.training_config.save_total_limit
-            safe_checkpoint_epochs: list[str] = []
-            log(
-                f"Cleaning up checkpoints in {checkpoint_path}", main_process_only=False
-            )
-            for subdir in get_sorted_checkpoints(checkpoint_path):
-                if len(safe_checkpoint_epochs) >= save_total_limit:
-                    assert checkpoint_path in subdir.parents
-                    assert subdir.name not in safe_checkpoint_epochs
-                    shutil.rmtree(subdir)
-                elif (subdir / "save_complete").exists():
-                    safe_checkpoint_epochs.append(subdir.name)
-                else:
-                    log(
-                        f"Deleting incomplete checkpoint: {subdir}",
-                        main_process_only=False,
-                    )
-                    assert checkpoint_path in subdir.parents
-                    assert subdir.name not in safe_checkpoint_epochs
-                    shutil.rmtree(subdir)
-            log(
-                f"Keeping checkpoints: {safe_checkpoint_epochs}",
-                main_process_only=False,
-            )
-
-        self.accelerator.wait_for_everyone()
+    def cleanup_checkpoints(self, path: Path):
+        return try_except_main_process_loop(
+            retries=self.training_config.upload_retries,
+            cooldown_seconds=self.training_config.upload_cooldown,
+            accelerator=self.accelerator,
+            func=self._cleanup_checkpoints,
+            path=path,
+        )
 
     def augment_dataset(self):
         """This is a placeholder for subclasses to override."""
@@ -626,7 +644,11 @@ class TrainingPipelineState:
             wandb.run.summary["saved_dir"] = str(output_dir)
 
         logger.info("Saving the model/tokenizer to %s", output_dir)
-        self.model_state.wrapped_model.save_local(output_dir=output_dir)
+        self.model_state.wrapped_model.save_local(
+            output_dir=output_dir,
+            retries=self.training_config.upload_retries,
+            cooldown_seconds=self.training_config.upload_cooldown,
+        )
 
     def _save_model_to_hf(self, model_name: str, revision: str) -> None:
         hf_name = f"AlignmentResearch/robust_llm_{model_name}"

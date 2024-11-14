@@ -1,14 +1,14 @@
 """Downloads datasets from HF to /robust_llm_data/datasets."""
 
 import logging
-import shutil
 from pathlib import Path
 
 import datasets
 from huggingface_hub import HfApi
 from tqdm import tqdm
 
-from robust_llm.config.constants import SHARED_DATA_DIR
+from robust_llm.dist_utils import dist_rmtree
+from robust_llm.file_utils import SHARED_DATA_DIR
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -16,23 +16,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 datasets.utils.logging.disable_progress_bar()
-
-
-def delete_failed_download(dataset_dir: Path) -> None:
-    """Deletes a download directory that did not complete.
-
-    Raises:
-        Exception: If the directory cannot be deleted.
-    """
-    try:
-        shutil.rmtree(dataset_dir)
-    except Exception as e:
-        logger.error(
-            f"Error deleting failed download {dataset_dir}: {str(e)}"
-            "\nIs the filesystem down?"
-            " You will need to manually delete this directory."
-        )
-        raise
 
 
 def download_one_dataset_revision(
@@ -70,11 +53,11 @@ def download_one_dataset_revision(
 
     except Exception as e:
         logger.error(f"Failed to download {dataset_name}:{revision}: {str(e)}")
-        delete_failed_download(dataset_dir)
+        dist_rmtree(dataset_dir)
         return False
 
     except KeyboardInterrupt:
-        delete_failed_download(dataset_dir)
+        dist_rmtree(dataset_dir)
         raise
 
 

@@ -1,5 +1,4 @@
 import dataclasses
-import shutil
 from pathlib import Path
 
 import pytest
@@ -8,6 +7,7 @@ from accelerate import Accelerator
 from transformers import LlamaForCausalLM, LlamaTokenizer
 
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
+from robust_llm.dist_utils import dist_rmtree
 from robust_llm.models import WrappedModel
 
 
@@ -228,15 +228,14 @@ def test_save_load_model():
     )
     accelerator = Accelerator(cpu=not torch.cuda.is_available())
     model = WrappedModel.from_config(cfg, accelerator=accelerator)
+    assert isinstance(model, WrappedModel)
     path = Path("artifacts/test_model")
-    if path.exists() and accelerator.is_main_process:
-        shutil.rmtree(path)
-    model.save_local(path)
+    dist_rmtree(path)
+    model.save_local(path, retries=3, cooldown_seconds=0.1)
 
     cfg.name_or_path = str(path)
     loaded_model = WrappedModel.from_config(cfg, accelerator=accelerator)
-    if accelerator.is_main_process:
-        shutil.rmtree(path)
+    dist_rmtree(path)
 
     example_prompt = "Hello, my dog is cute"
     encoding = loaded_model.tokenize(example_prompt, return_tensors="pt")

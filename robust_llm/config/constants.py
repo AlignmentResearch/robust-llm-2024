@@ -1,6 +1,3 @@
-SHARED_DATA_DIR = "/robust_llm_data"
-
-
 MODEL_FAMILIES = [
     "gpt2",
     "llama2",

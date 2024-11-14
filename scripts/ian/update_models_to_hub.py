@@ -1,7 +1,6 @@
 import argparse
 import os
 import re
-import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ from tqdm import tqdm
 from transformers.utils.logging import disable_progress_bar
 
 from robust_llm.config.model_configs import ModelConfig
+from robust_llm.dist_utils import dist_rmtree
 from robust_llm.models.wrapped_model import WrappedModel
 
 disable_progress_bar()
@@ -155,7 +155,7 @@ def check_model_upload(
     snapshot_download(repo_id, revision=revision, local_dir=temp_dir)
     model = load_model(temp_dir)
     model.eval()
-    shutil.rmtree(temp_dir)
+    dist_rmtree(temp_dir)
     with torch.no_grad():
         remote_logits = model(input_ids=input_ids).logits
     del model

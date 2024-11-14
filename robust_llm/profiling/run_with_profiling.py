@@ -33,7 +33,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from robust_llm.config.constants import SHARED_DATA_DIR
+from robust_llm.file_utils import SHARED_DATA_DIR
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"

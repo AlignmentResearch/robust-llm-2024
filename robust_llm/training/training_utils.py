@@ -133,9 +133,12 @@ def find_completed_checkpoints(path: Path) -> list[Path]:
 
 def prepare_dataloader(victim: WrappedModel, dataset: Dataset) -> DataLoader:
     # Computation taken from the old training.py.
-    batch_size = min(
-        len(dataset) // victim.num_processes,
-        victim.train_minibatch_size,
+    batch_size = max(
+        1,
+        min(
+            len(dataset) // victim.num_processes,
+            victim.train_minibatch_size,
+        ),
     )
 
     tokenizer = victim.right_tokenizer
