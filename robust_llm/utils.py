@@ -35,7 +35,18 @@ def interpolate_config(config: T) -> T:
 
 def deterministic_hash_config(
     config: ExperimentConfig,
-    excluded_keys: tuple[str] | None = ("environment.wandb_info_filename",),
+    excluded_keys: tuple[str, ...] | None = (
+        "environment.wandb_info_filename",
+        "environment.logging_level",
+        "environment.logging_filename",
+        "environment.save_root",
+        "training.save_to",
+        "training.save_name",
+        "training.save_total_limit",
+        "training.save_prefix",
+        "training.upload_retries",
+        "training.upload_cooldown",
+    ),
 ) -> str:
     """Compute a deterministic hash of a config, possible excluding some keys."""
 
