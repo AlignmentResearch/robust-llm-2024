@@ -27,8 +27,8 @@ MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
     ),
     (
         "pythia-12b",
-        1,
-        "80G",
+        2,
+        "160G",
         CLUSTER_NAME,
         1,
     ),
