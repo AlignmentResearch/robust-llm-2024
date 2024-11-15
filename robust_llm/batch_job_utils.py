@@ -527,12 +527,22 @@ def zero_pad(number: int | str, length: int = 4) -> str:
 
 
 def get_wandb_running_finished_runs(experiment_name: str) -> list[str]:
-    """Get a list of run names that are 'running' or 'finished' on wandb."""
+    """Get a list of run names that are running or finished on wandb."""
     runs = wandb_api().runs(
         path="farai/robust-llm",
-        filters={"group": experiment_name},
+        filters={
+            "group": experiment_name,
+            "$or": [
+                # Any of the below should imply the run is ongoing or finished.
+                # We can't rely on `{'state': 'finished'}` because it has false
+                # positives.
+                {"state": "running"},
+                {"summary_metrics.really_finished": 1},
+                {"summary_metrics.finish_reason": "completed"},
+            ],
+        },
     )
-    return [run.name for run in runs if run.state in ["finished", "running"]]
+    return [run.name for run in runs]
 
 
 @functools.cache
