@@ -12,10 +12,10 @@ dependencies = [
     "torch==2.2.2",
     "transformers==4.42.4",
     "accelerate==0.29.2",
-    # Scipy version >=1.13 is incompatible with TextAttack
+    # Scipy version >=1.13 is incompatible with TextAttack.
+    # (We don't use TextAttack anymore, but don't want to change versions.)
     "scipy>=1.12,<1.13.0",
     "tdigest==0.5.2.2",
-    "textattack==0.3.10",
     # v5.0.0 of conllu is not available on PyPI, can remove pin once fixed:
     # https://github.com/EmilStenstrom/conllu/issues/96
     "conllu==4.5.3",
@@ -69,13 +69,6 @@ cuda-deps = [
 cuda = [
     # Only needed if you set model.attention_implementation=flash_attention_2.
     "flash_attn==2.6.0.post1",
-]
-
-# Our models are all in PyTorch, but TextAttack uses TF embeddings for some attacks.
-# Install TensorFlow if you want to run those attacks.
-tensorflow = [
-    "tensorflow==2.16.1",
-    "tensorflow_hub==0.16.1",
 ]
 
 [build-system]

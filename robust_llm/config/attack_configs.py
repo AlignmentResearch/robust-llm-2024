@@ -4,7 +4,6 @@ from typing import Optional
 from hydra.core.config_store import ConfigStore
 from omegaconf import MISSING
 
-from robust_llm.attacks.text_attack.constants import TEXT_ATTACK_ATTACK_TYPES
 from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.file_utils import get_save_root
@@ -74,32 +73,6 @@ class IdentityAttackConfig(AttackConfig):
 
     def __post_init__(self):
         super().__post_init__()
-
-
-@dataclass
-class TextAttackAttackConfig(AttackConfig):
-    """
-    Options specific for TextAttack attacks.
-
-    Attributes:
-        text_attack_recipe: The TextAttack recipe to use (e.g. textfooler).
-        query_budget: Query budget per example.
-        num_modifiable_words_per_chunk: If set to an integer value, the
-            attack will replace all content of each modifiable chunk with
-            `num_modifiable_words_per_chunk` placeholder words which can be then
-            modified by the attack. Otherwise, content is not modified at the start and
-            the attack performs modifications on the original text.
-        silent: If silent, TextAttack will only print errors.
-    """
-
-    text_attack_recipe: str = MISSING
-    query_budget: int = 100
-    num_modifiable_words_per_chunk: Optional[int] = None
-    silent: bool = True
-
-    def __post_init__(self):
-        super().__post_init__()
-        assert self.text_attack_recipe in TEXT_ATTACK_ATTACK_TYPES
 
 
 @dataclass
@@ -288,34 +261,6 @@ class GCGAttackConfig(SearchBasedAttackConfig):
 
 
 @dataclass
-class MultipromptGCGAttackConfig(SearchBasedAttackConfig):
-    """Required options with defaults for the multi-prompt GCG attack.
-
-    Args:
-        differentiable_embeds_callback: The config of the
-            ScoringCallback to use to compute gradients for generating candidates.
-            Must take embeddings as input, and must be differentiable with respect
-            to the embeddings.
-        top_k: the number of token replacements to consider at each
-            position in the attack tokens.
-    """
-
-    differentiable_embeds_callback: CallbackConfig = field(
-        default_factory=lambda: CallbackConfig(
-            callback_name="losses_from_embeds", callback_return_type="tensor"
-        )
-    )
-    top_k: int = 256
-
-    def __post_init__(self):
-        super().__post_init__()
-        if self.n_candidates_per_it > self.top_k * self.n_attack_tokens:
-            raise ValueError(
-                "n_candidates_per_it must be at most top_k * suffix_length"
-            )
-
-
-@dataclass
 class BeamSearchAttackConfig(SearchBasedAttackConfig):
     """Required options with defaults for the beam search attack.
 
@@ -331,12 +276,6 @@ class BeamSearchAttackConfig(SearchBasedAttackConfig):
 
 # Register attack configs.
 cs = ConfigStore.instance()
-for text_attack_recipe in TEXT_ATTACK_ATTACK_TYPES:
-    cs.store(
-        group="attack",
-        name=text_attack_recipe.upper(),
-        node=TextAttackAttackConfig(text_attack_recipe=text_attack_recipe),
-    )
 cs.store(group="attack", name="IDENTITY", node=IdentityAttackConfig)
 cs.store(
     group="attack",
@@ -344,11 +283,6 @@ cs.store(
     node=RandomTokenAttackConfig,
 )
 cs.store(group="attack", name="GCG", node=GCGAttackConfig)
-cs.store(
-    group="attack",
-    name="MULTIPROMPT_GCG",
-    node=MultipromptGCGAttackConfig,
-)
 cs.store(group="attack", name="BEAM_SEARCH", node=BeamSearchAttackConfig)
 cs.store(group="attack", name="ZERO_SHOT_LM", node=LMAttackConfig)
 cs.store(group="attack", name="FEW_SHOT_LM", node=FewShotLMAttackConfig)

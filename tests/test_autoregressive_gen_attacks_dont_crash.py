@@ -10,22 +10,11 @@ from robust_llm.config import (
     ModelConfig,
     RandomTokenAttackConfig,
 )
-from robust_llm.config.attack_configs import GCGAttackConfig, MultipromptGCGAttackConfig
+from robust_llm.config.attack_configs import GCGAttackConfig
 from robust_llm.config.callback_configs import AutoregressiveCallbackConfig
 from robust_llm.config.configs import EvaluationConfig
 from robust_llm.config.model_configs import GenerationConfig
 from robust_llm.utils import interpolate_config
-
-NON_MODIFIABLE_WORDS_TEXT_ATTACKS = [
-    "textfooler",
-    "checklist",
-    "pso",
-]
-
-MODIFIABLE_WORDS_TEXT_ATTACKS = [
-    "bae",
-    "random_character_changes",
-]
 
 
 @pytest.fixture
@@ -120,15 +109,4 @@ def test_doesnt_crash_autoregressive_gen_gcg(exp_config: ExperimentConfig) -> No
     )
     exp_config.evaluation.num_iterations = 2
 
-    _test_doesnt_crash(exp_config)
-
-
-def test_doesnt_crash_autoregressive_gen_multiprompt_gcg(
-    exp_config: ExperimentConfig,
-) -> None:
-    assert exp_config.evaluation is not None
-    exp_config.evaluation.evaluation_attack = MultipromptGCGAttackConfig(
-        n_attack_tokens=3,
-    )
-    exp_config.evaluation.num_iterations = 2
     _test_doesnt_crash(exp_config)

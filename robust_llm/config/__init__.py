@@ -6,7 +6,6 @@ from .attack_configs import (
     LMAttackConfig,
     RandomTokenAttackConfig,
     SearchBasedAttackConfig,
-    TextAttackAttackConfig,
 )
 from .configs import EnvironmentConfig, EvaluationConfig, ExperimentConfig
 from .dataset_configs import DatasetConfig
@@ -26,7 +25,6 @@ __all__ = [
     "LMAttackConfig",
     "FewShotLMAttackConfig",
     "SearchBasedAttackConfig",
-    "TextAttackAttackConfig",
     "EnvironmentConfig",
     "EvaluationConfig",
     "ExperimentConfig",
