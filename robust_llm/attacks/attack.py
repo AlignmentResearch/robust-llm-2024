@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import abc
+import importlib
 import json
 import os
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Type, TypeVar
 
 import pandas as pd
 from typing_extensions import override
@@ -19,9 +22,12 @@ from robust_llm.logging_utils import log
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.rllm_dataset import RLLMDataset
 
+T = TypeVar("T", bound="AttackState")
+
 ATTACK_STATE_NAME = "attack_state.json"
 CONFIG_NAME = "config.json"
 STATES_NAME = "attack_states"
+CLASS_KEY = "class_name"
 
 
 def extract_attack_config(args: ExperimentConfig, training: bool) -> AttackConfig:
@@ -52,6 +58,36 @@ class AttackState:
     attacked_texts: list[str] = field(default_factory=list)
     all_iteration_texts: list[list[str]] = field(default_factory=list)
     attacks_info: dict[str, list[Any]] = field(default_factory=dict)
+
+    def save(self, path: Path) -> None:
+        """Save the AttackState to a JSON file."""
+        state_dict = asdict(self)
+        # Add class information for proper loading
+        state_dict[CLASS_KEY] = (
+            f"{self.__class__.__module__}.{self.__class__.__qualname__}"
+        )
+
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(state_dict, f, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def load(cls: Type[T], path: Path) -> T:
+        """Load an AttackState from a JSON file."""
+        with open(path, encoding="utf-8") as f:
+            state_dict = json.load(f)
+
+        # Get the correct class to instantiate
+        class_path = state_dict.pop(CLASS_KEY)
+        if class_path != f"{cls.__module__}.{cls.__qualname__}":
+            # Import and use the correct class,
+            # e.g. split `search_based.SearchBasedAttackState` into
+            # module `search_based` and class `SearchBasedAttackState`
+            module_name, class_name = class_path.rsplit(".", 1)
+
+            module = importlib.import_module(module_name)
+            cls = getattr(module, class_name)
+
+        return cls(**state_dict)
 
 
 @dataclass
@@ -228,13 +264,12 @@ class Attack(abc.ABC):
 
     def _save_state(self):
         """Saves the attack state to disk."""
-        output_dir = os.path.join(
-            self.states_directory(), f"checkpoint-{self.attack_state.example_index}"
+        output_dir = (
+            self.states_directory() / f"checkpoint-{self.attack_state.example_index}"
         )
         log(f"Saving state to {output_dir}")
         os.makedirs(output_dir)
-        with open(os.path.join(output_dir, ATTACK_STATE_NAME), "w") as f:
-            json.dump(asdict(self.attack_state), f)
+        self.attack_state.save(output_dir / ATTACK_STATE_NAME)
         with open(os.path.join(output_dir, CONFIG_NAME), "w") as f:
             json.dump(asdict(self.attack_config), f)
         self.clean_states()
@@ -263,13 +298,8 @@ class Attack(abc.ABC):
         if not self.can_checkpoint:
             return False
         for checkpoint in self.list_checkpoints():
-            state_path = os.path.join(
-                self.states_directory(), checkpoint, ATTACK_STATE_NAME
-            )
-            with open(state_path) as f:
-                attack_state = json.load(f)
-            for key, value in attack_state.items():
-                setattr(self.attack_state, key, value)
+            state_path = self.states_directory() / checkpoint / ATTACK_STATE_NAME
+            self.attack_state = AttackState.load(state_path)
             with open(
                 os.path.join(self.states_directory(), checkpoint, CONFIG_NAME)
             ) as f:
