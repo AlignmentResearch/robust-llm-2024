@@ -1,0 +1,41 @@
+# @package _global_
+defaults:
+- /environment: DEFAULT
+- /training: DEFAULT
+- /training/adversarial: DEFAULT
+- /evaluation: DEFAULT
+- /attack@training.adversarial.training_attack: GCG
+- /attack@evaluation.evaluation_attack: GCG
+- /model: EleutherAI/pythia-14m
+- /dataset: PasswordMatch/stable
+- _self_
+
+evaluation:
+  num_iterations: 10
+
+environment:
+  resume_mode: "once"
+
+training:
+  optimizer: "adafactor"
+  save_to: HF_ELSE_DISK
+  num_train_epochs: 2
+  learning_rate: 1e-5
+  lr_scheduler_type: "constant"
+  adversarial:
+    num_examples_to_generate_each_round: 20
+    max_augmented_data_size: 100
+    num_adversarial_training_rounds: 8
+    max_adv_data_proportion: 0.8
+    loss_rank_weight: 0.5
+    adv_sampling_decay: 0.005
+    evaluate_during_training: true
+  save_name: "20241114_test_attack_checkpointing"
+
+dataset:
+  n_train: 2000
+  n_val: 40
+
+experiment_type: "training"
+experiment_name: "20241114_test_attack_checkpointing"
+run_name: "20241114_test_attack_checkpointing-1"

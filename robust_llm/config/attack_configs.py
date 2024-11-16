@@ -6,7 +6,6 @@ from omegaconf import MISSING
 
 from robust_llm.config.callback_configs import CallbackConfig
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.file_utils import get_save_root
 from robust_llm.models.model_utils import InferenceType
 
 
@@ -27,12 +26,13 @@ class AttackConfig:
             If None, no training progress is logged. Must be positive or None.
         victim_inference_batch_size:
             Batch size to use for victim model inference.
-        save_prefix:
-            Prefix to use for saving attack states.
         save_steps:
             How often to save attack states.
         save_total_limit:
             Maximum number of attack states to keep at the same time.
+        disable_checkpointing:
+            If True, disable checkpointing for the attack while continuing
+            to allow training checkpoints.
         perturb_position_min:
             The earliest position in a perturbable chunk in which to insert
             the attack tokens, expressed as a fraction of the perturbable chunk length.
@@ -47,9 +47,9 @@ class AttackConfig:
     train_frequency: Optional[int] = None
     log_frequency: Optional[int] = 1
     victim_inference_batch_size: int = 8
-    save_prefix: str = get_save_root()
-    save_steps: int = 100
+    save_steps: int = 10
     save_total_limit: int = 1
+    disable_checkpointing: bool = False
     perturb_position_min: float = 1.0
     perturb_position_max: float = 1.0
 

@@ -79,7 +79,7 @@ def do_adversarial_evaluation(
         raise ValueError("No examples to attack in adversarial evaluation!")
     dataset_to_attack = dataset.get_subset(indices_to_attack)
 
-    attack_out, attack_flops = attack_dataset(
+    attack_out = attack_dataset(
         victim=victim,
         dataset_to_attack=dataset_to_attack,
         attack=attack,
@@ -155,8 +155,8 @@ def do_adversarial_evaluation(
     metrics["global_datapoint_count"] = global_datapoint_count
     metrics["model_size"] = model_size
     metrics["model_family"] = model_family
-    metrics["attack_flops"] = attack_flops
-    metrics["flops_per_iteration"] = attack_flops / n_its
+    metrics["attack_flops"] = attack_out.flops
+    metrics["flops_per_iteration"] = attack_out.flops / n_its
 
     if robustness_metric is not None:
         metrics |= robustness_metric.unwrap_metrics()
@@ -215,17 +215,16 @@ def attack_dataset(
     attack: Attack,
     n_its: int,
     resume_from_checkpoint: bool,
-) -> tuple[AttackOutput, int]:
-    with victim.flop_count_context() as attack_flops:
-        attack_out = attack.get_attacked_dataset(
-            dataset=dataset_to_attack,
-            n_its=n_its,
-            # Only resume from checkpoint if we're in the evaluation pipeline as
-            # otherwise we will be incorrectly reusing data in the case of adversarial
-            # training.
-            resume_from_checkpoint=resume_from_checkpoint,
-        )
-    return attack_out, attack_flops.flops
+) -> AttackOutput:
+    attack_out = attack.get_attacked_dataset(
+        dataset=dataset_to_attack,
+        n_its=n_its,
+        # Only resume from checkpoint if we're in the evaluation pipeline as
+        # otherwise we will be incorrectly reusing data in the case of adversarial
+        # training.
+        resume_from_checkpoint=resume_from_checkpoint,
+    )
+    return attack_out
 
 
 @print_time()

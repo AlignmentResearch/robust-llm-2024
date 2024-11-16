@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 import torch
@@ -111,6 +109,7 @@ def test_training_pipeline_final_state():
         environment=EnvironmentConfig(
             test_mode=True,
             allow_checkpointing=False,  # Otherwise checkpoints might already exist.
+            save_root="/tmp",
         ),
         evaluation=EvaluationConfig(),
         model=ModelConfig(
@@ -133,7 +132,6 @@ def test_training_pipeline_final_state():
             n_val=2,
         ),
         training=TrainingConfig(
-            save_prefix="test_training_pipeline",
             save_to=SaveTo.NONE,
             save_name="TEST_SAVE_NAME",
             # TODO(GH#990): Make lr scheduler configurable.
@@ -164,9 +162,10 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
         environment=EnvironmentConfig(
             test_mode=True,
             allow_checkpointing=True,  # Enable checkpointing for resumption test
+            save_root="/tmp",
         ),
         evaluation=EvaluationConfig(
-            num_iterations=2,
+            num_iterations=3,
             evaluation_attack=RandomTokenAttackConfig(),
         ),
         model=ModelConfig(
@@ -186,26 +185,27 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
             dataset_type="AlignmentResearch/IMDB",
             revision="2.1.0",
             n_train=5,
-            n_val=2,
+            n_val=5,
         ),
         training=TrainingConfig(
-            save_prefix="test_adv_training_pipeline",
             save_to=SaveTo.DISK,
-            save_total_limit=10,
+            save_total_limit=3,
             save_name="TEST_SAVE_NAME",
+            num_train_epochs=2,
             adversarial=AdversarialTrainingConfig(
-                num_examples_to_generate_each_round=2,
-                num_adversarial_training_rounds=4,
-                training_attack=RandomTokenAttackConfig(),
+                num_examples_to_generate_each_round=5,
+                num_adversarial_training_rounds=3,
+                training_attack=RandomTokenAttackConfig(
+                    save_steps=3,
+                    save_total_limit=2,
+                ),
             ),
             lr_scheduler_type="constant",
         ),
     )
 
     interpolated = interpolate_config(config)
-    checkpoint_dir = get_checkpoint_path(
-        Path(interpolated.environment.save_root) / "checkpoints", interpolated
-    )
+    checkpoint_dir = get_checkpoint_path(interpolated)
     dist_rmtree(checkpoint_dir)
 
     # Initial run and state validation
@@ -274,12 +274,14 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
         4474,
         4499,
     ]
-    assert initial_run_state.flops == pytest.approx(1.06e12, rel=0.06)
+    assert initial_run_state.flops == pytest.approx(9.45e11, rel=0.1)
 
     # Clear captured output from initial run
-    initial_stdout = capsys.readouterr()[-1]
+    initial_capture = capsys.readouterr()
+    initial_stderr = initial_capture.err
     if is_main_process():
-        assert "No saved state found" in initial_stdout
+        assert "No saved state found" in initial_stderr
+        assert "No attack state found, starting from scratch." in initial_stderr
 
     # Remove all but the first checkpoint
     assert checkpoint_dir.exists()
@@ -289,13 +291,17 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
 
     # Rerun from the previous checkpoint
     rerun_state = run(interpolated)
-    rerun_stdout = capsys.readouterr()[-1]
-    assert isinstance(rerun_stdout, str)
+    rerun_stderr = capsys.readouterr().err
+    assert isinstance(rerun_stderr, str)
 
-    # Assert the expected checkpoint loading message appears in stdout
-    expected_checkpoint_path = checkpoint_dir / "epoch_0003"
+    # Assert the expected checkpoint loading messages appears in stdout
+    expected_checkpoint_path = checkpoint_dir / "epoch_0004"
+    expected_attack_path = checkpoint_dir / "epoch_0004/attack_states/example_00003"
     if is_main_process():
-        assert f"Loading state from {expected_checkpoint_path}" in rerun_stdout
+        assert f"Loading state from {expected_checkpoint_path}" in rerun_stderr
+        assert (
+            f"Loading state from {expected_attack_path}" in rerun_stderr
+        ), rerun_stderr
 
     assert isinstance(rerun_state, AdversarialPipelineState)
 

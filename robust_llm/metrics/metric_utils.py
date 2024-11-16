@@ -39,7 +39,7 @@ def get_attack_output_from_wandb_run(
     dataset = dataset.get_subset(dataset_indices)
 
     attack_data = AttackedRawInputOutput.from_dfs(attack_data_dfs)
-    attack_output = AttackOutput(dataset=dataset, attack_data=attack_data)
+    attack_output = AttackOutput(dataset=dataset, attack_data=attack_data, flops=0)
     return attack_output
 
 

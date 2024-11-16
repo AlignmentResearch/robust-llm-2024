@@ -43,7 +43,6 @@ def deterministic_hash_config(
         "training.save_to",
         "training.save_name",
         "training.save_total_limit",
-        "training.save_prefix",
         "training.upload_retries",
         "training.upload_cooldown",
     ),

@@ -65,7 +65,7 @@ if __name__ == "__main__":
         dataset = dataset.get_subset(dataset_indices)
 
         attack_data = AttackedRawInputOutput.from_dfs(attack_data_dfs)
-        attack_output = AttackOutput(dataset=dataset, attack_data=attack_data)
+        attack_output = AttackOutput(dataset=dataset, attack_data=attack_data, flops=0)
 
         asrs = compute_asr_per_iteration_from_logits(attack_output)
         plot_interpolated_asr_from_asrs(asrs)

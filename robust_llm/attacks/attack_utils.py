@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Any, Type
 
 from robust_llm.attacks.attack import Attack, IdentityAttack, extract_attack_config
 from robust_llm.attacks.search_based.search_based import SearchBasedAttack
@@ -21,12 +21,12 @@ def create_attack(
     exp_config: ExperimentConfig,
     victim: WrappedModel,
     is_training: bool,
-) -> Attack:
+) -> Attack[Any]:
     """Returns an attack object of a proper type."""
     # This match-case statement uses class patterns, as described in this SO
     # answer: https://stackoverflow.com/a/67524642
     attack_config = extract_attack_config(exp_config, is_training)
-    cls: Type[Attack]
+    cls: Type[Attack[Any]]
     match attack_config:
         # Baseline attacks
         case IdentityAttackConfig():

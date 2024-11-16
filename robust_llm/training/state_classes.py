@@ -29,9 +29,7 @@ from robust_llm.config.configs import ExperimentConfig, SaveTo, get_checkpoint_p
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.dist_utils import (
-    DistributedRNG,
     assert_same_data_between_processes,
-    dist_rmtree,
     rmtree_if_exists,
     try_except_main_process_loop,
 )
@@ -48,6 +46,7 @@ from robust_llm.scoring_callbacks.build_scoring_callback import (
     build_binary_scoring_callback,
 )
 from robust_llm.scoring_callbacks.scoring_callback_utils import CallbackInput
+from robust_llm.state_classes.rng_state import RNGState
 from robust_llm.training.training_utils import (
     AttackSchedule,
     construct_combined_dataset,
@@ -173,7 +172,12 @@ class DatasetState:
         dataset_path = path / "dataset"
         adv_dataset_path = dataset_path / f"adv_dataset_{process_index}"
         if adv_dataset_path.exists():
-            adv_dataset = Dataset.load_from_disk(str(adv_dataset_path))
+            adv_dataset = Dataset.load_from_disk(
+                str(adv_dataset_path),
+                # We have to set keep_in_memory=True so that we can delete
+                # the dataset from disk even if we loaded from it.
+                keep_in_memory=True,
+            )
         else:
             adv_dataset = None
 
@@ -288,58 +292,6 @@ class TrainingState:
 
 
 @dataclass
-class RNGState:
-    """The state of the random number generators.
-
-    Contains two types:
-    - '_rng_state's, which tracks some global state.
-    - '_rng's, which can be used to generate random numbers.
-    """
-
-    torch_rng_state: torch.Tensor
-    distributed_rng: DistributedRNG
-
-    def update_states(self) -> RNGState:
-        return RNGState(
-            torch_rng_state=torch.random.get_rng_state(),
-            distributed_rng=self.distributed_rng,
-        )
-
-    def set_random_states(self):
-        torch.random.set_rng_state(self.torch_rng_state)
-
-    def save(self, path: Path, process_index: int, accelerator: Accelerator):
-        rng_path = path / "rng"
-        rng_path.mkdir(exist_ok=True)
-        torch.save(
-            self.torch_rng_state, rng_path / f"torch_rng_state_{process_index}.pt"
-        )
-        dist_rng_state = self.distributed_rng.getstate()
-        torch.save(
-            dist_rng_state, rng_path / f"distributed_rng_state_{process_index}.pt"
-        )
-
-    @staticmethod
-    def load(path: Path, process_index: int, accelerator: Accelerator) -> RNGState:
-        rng_path = path / "rng"
-        if accelerator.is_main_process:
-            dist_rng_state = torch.load(
-                rng_path / f"distributed_rng_state_{process_index}.pt"
-            )
-        else:
-            dist_rng_state = None
-        dist_rng = DistributedRNG(seed=0, accelerator=accelerator)
-        dist_rng.setstate(dist_rng_state)
-
-        return RNGState(
-            torch_rng_state=torch.load(
-                rng_path / f"torch_rng_state_{process_index}.pt"
-            ),
-            distributed_rng=dist_rng,
-        )
-
-
-@dataclass
 class TrainingPipelineState:
     """Base class for state of the training loop."""
 
@@ -393,12 +345,12 @@ class TrainingPipelineState:
         return self.dataset_state.clean_dataset.for_training()
 
     @print_time()
-    def save(self, path: Path):
+    def save(self):
         self.accelerator.wait_for_everyone()
         process_index = self.accelerator.process_index
 
         epoch = self.epoch
-        checkpoint_path = get_checkpoint_path(path, self.config)
+        checkpoint_path = get_checkpoint_path(self.config)
         epoch_path = checkpoint_path / f"epoch_{zero_pad(epoch)}"
         log(f"Saving checkpoint to {epoch_path}", main_process_only=False)
         log(f"Saving checkpoint to {epoch_path}", level="print")
@@ -412,7 +364,7 @@ class TrainingPipelineState:
                         main_process_only=False,
                     )
                     assert checkpoint_path in epoch_path.parents
-                    dist_rmtree(epoch_path)
+                    rmtree_if_exists(epoch_path)
                 else:
                     raise FileExistsError(
                         f"Path {epoch_path} already exists. Aborting save."
@@ -459,14 +411,14 @@ class TrainingPipelineState:
                 f.write("")
         self.accelerator.wait_for_everyone()
 
-    def _cleanup_checkpoints(self, path: Path):
+    def _cleanup_checkpoints(self):
         """Delete old checkpoints to save disk space.
 
         The process is: iterate in reverse order through the checkpoints, and
         once we have found save_total_limit checkpoints that are safely saved,
         we delete all older checkpoints.
         """
-        checkpoint_path = get_checkpoint_path(path, self.config)
+        checkpoint_path = get_checkpoint_path(self.config)
         if not checkpoint_path.exists():
             return
 
@@ -493,14 +445,21 @@ class TrainingPipelineState:
             main_process_only=False,
         )
 
-    def cleanup_checkpoints(self, path: Path):
-        return try_except_main_process_loop(
-            retries=self.training_config.upload_retries,
-            cooldown_seconds=self.training_config.upload_cooldown,
-            accelerator=self.accelerator,
-            func=self._cleanup_checkpoints,
-            path=path,
-        )
+    def cleanup_checkpoints(self):
+        try:
+            return try_except_main_process_loop(
+                retries=self.training_config.upload_retries,
+                cooldown_seconds=self.training_config.upload_cooldown,
+                accelerator=self.accelerator,
+                func=self._cleanup_checkpoints,
+            )
+        except RuntimeError as e:
+            log(
+                f"Error cleaning up checkpoints: {e}",
+                main_process_only=False,
+                level="warning",
+            )
+            log("Continuing after checkpoint deletion error", main_process_only=False)
 
     def augment_dataset(self):
         """This is a placeholder for subclasses to override."""
@@ -551,7 +510,6 @@ class TrainingPipelineState:
     def load(
         cls: type[StateT],
         config: ExperimentConfig,
-        path: Path,
         accelerator: Accelerator,
     ) -> StateT:
         """Load a state from disk.
@@ -562,7 +520,7 @@ class TrainingPipelineState:
         deserializing. This is fine because the configs are necessarily
         identical, given that we look it up by hash value.
         """
-        checkpoint_path = get_checkpoint_path(path, config)
+        checkpoint_path = get_checkpoint_path(config)
         process_index = accelerator.process_index
 
         subdir = find_most_recent_checkpoint(checkpoint_path)
@@ -744,10 +702,13 @@ class AdversarialPipelineState(TrainingPipelineState):
         n_its = attack_schedule[self.training_round]
         log(f"Generating {num_examples} adversarial examples with {n_its} iterations.")
 
-        with self.model_state.wrapped_model.flop_count_context() as attack_flops:
-            attack_out = attack.get_attacked_dataset(input_rllm_dataset, n_its=n_its)
-        log(f"Attack flops: {attack_flops.flops:.2E} flops.", level="debug")
-        self.flops += attack_flops.flops
+        attack_out = attack.get_attacked_dataset(
+            input_rllm_dataset,
+            n_its=n_its,
+            epoch=self.epoch,
+        )
+        log(f"Attack flops: {attack_out.flops:.2E} flops.", level="debug")
+        self.flops += attack_out.flops
         self._compute_metrics_on_adv_examples(attack_out)
 
         adv_examples = attack_out.dataset.as_adversarial_examples().for_training()

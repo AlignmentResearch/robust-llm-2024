@@ -195,6 +195,7 @@ def test_hash():
             test_mode=True,
             allow_checkpointing=False,  # Otherwise checkpoints might already exist.
             wandb_info_filename="THIS IS FILE 1",
+            save_root="/tmp",
         ),
         evaluation=EvaluationConfig(),
         model=ModelConfig(
@@ -215,7 +216,6 @@ def test_hash():
             n_val=2,
         ),
         training=TrainingConfig(
-            save_prefix="test_training_pipeline",
             save_to=SaveTo.NONE,
             save_name="TEST_SAVE_NAME",
             # TODO(GH#990): Make lr scheduler configurable.

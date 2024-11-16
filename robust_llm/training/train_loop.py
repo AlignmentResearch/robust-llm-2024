@@ -19,12 +19,12 @@ from robust_llm.logging_utils import (
 )
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.load_rllm_dataset import load_rllm_dataset
+from robust_llm.state_classes.rng_state import RNGState
 from robust_llm.training.state_classes import (
     OPTIMIZER_MAP,
     AdversarialPipelineState,
     DatasetState,
     ModelState,
-    RNGState,
     TrainingPipelineState,
     TrainingState,
     build_lr_scheduler,
@@ -53,12 +53,10 @@ def run_train_loop(
     save_checkpoints = config.environment.allow_checkpointing
 
     base_path = Path(config.environment.save_root)
-    checkpoints_path = base_path / "checkpoints"
     models_path = base_path / "models"
     state = get_first_state(
         config,
         accelerator,
-        checkpoints_path,
         resume_from_checkpoint,
     )
 
@@ -72,8 +70,8 @@ def run_train_loop(
             state = train_one_epoch(state)
 
         if save_checkpoints:
-            state.save(checkpoints_path)
-            state.cleanup_checkpoints(checkpoints_path)
+            state.save()
+            state.cleanup_checkpoints()
 
         if state.should_save_trained_model():
             state.save_trained_model(models_path)
@@ -83,7 +81,6 @@ def run_train_loop(
         if resume_from_checkpoint and resume_mode == "always":
             state = get_state_subclass(config).load(
                 config=config,
-                path=checkpoints_path,
                 accelerator=accelerator,
             )
     return state
@@ -93,14 +90,12 @@ def run_train_loop(
 def get_first_state(
     config: ExperimentConfig,
     accelerator: Accelerator,
-    base_path: Path,
     resume_from_checkpoint: bool,
 ) -> TrainingPipelineState:
     """Wrapper around _get_first_state for logging."""
     state = _get_first_state(
         config,
         accelerator,
-        base_path,
         resume_from_checkpoint,
     )
     model_info_dict = {
@@ -114,13 +109,12 @@ def get_first_state(
 def _get_first_state(
     config: ExperimentConfig,
     accelerator: Accelerator,
-    base_path: Path,
     resume_from_checkpoint: bool,
 ) -> TrainingPipelineState:
     if resume_from_checkpoint:
         try:
             return get_state_subclass(config).load(
-                config=config, path=base_path, accelerator=accelerator
+                config=config, accelerator=accelerator
             )
         except FileNotFoundError:
             log("No saved state found. Starting from scratch.", main_process_only=False)
@@ -203,6 +197,9 @@ def get_state_subclass(config: ExperimentConfig) -> type[TrainingPipelineState]:
 
 
 def train_one_epoch(state: TrainingPipelineState) -> TrainingPipelineState:
+    # For safety, make sure the random state is set from the RNGState
+    state.rng_state.set_random_states()
+
     state.log_epoch()
     optimizer = state.training_state.optimizer
     lr_scheduler = state.training_state.lr_scheduler

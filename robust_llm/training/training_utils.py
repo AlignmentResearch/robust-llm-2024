@@ -117,7 +117,7 @@ def find_most_recent_checkpoint(path: Path) -> Path:
     # Find the most recent epoch that is safely saved and load that
     for subdir in get_sorted_checkpoints(path):
         if (subdir / "save_complete").exists():
-            log(f"Loading state from {subdir}")
+            log(f"Loading state from {subdir}", main_process_only=False)
             return subdir
 
     raise FileNotFoundError(f"No saved state found for {path}.")

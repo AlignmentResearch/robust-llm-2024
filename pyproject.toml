@@ -88,6 +88,9 @@ known_third_party = ["datasets", "wandb"]
 venvPath = "."
 venv = "venv"
 include = ["robust_llm"]
+# We need extraPaths so that pyright works on devboxes.
+# A better alternative would be to install the venv in the root of the project.
+extraPaths = ["/usr/local/venv/lib/python3.10/site-packages"]
 pythonVersion = "3.10"
 
 [tool.mypy]

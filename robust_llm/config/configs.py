@@ -170,7 +170,6 @@ class TrainingConfig:
         optimizer: The optimizer to use in training.
         save_total_limit: The maximum number of checkpoints to keep. If more than
             save_total_limit checkpoints are saved, the oldest ones are deleted.
-        save_prefix: The parent directory to use for saving checkpoints.
         save_name: The name to use for saving checkpoints. If None, the name will be
             automatically generated.
         save_to: Where to save the model after running the trainer.
@@ -195,7 +194,6 @@ class TrainingConfig:
     # save_steps: int = 500
     save_total_limit: int = 2
     # log_full_datasets_to_wandb: bool = False
-    save_prefix: str = get_save_root()
     save_name: Optional[str] = None
     save_to: SaveTo = SaveTo.BOTH
     seed: int = 0
@@ -281,7 +279,7 @@ cs.store(name="DEFAULT", group="evaluation", node=EvaluationConfig)
 cs.store(name="DEFAULT", group="training/adversarial", node=AdversarialTrainingConfig)
 
 
-def get_checkpoint_path(base_path: Path, config: ExperimentConfig) -> Path:
+def get_checkpoint_path(config: ExperimentConfig) -> Path:
     """Get the deterministic path for saving/loading checkpoints.
 
     This is designed to mirror wandb, so e.g. the run
@@ -289,6 +287,7 @@ def get_checkpoint_path(base_path: Path, config: ExperimentConfig) -> Path:
     ian_135b_ft_pythia_harmless would have a path like
     /path/to/checkpoints/ian_135b_ft_pythia_harmless/ian-135b-ft-pythia-harmless-0000/abcdef1234.../
     """  # noqa: E501
+    base_path = Path(config.environment.save_root) / "checkpoints"
     hex_hash = deterministic_hash_config(config)
     group_name = config.experiment_name
     run_name = config.run_name

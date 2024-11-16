@@ -1,12 +1,9 @@
 """Test that attacks don't crash and are reproducible."""
 
-from pathlib import Path
-
 import pytest
 import torch
 from accelerate import Accelerator
 
-from robust_llm.attacks.attack import STATES_NAME
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.config import (
     DatasetConfig,
@@ -92,7 +89,7 @@ def _get_attacked_texts(
         victim=victim_model,
         is_training=False,
     )
-    attack_out, _ = attack_dataset(
+    attack_out = attack_dataset(
         victim=victim_model,
         dataset_to_attack=validation_set,
         attack=attack,
@@ -125,6 +122,34 @@ def test_random_token_determinism(
         n_attack_tokens=1,
     )
     _test_attack_determinism(exp_config, victim_model, validation_set)
+
+
+@pytest.mark.multigpu
+def test_random_token_checkpoint_determinism(
+    exp_config: ExperimentConfig,
+    victim_model: WrappedModel,
+    validation_set: RLLMDataset,
+    capsys: pytest.CaptureFixture,
+):
+    assert exp_config.evaluation is not None
+    exp_config.evaluation.evaluation_attack = RandomTokenAttackConfig(
+        n_attack_tokens=1,
+        save_steps=3,
+    )
+    exp_config.environment.allow_checkpointing = True
+    logging_context = LoggingContext(
+        args=exp_config,
+    )
+    logging_context.setup()
+    checkpoint_dir = get_checkpoint_path(exp_config)
+    dist_rmtree(checkpoint_dir)
+    initial_texts = _get_attacked_texts(exp_config, victim_model, validation_set)
+    initial_stdout = capsys.readouterr()[-1]
+    assert "Loading state from" not in initial_stdout
+    rerun_texts = _get_attacked_texts(exp_config, victim_model, validation_set)
+    rerun_stdout = capsys.readouterr()[-1]
+    assert "Loading state from" in rerun_stdout
+    assert initial_texts == rerun_texts
 
 
 def test_multiprompt_random_token_determinism(
@@ -170,23 +195,21 @@ def test_gcg_checkpoint_determinism(
         differentiable_embeds_callback=CallbackConfig(
             "losses_from_small_embeds", "tensor"
         ),
+        save_steps=3,
     )
     exp_config.environment.allow_checkpointing = True
     logging_context = LoggingContext(
         args=exp_config,
     )
     logging_context.setup()
-    checkpoint_dir = get_checkpoint_path(
-        Path(exp_config.evaluation.evaluation_attack.save_prefix) / STATES_NAME,
-        exp_config,
-    )
+    checkpoint_dir = get_checkpoint_path(exp_config)
     dist_rmtree(checkpoint_dir)
     initial_texts = _get_attacked_texts(exp_config, victim_model, validation_set)
     initial_stdout = capsys.readouterr()[-1]
-    assert "Loaded state from" not in initial_stdout
+    assert "Loading state from" not in initial_stdout
     rerun_texts = _get_attacked_texts(exp_config, victim_model, validation_set)
     rerun_stdout = capsys.readouterr()[-1]
-    assert "Loaded state from" in rerun_stdout
+    assert "Loading state from" in rerun_stdout
     assert initial_texts == rerun_texts
 
 
@@ -269,7 +292,7 @@ def test_lm_attack_gen_determinism(
     )
     exp_config = interpolate_config(exp_config)
     victim_model = WrappedModel.from_config(
-        exp_config.model, accelerator=Accelerator(cpu=True)
+        exp_config.model, accelerator=Accelerator(cpu=not torch.cuda.is_available())
     )
     validation_set = load_rllm_dataset(exp_config.dataset, split="validation")
     _test_attack_determinism(exp_config, victim_model, validation_set)

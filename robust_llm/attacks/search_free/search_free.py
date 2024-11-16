@@ -1,16 +1,16 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from datasets import Dataset
 from torch import Tensor
-from tqdm import tqdm
 from typing_extensions import override
 
 from robust_llm.attacks.attack import (
     Attack,
+    AttackedExample,
     AttackedRawInputOutput,
     AttackOutput,
     AttackState,
@@ -18,6 +18,7 @@ from robust_llm.attacks.attack import (
 )
 from robust_llm.config.attack_configs import SearchFreeAttackConfig
 from robust_llm.config.configs import ExperimentConfig
+from robust_llm.dist_utils import DistributedRNG
 from robust_llm.models.caching_wrapped_model import get_caching_model_with_example
 from robust_llm.models.prompt_templates import AttackChunks
 from robust_llm.models.wrapped_model import WrappedModel
@@ -39,13 +40,25 @@ SUCCESS_TYPE = Sequence[bool] | Tensor
 SUCCESSES_TYPE = list[SUCCESS_TYPE]
 
 
-@dataclass
+@dataclass(frozen=True)
+class SearchFreeAttackedExample(AttackedExample):
+    """Search-free attacked examples include success indices."""
+
+    success_indices: list[int]
+
+
+@dataclass(frozen=True)
 class SearchFreeAttackState(AttackState):
-    success_indices: list[list[int]] = field(default_factory=list)
-    logits_cache: list[list[list[float]] | list[None]] = field(default_factory=list)
+    """State for search-free attacks, which includes success_indices."""
+
+    previously_attacked_examples: tuple[SearchFreeAttackedExample, ...]
+
+    def get_all_success_indices(self) -> list[list[int]]:
+        """Returns the success indices for each example."""
+        return [ex.success_indices for ex in self.previously_attacked_examples]
 
 
-class SearchFreeAttack(Attack, ABC):
+class SearchFreeAttack(Attack[SearchFreeAttackState], ABC):
     """Attack where each iteration is independent, no searching.
 
     The attack is repeated for each datapoint until it is successful,
@@ -66,13 +79,23 @@ class SearchFreeAttack(Attack, ABC):
         is_training: bool,
     ) -> None:
         super().__init__(exp_config, victim=victim, is_training=is_training)
-        self.attack_state = SearchFreeAttackState(rng_state=self.rng.getstate())
         assert isinstance(self.attack_config, SearchFreeAttackConfig)
         self.prompt_attack_mode = PromptAttackMode(
             self.attack_config.prompt_attack_mode
         )
+        # TODO(ian): Avoid this concession to the old structure of search-free
+        # attacks by passing the rng state around better.
+        self.rng = DistributedRNG(self.attack_config.seed, victim.accelerator)
         cb_config = self.attack_config.victim_success_callback
         self.victim_success_callback = build_scoring_callback(cb_config)
+
+    @property
+    def attack_state_class(self) -> type[AttackState]:
+        """The AttackState class to use for this attack.
+
+        TODO(ian): Find a cleaner way to get this information.
+        """
+        return SearchFreeAttackState
 
     @override
     def get_attacked_dataset(
@@ -80,91 +103,105 @@ class SearchFreeAttack(Attack, ABC):
         dataset: RLLMDataset,
         n_its: int,
         resume_from_checkpoint: bool = True,
+        epoch: int | None = None,
     ) -> AttackOutput:
         """Returns the attacked dataset and the attack metadata."""
-        if resume_from_checkpoint and self.maybe_load_state():
-            assert isinstance(self.attack_state, SearchFreeAttackState)
-            attacked_texts = self.attack_state.attacked_texts
-            all_iteration_texts = self.attack_state.all_iteration_texts
-            logits_cache = self.attack_state.logits_cache
-            all_success_indices = self.attack_state.success_indices
-            per_example_info = self.attack_state.attacks_info
-            starting_index = self.attack_state.example_index + 1
-            self.rng.setstate(self.attack_state.rng_state)
-        else:
-            # Reset the state if not resuming from checkpoint
-            attacked_texts = []
-            all_iteration_texts = []
-            all_success_indices = []
-            logits_cache = []
-            per_example_info = {}
-            self.attack_state = SearchFreeAttackState(rng_state=self.rng.getstate())
-            starting_index = 0
+        accelerator = self.victim.accelerator
+        assert accelerator is not None
 
-        for example_index in tqdm(
-            range(starting_index, len(dataset.ds)), mininterval=5, position=-1
-        ):
-            example = dataset.ds[example_index]
-            assert isinstance(example, dict)
-            example["seed"] = example_index
-            # TODO (Oskar): account for examples in other partitions when indexing
-            attacked_text, example_info, victim_successes = self.attack_example(
-                example, dataset, n_its
-            )
-            attacked_text = self.victim.maybe_apply_user_template(attacked_text)
-            # We look for False in the successes list, which indicates a successful
-            # attack (i.e. that the model got the answer wrong after the attack).
-            success_indices = (
-                []
-                if isinstance(victim_successes, Tensor)
-                else [i for i, s in enumerate(victim_successes) if not s]
-            )
+        start_attack_state = self.get_first_attack_state(resume_from_checkpoint, epoch)
+        assert isinstance(start_attack_state, SearchFreeAttackState)
+        checkpoint_path = self.get_attack_checkpoint_path(epoch)
 
-            # Append data for this example
-            attacked_texts.append(attacked_text)
+        # TODO(ian): Avoid this concession to the existing structure by passing rng
+        # state around better.
+        self.rng = start_attack_state.rng_state.distributed_rng
 
-            example_iteration_texts = example_info["iteration_texts"]
-            example_logits: list[list[float]] | list[None] = example_info["logits"]
-            all_iteration_texts.append(example_iteration_texts)
-            logits_cache.append(example_logits)
+        end_attack_state = self.run_attack_loop(
+            dataset=dataset,
+            attack_state=start_attack_state,
+            checkpoint_path=checkpoint_path if resume_from_checkpoint else None,
+            n_its=n_its,
+        )
 
-            per_example_info = {
-                k: per_example_info.get(k, []) + [v] for k, v in example_info.items()
-            }
-            all_success_indices.append(success_indices)
-
-            # Save the state after each example in case of interruption.
-            self.attack_state = SearchFreeAttackState(
-                example_index=example_index,
-                attacked_texts=attacked_texts,
-                all_iteration_texts=all_iteration_texts,
-                logits_cache=logits_cache,
-                success_indices=all_success_indices,
-                attacks_info=per_example_info,
-                rng_state=self.rng.getstate(),
-            )
-            if resume_from_checkpoint:
-                self.maybe_save_state()
+        attacked_input_texts = end_attack_state.get_attacked_input_texts()
+        logits_cache = end_attack_state.get_logits_cache()
+        all_iteration_texts = end_attack_state.get_all_iteration_texts()
+        attack_flops = end_attack_state.get_attack_flops()
+        all_success_indices = end_attack_state.get_all_success_indices()
 
         if self.prompt_attack_mode == PromptAttackMode.MULTIPROMPT:
-            attacked_texts = self._get_multi_prompt_attacked_texts(
+            attacked_input_texts = self._get_multi_prompt_attacked_texts(
                 dataset=dataset,
                 n_its=n_its,
                 success_indices=all_success_indices,
             )
 
-        attacked_dataset = dataset.with_attacked_text(attacked_texts)
-        # If there are no logits, we set the cache to None.
-        # TODO(ian): Fix type hinting for logits.
-        final_logits_cache: list[list[list[float]]] | None = logits_cache if any(logits_cache) else None  # type: ignore  # noqa: E501
+        attacked_dataset = dataset.with_attacked_text(attacked_input_texts)
+
         attack_out = AttackOutput(
             dataset=attacked_dataset,
             attack_data=AttackedRawInputOutput(
-                iteration_texts=all_iteration_texts, logits=final_logits_cache
+                iteration_texts=all_iteration_texts, logits=logits_cache
             ),
-            per_example_info=per_example_info,
+            flops=attack_flops,
         )
         return attack_out
+
+    def run_attack_on_example(
+        self,
+        dataset: RLLMDataset,
+        n_its: int,
+        attack_state: SearchFreeAttackState,
+    ) -> SearchFreeAttackState:
+        example_index = attack_state.example_index
+        example = dataset.ds[example_index]
+        assert isinstance(example, dict)
+        example["seed"] = example_index
+        # TODO (Oskar): account for examples in other partitions when indexing
+        with self.victim.flop_count_context() as flop_count:
+            attacked_text, example_info, victim_successes = self.attack_example(
+                example, dataset, n_its
+            )
+        example_flops = flop_count.flops
+        # TODO(ian): Work out if we should do this, or if it's handled by
+        # _get_attacked_input.
+        # attacked_text = self.victim.maybe_apply_user_template(attacked_text)
+
+        # We look for False in the successes list, which indicates a successful
+        # attack (i.e. that the model got the answer wrong after the attack).
+        success_indices = (
+            []
+            if isinstance(victim_successes, Tensor)
+            else [i for i, s in enumerate(victim_successes) if not s]
+        )
+
+        example_iteration_texts = example_info["iteration_texts"]
+        example_logits: list[list[float]] | list[None] = example_info["logits"]
+
+        # TODO(ian): Work out what to do with per_example_info
+        # per_example_info = {
+        #     k: per_example_info.get(k, []) + [v] for k, v in example_info.items()
+        # }
+
+        # Save the state after each example in case of interruption.
+        new_attacked_example = SearchFreeAttackedExample(
+            example_index=example_index,
+            attacked_text=attacked_text,
+            iteration_texts=example_iteration_texts,
+            logits=example_logits,
+            flops=example_flops,
+            success_indices=success_indices,
+        )
+        new_previous_examples = attack_state.previously_attacked_examples + (
+            new_attacked_example,
+        )
+
+        new_attack_state = SearchFreeAttackState(
+            previously_attacked_examples=new_previous_examples,
+            rng_state=attack_state.rng_state.update_states(),
+        )
+        return new_attack_state
 
     def attack_example(
         self, example: dict[str, Any], dataset: RLLMDataset, n_its: int

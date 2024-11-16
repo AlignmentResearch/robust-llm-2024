@@ -12,6 +12,9 @@ def test_wrong_len():
     # Check that the error message is informative.
     with pytest.raises(ValueError) as excinfo:
         AttackOutput(
-            dataset=dataset, attack_data=None, per_example_info=per_example_info
+            dataset=dataset,
+            attack_data=None,
+            per_example_info=per_example_info,
+            flops=0,
         )
     assert "Length of per_example_info[key] (2)" in str(excinfo.value)

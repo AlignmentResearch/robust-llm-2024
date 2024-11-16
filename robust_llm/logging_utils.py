@@ -4,7 +4,7 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import wandb
 import yaml
@@ -14,8 +14,10 @@ from datasets.utils.logging import disable_progress_bar
 from omegaconf import OmegaConf
 
 from robust_llm import logger
-from robust_llm.config.configs import ExperimentConfig
 from robust_llm.dist_utils import is_main_process
+
+if TYPE_CHECKING:
+    from robust_llm.config.configs import ExperimentConfig
 
 LOGGING_LEVELS = {
     logging.DEBUG,
@@ -467,15 +469,46 @@ def format_training_status(
         secs_per_batch = elapsed_secs / batch
         remaining_secs = secs_per_batch * (total_batches - batch)
         time_info = (
-            f"│ {format_time(elapsed_secs)} elapsed │ "
+            f"| {format_time(elapsed_secs)} elapsed | "
             f"ETA: {format_time(remaining_secs)}"
         )
     else:
-        time_info = f"│ {format_time(elapsed_secs)} elapsed"
+        time_info = f"| {format_time(elapsed_secs)} elapsed"
 
     return (
-        f"Epoch {epoch:3d} │ {bar} │ "
-        f"{progress:>3.0%} │ "
+        f"Epoch {epoch:3d} | {bar} | "
+        f"{progress:>3.0%} | "
         f"Loss: {loss:.4e} "
+        f"{time_info}"
+    )
+
+
+def format_attack_status(
+    total_examples: int,
+    current_index: int,
+    start_index: int,
+    current_time: float,
+    start_time: float,
+) -> str:
+    """Progress bar adapted from Claude."""
+    progress = current_index / total_examples
+    filled = int(20 * progress)
+    bar = "█" * filled + "░" * (20 - filled)
+
+    # Linear estimate of time remaining
+    if progress > 0:
+        secs_per_example = (current_time - start_time) / (current_index - start_index)
+        remaining_secs = secs_per_example * (total_examples - current_index)
+        time_info = (
+            f" {format_time(current_time - start_time)} elapsed | "
+            f" {format_time(secs_per_example)} per example | "
+            f"ETA: {format_time(remaining_secs)}"
+        )
+    else:
+        time_info = f"| {format_time(current_time - start_time)} elapsed"
+
+    return (
+        f"Example {current_index:3d} of {total_examples:3d} | {bar} | "
+        f"{progress:>3.0%} | "
         f"{time_info}"
     )

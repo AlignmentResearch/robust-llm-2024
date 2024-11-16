@@ -35,10 +35,11 @@ from robust_llm.dist_utils import (
     DistributedRNG,
     broadcast_int,
     broadcast_int128,
-    dist_rmtree,
     is_main_process,
+    rmtree_if_exists,
     try_except_main_process_loop,
 )
+from robust_llm.logging_utils import log
 from robust_llm.models.model_disk_utils import (
     get_model_load_path,
     mark_model_save_as_finished,
@@ -348,6 +349,7 @@ class WrappedModel(ABC):
             # cleanup files if not using a permanent directory
             cleanup=local_dir is None,
         )
+        log("DEBUG: Pushed model to hub.", main_process_only=False)
 
     @print_time()
     def save_local(
@@ -447,7 +449,7 @@ class WrappedModel(ABC):
         # Only clean up if we didn't want to keep the local directory.
         if cleanup:
             logger.debug(f"Removing temp directory: {save_dir}")
-            dist_rmtree(save_dir)
+            rmtree_if_exists(save_dir)
 
     @classmethod
     def register_subclass(cls, name):

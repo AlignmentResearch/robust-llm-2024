@@ -74,7 +74,7 @@ def test_ifs_metric_logits(rllm_dataset):
             [[0.0, 1.0], [0.0, 1.0], [1.0, 0.0]],
         ],
     )
-    attack_out = AttackOutput(rllm_dataset, attack_data)
+    attack_out = AttackOutput(rllm_dataset, attack_data, flops=0)
 
     dummy_callback = MagicMock(side_effect=lambda x, y: MagicMock())
     model = MagicMock()
@@ -98,7 +98,7 @@ def test_ifs_metric_no_logits(rllm_dataset):
         ],
         logits=None,
     )
-    attack_out = AttackOutput(rllm_dataset, attack_data)
+    attack_out = AttackOutput(rllm_dataset, attack_data, flops=0)
 
     dummy_callback = MagicMock()
     dummy_callback.side_effect = [
@@ -130,7 +130,7 @@ def test_ifs_metric_logits_no_success(rllm_dataset):
             [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]],
         ],
     )
-    attack_out = AttackOutput(rllm_dataset, attack_data)
+    attack_out = AttackOutput(rllm_dataset, attack_data, flops=0)
 
     dummy_callback = MagicMock(side_effect=lambda x, y: MagicMock())
     model = MagicMock()
@@ -177,6 +177,7 @@ def mock_attack_output():
                 [[0.0, 1.0], [0.0, 1.0], [1.0, 0.0]],
             ],
         ),
+        flops=0,
     )
 
 
