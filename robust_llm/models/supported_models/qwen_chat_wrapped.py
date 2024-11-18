@@ -11,12 +11,23 @@ from robust_llm.models.wrapped_model import WrappedModel
 
 @WrappedModel.register_subclass("qwen1.5-chat")
 @WrappedModel.register_subclass("qwen2-chat")
+@WrappedModel.register_subclass("qwen2.5-chat")
 class QwenChatModel(WrappedChatModel):
     CONTEXT_LENGTH = 32768
 
     def post_init(self):
         super().post_init()
-        assert self.family in ["qwen1.5-chat", "qwen2-chat"]
+        assert self.family in ["qwen1.5-chat", "qwen2-chat", "qwen2.5-chat"]
+        self.model.config.pad_token_id = self.model.config.eos_token_id
+
+    @property
+    def default_system_prompt(self) -> str:
+        if self.family == "qwen2.5-chat":
+            return (
+                "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
+            )
+        else:
+            return "You are a helpful assistant."
 
     @override
     def forward(self, **inputs):
@@ -56,5 +67,5 @@ class QwenChatModel(WrappedChatModel):
             user_suffix="<|im_end|>\n",
             assistant_prefix="<|im_start|>assistant\n",
             assistant_suffix="<|im_end|>\n",
-            system_prompt=self.system_prompt or "You are a helpful assistant.",
+            system_prompt=self.system_prompt or self.default_system_prompt,
         )

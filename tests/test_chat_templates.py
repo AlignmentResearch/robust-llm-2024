@@ -14,6 +14,7 @@ NAME_AND_TEMPLATE = [
     ("lmsys/vicuna-7b-v1.5", "vicuna"),
     ("Qwen/Qwen1.5-1.8B-Chat", "qwen1.5-chat"),
     ("Qwen/Qwen2-7B-Instruct", "qwen2-chat"),
+    ("Qwen/Qwen2.5-7B-Instruct", "qwen2.5-chat"),
     ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", "tinyllama"),
     ("Felladrin/Pythia-31M-Chat-v1", "pythia-chat"),
 ]

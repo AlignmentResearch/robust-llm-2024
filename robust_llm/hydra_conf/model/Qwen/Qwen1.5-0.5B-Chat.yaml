@@ -1,3 +1,3 @@
 name_or_path: "Qwen/Qwen1.5-0.5B-Chat"
 family: "qwen1.5-chat"
-train_minibatch_size: 96
+max_minibatch_size: 96

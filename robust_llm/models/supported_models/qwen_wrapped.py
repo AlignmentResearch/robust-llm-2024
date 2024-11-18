@@ -9,12 +9,14 @@ from robust_llm.models.wrapped_model import WrappedModel
 
 @WrappedModel.register_subclass("qwen1.5")
 @WrappedModel.register_subclass("qwen2")
+@WrappedModel.register_subclass("qwen2.5")
 class QwenModel(WrappedModel):
     CONTEXT_LENGTH = 32768
 
     def post_init(self):
         super().post_init()
-        assert self.family in ["qwen1.5", "qwen2"]
+        assert self.family in ["qwen1.5", "qwen2", "qwen2.5"]
+        self.model.config.pad_token_id = self.model.config.eos_token_id
 
     @override
     def forward(self, **inputs):

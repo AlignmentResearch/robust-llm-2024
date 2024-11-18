@@ -745,20 +745,30 @@ def _get_tracking_data_for_run(run: WandbRun) -> dict[str, Any]:
     assert "experiment_name" in args
     experiment_yaml = run.summary.get("experiment_yaml", {})
     training_yaml = (
-        experiment_yaml["training"] if experiment_yaml["training"] is not None else {}
+        experiment_yaml.get("training", {})
+        if experiment_yaml.get("training", {}) is not None
+        else {}
     )
     hub_model_id = run.config.get(
         "hub_model_id", experiment_yaml.get("model", {}).get("name_or_path", None)
     )  # e.g. "AlignmentResearch/robust_llm_clf_pm_pythia-2.8b_s-0_adv_tr_gcg_t-0"
-    match = re.match(
-        r"AlignmentResearch/robust_llm_clf_(.*)_pythia-(.*)_s-(.*)_adv_tr_(.*)_t-(.*)",  # noqa: E501
-        hub_model_id,
+    match = (
+        re.match(
+            r"AlignmentResearch/robust_llm_clf_(.*)_pythia-(.*)_s-(.*)_adv_tr_(.*)_t-(.*)",  # noqa: E501
+            hub_model_id,
+        )
+        if hub_model_id is not None
+        else None
     )
     if match is None:
         # Handle model misnaming issue (GH #921)
-        match = re.match(
-            r"AlignmentResearch/clf_(.*)_pythia-(.*)_s-(.*)_adv_tr_(.*)_t-(.*)",  # noqa: E501
-            hub_model_id,
+        match = (
+            re.match(
+                r"AlignmentResearch/clf_(.*)_pythia-(.*)_s-(.*)_adv_tr_(.*)_t-(.*)",  # noqa: E501
+                hub_model_id,
+            )
+            if hub_model_id is not None
+            else None
         )
     if match is None:
         dataset, base_model, ft_seed, attack, adv_seed = [None] * 5
@@ -770,6 +780,16 @@ def _get_tracking_data_for_run(run: WandbRun) -> dict[str, Any]:
         else None
     )
     revision = experiment_yaml.get("model", {}).get("revision", None)
+    adversarial_config = (
+        training_yaml.get("adversarial", {})
+        if training_yaml.get("adversarial", {}) is not None
+        else {}
+    )
+    evaluation_config = (
+        experiment_yaml.get("evaluation", {})
+        if experiment_yaml.get("evaluation", {}) is not None
+        else {}
+    )
 
     run_data = {
         "wandb_run_link": run.url,
@@ -784,20 +804,19 @@ def _get_tracking_data_for_run(run: WandbRun) -> dict[str, Any]:
         "attack": attack,
         "adv_seed": adv_seed,
         "num_parameters": num_parameters,
-        "num_adversarial_training_rounds": training_yaml.get("adversarial", {}).get(
-            "num_adversarial_training_rounds", None
+        "num_adversarial_training_rounds": (
+            adversarial_config.get("num_adversarial_training_rounds", None)
         ),
-        "eval_iterations": experiment_yaml.get("evaluation", {}).get("num_iterations"),
+        "eval_iterations": (evaluation_config.get("num_iterations")),
         "eval_attack": (
             "gcg"
-            if experiment_yaml.get("evaluation", {})
-            .get("evaluation_attack", {})
-            .get("n_candidates_per_it")
+            if evaluation_config.get("evaluation_attack", {}).get("n_candidates_per_it")
             is not None
             else "rt"
         ),
         "eval_round": revision.split("-")[-1] if revision is not None else None,
         "really_finished": run.summary.get("really_finished", False),
+        "finish_reason": run.summary.get("finish_reason", None),
         "gpu_type": run.metadata.get("gpu", "Unknown"),
         "gpu_count": run.metadata.get("gpu_count", np.nan),
         "duration_seconds": run.summary.get("_runtime", np.nan),

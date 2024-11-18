@@ -246,6 +246,7 @@ We currently support the following model families:
 - [Llama3](https://huggingface.co/collections/meta-llama/meta-llama-3-66214712577ca38149ebb2b6)
 - [Qwen1.5](https://huggingface.co/collections/Qwen/qwen15-65c0a2f577b1ecb76d786524)
 - [Qwen2](https://huggingface.co/collections/Qwen/qwen2-6659360b33528ced941e557f).
+- [Qwen2.5](https://huggingface.co/collections/Qwen/qwen25-66e81a666513e518adb90d9e)
 
 You can find the relevant configs nested in robust_llm/hydra_conf/model/meta-llama/Llama-2-7b-chat-hf.yaml for example.
 

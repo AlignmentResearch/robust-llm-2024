@@ -43,7 +43,7 @@ SUPPORTED_MODELS = [
     "EleutherAI/pythia-14m",
     # To use llama you need to request access on hf and export HF_TOKEN
     "meta-llama/Llama-2-7b-hf",
-    "Qwen/Qwen1.5-0.5B",
+    "Qwen/Qwen2.5-0.5B",
 ]
 
 

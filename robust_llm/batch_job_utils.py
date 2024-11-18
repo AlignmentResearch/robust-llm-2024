@@ -345,7 +345,7 @@ def create_job_for_multiple_runs(
             (
                 "        - name: robust-llm-storage\n"
                 "          persistentVolumeClaim:\n"
-                "            claimName: az-robust-llm\n"
+                "            claimName: az-csi-robust-llm\n"
             ),
             (
                 "            - name: robust-llm-storage\n"

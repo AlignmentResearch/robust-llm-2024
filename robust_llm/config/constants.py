@@ -10,6 +10,8 @@ MODEL_FAMILIES = [
     "qwen2",
     "qwen1.5-chat",
     "qwen2-chat",
+    "qwen2.5",
+    "qwen2.5-chat",
     "tinyllama",
     "mistralai",
     "gpt_neox",
