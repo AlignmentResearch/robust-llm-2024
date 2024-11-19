@@ -102,14 +102,68 @@ def assert_datasets_equal(
             assert values1 == values2, f"Values don't match in column {column}"
 
 
+def assert_runs_equal(
+    initial_run_state: TrainingPipelineState, rerun_state: TrainingPipelineState
+) -> None:
+    assert rerun_state.epoch == initial_run_state.epoch
+    assert rerun_state.config == initial_run_state.config
+    assert_datasets_equal(
+        rerun_state.dataset_state.clean_dataset.ds,
+        initial_run_state.dataset_state.clean_dataset.ds,
+    )
+    assert_datasets_equal(
+        rerun_state.dataset_state.val_dataset.ds,
+        initial_run_state.dataset_state.val_dataset.ds,
+    )
+    if initial_run_state.dataset_state.adv_dataset is not None:
+        assert rerun_state.dataset_state.adv_dataset is not None
+        assert_datasets_equal(
+            rerun_state.dataset_state.adv_dataset,
+            initial_run_state.dataset_state.adv_dataset,
+        )
+    assert (
+        rerun_state.dataset_state.adv_losses
+        == initial_run_state.dataset_state.adv_losses
+    )
+    assert (
+        rerun_state.dataset_state.clean_index_map
+        == initial_run_state.dataset_state.clean_index_map
+    )
+    assert (
+        rerun_state.dataset_state.adv_index_map
+        == initial_run_state.dataset_state.adv_index_map
+    )
+    assert (
+        rerun_state.model_state.wrapped_model.n_params
+        == initial_run_state.model_state.wrapped_model.n_params
+    )
+    assert (
+        rerun_state.training_state.lr_scheduler.get_last_lr()[0]
+        == initial_run_state.training_state.lr_scheduler.get_last_lr()[0]
+    )
+    assert torch.allclose(
+        rerun_state.rng_state.torch_rng_state,
+        initial_run_state.rng_state.torch_rng_state,
+    )
+    assert rerun_state.flops == initial_run_state.flops
+
+    # Validate model outputs are consistent between runs
+    example_prompt = "Hello, World!"
+    initial_model = initial_run_state.model_state.wrapped_model
+    rerun_model = rerun_state.model_state.wrapped_model
+    encoded = initial_model.tokenize(example_prompt, return_tensors="pt")
+    initial_run_logits = initial_model.forward(**encoded)["logits"]
+    rerun_logits = rerun_model.forward(**encoded)["logits"]
+    assert torch.allclose(initial_run_logits, rerun_logits)
+
+
 @pytest.mark.multigpu
-def test_training_pipeline_final_state():
+def test_training_pipeline_state_and_resume(capsys: pytest.CaptureFixture):
     config = ExperimentConfig(
         experiment_type="training",
         environment=EnvironmentConfig(
             test_mode=True,
-            allow_checkpointing=False,  # Otherwise checkpoints might already exist.
-            save_root="/tmp",
+            allow_checkpointing=True,
         ),
         evaluation=EvaluationConfig(),
         model=ModelConfig(
@@ -139,20 +193,38 @@ def test_training_pipeline_final_state():
         ),
     )
     assert config.training is not None
-    final_state = run(config)
-    assert isinstance(final_state, TrainingPipelineState)
-    assert final_state.epoch == config.training.num_train_epochs
-    assert final_state.config == config
-    assert len(final_state.dataset_state.clean_dataset) == config.dataset.n_train
-    assert len(final_state.dataset_state.val_dataset) == config.dataset.n_val
-    assert final_state.dataset_state.adv_dataset is None
-    assert final_state.model_state.wrapped_model.n_params == 7629056
-    assert final_state.training_state.lr_scheduler.get_last_lr()[0] == 5e-5
-    assert isinstance(final_state.rng_state.torch_rng_state, torch.Tensor)
-    assert final_state.rng_state.torch_rng_state.shape[0] == 5056
-    assert final_state.rng_state.torch_rng_state.min() == 0
-    assert final_state.rng_state.torch_rng_state.max() == 255
-    assert final_state.flops == pytest.approx(1.785e11, rel=0.05)
+    checkpoint_dir = get_checkpoint_path(config)
+    dist_rmtree(checkpoint_dir)
+    initial_state = run(config)
+    assert isinstance(initial_state, TrainingPipelineState)
+    assert initial_state.epoch == config.training.num_train_epochs
+    assert initial_state.config == config
+    assert len(initial_state.dataset_state.clean_dataset) == config.dataset.n_train
+    assert len(initial_state.dataset_state.val_dataset) == config.dataset.n_val
+    assert initial_state.dataset_state.adv_dataset is None
+    assert initial_state.model_state.wrapped_model.n_params == 7629056
+    assert initial_state.training_state.lr_scheduler.get_last_lr()[0] == 5e-5
+    assert isinstance(initial_state.rng_state.torch_rng_state, torch.Tensor)
+    assert initial_state.rng_state.torch_rng_state.shape[0] == 5056
+    assert initial_state.rng_state.torch_rng_state.min() == 0
+    assert initial_state.rng_state.torch_rng_state.max() == 255
+    assert initial_state.flops == pytest.approx(1.785e11, rel=0.05)
+
+    initial_stdout = capsys.readouterr()[-1]
+    if is_main_process():
+        assert "No saved state found" in initial_stdout
+
+    # Remove all but the first checkpoint
+    assert checkpoint_dir.exists()
+    completed_checkpoints = find_completed_checkpoints(checkpoint_dir)
+    for subdir in completed_checkpoints[:-1]:
+        dist_rmtree(subdir)
+
+    rerun_state = run(config)
+    rerun_stdout = capsys.readouterr()[-1]
+    assert isinstance(rerun_stdout, str)
+
+    assert_runs_equal(initial_state, rerun_state)
 
 
 @pytest.mark.multigpu
@@ -305,53 +377,4 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
 
     assert isinstance(rerun_state, AdversarialPipelineState)
 
-    # Check various properties are unchanged between initial run and rerun
-    assert rerun_state.epoch == initial_run_state.epoch
-    assert rerun_state.config == initial_run_state.config
-    assert_datasets_equal(
-        rerun_state.dataset_state.clean_dataset.ds,
-        initial_run_state.dataset_state.clean_dataset.ds,
-    )
-    assert_datasets_equal(
-        rerun_state.dataset_state.val_dataset.ds,
-        initial_run_state.dataset_state.val_dataset.ds,
-    )
-    assert rerun_state.dataset_state.adv_dataset is not None
-    assert_datasets_equal(
-        rerun_state.dataset_state.adv_dataset,
-        initial_run_state.dataset_state.adv_dataset,
-    )
-    assert (
-        rerun_state.dataset_state.adv_losses
-        == initial_run_state.dataset_state.adv_losses
-    )
-    assert (
-        rerun_state.dataset_state.clean_index_map
-        == initial_run_state.dataset_state.clean_index_map
-    )
-    assert (
-        rerun_state.dataset_state.adv_index_map
-        == initial_run_state.dataset_state.adv_index_map
-    )
-    assert (
-        rerun_state.model_state.wrapped_model.n_params
-        == initial_run_state.model_state.wrapped_model.n_params
-    )
-    assert (
-        rerun_state.training_state.lr_scheduler.get_last_lr()[0]
-        == initial_run_state.training_state.lr_scheduler.get_last_lr()[0]
-    )
-    assert torch.allclose(
-        rerun_state.rng_state.torch_rng_state,
-        initial_run_state.rng_state.torch_rng_state,
-    )
-    assert rerun_state.flops == initial_run_state.flops
-
-    # Validate model outputs are consistent between runs
-    example_prompt = "Hello, World!"
-    initial_model = initial_run_state.model_state.wrapped_model
-    rerun_model = rerun_state.model_state.wrapped_model
-    encoded = initial_model.tokenize(example_prompt, return_tensors="pt")
-    initial_run_logits = initial_model.forward(**encoded)["logits"]
-    rerun_logits = rerun_model.forward(**encoded)["logits"]
-    assert torch.allclose(initial_run_logits, rerun_logits)
+    assert_runs_equal(initial_run_state, rerun_state)
