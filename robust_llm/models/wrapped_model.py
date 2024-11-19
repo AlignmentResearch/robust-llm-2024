@@ -399,7 +399,7 @@ class WrappedModel(ABC):
         )
 
         # Save other files
-        self.model.config.save_pretrained(output_dir)
+        self.save_pretrained_config(output_dir)
         self.right_tokenizer.save_pretrained(
             save_directory=output_dir,
         )
@@ -414,6 +414,11 @@ class WrappedModel(ABC):
                 f,
             )
         mark_model_save_as_finished(model_save_directory=output_dir)
+
+    def save_pretrained_config(self, output_dir: Path):
+        # TODO(GH#1103): Weird hack taken from PreTrainedModel.save_pretrained
+        self.model.config._attn_implementation_autoset = False
+        self.model.config.save_pretrained(output_dir)
 
     @print_time()
     def _push_to_hub_once(

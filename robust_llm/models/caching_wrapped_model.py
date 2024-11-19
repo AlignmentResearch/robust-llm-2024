@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 
 import torch
-from transformers import BatchEncoding
+from transformers import BatchEncoding, DynamicCache
 from typing_extensions import override
 
 from robust_llm.dist_utils import is_main_process
@@ -64,7 +64,9 @@ class CachingWrappedModel(WrappedModel):
             if "inputs_embeds" in inputs:
                 inputs["inputs_embeds"] = inputs["inputs_embeds"][:, len(prefix) :]
 
-            inputs["past_key_values"] = overlapping_cached_kv
+            inputs["past_key_values"] = DynamicCache.from_legacy_cache(
+                overlapping_cached_kv,  # type: ignore
+            )
         # If there is no attention mask, we add one, since this affects behavior as of
         # 4.42.0 (see https://github.com/huggingface/transformers/issues/31943)
         if "attention_mask" not in inputs:

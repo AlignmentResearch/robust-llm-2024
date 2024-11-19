@@ -9,14 +9,24 @@ from robust_llm.models.prompt_templates import AttackChunks
 from robust_llm.models.wrapped_chat_model import WrappedChatModel
 
 NAME_AND_TEMPLATE = [
-    ("NousResearch/Llama-2-7b-chat-hf", "llama2-chat"),
-    ("NousResearch/Meta-Llama-3-8B-Instruct", "llama3-chat"),
-    ("lmsys/vicuna-7b-v1.5", "vicuna"),
+    ("meta-llama/Llama-2-7b-chat-hf", "llama2-chat"),
+    ("meta-llama/Meta-Llama-3-8B-Instruct", "llama3-chat"),
     ("Qwen/Qwen1.5-1.8B-Chat", "qwen1.5-chat"),
     ("Qwen/Qwen2-7B-Instruct", "qwen2-chat"),
     ("Qwen/Qwen2.5-7B-Instruct", "qwen2.5-chat"),
     ("TinyLlama/TinyLlama-1.1B-Chat-v1.0", "tinyllama"),
     ("Felladrin/Pythia-31M-Chat-v1", "pythia-chat"),
+    pytest.param(
+        "lmsys/vicuna-7b-v1.5",
+        "vicuna",
+        marks=pytest.mark.xfail(
+            reason=(
+                "Vicuna does not supply a chat template"
+                " which is required since transformers==4.4.0"
+                " (see GH#1104)"
+            )
+        ),
+    ),
 ]
 # Gemma models do not support system prompts.
 NAME_AND_TEMPLATE_NO_SYSTEM_PROMPT = NAME_AND_TEMPLATE + [

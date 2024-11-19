@@ -55,10 +55,34 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
 
     def __call__(
         self,
-        text: TextOrTokenSeqInput | None = None,
-        text_pair: TextOrTokenSeqInput | None = None,
-        text_target: TextOrTokenSeqInput | None = None,
-        text_pair_target: TextOrTokenSeqInput | None = None,
+        text: (
+            TextInput
+            | PreTokenizedInput
+            | list[TextInput]
+            | list[PreTokenizedInput]
+            | None
+        ) = None,
+        text_pair: (
+            TextInput
+            | PreTokenizedInput
+            | list[TextInput]
+            | list[PreTokenizedInput]
+            | None
+        ) = None,
+        text_target: (
+            TextInput
+            | PreTokenizedInput
+            | list[TextInput]
+            | list[PreTokenizedInput]
+            | None
+        ) = None,
+        text_pair_target: (
+            TextInput
+            | PreTokenizedInput
+            | list[TextInput]
+            | list[PreTokenizedInput]
+            | None
+        ) = None,
         add_special_tokens: bool = True,
         padding: bool | str | PaddingStrategy = False,
         truncation: bool | str | TruncationStrategy | None = None,
@@ -66,6 +90,7 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
         stride: int = 0,
         is_split_into_words: bool = False,
         pad_to_multiple_of: int | None = None,
+        padding_side: bool | None = None,
         return_tensors: str | TensorType | None = None,
         return_token_type_ids: bool | None = None,
         return_attention_mask: bool | None = None,
@@ -114,6 +139,7 @@ class ParaphraseTokenizer(PreTrainedTokenizerBase):
             stride,
             is_split_into_words,
             pad_to_multiple_of,
+            padding_side,
             return_tensors,
             return_token_type_ids,
             return_attention_mask,
