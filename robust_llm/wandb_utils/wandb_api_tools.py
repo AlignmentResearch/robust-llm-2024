@@ -583,6 +583,10 @@ def _get_full_history(run: RunInfo) -> pd.DataFrame:
 
 
 def _fix_flops_round_mapping(history: pd.DataFrame, run: RunInfo) -> pd.DataFrame:
+    # In the training pipeline refactor, `train/total_flops` was renamed to
+    # `train/flops`
+    history = history.rename(columns={"train_flops": "train/total_flops"})
+
     if "adv_training_round" in history and "adversarial_training_round" not in history:
         # We don't need to do anything in the case of an evaluation run
         return history
@@ -590,11 +594,13 @@ def _fix_flops_round_mapping(history: pd.DataFrame, run: RunInfo) -> pd.DataFram
         # In older training runs, we had duplicate columns for adv training round
         history.loc[history.adv_training_round.eq(0), "train/total_flops"] = 0
         return history
-    elif len(history) <= 1 and (
+    elif (
         "adversarial_training_round" not in history
         or "train/total_flops" not in history
     ):
         # We didn't get far enough into the run to log anything useful
+        # e.g. https://wandb.ai/farai/robust-llm/runs/383zxn9j/overview
+        # or https://wandb.ai/farai/robust-llm/runs/cunozfct/overview
         return pd.DataFrame()
     has_dummy_round = (history.adversarial_training_round.min() == 0) and (
         run.summary.get("experiment_yaml", {})

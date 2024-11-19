@@ -393,9 +393,6 @@ def load_flops_data(
         ],
         use_group_cache=use_group_cache,
     )
-    # In the training pipeline refactor, `train/total_flops` was renamed to
-    # `train/flops`
-    data = data.rename(columns={"train_flops": "train_total_flops"})
     data["model_key"] = data.training_force_name_to_save.where(
         data.training_force_name_to_save.notnull(), data.training_save_name
     )
@@ -621,6 +618,26 @@ def hack_together_new_evals_old_flops(adv_data, train_data):
     return pd.concat([train_data, matched_seeds_train_data], ignore_index=True)
 
 
+def remove_fake_adv_evals(data: pd.DataFrame) -> pd.DataFrame:
+    """Remove fake adversarial evals data.
+
+    niki-170-adv-tr-gcg-spam-small-0038 saved a model with
+    revision adv-training-round-0 only (so no adversarial training)
+    and we evaluated it in https://wandb.ai/farai/robust-llm/runs/w6insut2/overview
+    but recorded no flops data. It's annoying so we remove such cases.
+    """
+    data["max_adv_training_round"] = data.groupby(["model_key", "seed_idx"])[
+        "adv_training_round"
+    ].transform("max")
+    if data.max_adv_training_round.eq(0).any():
+        print(
+            f"\033[91mWARNING: Dropping {data.max_adv_training_round.eq(0).sum()} "
+            f"evals which are not adversarial\033[0m"
+        )
+        data = data.loc[~data.max_adv_training_round.eq(0)]
+    return data
+
+
 def prepare_adv_training_data(
     group_names: iter_str | str,
     summary_keys: list[str],
@@ -646,6 +663,7 @@ def prepare_adv_training_data(
         ).str.replace("robust_llm_", "")
         train_data = load_flops_data(merge_runs, use_group_cache=use_group_cache)
         train_data = hack_together_new_evals_old_flops(adv_data, train_data)
+        adv_data = remove_fake_adv_evals(adv_data)
         adv_data = merge_adv_and_train_data(adv_data, train_data)
         assert_flops_data_not_missing(adv_data, train_data)
     return adv_data
