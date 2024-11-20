@@ -742,10 +742,14 @@ def get_color_palette(data: pd.Series | pd.DataFrame, color_data_name: str) -> d
 
 
 def get_legend_handles(
-    data: pd.DataFrame, color_data_name: str, palette_dict: dict
+    data: pd.DataFrame,
+    color_data_name: str,
+    palette_dict: dict,
+    large_to_small: bool = False,
 ) -> dict:
     legend_handles = {}
-    for name, _ in reversed(sorted(data.groupby(color_data_name))):
+    maybe_reversed = reversed if large_to_small else lambda x: x
+    for name, _ in maybe_reversed(sorted(data.groupby(color_data_name))):
         if name not in legend_handles:
             if name in MODEL_SIZES:
                 ([model_index],) = np.where(np.array(MODEL_SIZES) == name)
@@ -928,7 +932,13 @@ def _draw_plot_adv_training(
         )
 
     if legend:
-        legend_handles = get_legend_handles(data, color_data_name, palette_dict)
+        large_to_small = (
+            x_data_name == "defense_flops_fraction_pretrain"
+            and y_data_name == "adversarial_eval_attack_success_rate"
+        )
+        legend_handles = get_legend_handles(
+            data, color_data_name, palette_dict, large_to_small
+        )
         create_legend(color_data_name, ax, legend_handles)
     if y_transform == "logit":
         set_yticks_for_logit(ax)
@@ -1866,7 +1876,7 @@ def plot_attack_scaling_base(
         dataset,
         round_info,
         x_data_name,
-        y_data_name,
+        y_transf_data_name,
         f"smoothing-{smoothing}",
         "legend",
         data=df,
