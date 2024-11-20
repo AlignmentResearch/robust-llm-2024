@@ -2,9 +2,11 @@ import matplotlib.pyplot as plt
 
 
 def name_to_attack(name: str) -> str:
-    if "gcg" in name:
+    if "gcg" in name and "rt" not in name:
         return "GCG"
-    elif "rt" in name:
+    elif "rt" in name and "gcg" not in name:
+        return "RandomToken"
+    elif "gcg" in name and "rt" in name:
         return "RandomToken"
     else:
         raise ValueError(f"Unknown attack name: {name}")

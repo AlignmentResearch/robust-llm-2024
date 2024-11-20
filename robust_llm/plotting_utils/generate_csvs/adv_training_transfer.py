@@ -15,6 +15,9 @@ METRICS = [
     "metrics/asr@72",
     "metrics/asr@120",
     "metrics/asr@128",
+    "adversarial_eval/pre_attack_accuracy",
+    "adversarial_eval/n_correct_post_attack",
+    "adversarial_eval/n_examples",
 ]
 
 
