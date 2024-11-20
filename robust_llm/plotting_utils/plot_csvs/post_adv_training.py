@@ -11,7 +11,7 @@ from robust_llm.plotting_utils.tools import (
 
 
 def main(style: str = "paper"):
-    ROUNDS = [0, 1, 2, 3, 4, 9, 29]
+    ROUNDS = [0, 1, 2, 3, 4, 5, 10]
     all_data = []
     metadata = None
     for attack in ("gcg_gcg",):
