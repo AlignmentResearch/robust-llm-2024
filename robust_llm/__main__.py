@@ -113,7 +113,7 @@ def run(cfg: ExperimentConfig):
         try:
             pipe_out = safe_run_pipeline(run_pipeline, cfg, accelerator)
         except Exception as e:
-            logger.error("Pipeline failed with exception: %s", e)
+            logger.error("Pipeline failed with exception: %s", e, exc_info=True)
             if accelerator.is_main_process:
                 wandb.summary["finish_reason"] = type(e).__name__
                 wandb.finish(exit_code=1)
