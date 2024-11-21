@@ -1,0 +1,7 @@
+
+defaults:
+- /model/EleutherAI/pythia-2.8b@_here_
+- /model/Default/gen/base@_here_
+- _self_
+
+name_or_path: AlignmentResearch/robust_llm_pythia-2.8b-pm_1.2.0-gen-ian-nd-v2

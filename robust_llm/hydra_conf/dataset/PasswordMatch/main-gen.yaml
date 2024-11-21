@@ -1,0 +1,5 @@
+dataset_type: "AlignmentResearch/PasswordMatch"
+revision: "main"
+
+inference_type: "generation"
+classification_as_generation: true

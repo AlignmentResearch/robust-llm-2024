@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+- /dataset: PasswordMatch/main-gen
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: RANDOM_TOKEN  # len 10 is the default now.
+- /model: Default/gen/pm/pythia-14m-s0
+- /environment: mac-testing
+- _self_
+
+dataset:
+  n_val: 10
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"

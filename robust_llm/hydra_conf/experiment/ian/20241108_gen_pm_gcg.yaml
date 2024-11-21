@@ -1,0 +1,14 @@
+# @package _global_
+defaults:
+- /dataset: PasswordMatch/main-gen
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: GCG
+- /model: Default/gen/pm/pythia-14m-s0
+- _self_
+
+dataset:
+  n_val: 10
+
+experiment_name: ???
+run_name: ???
+experiment_type: "evaluation"
