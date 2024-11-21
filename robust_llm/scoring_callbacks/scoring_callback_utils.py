@@ -239,15 +239,14 @@ def _classification_success_from_tokens(
 ) -> tuple[list[bool], list[list[float]]]:
 
     all_successes: list[bool] = []
-    output_generator = victim.classification_output_from_tokens(
+    logit_generator = victim.classification_logits_from_tokens(
         input_ids=input_ids,
         attention_mask=attention_mask,
     )
 
     batch_start = 0
     all_logits = []
-    for out in output_generator:
-        logits = out["logits"]
+    for logits in logit_generator:
         assert victim.accelerator is not None
         assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]
@@ -309,14 +308,13 @@ def _generation_successes_from_tokens(
     attention_mask = tokenized.attention_mask
 
     all_successes: list[bool] = []
-    output_generator = victim.generation_output_from_tokens(
+    logit_generator = victim.generation_logits_from_tokens(
         input_ids=input_ids,
         attention_mask=attention_mask,
     )
 
     batch_start = 0
-    for out in output_generator:
-        logits = out["logits"]
+    for logits in logit_generator:
         assert victim.accelerator is not None
         assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]
@@ -380,15 +378,14 @@ def _generation_losses_from_tokens(
     attention_mask = tokenized.attention_mask
 
     all_losses: list[torch.Tensor] = []
-    output_generator = victim.generation_output_from_tokens(
+    logit_generator = victim.generation_logits_from_tokens(
         input_ids=input_ids,
         attention_mask=attention_mask,
         use_no_grad=use_no_grad,
     )
 
     batch_start = 0
-    for out in output_generator:
-        logits = out["logits"]
+    for logits in logit_generator:
         assert victim.accelerator is not None
         assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]
@@ -432,7 +429,7 @@ def _generation_losses_from_embeds(
     full_embeds = get_full_embeds(prompt_input_embeds, target_embeds)
 
     all_losses: list[torch.Tensor] = []
-    output_generator = victim.generation_output_from_embeddings(
+    logit_generator = victim.generation_logits_from_embeddings(
         # It's fine that input_ids doesn't have the target since it's just for
         # checking for cache hits with early parts of the prompt anyway.
         input_ids=prompt_input_ids,
@@ -444,8 +441,7 @@ def _generation_losses_from_embeds(
     )
 
     batch_start = 0
-    for out in output_generator:
-        logits = out["logits"]
+    for logits in logit_generator:
         assert victim.accelerator is not None
         assert isinstance(logits, torch.Tensor)
         batch_length = logits.shape[0]

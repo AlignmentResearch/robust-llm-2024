@@ -146,12 +146,11 @@ def _losses_from_embeds_callback(
         assert callback_input.clf_label_data is not None
         label_data = _validate_classification_labels(callback_input.clf_label_data)
 
-        out = victim.classification_output_from_embeddings(
+        logits = victim.classification_logits_from_embeddings(
             input_ids=input_data["input_ids"],
             embeddings=input_data["embeddings"],
             use_no_grad=use_no_grad,
         )
-        logits = out["logits"]
         assert victim.accelerator is not None
         assert isinstance(logits, torch.Tensor)
         losses = classification_losses_from_logits(logits, label_data)
@@ -234,14 +233,13 @@ def losses_from_text_callback(
 
         all_losses = []
         all_logits = []
-        output_generator = victim.classification_output_from_tokens(
+        logits_generator = victim.classification_logits_from_tokens(
             input_ids=input_ids,
             attention_mask=attention_mask,
         )
 
         batch_start = 0
-        for out in output_generator:
-            logits = out["logits"]
+        for logits in logits_generator:
             assert victim.accelerator is not None
             assert isinstance(logits, torch.Tensor)
             batch_length = logits.shape[0]

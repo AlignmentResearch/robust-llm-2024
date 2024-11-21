@@ -27,7 +27,6 @@ from transformers import (
     PreTrainedTokenizerBase,
     set_seed,
 )
-from transformers.modeling_outputs import ModelOutput
 
 from robust_llm import logger
 from robust_llm.config.model_configs import GenerationConfig, ModelConfig
@@ -596,13 +595,13 @@ class WrappedModel(ABC):
             seed=config.seed,
         )
 
-    def classification_output_from_tokens(
+    def classification_logits_from_tokens(
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
         use_no_grad: bool = True,
         minibatch_size: int | None = None,
-    ) -> Iterator[ModelOutput]:
+    ) -> Iterator[torch.Tensor]:
         """Returns the classification logits from the token ids.
 
         Args:
@@ -618,7 +617,7 @@ class WrappedModel(ABC):
                 self.eval_minibatch_size.
 
         Yields:
-            A SequenceClassifierOutput object, which has a 'logits' attribute.
+            A tensor of logits.
         """
 
         minibatch_size = self.get_minibatch_size(input_ids, minibatch_size)
@@ -638,16 +637,17 @@ class WrappedModel(ABC):
                     input_ids=minibatch["input_ids"],
                     attention_mask=minibatch["attention_mask"],
                 )
-                minibatch_out = self.accelerator.gather_for_metrics(minibatch_out)
-                assert isinstance(minibatch_out, ModelOutput)
-                yield minibatch_out
+                logits = minibatch_out.logits
+                gathered_logits = self.accelerator.gather_for_metrics(logits)
+                assert isinstance(gathered_logits, torch.Tensor)
+                yield gathered_logits
 
-    def classification_output_from_embeddings(
+    def classification_logits_from_embeddings(
         self,
         input_ids: torch.Tensor,
         embeddings: torch.Tensor,
         use_no_grad: bool = True,
-    ) -> ModelOutput:
+    ) -> torch.Tensor:
         """Returns the classification logits from the embeddings.
 
         TODO (ian): Make this run on batch size >1.
@@ -662,7 +662,7 @@ class WrappedModel(ABC):
                 will just be silently inefficient.
 
         Returns:
-            A SequenceClassifierOutput object, which has a 'logits' attribute.
+            A tensor of logits.
         """
 
         if embeddings.shape[0] != 1:
@@ -676,15 +676,15 @@ class WrappedModel(ABC):
                     input_ids=input_ids,
                     inputs_embeds=embeddings,
                 )
-        return out
+        return out.logits
 
-    def generation_output_from_tokens(
+    def generation_logits_from_tokens(
         self,
         input_ids: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
         use_no_grad: bool = True,
         minibatch_size: int | None = None,
-    ) -> Iterator[ModelOutput]:
+    ) -> Iterator[torch.Tensor]:
         """Returns the generation logits from the token ids.
 
         Args:
@@ -720,16 +720,17 @@ class WrappedModel(ABC):
                     input_ids=minibatch["input_ids"],
                     attention_mask=minibatch["attention_mask"],
                 )
-                minibatch_out = self.accelerator.gather_for_metrics(minibatch_out)
-                assert isinstance(minibatch_out, ModelOutput)
-                yield minibatch_out
+                logits = minibatch_out.logits
+                gathered_logits = self.accelerator.gather_for_metrics(logits)
+                assert isinstance(gathered_logits, torch.Tensor)
+                yield gathered_logits
 
-    def generation_output_from_embeddings(
+    def generation_logits_from_embeddings(
         self,
         input_ids: torch.Tensor,
         embeddings: torch.Tensor,
         use_no_grad: bool = True,
-    ) -> Iterator[ModelOutput]:
+    ) -> Iterator[torch.Tensor]:
         """Returns the classification logits from the embeddings.
 
         TODO (ian): Make this run on batch size >1.
@@ -744,7 +745,7 @@ class WrappedModel(ABC):
                 will just be silently inefficient.
 
         Yields:
-            A SequenceClassifierOutput object, which has a 'logits' attribute.
+            A tensor of logits.
         """
 
         if embeddings.shape[0] != 1:
@@ -759,7 +760,7 @@ class WrappedModel(ABC):
                     input_ids=input_ids,
                     inputs_embeds=embeddings,
                 )
-                yield out
+                yield out.logits
 
     def autoregressive_generation_from_tokens(
         self,
