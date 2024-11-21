@@ -13,12 +13,9 @@ spec:
     spec:
       priorityClassName: interactive
       volumes:
-        - name: working-storage
-          persistentVolumeClaim:
-            claimName: devbox-storage
         - name: robust-llm-storage
           persistentVolumeClaim:
-            claimName: az-csi-robust-llm
+            claimName: az-robust-llm
         - name: devshm
           emptyDir:
             medium: Memory
@@ -45,8 +42,6 @@ spec:
               memory: "{MEMORY}"
               nvidia.com/gpu: {GPU}
           volumeMounts:
-            - name: working-storage
-              mountPath: /home/dev
             - name: robust-llm-storage
               mountPath: /robust_llm_data
             # This is needed as for multi-GPU training, accelerate needs to write

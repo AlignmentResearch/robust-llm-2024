@@ -299,12 +299,10 @@ Kaniko will push the Docker image to a tag formed of a timestamp followed by the
   2. Update the `latest` tag by running `docker pull ghcr.io/alignmentresearch/robust-llm:$TAG && docker tag ghcr.io/alignmentresearch/robust-llm:$TAG ghcr.io/alignmentresearch/robust-llm:latest && docker push ghcr.io/alignmentresearch/robust-llm:latest`. The `latest` tag should not be used for experiments, but may be used for interactive development.
 
 ## Working in a devbox
-The most convenient way to create a devbox is to run `make devbox` which will use `k8s/auto-devbox.yaml` and you can pass various arguments to this, e.g. CPU, GPU and MEMORY (see the Makefile).
+The most convenient way to create a devbox is to run `make devbox` which will use `k8s/auto-devbox.yaml` and you can pass various arguments to this, e.g. CPU, GPU and MEMORY. For example, `make devbox CPU=4 MEMORY=80G`. See the Makefile for the different options.
 
-To use the different default configurations, you can run e.g. `make cpu devbox`.
-This can be combined with making a customized `auto-devbox.yaml`, like `auto-devbox-ian.yaml`. Then you can do things like `make ian devbox` or even `make cpu ian devbox`.
-
-You can also run `kubectl create -f k8s/devbox.yaml`.
+We have shortcuts for a cpu-only devbox and a 2 GPU devbox, which can be run with `make cpu devbox` and `make large devbox`.
+All this can be combined with making your own customized `auto-devbox.yaml`, like `auto-devbox-ian.yaml`; then you can do things like `make ian devbox` or even `make cpu ian devbox`.
 
 Using the VSCode Kubernetes extension, you can then right click the pod and select "Attach VS Code".
 
