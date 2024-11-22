@@ -9,7 +9,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import ContextDecorator
 from dataclasses import fields
 from datetime import datetime
-from functools import cached_property
+from functools import cached_property, wraps
 from typing import TYPE_CHECKING, Callable, Optional, Sized, TypeVar
 
 import torch
@@ -285,7 +285,16 @@ class print_time(ContextDecorator):
         # __call__ method is invoked. We can use the function name as the label.
         if self.label is None:
             self.label = func.__qualname__
-        return super().__call__(func)
+
+        # @wraps(func) preserves the function's metadata (name, docstring, etc.)
+        # whilst still ensuring that __enter__ and __exit__ are called.
+
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+
+        return wrapped  # type: ignore
 
     def __enter__(self):
         self.start_time = time.perf_counter()

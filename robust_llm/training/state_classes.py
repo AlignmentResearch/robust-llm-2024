@@ -461,6 +461,7 @@ class TrainingPipelineState:
             )
             log("Continuing after checkpoint deletion error", main_process_only=False)
 
+    @print_time()
     def augment_dataset(self):
         """This is a placeholder for subclasses to override."""
         raise NotImplementedError

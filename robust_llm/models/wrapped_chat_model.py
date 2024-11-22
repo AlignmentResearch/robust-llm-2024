@@ -8,6 +8,7 @@ from typing_extensions import override
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.models.prompt_templates import Conversation
 from robust_llm.models.wrapped_model import Prompt, WrappedModel
+from robust_llm.utils import print_time
 
 
 class WrappedChatModel(WrappedModel):
@@ -64,6 +65,7 @@ class WrappedChatModel(WrappedModel):
         else:
             return [self.get_user_prompt(u) for u in text]
 
+    @print_time()
     @classmethod
     def from_config(
         cls,
