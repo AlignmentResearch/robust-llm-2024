@@ -8,6 +8,16 @@ QWEN_ROUNDS = {
     "14B": 10,
 }
 
+QWEN_EVAL_ROUNDS = {
+    # >>> np.geomspace(1, 22, 10, dtype=int)
+    # array([ 1,  1,  1,  2,  3,  5,  7, 11, 15, 22])
+    "0.5B": [1, 2, 3, 4, 5, 6, 7, 11, 15, 22],
+    "1.5B": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "3B": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "7B": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "14B": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+}
+
 
 def get_n_adv_tr_rounds(attack: str) -> list[int]:
     assert attack in ("rt", "gcg")
