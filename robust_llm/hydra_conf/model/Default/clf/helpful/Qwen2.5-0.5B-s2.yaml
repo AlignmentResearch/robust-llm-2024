@@ -1,0 +1,7 @@
+
+defaults:
+- /model/Qwen/Qwen2.5-0.5B@_here_
+- /model/Default/clf/base@_here_
+- _self_
+
+name_or_path: "AlignmentResearch/robust_llm_Qwen2.5-0.5B_clf_helpful_v-oskar-022b_s-2"

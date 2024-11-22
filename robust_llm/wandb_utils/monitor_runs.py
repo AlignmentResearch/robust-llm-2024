@@ -55,11 +55,13 @@ if __name__ == "__main__":
         ["run_name", "created_at", "really_finished", "wandb_run_id"]
     ).sort_index()
     multi_index.to_csv(output_path / "multiindex.csv")
-    grouped = df.groupby("run_name")["really_finished"].any().reset_index()
-    grouped.columns = ["run_name", "finished"]
+    df["running"] = df.state.eq("running")
+    grouped = df.groupby("run_name")[["really_finished", "running"]].any().reset_index()
+    grouped.columns = ["run_name", "finished", "running"]
     grouped.to_csv(output_path / "grouped.csv", index=False)
     print(f"CSV files exported to '{output_path}'")
     print(
-        f"In total, {grouped['finished'].sum()} runs are finished out of "
-        f"{grouped.shape[0]} runs."
+        f"In total, {grouped['finished'].sum()} runs are finished and "
+        f"{grouped['running'].sum()} are running out of "
+        f"{grouped.shape[0]} on wandb."
     )

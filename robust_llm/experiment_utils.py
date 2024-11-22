@@ -1,5 +1,13 @@
 import numpy as np
 
+QWEN_ROUNDS = {
+    "0.5B": 22,
+    "1.5B": 10,
+    "3B": 10,
+    "7B": 10,
+    "14B": 10,
+}
+
 
 def get_n_adv_tr_rounds(attack: str) -> list[int]:
     assert attack in ("rt", "gcg")

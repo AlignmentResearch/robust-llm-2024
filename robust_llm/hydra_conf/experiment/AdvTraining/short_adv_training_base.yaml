@@ -10,7 +10,7 @@ dataset:
   n_val: 200
 
 training:
-  save_to: HF_ELSE_DISK
+  save_to: DISK
   num_train_epochs: 1
   learning_rate: 1e-5
   optimizer: "adafactor"
