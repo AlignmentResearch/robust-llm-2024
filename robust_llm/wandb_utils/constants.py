@@ -13,6 +13,7 @@ SUMMARY_KEYS = [
 PROJECT_NAME = "farai/robust-llm"
 
 MODEL_NAMES = ["14m", "31m", "70m", "160m", "410m", "1b", "1.4b", "2.8b", "6.9b", "12b"]
+QWEN_MODEL_NAMES = ["0.5B", "1.5B", "3B", "7B", "14B"]
 
 MODEL_NAME_SIZES = [
     14_000_000,
