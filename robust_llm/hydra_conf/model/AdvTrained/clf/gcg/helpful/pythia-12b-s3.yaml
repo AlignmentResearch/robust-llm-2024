@@ -4,4 +4,4 @@ defaults:
 - /model/Default/clf/base@_here_
 - _self_
 
-name_or_path: "AlignmentResearch/robust_llm_clf_oskar-015e_helpful_pythia-12b_s-3_adv_tr_gcg_t-3"
+name_or_path: "AlignmentResearch/robust_llm_oskar-015e_clf_helpful_pythia-12b_s-3_adv_tr_gcg_t-3"
