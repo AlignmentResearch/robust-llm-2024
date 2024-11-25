@@ -19,7 +19,7 @@ dependencies = [
     # v5.0.0 of conllu is not available on PyPI, can remove pin once fixed:
     # https://github.com/EmilStenstrom/conllu/issues/96
     "conllu==4.5.3",
-    "wandb==0.16.6",
+    "wandb==0.18.7",
     "semver==3.0.2",
     "detoxify==0.5.2",
     "openai==1.35.3",

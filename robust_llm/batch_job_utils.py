@@ -33,7 +33,7 @@ with JOB_TEMPLATE_PATH.open() as f:
 # Container tag to use by default for jobs. Update this when uploading a
 # new version of the canonical Docker image. (Avoid reusing tags as
 # older versions of that image may be cached on K8s nodes.)
-DEFAULT_CONTAINER_TAG = "2024-11-20-01-43-45-main"
+DEFAULT_CONTAINER_TAG = "2024-11-24-04-09-25-pr1132"
 
 
 def memory_str_to_bytes(memory: str) -> int:
@@ -528,7 +528,8 @@ def zero_pad(number: int | str, length: int = 4) -> str:
 
 def get_wandb_running_finished_runs(experiment_name: str) -> list[str]:
     """Get a list of run names that are running or finished on wandb."""
-    runs = wandb_api().runs(
+    # Type error is reported at https://github.com/wandb/wandb/issues/8939
+    runs = wandb_api().runs(  # type: ignore[attr-defined]
         path="farai/robust-llm",
         filters={
             "group": experiment_name,
@@ -546,7 +547,8 @@ def get_wandb_running_finished_runs(experiment_name: str) -> list[str]:
 
 
 @functools.cache
-def wandb_api() -> wandb.Api:
+# Type error is reported at https://github.com/wandb/wandb/issues/8939
+def wandb_api() -> wandb.Api:  # type: ignore[valid-type] # pyright: ignore[reportInvalidTypeForm] # noqa: E501
     # Default timeout is shorter than 30 seconds and fails sometimes.
     return wandb.Api(timeout=30)
 
