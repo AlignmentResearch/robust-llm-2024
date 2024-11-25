@@ -28,18 +28,26 @@ FINETUNED_RUNS = [
     "ian_111_rt_pythia_pm",
     "ian_112_rt_pythia_wl",
     "ian_113_rt_pythia_spam",
+    "oskar_025a_gcg_eval_qwen25_ft_harmless",
+    "oskar_025b_gcg_eval_qwen25_ft_spam",
 ]
 
 
 def main():
     for run in FINETUNED_RUNS:
-        attack, dataset = run.split("_")[2], run.split("_")[-1]
+        if "pythia" in run:
+            attack, dataset = run.split("_")[2], run.split("_")[-1]
+            model = "pythia"
+        else:
+            assert "qwen25" in run
+            attack, dataset = run.split("_")[2], run.split("_")[-1]
+            model = "qwen25"
 
         make_finetuned_data(
             group_names=[
                 run,
             ],
-            save_as=("finetuned", attack, dataset),
+            save_as=("finetuned", model, attack, dataset),
             metrics=metrics,
             eval_summary_keys=summary_keys,
         )

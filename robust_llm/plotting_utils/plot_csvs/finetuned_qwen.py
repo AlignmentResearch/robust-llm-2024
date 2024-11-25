@@ -14,7 +14,7 @@ from robust_llm.plotting_utils.tools import (
 
 
 def pick_attack_iterations(df, attack, dataset):
-    for field in ("asr", "mean_log_prob", "log_mean_prob"):
+    for field in ("asr",):
         if not df.columns.str.contains(f"{field}_at_").any():
             print(f"Missing {field}_at_ for {attack} {dataset}")
             continue
@@ -36,9 +36,9 @@ def main(style):
 
     all_data = []
     metadata = None
-    for attack in ("gcg", "rt"):
-        for dataset in ("imdb", "spam", "wl", "pm", "helpful", "harmless"):
-            save_as = ("finetuned", "pythia", attack, dataset)
+    for attack in ("gcg",):
+        for dataset in ("spam", "harmless"):
+            save_as = ("finetuned", "qwen25", attack, dataset)
             data, metadata = read_csv_and_metadata(*save_as)
             pick_attack_iterations(data, attack, dataset)
             for legend in (True, False):
@@ -73,8 +73,6 @@ def main(style):
             for y_data_name, ytransform in [
                 ("asr", "logit"),
                 ("asr", None),
-                ("mean_log_prob", "negative"),
-                ("log_mean_prob", "comp_exp"),
             ]:
                 draw_min_max_median_plot_by_dataset(
                     attack_df,
@@ -82,7 +80,7 @@ def main(style):
                     title=f"{name_to_attack(attack)} Attack on All Tasks",
                     y_data_name=y_data_name,
                     ytransform=ytransform,
-                    save_as=("finetuned", "pythia", attack, "all"),
+                    save_as=("finetuned", "qwen25", attack, "all"),
                     legend=legend,
                     style=style,
                     smoothing=0 if "prob" in y_data_name else 1,
@@ -93,7 +91,7 @@ def main(style):
                     title=f"{name_to_attack(attack)} Attack on All Tasks",
                     y_data_name=y_data_name,
                     ytransform=ytransform,
-                    save_as=("finetuned", "pythia", attack, "all_except_wl"),
+                    save_as=("finetuned", "qwen25", attack, "all_except_wl"),
                     legend=legend,
                     style=style,
                     smoothing=0 if "prob" in y_data_name else 1,
@@ -107,7 +105,7 @@ def main(style):
         title="Pre-Attack Accuracy",
         y_data_name="adversarial_eval_pre_attack_accuracy",
         ytransform="none",
-        save_as=("finetuned", "pythia", "pre_attack_accuracy", "all"),
+        save_as=("finetuned", "qwen25", "pre_attack_accuracy", "all"),
         legend=True,
         style=style,
         smoothing=1,
@@ -124,7 +122,7 @@ def main(style):
             ytransform="none",
             save_as=(
                 "finetuned",
-                "pythia",
+                "qwen25",
                 f"post_{str(attack)}_attack_accuracy",
                 "all",
             ),

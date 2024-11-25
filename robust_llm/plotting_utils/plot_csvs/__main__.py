@@ -10,6 +10,9 @@ from robust_llm.plotting_utils.plot_csvs.asr_adv_training import (
 from robust_llm.plotting_utils.plot_csvs.asr_finetuned import main as asr_finetuned_main
 from robust_llm.plotting_utils.plot_csvs.asr_slopes import main as asr_slopes_main
 from robust_llm.plotting_utils.plot_csvs.finetuned import main as finetuned_main
+from robust_llm.plotting_utils.plot_csvs.finetuned_qwen import (
+    main as finetuned_qwen_main,
+)
 from robust_llm.plotting_utils.plot_csvs.offense_defense import (
     main as offense_defense_main,
 )
@@ -39,6 +42,7 @@ def parse_args():
             "asr_finetuned",
             "asr_slopes",
             "finetuned",
+            "finetuned_qwen",
             "offense_defense",
             "post_adv_training",
         ],
@@ -62,6 +66,8 @@ if __name__ == "__main__":
         asr_slopes_main(args.style)
     if "finetuned" in args.plots:
         finetuned_main(args.style)
+    if "finetuned_qwen" in args.plots:
+        finetuned_qwen_main(args.style)
     if "offense_defense" in args.plots:
         offense_defense_main(args.style)
     if "post_adv_training" in args.plots:

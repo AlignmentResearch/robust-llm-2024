@@ -38,6 +38,8 @@ from robust_llm.wandb_utils.constants import (
     METRICS,
     MODEL_NAMES,
     MODEL_SIZES,
+    QWEN_MODEL_NAMES,
+    QWEN_MODEL_SIZES,
     SUMMARY_KEYS,
 )
 from robust_llm.wandb_utils.wandb_api_tools import (
@@ -341,6 +343,9 @@ def make_finetuned_data(
         )
         postprocess_data(run)
         run_asr = get_unstacked_cached_attack_data(group)
+        run = drop_duplicates(
+            run, ["model_idx", "seed_idx", "adv_training_round"], "wandb_data"
+        )
         run = run.merge(
             run_asr,
             on=["model_idx", "seed_idx", "adv_training_round"],
@@ -1601,9 +1606,14 @@ def draw_scatter_with_color_from_metric(
 
 
 def _get_num_params_from_name(name: str) -> int:
-    sizes_in_name = [i for i, size in enumerate(MODEL_NAMES) if size in name]
+    if "pythia" in name.lower():
+        model_names, model_sizes = MODEL_NAMES, MODEL_SIZES
+    else:
+        assert "qwen" in name.lower()
+        model_names, model_sizes = QWEN_MODEL_NAMES, QWEN_MODEL_SIZES
+    sizes_in_name = [i for i, size in enumerate(model_names) if size in name]
     assert len(sizes_in_name) == 1, f"Found {sizes_in_name} in {name}"
-    return MODEL_SIZES[sizes_in_name[0]]
+    return model_sizes[sizes_in_name[0]]
 
 
 def _get_pretraining_fraction(name: str) -> float:
@@ -1619,11 +1629,14 @@ def _get_pretraining_fraction(name: str) -> float:
 
 
 def _update_model_sizes_as_necessary(df: pd.DataFrame) -> None:
+    # Concatenate model sizes into one list
+    model_sizes = MODEL_SIZES + QWEN_MODEL_SIZES
     # Sometimes, the model size is not a size that we recognize.
     # In those cases, just take the model size directly from
     # the model name.
+    df.num_params = df.num_params.astype(int)
     for i, row in df.iterrows():
-        if row["num_params"] not in MODEL_SIZES:
+        if row["num_params"] not in model_sizes:
             size_from_name = _get_num_params_from_name(
                 row["model_name_or_path"]  # type: ignore
             )
@@ -1901,15 +1914,6 @@ def get_cached_asr_data(
         assert set(df.columns.tolist()) > set(
             ["model_idx", "seed_idx", "asr", "iteration"]
         )
-        n_models = 10
-        n_seeds = 5
-        n_iterations = 11 if "gcg" in group_name else 1281
-        assert df.model_idx.between(0, n_models - 1).all()
-        assert df.seed_idx.between(0, n_seeds - 1).all()
-        assert df.iteration.between(0, n_iterations - 1).all()
-        assert len(df) == n_models * n_seeds * n_iterations
-        if n_iterations > 1000:
-            df = df.loc[df.iteration.mod(100) == 0]
     df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
     df["iteration_x_params"] = df.iteration * df.num_params
     df.sort_values("model_idx", inplace=True)
@@ -1946,6 +1950,9 @@ def get_unstacked_cached_attack_data(
     group_name: str, for_offense_defense: bool = False
 ):
     df = get_cached_asr_logprob_data(group_name, for_offense_defense)
+    if df.empty:
+        warnings.warn(f"No cached ASR data found for {group_name}")
+        return df
     unstacked_data = []
     for field in ("asr", "log_mean_prob", "mean_log_prob"):
         if field not in df:
