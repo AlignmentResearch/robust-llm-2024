@@ -31,6 +31,7 @@ from robust_llm.plotting_utils.style import name_to_attack, name_to_dataset, set
 from robust_llm.plotting_utils.utils import (
     add_model_idx_inplace,
     drop_duplicates,
+    get_wilson_score_interval,
     merge_adv_and_train_data,
 )
 from robust_llm.wandb_utils.constants import (
@@ -38,8 +39,9 @@ from robust_llm.wandb_utils.constants import (
     METRICS,
     MODEL_NAMES,
     MODEL_SIZES,
+    QWEN_CLF_MODEL_SIZES,
+    QWEN_GEN_MODEL_SIZES,
     QWEN_MODEL_NAMES,
-    QWEN_MODEL_SIZES,
     SUMMARY_KEYS,
 )
 from robust_llm.wandb_utils.wandb_api_tools import (
@@ -346,13 +348,15 @@ def make_finetuned_data(
         run = drop_duplicates(
             run, ["model_idx", "seed_idx", "adv_training_round"], "wandb_data"
         )
-        run = run.merge(
-            run_asr,
-            on=["model_idx", "seed_idx", "adv_training_round"],
-            how="left",
-            validate="1:1",
-            suffixes=("", "_asr"),
-        )
+        if not run_asr.empty:
+            print("No ASR data found for", group)
+            run = run.merge(
+                run_asr,
+                on=["model_idx", "seed_idx", "adv_training_round"],
+                how="left",
+                validate="1:1",
+                suffixes=("", "_asr"),
+            )
         runs.append(run)
 
     # Concatenate the runs together
@@ -1476,7 +1480,7 @@ def draw_min_max_median_plot_by_dataset(
     # Color palette for different datasets
     datasets = [
         ds
-        for ds in ["spam", "imdb", "pm", "wl", "helpful", "harmless"]
+        for ds in ["spam", "imdb", "pm", "wl", "helpful", "harmless", "strongreject"]
         if ds in data["dataset"].unique()
     ]
     pretty_datasets = [name_to_dataset(ds) for ds in datasets]
@@ -1567,6 +1571,112 @@ def draw_min_max_median_plot_by_dataset(
     )
 
 
+def draw_wilson_score_interval_plot(
+    orig_data: pd.DataFrame,
+    metadata: PlotMetadata | None,
+    title: str,
+    save_as: iter_str | str,
+    successes_name: str,
+    trials_name: str,
+    custom_ys=None,
+    custom_xs_and_ys=None,
+    legend: bool = False,
+    check_seeds: int | None = None,
+    ylim: tuple[float, float] | None = None,
+    ytransform: str | None = None,
+    y_data_name: str = "adversarial_eval_attack_success_rate",
+    smoothing: int = DEFAULT_SMOOTHING,
+    style: str = "paper",
+):
+    data = orig_data.copy()
+    print("Found", len(data), "runs to use for the Wilson score interval plot")
+
+    fig, ax = plt.subplots()
+
+    # Calculate the Wilson score interval
+    data = get_wilson_score_interval(
+        data, successes_col=successes_name, trials_col=trials_name
+    )
+    data = data.sort_values("num_params")
+
+    plt.xscale("log")
+    plt.title(title)
+    if smoothing != 0:
+        apply_laplace_smoothing(data, y_data_name, smoothing)
+    if ytransform is None:
+        data["y_value"] = data[y_data_name]
+        y_transf_data_name = y_data_name
+    else:
+        data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
+        data["lower_bound"] = TRANSFORMS[ytransform](data["lower_bound"])
+        data["upper_bound"] = TRANSFORMS[ytransform](data["upper_bound"])
+        y_transf_data_name = name_transformed_data(y_data_name, ytransform)
+    if ylim is not None:
+        plt.ylim(ylim)
+    elif ytransform == "none" and ("asr" in y_data_name or "success" in y_data_name):
+        plt.ylim(0, 1)
+    plt.xlabel(AXIS_LABELS["num_params"])
+    plt.ylabel(AXIS_LABELS[y_transf_data_name])
+
+    relevant_data = data[
+        ["num_params", "y_value", "model_name_or_path", "lower_bound", "upper_bound"]
+    ]
+
+    relevant_data = _maybe_get_custom_xs_and_maybe_ys(
+        relevant_data, custom_ys, custom_xs_and_ys
+    )
+
+    if check_seeds is not None:
+        _check_correct_num_seeds(
+            relevant_data, num_seeds=check_seeds, adversarial=False
+        )
+
+    sns_blue = sns.color_palette()[0]
+
+    # Plot the band between the min and max values
+    plt.fill_between(
+        relevant_data["num_params"],
+        relevant_data["lower_bound"],
+        relevant_data["upper_bound"],
+        alpha=0.2,
+        label="95% Wilson Score Interval",
+        color=sns_blue,
+    )
+    # Plot the median values
+    sns.lineplot(
+        x=relevant_data["num_params"],
+        y=relevant_data["y_value"],
+        label="Attack Success Rate",
+        color=sns_blue,
+        alpha=0.5,
+        zorder=5,
+    )
+
+    set_up_paper_plot(fig, ax, style=style)
+    if ytransform == "logit":
+        set_yticks_for_logit(ax)
+
+    # Turn off the legend if we don't want it
+    if not legend:
+        ax.get_legend().remove()
+
+    if isinstance(save_as, str):
+        save_as = (save_as,)
+    save_as = [style] + list(save_as)
+
+    assert isinstance(relevant_data, pd.DataFrame)
+    create_path_and_savefig(
+        fig,
+        *save_as,
+        "num_params",
+        y_transf_data_name,
+        f"smoothing-{smoothing}",
+        "legend" if legend else "no_legend",
+        data=relevant_data if legend else None,
+        metadata=metadata if legend else None,
+    )
+
+
 def draw_scatter_with_color_from_metric(
     data,
     metric,
@@ -1610,7 +1720,7 @@ def _get_num_params_from_name(name: str) -> int:
         model_names, model_sizes = MODEL_NAMES, MODEL_SIZES
     else:
         assert "qwen" in name.lower()
-        model_names, model_sizes = QWEN_MODEL_NAMES, QWEN_MODEL_SIZES
+        model_names, model_sizes = QWEN_MODEL_NAMES, QWEN_CLF_MODEL_SIZES
     sizes_in_name = [i for i, size in enumerate(model_names) if size in name]
     assert len(sizes_in_name) == 1, f"Found {sizes_in_name} in {name}"
     return model_sizes[sizes_in_name[0]]
@@ -1630,7 +1740,7 @@ def _get_pretraining_fraction(name: str) -> float:
 
 def _update_model_sizes_as_necessary(df: pd.DataFrame) -> None:
     # Concatenate model sizes into one list
-    model_sizes = MODEL_SIZES + QWEN_MODEL_SIZES
+    model_sizes = MODEL_SIZES + QWEN_CLF_MODEL_SIZES + QWEN_GEN_MODEL_SIZES
     # Sometimes, the model size is not a size that we recognize.
     # In those cases, just take the model size directly from
     # the model name.
@@ -1669,10 +1779,18 @@ def postprocess_data(df, adjust_flops_for_n_val: bool = False):
         "model_name_or_path is necessary for plotting, "
         "but it was not found in the dataframe"
     )
-    if "seed_idx" not in df and "training_seed" in df:
-        df["seed_idx"] = df["training_seed"]
-    if "seed_idx" not in df and "model_name_or_path" in df:
-        df["seed_idx"] = df.model_name_or_path.apply(_get_seed_from_name)
+    if "seed_idx" not in df:
+        if "training_seed" in df:
+            df["seed_idx"] = df["training_seed"]
+        elif "model_name_or_path" in df:
+            try:
+                df["seed_idx"] = df.model_name_or_path.apply(_get_seed_from_name)
+            except ValueError:
+                print("Couldn't find seed in model_name_or_path;")
+        if "seed_idx" not in df and "evaluation_evaluation_attack_seed" in df.columns:
+            print("Using the evaluation seed")
+            df["seed_idx"] = df["evaluation_evaluation_attack_seed"]
+
     if "seed_idx" in df:
         df.seed_idx = df.seed_idx.astype(int)
 

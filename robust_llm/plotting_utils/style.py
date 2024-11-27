@@ -1,6 +1,15 @@
 import matplotlib.pyplot as plt
 
 
+def name_to_model(name: str) -> str:
+    if "pythia" in name:
+        return "Pythia"
+    elif "wen" in name:
+        return "Qwen2.5"
+    else:
+        raise ValueError(f"Unknown model name: {name}")
+
+
 def name_to_attack(name: str) -> str:
     if "gcg" in name and "rt" not in name:
         return "GCG"
@@ -25,6 +34,8 @@ def name_to_dataset(name: str) -> str:
         return "Helpful"
     elif "harmless" in name:
         return "Harmless"
+    elif "strongreject" in name:
+        return "StrongREJECT"
     else:
         raise ValueError(f"Unknown dataset name: {name}")
 

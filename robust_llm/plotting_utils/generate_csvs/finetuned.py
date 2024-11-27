@@ -6,6 +6,8 @@ metrics = [
     "adversarial_eval/attack_success_rate",
     "adversarial_eval/pre_attack_accuracy",
     "adversarial_eval/n_correct_post_attack",
+    "adversarial_eval/n_incorrect_post_attack",
+    "adversarial_eval/n_correct_pre_attack",
     "adversarial_eval/n_examples",
     "model_size",
     "adv_training_round",
@@ -13,6 +15,7 @@ metrics = [
 summary_keys = [
     "experiment_yaml.model.name_or_path",
     "experiment_yaml.dataset.n_val",
+    "experiment_yaml.evaluation.evaluation_attack.seed",
 ]
 
 FINETUNED_RUNS = [
@@ -30,6 +33,7 @@ FINETUNED_RUNS = [
     "ian_113_rt_pythia_spam",
     "oskar_025a_gcg_eval_qwen25_ft_harmless",
     "oskar_025b_gcg_eval_qwen25_ft_spam",
+    "ian_142a_gen_strongreject_gcg_qwen25",
 ]
 
 
@@ -40,7 +44,7 @@ def main():
             model = "pythia"
         else:
             assert "qwen25" in run
-            attack, dataset = run.split("_")[2], run.split("_")[-1]
+            attack, dataset = run.split("_")[4], run.split("_")[3]
             model = "qwen25"
 
         make_finetuned_data(

@@ -1,4 +1,6 @@
+import numpy as np
 import pandas as pd
+from scipy.stats import norm
 
 
 def add_model_idx_inplace(
@@ -73,3 +75,33 @@ def drop_duplicates(
         )
         df = df.drop_duplicates(subset=keys, keep=keep)  # type: ignore
     return df
+
+
+def get_wilson_score_interval(
+    df: pd.DataFrame, successes_col: str, trials_col: str, confidence: float = 0.95
+) -> pd.DataFrame:
+    """
+    Compute the Wilson score interval for a binomial proportion.
+
+    See https://www.statisticshowto.com/wilson-ci/ for reference.
+    """
+    alpha = 1 - confidence
+    z = norm.ppf(1 - alpha / 2)
+
+    # Compute proportions and intermediate values
+    n = df[trials_col]
+    p_hat = df[successes_col] / n
+    q_hat = 1 - p_hat
+    second_term = z**2 / (2 * n)
+    third_term = z * np.sqrt(p_hat * q_hat / n + z**2 / (4 * n**2))
+    denominator = 1 + z**2 / n
+
+    # Compute bounds
+    lower_bound = (p_hat + second_term - third_term) / denominator
+    upper_bound = (p_hat + second_term + third_term) / denominator
+
+    # Return the DataFrame with bounds as new columns
+    result_df = df.copy()
+    result_df["lower_bound"] = lower_bound
+    result_df["upper_bound"] = upper_bound
+    return result_df
