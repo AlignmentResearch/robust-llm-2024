@@ -20,6 +20,16 @@ from robust_llm.plotting_utils.generate_csvs.post_adv_training import (
     main as post_adv_training_main,
 )
 
+EXPERIMENTS = [
+    "adv_training_transfer",
+    "adv_training",
+    "asr_adv_training",
+    "asr_finetuned",
+    "finetuned",
+    "offense_defense",
+    "post_adv_training",
+]
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -28,17 +38,9 @@ def main():
     parser.add_argument(
         "--experiments",
         nargs="+",
-        choices=[
-            "adv_training_transfer",
-            "adv_training",
-            "asr_adv_training",
-            "asr_finetuned",
-            "finetuned",
-            "offense_defense",
-            "post_adv_training",
-        ],
-        required=True,
-        help="List of experiments to run",
+        choices=EXPERIMENTS,
+        help="List of experiments to run (default: all)",
+        default=EXPERIMENTS,
     )
     args = parser.parse_args()
 

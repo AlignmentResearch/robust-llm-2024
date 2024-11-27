@@ -19,13 +19,17 @@ metrics = [
 
 
 def main():
-    attack = "gcg_gcg"
-    for dataset in ("imdb", "spam", "wl", "pm"):
+    for family, attack, dataset in [
+        ("pythia", "gcg_gcg", "imdb"),
+        ("pythia", "gcg_gcg", "spam"),
+        ("pythia", "gcg_gcg", "wl"),
+        ("pythia", "gcg_gcg", "pm"),
+    ]:
         prepare_adv_training_data(
             summary_keys=summary_keys,
             metrics=metrics,
-            save_as=("post_adv_training", attack, dataset),
-            **get_run_names(attack, dataset),
+            save_as=("post_adv_training", family, attack, dataset),
+            **get_run_names(family, attack, dataset),
         )
 
 

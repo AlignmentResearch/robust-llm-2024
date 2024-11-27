@@ -19,22 +19,23 @@ METRICS = [
 
 
 def main():
-    for attack, dataset in [
-        ("rt_gcg", "imdb"),
-        ("rt_gcg", "spam"),
-        ("gcg_gcg", "imdb"),
-        ("gcg_gcg_infix90", "imdb"),
-        ("gcg_gcg", "spam"),
-        ("gcg_gcg_infix90", "spam"),
+    for family, attack, dataset in [
+        ("pythia", "rt_gcg", "imdb"),
+        ("pythia", "rt_gcg", "spam"),
+        ("pythia", "gcg_gcg", "imdb"),
+        ("pythia", "gcg_gcg_infix90", "imdb"),
+        ("pythia", "gcg_gcg", "spam"),
+        ("pythia", "gcg_gcg_infix90", "spam"),
     ]:
         for target_asr in [5]:
             prepare_offense_defense_data(
+                family=family,
                 attack=attack,
                 dataset=dataset,
                 summary_keys=summary_keys,
                 target_asr=target_asr,
                 metrics=METRICS,
-                **get_run_names(attack, dataset),
+                **get_run_names(family, attack, dataset),
             )
 
 

@@ -55,15 +55,16 @@ def main(style):
                 diagonal_gridlines = False
 
             for legend in (True, False):
-                for attack, dataset in [
-                    ("rt_gcg", "imdb"),
-                    ("rt_gcg", "spam"),
-                    ("gcg_gcg", "imdb"),
-                    ("gcg_gcg_infix90", "imdb"),
-                    ("gcg_gcg", "spam"),
-                    ("gcg_gcg_infix90", "spam"),
+                for family, attack, dataset in [
+                    ("pythia", "rt_gcg", "imdb"),
+                    ("pythia", "rt_gcg", "spam"),
+                    ("pythia", "gcg_gcg", "imdb"),
+                    ("pythia", "gcg_gcg_infix90", "imdb"),
+                    ("pythia", "gcg_gcg", "spam"),
+                    ("pythia", "gcg_gcg_infix90", "spam"),
                 ]:
                     load_and_plot_offense_defense_plots(
+                        family=family,
                         attack=attack,
                         dataset=dataset,
                         x_data_name=x_data_name,

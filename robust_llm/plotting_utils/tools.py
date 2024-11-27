@@ -21,6 +21,7 @@ from robust_llm.plotting_utils.constants import (
     DEFAULT_SMOOTHING,
     LOG_SCALE_VARIABLES,
     MODEL_PLOTTING_NAMES,
+    RUN_NAMES,
     get_fudge_factor,
     get_offense_defense_ylabel_title,
 )
@@ -39,9 +40,6 @@ from robust_llm.wandb_utils.constants import (
     METRICS,
     MODEL_NAMES,
     MODEL_SIZES,
-    QWEN_CLF_MODEL_SIZES,
-    QWEN_GEN_MODEL_SIZES,
-    QWEN_MODEL_NAMES,
     SUMMARY_KEYS,
 )
 from robust_llm.wandb_utils.wandb_api_tools import (
@@ -433,6 +431,7 @@ def assert_flops_data_not_missing(data: pd.DataFrame, train_data: pd.DataFrame) 
 
 def save_adv_training_data(
     group_names: iter_str | str,
+    family: str,
     attack: str,
     dataset: str,
     merge_runs: iter_str | str | None = None,
@@ -460,6 +459,7 @@ def save_adv_training_data(
         save_adv_training_data.__name__,
         {
             "group_names": group_names,
+            "family": family,
             "attack": attack,
             "dataset": dataset,
             "merge_runs": merge_runs,
@@ -468,12 +468,14 @@ def save_adv_training_data(
             "use_group_cache": use_group_cache,
         },
         "adv_training",
+        family,
         attack,
         dataset,
     )
 
 
 def load_and_plot_adv_training_plots(
+    family: str,
     attack: str,
     dataset: str,
     x_data_name: str = "adv_training_round",
@@ -495,6 +497,7 @@ def load_and_plot_adv_training_plots(
     Make adversarial training plots for given runs, pulling data from W&B.
 
     Args:
+        family: The model family to plot (e.g. "pythia").
         attack: The training/eval attacks to plot (e.g. "gcg_gcg").
         dataset: The dataset to plot (e.g. "imdb").
         x_data_name: The name of the data to use for the x-axis.
@@ -517,12 +520,13 @@ def load_and_plot_adv_training_plots(
             inform matplotlib of the full range of models which need to be
             assigned colors.
     """
-    data, metadata = read_csv_and_metadata("adv_training", attack, dataset)
+    data, metadata = read_csv_and_metadata("adv_training", family, attack, dataset)
     draw_plot_adv_training(
         data=data,
         metadata=metadata,
         x_data_name=x_data_name,
         color_data_name=color_data_name,
+        family=family,
         attack=attack,
         dataset=dataset,
         xlim=xlim,
@@ -752,6 +756,7 @@ def get_color_palette(data: pd.Series | pd.DataFrame, color_data_name: str) -> d
 
 def get_legend_handles(
     data: pd.DataFrame,
+    family: str,
     color_data_name: str,
     palette_dict: dict,
     large_to_small: bool = False,
@@ -760,9 +765,9 @@ def get_legend_handles(
     maybe_reversed = reversed if large_to_small else lambda x: x
     for name, _ in maybe_reversed(sorted(data.groupby(color_data_name))):
         if name not in legend_handles:
-            if name in MODEL_SIZES:
-                ([model_index],) = np.where(np.array(MODEL_SIZES) == name)
-                label = MODEL_PLOTTING_NAMES[model_index]
+            if name in MODEL_NAMES:
+                ([model_index],) = np.where(np.array(MODEL_NAMES[family]) == name)
+                label = MODEL_PLOTTING_NAMES[family][model_index]
             else:
                 label = name
 
@@ -817,6 +822,7 @@ def _draw_plot_adv_training(
     metadata: PlotMetadata | None,
     x_data_name: str,
     color_data_name: str,
+    family: str,
     attack: str,
     dataset: str,
     y_data_name: str = "adversarial_eval_attack_success_rate",
@@ -946,7 +952,7 @@ def _draw_plot_adv_training(
             and y_data_name == "adversarial_eval_attack_success_rate"
         )
         legend_handles = get_legend_handles(
-            data, color_data_name, palette_dict, large_to_small
+            data, family, color_data_name, palette_dict, large_to_small
         )
         create_legend(color_data_name, ax, legend_handles)
     if y_transform == "logit":
@@ -955,17 +961,18 @@ def _draw_plot_adv_training(
         fig,
         style,
         "adv_training",
+        family,
         attack,
         dataset,
         x_data_name,
         y_transf_data_name,
         f"smoothing-{smoothing}",
-        "legend" if legend else "no_legend",
         (
             f"ylim_{str(ylim[0]).replace('.', 'p')}_{str(ylim[1]).replace('.', 'p')}"
             if ylim is not None
             else "auto"
         ),
+        "legend" if legend else "no_legend",
         data=data if legend else None,
         metadata=metadata if legend else None,
     )
@@ -976,6 +983,7 @@ def draw_plot_adv_training(
     metadata: PlotMetadata | None,
     x_data_name: str,
     color_data_name: str,
+    family: str,
     attack: str,
     dataset: str,
     xlim: tuple[float, float] | None = None,
@@ -1011,6 +1019,7 @@ def draw_plot_adv_training(
         metadata,
         x_data_name,
         color_data_name=color_data_name,
+        family=family,
         attack=attack,
         dataset=dataset,
         xlim=xlim,
@@ -1059,7 +1068,13 @@ def create_path_and_savefig(
     return save_path
 
 
-def _maybe_get_custom_xs_and_maybe_ys(relevant_data, custom_ys, custom_xs_and_ys):
+def _maybe_get_custom_xs_and_maybe_ys(
+    relevant_data,
+    mode: str,
+    family: str,
+    custom_ys: list[float] | None,
+    custom_xs_and_ys: list[tuple[float, float]] | None,
+):
     # Add the custom xs and ys
     # xs are "num_params"
     # ys are values
@@ -1067,7 +1082,7 @@ def _maybe_get_custom_xs_and_maybe_ys(relevant_data, custom_ys, custom_xs_and_ys
         assert custom_xs_and_ys is None or custom_ys is None
         print("Adding custom data to the plot")
         if custom_ys is not None:
-            xs = MODEL_SIZES[-len(custom_ys) :]
+            xs = MODEL_SIZES[mode][family][-len(custom_ys) :]
         elif custom_xs_and_ys is not None:
             xs, custom_ys = zip(*custom_xs_and_ys)  # type: ignore
         else:
@@ -1175,7 +1190,10 @@ def draw_min_max_median_plot(
     orig_data: pd.DataFrame,
     metadata: PlotMetadata | None,
     title: str,
-    save_as: iter_str | str,
+    family: str,
+    attack: str,
+    dataset: str,
+    mode: str = "clf",
     custom_ys=None,
     custom_xs_and_ys=None,
     legend: bool = False,
@@ -1211,7 +1229,7 @@ def draw_min_max_median_plot(
     relevant_data = data[["num_params", "y_value", "model_name_or_path"]]
 
     relevant_data = _maybe_get_custom_xs_and_maybe_ys(
-        relevant_data, custom_ys, custom_xs_and_ys
+        relevant_data, mode, family, custom_ys, custom_xs_and_ys
     )
 
     if check_seeds is not None:
@@ -1257,13 +1275,13 @@ def draw_min_max_median_plot(
     if not legend:
         ax.get_legend().remove()
 
-    if isinstance(save_as, str):
-        save_as = (save_as,)
-    save_as = [style] + list(save_as)
-
     create_path_and_savefig(
         fig,
-        *save_as,
+        style,
+        "finetuned",
+        family,
+        attack,
+        dataset,
         "num_params",
         y_transf_data_name,
         f"smoothing-{smoothing}",
@@ -1277,7 +1295,10 @@ def draw_min_max_median_plot_by_round(
     orig_data: pd.DataFrame,
     metadata: PlotMetadata | None,
     title: str,
-    save_as: iter_str | str,
+    family: str,
+    attack: str,
+    dataset: str,
+    mode: str = "clf",
     custom_ys=None,
     custom_xs_and_ys=None,
     legend: bool = True,
@@ -1322,7 +1343,7 @@ def draw_min_max_median_plot_by_round(
         _check_correct_num_seeds(relevant_data, num_seeds=check_seeds, adversarial=True)
 
     relevant_data = _maybe_get_custom_xs_and_maybe_ys(
-        relevant_data, custom_ys, custom_xs_and_ys
+        relevant_data, mode, family, custom_ys, custom_xs_and_ys
     )
 
     # Group by num_params and adv_training_round then calculate min, max, and median
@@ -1407,13 +1428,13 @@ def draw_min_max_median_plot_by_round(
     # Adjust layout to prevent cutoff
     plt.tight_layout()
 
-    if isinstance(save_as, str):
-        save_as = (save_as,)
-    save_as = [style] + list(save_as)
-
     create_path_and_savefig(
         fig,
-        *save_as,
+        style,
+        "post_adv_training",
+        family,
+        attack,
+        dataset,
         "num_params",
         y_transf_data_name,
         f"smoothing-{smoothing}",
@@ -1427,7 +1448,11 @@ def draw_min_max_median_plot_by_dataset(
     orig_data: pd.DataFrame,
     metadata: PlotMetadata | None,
     title: str,
-    save_as: iter_str | str,
+    adversarial: bool,
+    family: str,
+    attack: str,
+    datasets: str = "all",
+    mode: str = "clf",
     custom_ys=None,
     custom_xs_and_ys=None,
     legend: bool = True,
@@ -1466,7 +1491,7 @@ def draw_min_max_median_plot_by_dataset(
         _check_correct_num_seeds(relevant_data, num_seeds=check_seeds, adversarial=True)
 
     relevant_data = _maybe_get_custom_xs_and_maybe_ys(
-        relevant_data, custom_ys, custom_xs_and_ys
+        relevant_data, mode, family, custom_ys, custom_xs_and_ys
     )
 
     # Group by num_params and adv_training_round then calculate min, max, and median
@@ -1478,16 +1503,16 @@ def draw_min_max_median_plot_by_dataset(
     grouped.columns = ["num_params", "dataset", "y_min", "y_max", "y_median"]
 
     # Color palette for different datasets
-    datasets = [
+    datasets_to_color = [
         ds
         for ds in ["spam", "imdb", "pm", "wl", "helpful", "harmless", "strongreject"]
         if ds in data["dataset"].unique()
     ]
-    pretty_datasets = [name_to_dataset(ds) for ds in datasets]
-    colors = sns.color_palette(n_colors=len(datasets))
-    color_map = dict(zip(datasets, colors))
+    pretty_datasets = [name_to_dataset(ds) for ds in datasets_to_color]
+    colors = sns.color_palette(n_colors=len(datasets_to_color))
+    color_map = dict(zip(datasets_to_color, colors))
 
-    for i, dataset in enumerate(datasets):
+    for i, dataset in enumerate(datasets_to_color):
         round_data = grouped[grouped["dataset"] == dataset]
 
         # Plot the band between the min and max values
@@ -1521,7 +1546,7 @@ def draw_min_max_median_plot_by_dataset(
             Line2D(
                 [0], [0], color=color_map[d], lw=2, label=name_to_dataset(d), alpha=0.7
             )
-            for d in datasets
+            for d in datasets_to_color
         ]
         style_legend = [
             Line2D(
@@ -1555,13 +1580,13 @@ def draw_min_max_median_plot_by_dataset(
     # Adjust layout to prevent cutoff
     plt.tight_layout()
 
-    if isinstance(save_as, str):
-        save_as = (save_as,)
-    save_as = [style] + list(save_as)
-
     create_path_and_savefig(
         fig,
-        *save_as,
+        style,
+        "post_adv_training" if adversarial else "finetuned",
+        family,
+        attack,
+        datasets,
         "num_params",
         y_transf_data_name,
         f"smoothing-{smoothing}",
@@ -1575,9 +1600,12 @@ def draw_wilson_score_interval_plot(
     orig_data: pd.DataFrame,
     metadata: PlotMetadata | None,
     title: str,
-    save_as: iter_str | str,
     successes_name: str,
     trials_name: str,
+    mode: str,
+    family: str,
+    attack: str,
+    dataset: str,
     custom_ys=None,
     custom_xs_and_ys=None,
     legend: bool = False,
@@ -1623,7 +1651,7 @@ def draw_wilson_score_interval_plot(
     ]
 
     relevant_data = _maybe_get_custom_xs_and_maybe_ys(
-        relevant_data, custom_ys, custom_xs_and_ys
+        relevant_data, mode, family, custom_ys, custom_xs_and_ys
     )
 
     if check_seeds is not None:
@@ -1660,14 +1688,14 @@ def draw_wilson_score_interval_plot(
     if not legend:
         ax.get_legend().remove()
 
-    if isinstance(save_as, str):
-        save_as = (save_as,)
-    save_as = [style] + list(save_as)
-
     assert isinstance(relevant_data, pd.DataFrame)
     create_path_and_savefig(
         fig,
-        *save_as,
+        style,
+        "finetuned",
+        family,
+        attack,
+        dataset,
         "num_params",
         y_transf_data_name,
         f"smoothing-{smoothing}",
@@ -1715,12 +1743,83 @@ def draw_scatter_with_color_from_metric(
     plt.show()
 
 
-def _get_num_params_from_name(name: str) -> int:
+def get_family_from_name(name: str) -> str:
     if "pythia" in name.lower():
-        model_names, model_sizes = MODEL_NAMES, MODEL_SIZES
+        return "pythia"
+    elif "qwen" in name.lower():
+        return "qwen"
     else:
-        assert "qwen" in name.lower()
-        model_names, model_sizes = QWEN_MODEL_NAMES, QWEN_CLF_MODEL_SIZES
+        return _get_family_from_group(name)
+
+
+def get_attack_from_name(name: str) -> str:
+    if "infix" in name:
+        return "gcg_infix"
+    elif "prefix" in name:
+        return "gcg_prefix"
+    elif "gcg" in name:
+        return "gcg"
+    elif "_rt_" in name:
+        return "rt"
+    else:
+        return _get_attack_from_group(name)
+
+
+def get_dataset_from_name(name: str) -> str:
+    if "imdb" in name:
+        return "imdb"
+    elif "spam" in name:
+        return "spam"
+    elif "pm" in name:
+        return "pm"
+    elif "wl" in name:
+        return "wl"
+    elif "helpful" in name:
+        return "helpful"
+    elif "harmless" in name:
+        return "harmless"
+    elif "strongreject" in name:
+        return "strongreject"
+    else:
+        return _get_dataset_from_group(name)
+
+
+def _get_family_from_group(group: str) -> str:
+    for family, family_dict in RUN_NAMES.items():
+        for _, attack_dict in family_dict.items():
+            assert isinstance(attack_dict, dict)
+            for _, dataset_dict in attack_dict.items():
+                assert isinstance(dataset_dict, dict)
+                if group in dataset_dict["group_names"]:
+                    return family
+    raise ValueError(f"Couldn't find family for {group}")
+
+
+def _get_attack_from_group(group: str) -> str:
+    for _, model_dict in RUN_NAMES.items():
+        for attack, attack_dict in model_dict.items():
+            assert isinstance(attack_dict, dict)
+            for _, dataset_dict in attack_dict.items():
+                assert isinstance(dataset_dict, dict)
+                if group in dataset_dict["group_names"]:
+                    return attack
+    raise ValueError(f"Couldn't find attack for {group}")
+
+
+def _get_dataset_from_group(group: str) -> str:
+    for _, model_dict in RUN_NAMES.items():
+        for _, attack_dict in model_dict.items():
+            assert isinstance(attack_dict, dict)
+            for dataset, dataset_dict in attack_dict.items():
+                assert isinstance(dataset_dict, dict)
+                if group in dataset_dict["group_names"]:
+                    return dataset
+    raise ValueError(f"Couldn't find dataset for {group}")
+
+
+def _get_num_params_from_name(name: str, mode: str = "clf") -> int:
+    family = get_family_from_name(name)
+    model_names, model_sizes = MODEL_NAMES[family], MODEL_SIZES[mode][family]
     sizes_in_name = [i for i, size in enumerate(model_names) if size in name]
     assert len(sizes_in_name) == 1, f"Found {sizes_in_name} in {name}"
     return model_sizes[sizes_in_name[0]]
@@ -1740,7 +1839,14 @@ def _get_pretraining_fraction(name: str) -> float:
 
 def _update_model_sizes_as_necessary(df: pd.DataFrame) -> None:
     # Concatenate model sizes into one list
-    model_sizes = MODEL_SIZES + QWEN_CLF_MODEL_SIZES + QWEN_GEN_MODEL_SIZES
+    model_sizes = sum(
+        [
+            sizes_list
+            for mode_dict in MODEL_SIZES.values()
+            for sizes_list in mode_dict.values()
+        ],
+        [],
+    )
     # Sometimes, the model size is not a size that we recognize.
     # In those cases, just take the model size directly from
     # the model name.
@@ -1757,7 +1863,7 @@ def _update_model_sizes_as_necessary(df: pd.DataFrame) -> None:
             df.at[i, "num_params"] = size_from_name
 
 
-def postprocess_data(df, adjust_flops_for_n_val: bool = False):
+def postprocess_data(df: pd.DataFrame, adjust_flops_for_n_val: bool = False):
     df.rename(columns={"name_or_path": "model_name_or_path"}, inplace=True)
     if "model_size" in df:
         df["num_params"] = df["model_size"]
@@ -1830,6 +1936,8 @@ def restrict_asr_to_round(
     n_models: int,
     n_seeds: int,
     n_iterations: int,
+    family: str,
+    mode: str = "clf",
     round: int | float | None = None,
     check_seeds: bool = True,
 ) -> pd.DataFrame:
@@ -1840,7 +1948,7 @@ def restrict_asr_to_round(
     if "seed_idx" not in df and "model_name_or_path" in df:
         df["seed_idx"] = df.model_name_or_path.apply(_get_seed_from_name)
     if "num_params" not in df:
-        df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
+        df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[mode][family][x])
     df = df.drop_duplicates(
         subset=["model_idx", "seed_idx", "adv_training_round", "iteration"]
     )
@@ -1911,6 +2019,7 @@ def add_columns_for_attack_scaling(
 def plot_attack_scaling_base(
     orig_df: pd.DataFrame,
     metadata: PlotMetadata | None,
+    family: str,
     attack: str,
     dataset: str,
     round_info: str,
@@ -1987,6 +2096,7 @@ def plot_attack_scaling_base(
         fig,
         style,
         "asr",
+        family,
         attack,
         dataset,
         round_info,
@@ -1997,12 +2107,13 @@ def plot_attack_scaling_base(
         close=False,
     )
     # Now add the legend and export again
-    legend_handles = get_legend_handles(df, color_data_name, palette)
+    legend_handles = get_legend_handles(df, family, color_data_name, palette)
     create_legend(color_data_name, ax, legend_handles, outside=False)
     create_path_and_savefig(
         fig,
         style,
         "asr",
+        family,
         attack,
         dataset,
         round_info,
@@ -2016,7 +2127,7 @@ def plot_attack_scaling_base(
 
 
 def get_cached_asr_data(
-    group_name: str, for_offense_defense: bool = False
+    group_name: str, for_offense_defense: bool = False, mode: str = "clf"
 ) -> pd.DataFrame:
     root = compute_repo_path()
     path = os.path.join(root, "cache_csvs", f"asr_{group_name}.csv")
@@ -2032,7 +2143,8 @@ def get_cached_asr_data(
         assert set(df.columns.tolist()) > set(
             ["model_idx", "seed_idx", "asr", "iteration"]
         )
-    df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
+    family = get_family_from_name(group_name)
+    df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[mode][family][x])
     df["iteration_x_params"] = df.iteration * df.num_params
     df.sort_values("model_idx", inplace=True)
     return df
@@ -2094,6 +2206,7 @@ def get_unstacked_cached_attack_data(
 def save_asr_data(
     group_names: iter_str | str,
     merge_runs: iter_str | str,
+    family: str,
     attack: str,
     dataset: str,
     summary_keys: list[str],
@@ -2126,6 +2239,7 @@ def save_asr_data(
     for round in rounds:
         round_df = restrict_asr_to_round(
             asr_data,
+            family=family,
             n_models=n_models,
             n_seeds=n_seeds,
             n_iterations=n_iterations,
@@ -2138,6 +2252,7 @@ def save_asr_data(
             {
                 "group_names": group_names,
                 "merge_runs": merge_runs,
+                "family": family,
                 "attack": attack,
                 "dataset": dataset,
                 "summary_keys": summary_keys,
@@ -2148,6 +2263,7 @@ def save_asr_data(
                 "round": round,
             },
             "asr",
+            family,
             attack,
             dataset,
             round_to_str(round),
@@ -2155,6 +2271,7 @@ def save_asr_data(
 
 
 def load_and_plot_asr(
+    family: str,
     attack: str,
     dataset: str,
     rounds: list[int | float],
@@ -2167,7 +2284,7 @@ def load_and_plot_asr(
 ):
     for round in rounds:
         asr_data, metadata = read_csv_and_metadata(
-            "asr", attack, dataset, round_to_str(round)
+            "asr", family, attack, dataset, round_to_str(round)
         )
         if datapoints is not None and asr_data.iteration.nunique() > datapoints:
             # If datapoints=10, filter out all but empirical deciles
@@ -2179,6 +2296,7 @@ def load_and_plot_asr(
         plot_attack_scaling_base(
             asr_data,
             metadata,
+            family,
             attack,
             dataset,
             round_to_str(round),
@@ -2192,8 +2310,10 @@ def load_and_plot_asr(
 
 def prepare_offense_defense_data(
     group_names: iter_str | str,
+    family: str,
     attack: str,
     dataset: str,
+    mode: str = "clf",
     merge_runs: iter_str | str | None = None,
     summary_keys: list[str] | None = None,
     metrics: list[str] | None = None,
@@ -2227,7 +2347,7 @@ def prepare_offense_defense_data(
 
     df = adv_data.copy()
     if "num_params" not in df:
-        df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[x])
+        df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[mode][family][x])
 
     # We want the same number of iterations for the same model to be grouped
     # together in the plot
@@ -2299,6 +2419,7 @@ def prepare_offense_defense_data(
         prepare_offense_defense_data.__name__,
         {
             "group_names": group_names,
+            "family": family,
             "attack": attack,
             "dataset": dataset,
             "merge_runs": merge_runs,
@@ -2308,12 +2429,14 @@ def prepare_offense_defense_data(
             "use_group_cache": use_group_cache,
         },
         "offense_defense",
+        family,
         attack,
         dataset,
     )
 
 
 def load_and_plot_offense_defense_plots(
+    family: str,
     attack: str,
     dataset: str,
     x_data_name: str = "train_total_flops",
@@ -2331,12 +2454,15 @@ def load_and_plot_offense_defense_plots(
     diagonal_gridlines: bool = False,
     style: str = "paper",
 ):
-    adv_data, metadata = read_csv_and_metadata("offense_defense", attack, dataset)
+    adv_data, metadata = read_csv_and_metadata(
+        "offense_defense", family, attack, dataset
+    )
     draw_plot_adv_training(
         data=adv_data,
         metadata=metadata,
         x_data_name=x_data_name,
         color_data_name=color_data_name,
+        family=family,
         attack=attack,
         dataset=dataset,
         xlim=xlim,
@@ -2354,14 +2480,16 @@ def load_and_plot_offense_defense_plots(
     )
 
 
-def postprocess_attack_compute(df: pd.DataFrame, attack: str, dataset: str) -> None:
+def postprocess_attack_compute(
+    df: pd.DataFrame, family: str, attack: str, dataset: str
+) -> None:
     if "logit_asr" not in df.columns:
         df["logit_asr"] = TRANSFORMS["logit"](df["asr"])
     if "model_idx" not in df.columns:
         df = add_model_idx_inplace(df, reference_col="model_size")
     # Fudge the compute for the 12b model due to issue recording multi-GPU
     # flops.
-    fudge_factor = get_fudge_factor(attack, dataset)
+    fudge_factor = get_fudge_factor(family, attack, dataset)
     df.loc[df.model_idx == 9, "flops_per_iteration"] *= fudge_factor
     df["pretrain_compute"] = df.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
 

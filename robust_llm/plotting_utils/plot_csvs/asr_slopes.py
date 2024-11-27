@@ -18,9 +18,11 @@ from robust_llm.plotting_utils.tools import (
 )
 
 
-def regress_attack_scaling(attack: str, dataset: str, round: str, style: str = "paper"):
-    df, metadata = read_csv_and_metadata("asr", attack, dataset, round)
-    postprocess_attack_compute(df, attack, dataset)
+def regress_attack_scaling(
+    family: str, attack: str, dataset: str, round: str, style: str = "paper"
+):
+    df, metadata = read_csv_and_metadata("asr", family, attack, dataset, round)
+    postprocess_attack_compute(df, family, attack, dataset)
     df = df.loc[np.isfinite(df.logit_asr)]
     gradients = dict()
     reg = None
@@ -89,6 +91,7 @@ def regress_attack_scaling(attack: str, dataset: str, round: str, style: str = "
         fig,
         style,
         "asr",
+        family,
         attack,
         dataset,
         round,
@@ -104,7 +107,7 @@ def regress_attack_scaling(attack: str, dataset: str, round: str, style: str = "
 def main(style: str = "paper"):
 
     set_style(style)
-
+    family = "pythia"
     for attack in ["gcg", "gcg_gcg", "rt"]:
         for dataset in ["imdb", "spam", "pm", "wl", "helpful", "harmless"]:
             if dataset in ["helpful", "harmless"] and attack == "gcg_gcg":
@@ -122,7 +125,7 @@ def main(style: str = "paper"):
                 ]
             )
             for round in rounds:
-                regress_attack_scaling(attack, dataset, round, style=style)
+                regress_attack_scaling(family, attack, dataset, round, style=style)
 
 
 if __name__ == "__main__":

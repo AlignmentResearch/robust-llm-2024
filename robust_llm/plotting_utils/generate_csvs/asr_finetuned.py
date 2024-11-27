@@ -5,7 +5,10 @@ from tqdm import tqdm
 
 from robust_llm.plotting_utils.tools import (
     export_csv_and_metadata,
+    get_attack_from_name,
     get_cached_asr_logprob_data,
+    get_dataset_from_name,
+    get_family_from_name,
     prepare_adv_training_data,
 )
 
@@ -22,6 +25,8 @@ GROUPS = [
     "ian_111_rt_pythia_pm",
     "ian_112_rt_pythia_wl",
     "ian_113_rt_pythia_spam",
+    "oskar_025a_gcg_eval_qwen25_ft_harmless",
+    "oskar_025b_gcg_eval_qwen25_ft_spam",
 ]
 
 
@@ -29,8 +34,9 @@ def save_asr_for_group(
     df: pd.DataFrame,
     group_name: str,
 ):
-    attack = group_name.split("_")[2]
-    dataset = group_name.split("_")[-1]
+    family = get_family_from_name(group_name)
+    attack = get_attack_from_name(group_name)
+    dataset = get_dataset_from_name(group_name)
 
     flop_data = prepare_adv_training_data(
         (group_name,),
@@ -58,8 +64,12 @@ def save_asr_for_group(
         save_asr_for_group.__name__,
         {
             "group_name": group_name,
+            "model": family,
+            "attack": attack,
+            "dataset": dataset,
         },
         "asr",
+        family,
         attack,
         dataset,
         "finetuned",

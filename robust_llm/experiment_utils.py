@@ -50,7 +50,7 @@ def _concatenate_and_pad(
     return points
 
 
-def get_all_n_rounds_to_evaluate(
+def get_all_n_rounds_to_evaluate_pythia(
     attack: str,
     start_rounds: int = 0,
     middle_rounds: int = 10,

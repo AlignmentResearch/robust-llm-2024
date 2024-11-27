@@ -1,6 +1,11 @@
 """Generate data for basic finetuned plots (robustness vs. size)"""
 
-from robust_llm.plotting_utils.tools import make_finetuned_data
+from robust_llm.plotting_utils.tools import (
+    get_attack_from_name,
+    get_dataset_from_name,
+    get_family_from_name,
+    make_finetuned_data,
+)
 
 metrics = [
     "adversarial_eval/attack_success_rate",
@@ -39,19 +44,15 @@ FINETUNED_RUNS = [
 
 def main():
     for run in FINETUNED_RUNS:
-        if "pythia" in run:
-            attack, dataset = run.split("_")[2], run.split("_")[-1]
-            model = "pythia"
-        else:
-            assert "qwen25" in run
-            attack, dataset = run.split("_")[4], run.split("_")[3]
-            model = "qwen25"
+        family = get_family_from_name(run)
+        attack = get_attack_from_name(run)
+        dataset = get_dataset_from_name(run)
 
         make_finetuned_data(
             group_names=[
                 run,
             ],
-            save_as=("finetuned", model, attack, dataset),
+            save_as=("finetuned", family, attack, dataset),
             metrics=metrics,
             eval_summary_keys=summary_keys,
         )

@@ -1,30 +1,30 @@
 import re
 from typing import Any
 
-from robust_llm.wandb_utils.constants import MODEL_SIZES
-
-MODEL_PLOTTING_NAMES = [
-    "7.6M",
-    "17.6M",
-    "44.7M",
-    "123.7M",
-    "353.8M",
-    "908.8M",
-    "1.3B",
-    "2.6B",
-    "6.7B",
-    "11.6B",
-]
-
-assert len(MODEL_SIZES) == len(MODEL_PLOTTING_NAMES)
-PLOTTING_NAME_DICT = dict(zip(MODEL_SIZES, MODEL_PLOTTING_NAMES))
+MODEL_PLOTTING_NAMES = {
+    "pythia": [
+        "7.6M",
+        "17.6M",
+        "44.7M",
+        "123.7M",
+        "353.8M",
+        "908.8M",
+        "1.3B",
+        "2.6B",
+        "6.7B",
+        "11.6B",
+    ],
+    "qwen": ["0.5B", "1.5B", "3B", "7B", "14B"],
+}
 
 
-def get_fudge_factor(attack: str, dataset: str) -> float:
-    """This is a per-task multiplier we use to fix multi-GPU flops for the 12b model.
+def get_fudge_factor(model: str, attack: str, dataset: str) -> float:
+    """This is a per-task multiplier to fix multi-GPU flops for the 12b pythia model.
 
     The values are all chosen empirically.
     """
+    if model.lower() != "pythia":
+        return 1.0
     if dataset.lower() == "imdb":
         if attack.lower() == "gcg":
             return 1.6
@@ -107,117 +107,121 @@ LOG_SCALE_VARIABLES = [
 ]
 
 RUN_NAMES = {
-    "rt_gcg": {
-        "imdb": {
-            "group_names": "tom_005a_eval_niki_149_gcg",
-            "merge_runs": "niki_149_adv_tr_rt_imdb_small",
+    "pythia": {
+        "rt_gcg": {
+            "imdb": {
+                "group_names": "tom_005a_eval_niki_149_gcg",
+                "merge_runs": "niki_149_adv_tr_rt_imdb_small",
+            },
+            "spam": {
+                "group_names": "tom_006_eval_niki_150_gcg",
+                "merge_runs": ("niki_150_adv_tr_rt_spam_small",),
+            },
+            "wl": {
+                "group_names": "tom_012_eval_niki_153_gcg",
+                "merge_runs": (
+                    "niki_153_adv_tr_rt_wl_small",
+                    "niki_159_adv_tr_rt_wl_large",
+                ),
+            },
+            "pm": {
+                "group_names": "tom_011_eval_niki_151_gcg",
+                "merge_runs": (
+                    "niki_151_adv_tr_rt_pm_small",
+                    "niki_158_adv_tr_rt_pm_large",
+                ),
+            },
         },
-        "spam": {
-            "group_names": "tom_006_eval_niki_150_gcg",
-            "merge_runs": ("niki_150_adv_tr_rt_spam_small",),
+        "gcg_gcg_infix90": {
+            "imdb": {
+                "group_names": (
+                    "tom_008_eval_niki_152_gcg_infix90",
+                    "tom_008_eval_niki_152a_gcg_infix90",
+                ),
+                "merge_runs": (
+                    "niki_152a_adv_tr_gcg_imdb_small",
+                    "niki_152_adv_tr_gcg_imdb_small",
+                ),
+            },
+            "spam": {
+                "group_names": "tom_010_eval_niki_170_gcg_infix90",
+                "merge_runs": "niki_170_adv_tr_gcg_spam_small",
+            },
         },
-        "wl": {
-            "group_names": "tom_012_eval_niki_153_gcg",
-            "merge_runs": (
-                "niki_153_adv_tr_rt_wl_small",
-                "niki_159_adv_tr_rt_wl_large",
-            ),
+        "gcg_gcg_prefix": {
+            "imdb": {
+                "group_names": (
+                    "tom_015_eval_niki_152_gcg_prefix",
+                    "tom_015_eval_niki_152a_gcg_prefix",
+                ),
+                "merge_runs": (
+                    "niki_152a_adv_tr_gcg_imdb_small",
+                    "niki_152_adv_tr_gcg_imdb_small",
+                ),
+            },
+            "spam": {
+                "group_names": "tom_016_eval_niki_170_gcg_prefix",
+                "merge_runs": "niki_170_adv_tr_gcg_spam_small",
+            },
         },
-        "pm": {
-            "group_names": "tom_011_eval_niki_151_gcg",
-            "merge_runs": (
-                "niki_151_adv_tr_rt_pm_small",
-                "niki_158_adv_tr_rt_pm_large",
-            ),
+        "gcg_gcg": {
+            "imdb": {
+                "group_names": (
+                    "tom_007_eval_niki_152_gcg",
+                    "tom_007_eval_niki_152a_gcg",
+                ),
+                "merge_runs": (
+                    "niki_152a_adv_tr_gcg_imdb_small",
+                    "niki_152_adv_tr_gcg_imdb_small",
+                ),
+            },
+            "spam": {
+                "group_names": "tom_009_eval_niki_170_gcg",
+                "merge_runs": "niki_170_adv_tr_gcg_spam_small",
+            },
+            "wl": {
+                "group_names": "tom_014_eval_niki_172_gcg",
+                "merge_runs": "niki_172_adv_tr_gcg_wl_small",
+            },
+            "pm": {
+                "group_names": "tom_013_eval_niki_171_gcg",
+                "merge_runs": "niki_171_adv_tr_gcg_pm_small",
+            },
         },
-    },
-    "gcg_gcg_infix90": {
-        "imdb": {
-            "group_names": (
-                "tom_008_eval_niki_152_gcg_infix90",
-                "tom_008_eval_niki_152a_gcg_infix90",
-            ),
-            "merge_runs": (
-                "niki_152a_adv_tr_gcg_imdb_small",
-                "niki_152_adv_tr_gcg_imdb_small",
-            ),
+        "gcg_gcg_match_seed": {
+            "imdb": {
+                "group_names": ("oskar_019b_suffix_eval_adv_tr_gcg_imdb_small",),
+                "merge_runs": (
+                    "niki_152a_adv_tr_gcg_imdb_small",
+                    "niki_152_adv_tr_gcg_imdb_small",
+                    # "ian_141_rerun_adv_tr_gcg_imdb_small", # Flops data unuseable
+                ),
+            },
         },
-        "spam": {
-            "group_names": "tom_010_eval_niki_170_gcg_infix90",
-            "merge_runs": "niki_170_adv_tr_gcg_spam_small",
+        "gcg_gcg_infix90_match_seed": {
+            "imdb": {
+                "group_names": ("oskar_019a_infix_eval_adv_tr_gcg_imdb_small",),
+                "merge_runs": (
+                    "niki_152a_adv_tr_gcg_imdb_small",
+                    "niki_152_adv_tr_gcg_imdb_small",
+                    # "ian_141_rerun_adv_tr_gcg_imdb_small", # Flops data unuseable
+                ),
+            },
         },
-    },
-    "gcg_gcg_prefix": {
-        "imdb": {
-            "group_names": (
-                "tom_015_eval_niki_152_gcg_prefix",
-                "tom_015_eval_niki_152a_gcg_prefix",
-            ),
-            "merge_runs": (
-                "niki_152a_adv_tr_gcg_imdb_small",
-                "niki_152_adv_tr_gcg_imdb_small",
-            ),
+        "gcg_no_ramp_gcg": {
+            "imdb": {
+                "group_names": "niki_iki_eval_niki_182_gcg",
+                "merge_runs": "niki_182_adv_tr_no_ramp_small",
+            },
         },
-        "spam": {
-            "group_names": "tom_016_eval_niki_170_gcg_prefix",
-            "merge_runs": "niki_170_adv_tr_gcg_spam_small",
-        },
-    },
-    "gcg_gcg": {
-        "imdb": {
-            "group_names": (
-                "tom_007_eval_niki_152_gcg",
-                "tom_007_eval_niki_152a_gcg",
-            ),
-            "merge_runs": (
-                "niki_152a_adv_tr_gcg_imdb_small",
-                "niki_152_adv_tr_gcg_imdb_small",
-            ),
-        },
-        "spam": {
-            "group_names": "tom_009_eval_niki_170_gcg",
-            "merge_runs": "niki_170_adv_tr_gcg_spam_small",
-        },
-        "wl": {
-            "group_names": "tom_014_eval_niki_172_gcg",
-            "merge_runs": "niki_172_adv_tr_gcg_wl_small",
-        },
-        "pm": {
-            "group_names": "tom_013_eval_niki_171_gcg",
-            "merge_runs": "niki_171_adv_tr_gcg_pm_small",
-        },
-    },
-    "gcg_gcg_match_seed": {
-        "imdb": {
-            "group_names": ("oskar_019b_suffix_eval_adv_tr_gcg_imdb_small",),
-            "merge_runs": (
-                "niki_152a_adv_tr_gcg_imdb_small",
-                "niki_152_adv_tr_gcg_imdb_small",
-                # "ian_141_rerun_adv_tr_gcg_imdb_small", # Flops data unuseable
-            ),
-        },
-    },
-    "gcg_gcg_infix90_match_seed": {
-        "imdb": {
-            "group_names": ("oskar_019a_infix_eval_adv_tr_gcg_imdb_small",),
-            "merge_runs": (
-                "niki_152a_adv_tr_gcg_imdb_small",
-                "niki_152_adv_tr_gcg_imdb_small",
-                # "ian_141_rerun_adv_tr_gcg_imdb_small", # Flops data unuseable
-            ),
-        },
-    },
-    "gcg_no_ramp_gcg": {
-        "imdb": {
-            "group_names": "niki_iki_eval_niki_182_gcg",
-            "merge_runs": "niki_182_adv_tr_no_ramp_small",
-        },
-    },
+    }
 }
 
 
-def get_run_names(attack: str, dataset: str) -> dict[str, Any]:
-    attack_info = RUN_NAMES.get(attack)
+def get_run_names(family: str, attack: str, dataset: str) -> dict[str, Any]:
+    family_info = RUN_NAMES.get(family)
+    assert isinstance(family_info, dict)
+    attack_info = family_info.get(attack)
     assert isinstance(attack_info, dict)
     dataset_info = attack_info.get(dataset)
     assert isinstance(dataset_info, dict)

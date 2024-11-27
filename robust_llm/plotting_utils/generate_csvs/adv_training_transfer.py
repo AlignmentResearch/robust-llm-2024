@@ -22,25 +22,26 @@ METRICS = [
 
 
 def main():
-    for attack, dataset in (
-        ("rt_gcg", "imdb"),
-        ("rt_gcg", "spam"),
-        ("rt_gcg", "wl"),
-        ("rt_gcg", "pm"),
-        ("gcg_gcg_infix90_match_seed", "imdb"),
-        ("gcg_gcg_infix90", "imdb"),
-        ("gcg_gcg_infix90", "spam"),
-        ("gcg_gcg_prefix", "imdb"),
-        ("gcg_gcg_prefix", "spam"),
-        ("gcg_no_ramp_gcg", "imdb"),
+    for family, attack, dataset in (
+        ("pythia", "rt_gcg", "imdb"),
+        ("pythia", "rt_gcg", "spam"),
+        ("pythia", "rt_gcg", "wl"),
+        ("pythia", "rt_gcg", "pm"),
+        ("pythia", "gcg_gcg_infix90_match_seed", "imdb"),
+        ("pythia", "gcg_gcg_infix90", "imdb"),
+        ("pythia", "gcg_gcg_infix90", "spam"),
+        ("pythia", "gcg_gcg_prefix", "imdb"),
+        ("pythia", "gcg_gcg_prefix", "spam"),
+        ("pythia", "gcg_no_ramp_gcg", "imdb"),
     ):
         save_adv_training_data(
+            family=family,
             attack=attack,
             dataset=dataset,
             summary_keys=summary_keys,
             metrics=METRICS,
             use_group_cache=True,
-            **get_run_names(attack, dataset),
+            **get_run_names(family, attack, dataset),
         )
 
 

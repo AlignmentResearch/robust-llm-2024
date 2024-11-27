@@ -14,10 +14,11 @@ def main(style: str = "paper"):
     ROUNDS = [0, 1, 2, 3, 4, 5, 10]
     all_data = []
     metadata = None
+    family = "pythia"
     for attack in ("gcg_gcg",):
         for dataset in ("imdb", "spam", "wl", "pm"):
             adv_data, metadata = read_csv_and_metadata(
-                "post_adv_training", attack, dataset
+                "post_adv_training", family, attack, dataset
             )
             for legend in (True, False):
                 for ytransform in ("logit", "none"):
@@ -28,19 +29,22 @@ def main(style: str = "paper"):
                             metadata,
                             title=f" {name_to_attack(eval_attack)}, "
                             f"{name_to_dataset(dataset)}",
-                            save_as=("post_adv_training", attack, dataset),
+                            family=family,
+                            attack=attack,
+                            dataset=dataset,
                             legend=legend,
                             rounds=ROUNDS,
                             ytransform=ytransform,
                             y_data_name=y_data_name,
                             style=style,
                         )
+            adv_data["family"] = family
             adv_data["attack"] = attack
             adv_data["dataset"] = dataset
             all_data.append(adv_data)
     concat_data = pd.concat(all_data)
     concat_data = concat_data.loc[concat_data.adv_training_round.eq(0)]
-    for attack, attack_df in concat_data.groupby("attack"):
+    for (family, attack), attack_df in concat_data.groupby(["family", "attack"]):
         assert isinstance(attack, str)
         for legend in (True, False):
             for ytransform in ("logit", "none"):
@@ -49,7 +53,9 @@ def main(style: str = "paper"):
                         attack_df,
                         metadata,
                         title=f"{name_to_attack(attack)} Attack on All Tasks",
-                        save_as=("post_adv_training", attack, "all", "round0"),
+                        family=family,
+                        attack=attack,
+                        adversarial=True,
                         ytransform=ytransform,
                         y_data_name=y_data_name,
                         legend=legend,

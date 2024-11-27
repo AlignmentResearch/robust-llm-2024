@@ -12,20 +12,21 @@ def main(style):
     # Set the plot style
     set_style(style)
 
-    for attack, dataset in [
-        ("rt_gcg", "imdb"),
-        ("rt_gcg", "spam"),
-        ("gcg_gcg", "imdb"),
-        ("gcg_gcg_infix90", "imdb"),
-        ("gcg_gcg", "spam"),
-        ("gcg_gcg_infix90", "spam"),
-        ("gcg_gcg", "wl"),
-        ("gcg_gcg_prefix", "imdb"),
-        ("gcg_gcg_prefix", "spam"),
-        ("gcg_no_ramp_gcg", "imdb"),
+    for family, attack, dataset in [
+        ("pythia", "rt_gcg", "imdb"),
+        ("pythia", "rt_gcg", "spam"),
+        ("pythia", "gcg_gcg", "imdb"),
+        ("pythia", "gcg_gcg_infix90", "imdb"),
+        ("pythia", "gcg_gcg", "spam"),
+        ("pythia", "gcg_gcg_infix90", "spam"),
+        ("pythia", "gcg_gcg", "wl"),
+        ("pythia", "gcg_gcg_prefix", "imdb"),
+        ("pythia", "gcg_gcg_prefix", "spam"),
+        ("pythia", "gcg_no_ramp_gcg", "imdb"),
     ]:
         for x in ("attack_flops_fraction_pretrain",):
             load_and_plot_asr(
+                family=family,
                 attack=attack,
                 dataset=dataset,
                 rounds=ROUNDS,

@@ -50,7 +50,7 @@ def test_get_legend_handles():
     )
     palette_dict = {1e6: (1, 0, 0), 1e7: (0, 1, 0), 1e8: (0, 0, 1)}
 
-    legend_handles = get_legend_handles(data, "num_params", palette_dict)
+    legend_handles = get_legend_handles(data, "pythia", "num_params", palette_dict)
     assert len(legend_handles) == 3
     assert all(
         isinstance(handle, plt.Line2D)  # type: ignore
@@ -58,7 +58,9 @@ def test_get_legend_handles():
     )
 
     palette_dict = {1: (1, 0, 0), 2: (0, 1, 0), 3: (0, 0, 1)}
-    legend_handles = get_legend_handles(data, "adv_training_round", palette_dict)
+    legend_handles = get_legend_handles(
+        data, "pythia", "adv_training_round", palette_dict
+    )
     assert len(legend_handles) == 3
     assert all(
         isinstance(handle, plt.Line2D)  # type: ignore
@@ -112,7 +114,7 @@ def test_postprocess_data(sample_data):
 
 def test_get_num_params_from_name():
     assert _get_num_params_from_name("pythia-70m") == 44_672_000
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         _get_num_params_from_name("invalid_model_name")
 
 

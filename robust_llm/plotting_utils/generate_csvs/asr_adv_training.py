@@ -19,22 +19,23 @@ ROUNDS = [0, 1e-4, 1e-3, 5e-3, -1]
 
 
 def main():
-    for attack, dataset in [
-        ("rt_gcg", "imdb"),
-        ("rt_gcg", "spam"),
-        ("gcg_gcg", "imdb"),
-        ("gcg_gcg", "spam"),
-        ("gcg_gcg", "wl"),
-        ("gcg_gcg", "pm"),
-        ("gcg_gcg_infix90", "imdb"),
-        ("gcg_gcg_infix90", "spam"),
-        ("gcg_gcg_prefix", "imdb"),
-        ("gcg_gcg_prefix", "spam"),
-        ("gcg_no_ramp_gcg", "imdb"),
+    for family, attack, dataset in [
+        ("pythia", "rt_gcg", "imdb"),
+        ("pythia", "rt_gcg", "spam"),
+        ("pythia", "gcg_gcg", "imdb"),
+        ("pythia", "gcg_gcg", "spam"),
+        ("pythia", "gcg_gcg", "wl"),
+        ("pythia", "gcg_gcg", "pm"),
+        ("pythia", "gcg_gcg_infix90", "imdb"),
+        ("pythia", "gcg_gcg_infix90", "spam"),
+        ("pythia", "gcg_gcg_prefix", "imdb"),
+        ("pythia", "gcg_gcg_prefix", "spam"),
+        ("pythia", "gcg_no_ramp_gcg", "imdb"),
     ]:
         save_asr_data(
             summary_keys=summary_keys,
             metrics=METRICS,
+            family=family,
             attack=attack,
             dataset=dataset,
             n_models=10,
@@ -42,7 +43,7 @@ def main():
             check_seeds=False,
             n_iterations=64 if "infix" in attack else 128,
             rounds=ROUNDS,
-            **get_run_names(attack, dataset),
+            **get_run_names(family, attack, dataset),
         )
 
 

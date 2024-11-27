@@ -22,27 +22,22 @@ METRICS = [
 
 
 def main():
-    for attack in (
-        "gcg_gcg_match_seed",
-        "gcg_gcg",
-    ):
-        for dataset in (
-            "imdb",
-            "spam",
-            "wl",
-            "pm",
-        ):
-            if "match_seed" in attack and dataset != "imdb":
-                # We re-ran some IMDB adv training with ft_seed==adv_seed
-                continue
-            save_adv_training_data(
-                attack=attack,
-                dataset=dataset,
-                summary_keys=summary_keys,
-                metrics=METRICS,
-                use_group_cache=True,
-                **get_run_names(attack, dataset),
-            )
+    for family, attack, dataset in [
+        ("pythia", "gcg_gcg_match_seed", "imdb"),
+        ("pythia", "gcg_gcg", "imdb"),
+        ("pythia", "gcg_gcg", "spam"),
+        ("pythia", "gcg_gcg", "wl"),
+        ("pythia", "gcg_gcg", "pm"),
+    ]:
+        save_adv_training_data(
+            family=family,
+            attack=attack,
+            dataset=dataset,
+            summary_keys=summary_keys,
+            metrics=METRICS,
+            use_group_cache=True,
+            **get_run_names(family, attack, dataset),
+        )
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ from robust_llm.config.configs import (
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.dist_utils import dist_rmtree
-from robust_llm.experiment_utils import get_all_n_rounds_to_evaluate
+from robust_llm.experiment_utils import get_all_n_rounds_to_evaluate_pythia
 from robust_llm.utils import (
     BalancedSampler,
     deterministic_hash,
@@ -171,7 +171,7 @@ def test_nested_list_to_tuple():
     ],
 )
 def test_get_all_n_rounds_to_evaluate(attack, start_rounds, middle_rounds, end_rounds):
-    n_rounds = get_all_n_rounds_to_evaluate(
+    n_rounds = get_all_n_rounds_to_evaluate_pythia(
         attack, start_rounds, middle_rounds, end_rounds
     )
     assert len(n_rounds) == 10

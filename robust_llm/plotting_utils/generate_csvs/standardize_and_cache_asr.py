@@ -15,6 +15,9 @@ def maybe_download_asr_data(group: str) -> None:
     We want to standardize many runs with different storage methods to be convenient
     CSVs in the repo. This function downloads the runs where we save a wandb table
     (i.e. artifact) called asr_per_iteration and standardizes them to a CSV.
+
+    TODO(Oskar): Try using metrics rather than artifacts to retrieve this data
+    because then we can also get the log_mean_prob and mean_log_prob metrics.
     """
     asr_path = f"cache_csvs/asr_{group}.csv"
     if os.path.exists(asr_path):

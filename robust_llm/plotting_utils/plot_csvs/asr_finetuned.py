@@ -17,6 +17,7 @@ from robust_llm.plotting_utils.tools import (
 def plot_asr_for_group(
     df: pd.DataFrame,
     metadata: PlotMetadata | None,
+    family: str,
     attack: str,
     dataset: str,
     x: str = "iteration_x_flops",
@@ -25,10 +26,11 @@ def plot_asr_for_group(
     smoothing: int = DEFAULT_SMOOTHING,
     style: str = "paper",
 ):
-    postprocess_attack_compute(df, attack, dataset)
+    postprocess_attack_compute(df, family, attack, dataset)
     plot_attack_scaling_base(
         df,
         metadata=metadata,
+        family=family,
         attack=attack,
         dataset=dataset,
         round_info="finetuned",
@@ -42,9 +44,12 @@ def plot_asr_for_group(
 
 def main(style: str):
     set_style(style)
+    family = "pythia"
     for attack in ("gcg", "rt"):
         for dataset in ("imdb", "pm", "wl", "spam", "helpful", "harmless"):
-            df, metadata = read_csv_and_metadata("asr", attack, dataset, "finetuned")
+            df, metadata = read_csv_and_metadata(
+                "asr", family, attack, dataset, "finetuned"
+            )
             for x in ("attack_flops_fraction_pretrain",):
                 for y_transf, y_data in [
                     ("logit", "asr"),
@@ -54,6 +59,7 @@ def main(style: str):
                     plot_asr_for_group(
                         df,
                         metadata=metadata,
+                        family=family,
                         attack=attack,
                         dataset=dataset,
                         x=x,
