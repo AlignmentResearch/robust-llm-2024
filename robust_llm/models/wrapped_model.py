@@ -700,7 +700,7 @@ class WrappedModel(ABC):
                 self.eval_minibatch_size.
 
         Yields:
-            A SequenceClassifierOutput object, which has a 'logits' attribute.
+            Logits.
         """
 
         minibatch_size = self.get_minibatch_size(input_ids, minibatch_size)

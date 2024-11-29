@@ -4,14 +4,15 @@ import pytest
 
 from robust_llm.__main__ import run
 from robust_llm.config import (
+    BeastAttackConfig,
     DatasetConfig,
     EnvironmentConfig,
+    EvaluationConfig,
     ExperimentConfig,
+    GCGAttackConfig,
     ModelConfig,
     RandomTokenAttackConfig,
 )
-from robust_llm.config.attack_configs import GCGAttackConfig
-from robust_llm.config.configs import EvaluationConfig
 from robust_llm.utils import interpolate_config
 
 
@@ -93,3 +94,23 @@ def test_gcg_asr(exp_config: ExperimentConfig) -> None:
     exp_config.evaluation.num_iterations = 2
 
     _test_attack(exp_config, success_rate_at_least=28)
+
+
+def test_beast_asr(exp_config: ExperimentConfig) -> None:
+    assert exp_config.evaluation is not None
+    exp_config.evaluation.evaluation_attack = BeastAttackConfig(
+        beam_search_width=4,
+        beam_branch_factor=4,
+        sampling_model=ModelConfig(
+            name_or_path="EleutherAI/pythia-14m",
+            family="pythia",
+            inference_type="generation",
+            revision="main",
+            max_minibatch_size=4,
+            eval_minibatch_multiplier=1,
+            env_minibatch_multiplier=0.5,
+        ),
+    )
+    exp_config.evaluation.num_iterations = 2
+
+    _test_attack(exp_config, success_rate_at_least=22)

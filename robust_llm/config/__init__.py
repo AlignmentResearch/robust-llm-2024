@@ -1,6 +1,7 @@
 from .attack_configs import (
     AttackConfig,
     BeamSearchAttackConfig,
+    BeastAttackConfig,
     FewShotLMAttackConfig,
     GCGAttackConfig,
     LMAttackConfig,
@@ -20,6 +21,7 @@ from .model_configs import ModelConfig
 __all__ = [
     "AttackConfig",
     "BeamSearchAttackConfig",
+    "BeastAttackConfig",
     "GCGAttackConfig",
     "RandomTokenAttackConfig",
     "LMAttackConfig",

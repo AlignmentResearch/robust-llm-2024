@@ -1,0 +1,20 @@
+# @package _global_
+defaults:
+- /dataset: EnronSpam/stable
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: BEAST
+# Sample from the smallest model of the model family
+- /model@evaluation.evaluation_attack.sampling_model: EleutherAI/pythia-14m
+- _self_
+
+dataset:
+  n_train: 0
+  n_val: 500
+
+evaluation:
+  num_iterations: 40
+  evaluation_attack:
+    sampling_model:
+      inference_type: "generation"
+
+experiment_type: "evaluation"

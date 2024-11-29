@@ -1,12 +1,14 @@
 from typing import Any, Type
 
 from robust_llm.attacks.attack import Attack, IdentityAttack, extract_attack_config
+from robust_llm.attacks.beast.beast import BeastAttack
 from robust_llm.attacks.search_based.search_based import SearchBasedAttack
 from robust_llm.attacks.search_free.lm_attack_few_shot import FewShotLMAttack
 from robust_llm.attacks.search_free.lm_attack_zero_shot import ZeroShotLMAttack
 from robust_llm.attacks.search_free.random_token import RandomTokenAttack
 from robust_llm.config.attack_configs import (
     BeamSearchAttackConfig,
+    BeastAttackConfig,
     FewShotLMAttackConfig,
     GCGAttackConfig,
     IdentityAttackConfig,
@@ -35,6 +37,8 @@ def create_attack(
             cls = RandomTokenAttack
         case BeamSearchAttackConfig() | GCGAttackConfig():
             cls = SearchBasedAttack
+        case BeastAttackConfig():
+            cls = BeastAttack
         case FewShotLMAttackConfig():
             cls = FewShotLMAttack
         case LMAttackConfig():

@@ -274,6 +274,49 @@ class BeamSearchAttackConfig(SearchBasedAttackConfig):
         super().__post_init__()
 
 
+@dataclass
+class BeastAttackConfig(AttackConfig):
+    """Required options with defaults for the BEAST attack.
+
+    BEAST is supposed to sample tokens from the victim model, but for
+    classification models this isn't directly possible because they don't
+    have an unembedding layer to convert the last hidden state into token
+    logits.
+
+    Args:
+        beam_search_width: how many candidates to keep after each iteration.
+        beam_branch_factor: how many new candidates to generate from each
+            candidate in an iteration.
+        sampling_model: Model to sample from for the attack, if it is different
+            from the victim model.
+        scores_from_text_callback: The config of the ScoringCallback to use to
+            compute scores for the inputs. Must take text as input, and return
+            floats that can be used to rank the inputs.
+    """
+
+    # Appendix D of the Beast paper says the authors the number of iterations
+    # (number of tokens) to 40 and the two beam hyperparameters to be 15 (k1 and
+    # k2 in Algorithm 1, and just k in Appendix D since Section 3.3 says k1 = k2
+    # for simplicity).
+    beam_search_width: int = 15
+    beam_branch_factor: int = 15
+
+    sampling_model: ModelConfig | None = None
+
+    scores_from_text_callback: CallbackConfig = field(
+        default_factory=lambda: CallbackConfig(
+            callback_name="losses_from_text", callback_return_type="tensor"
+        )
+    )
+
+    def __post_init__(self):
+        assert self.beam_search_width >= 1
+        assert self.beam_branch_factor >= 1
+        if self.sampling_model is not None:
+            assert self.sampling_model.inference_type == "generation"
+        super().__post_init__()
+
+
 # Register attack configs.
 cs = ConfigStore.instance()
 cs.store(group="attack", name="IDENTITY", node=IdentityAttackConfig)
@@ -284,5 +327,6 @@ cs.store(
 )
 cs.store(group="attack", name="GCG", node=GCGAttackConfig)
 cs.store(group="attack", name="BEAM_SEARCH", node=BeamSearchAttackConfig)
+cs.store(group="attack", name="BEAST", node=BeastAttackConfig)
 cs.store(group="attack", name="ZERO_SHOT_LM", node=LMAttackConfig)
 cs.store(group="attack", name="FEW_SHOT_LM", node=FewShotLMAttackConfig)

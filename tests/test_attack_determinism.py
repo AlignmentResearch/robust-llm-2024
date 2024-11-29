@@ -6,13 +6,15 @@ from accelerate import Accelerator
 
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.config import (
+    BeastAttackConfig,
     DatasetConfig,
     EnvironmentConfig,
     ExperimentConfig,
+    GCGAttackConfig,
+    LMAttackConfig,
     ModelConfig,
     RandomTokenAttackConfig,
 )
-from robust_llm.config.attack_configs import GCGAttackConfig, LMAttackConfig
 from robust_llm.config.callback_configs import (
     AutoregressiveCallbackConfig,
     CallbackConfig,
@@ -296,3 +298,63 @@ def test_lm_attack_gen_determinism(
     )
     validation_set = load_rllm_dataset(exp_config.dataset, split="validation")
     _test_attack_determinism(exp_config, victim_model, validation_set)
+
+
+def test_beast_determinism(
+    exp_config: ExperimentConfig,
+    victim_model: WrappedModel,
+    validation_set: RLLMDataset,
+):
+    assert exp_config.evaluation is not None
+    exp_config.evaluation.evaluation_attack = BeastAttackConfig(
+        beam_search_width=3,
+        beam_branch_factor=3,
+        sampling_model=ModelConfig(
+            name_or_path=DUMMY_NEOX_GEN,
+            family="pythia",
+            inference_type="generation",
+            revision="main",
+            max_minibatch_size=4,
+            eval_minibatch_multiplier=1,
+            env_minibatch_multiplier=0.5,
+        ),
+    )
+    _test_attack_determinism(exp_config, victim_model, validation_set)
+
+
+@pytest.mark.multigpu
+def test_beast_checkpoint_determinism(
+    exp_config: ExperimentConfig,
+    victim_model: WrappedModel,
+    validation_set: RLLMDataset,
+    capsys: pytest.CaptureFixture,
+):
+    assert exp_config.evaluation is not None
+    exp_config.evaluation.evaluation_attack = BeastAttackConfig(
+        beam_search_width=3,
+        beam_branch_factor=3,
+        sampling_model=ModelConfig(
+            name_or_path=DUMMY_NEOX_GEN,
+            family="pythia",
+            inference_type="generation",
+            revision="main",
+            max_minibatch_size=4,
+            eval_minibatch_multiplier=1,
+            env_minibatch_multiplier=0.5,
+        ),
+        save_steps=3,
+    )
+    exp_config.environment.allow_checkpointing = True
+    logging_context = LoggingContext(
+        args=exp_config,
+    )
+    logging_context.setup()
+    checkpoint_dir = get_checkpoint_path(exp_config)
+    dist_rmtree(checkpoint_dir)
+    initial_texts = _get_attacked_texts(exp_config, victim_model, validation_set)
+    initial_stdout = capsys.readouterr()[-1]
+    assert "Loading state from" not in initial_stdout
+    rerun_texts = _get_attacked_texts(exp_config, victim_model, validation_set)
+    rerun_stdout = capsys.readouterr()[-1]
+    assert "Loading state from" in rerun_stdout
+    assert initial_texts == rerun_texts
