@@ -80,6 +80,11 @@ OVERRIDE_ARGS_LIST = [x[0] for x in OVERRIDE_TUPLES]
 N_GPUS = [x[1] for x in OVERRIDE_TUPLES]
 MEMORY = [x[2] for x in OVERRIDE_TUPLES]
 CLUSTER = [x[3] for x in OVERRIDE_TUPLES]
+PRIORITY = [
+    "low-batch" if x["+model"].split("/")[-1].split("-s")[0] == "Qwen2.5-14B" else "high-batch"  # type: ignore # noqa
+    for x in OVERRIDE_ARGS_LIST
+]
+print(PRIORITY)
 
 if __name__ == "__main__":
     run_multiple(
@@ -90,6 +95,6 @@ if __name__ == "__main__":
         memory=MEMORY,
         cluster=CLUSTER,
         cpu=8,
-        priority="normal-batch",
+        priority=PRIORITY,
         container_tag="2024-11-03-14-15-57-main",
     )

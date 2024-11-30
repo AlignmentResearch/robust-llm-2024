@@ -17,11 +17,12 @@ HYDRA_CONFIG = f"ian/iclr2024_stronger_{ATTACK}_{DATASET}"
 MODEL_GPU_MEMORY_CLUSTER_PARALLEL: list[tuple[str, int, str, str, int]] = [
     ("0.5B", 1, "40G", "a6k", 1),
     ("1.5B", 1, "80G", "a6k", 1),
-    ("3B", 1, "100G", "a6k", 1),
+    ("3B", 1, "100G", "h100", 1),
     ("7B", 2, "150G", "h100", 1),
-    ("14B", 2, "200G", "h100", 1),
 ]
-SEEDS = [0, 1, 2]
+SEEDS = [
+    0,
+]
 
 OVERRIDE_TUPLES = [
     (
@@ -58,6 +59,6 @@ if __name__ == "__main__":
         cluster=CLUSTER,
         n_max_parallel=PARALLEL,
         cpu=8,
-        priority="normal-batch",
-        container_tag="2024-11-03-14-15-57-main",
+        priority="low-batch",
+        container_tag="2024-11-24-04-09-25-pr1132",
     )
