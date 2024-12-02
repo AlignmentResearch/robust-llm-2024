@@ -350,12 +350,73 @@ class WrappedModel(ABC):
         )
         log("DEBUG: Pushed model to hub.", main_process_only=False)
 
+    def _convert_size_to_bytes(self, size_str: str) -> int:
+        """Convert human readable size string to bytes.
+
+        Args:
+            size_str: Size string like "10GB", "1GB", "100MB"
+
+        Returns:
+            Size in bytes
+        """
+        size_units = {"B": 1, "KB": 1024, "MB": 1024**2, "GB": 1024**3}
+        size_str = size_str.upper()
+        unit = size_str[-2:] if size_str[-2:] in size_units else "B"
+        number = float(size_str[:-2] if unit != "B" else size_str)
+        return int(number * size_units[unit])
+
+    def _construct_shards(
+        self,
+        state_dict: dict[str, torch.Tensor],
+        max_size_bytes: int,
+    ) -> tuple[dict[str, dict[str, torch.Tensor]], dict[str, str]]:
+        """Construct shards from state dict based on size constraints
+
+        Args:
+            state_dict: Model state dictionary
+            max_size_bytes: Maximum shard size in bytes
+
+        Returns:
+            Tuple of (
+                shards dict mapping shard files to their contents,
+                weight map dict mapping parameter names to shard files
+            )
+        """
+        shards: dict[str, dict[str, torch.Tensor]] = {}
+        weight_map: dict[str, str] = {}
+        current_shard: dict[str, torch.Tensor] = {}
+        current_shard_size = 0
+        shard_index = 0
+
+        for key, tensor in state_dict.items():
+            tensor_size = tensor.numel() * tensor.element_size()
+
+            if current_shard_size + tensor_size > max_size_bytes and current_shard:
+                # Save current shard and start a new one
+                shard_filename = f"pytorch_model-{shard_index:05d}.bin"
+                shards[shard_filename] = current_shard
+                current_shard = {}
+                current_shard_size = 0
+                shard_index += 1
+
+            current_shard[key] = tensor
+            weight_map[key] = f"pytorch_model-{shard_index:05d}.bin"
+            current_shard_size += tensor_size
+
+        # Save the last shard
+        if current_shard:
+            shard_filename = f"pytorch_model-{shard_index:05d}.bin"
+            shards[shard_filename] = current_shard
+
+        return shards, weight_map
+
     @print_time()
     def save_local(
         self,
         output_dir: Path,
         retries: int,
         cooldown_seconds: float,
+        max_shard_size: str = "10GB",
     ):
         """Save the model and tokenizer to a local directory"""
         if dist.is_initialized():
@@ -382,20 +443,30 @@ class WrappedModel(ABC):
             func=self._save_local,
             state_dict=state_dict,
             output_dir=output_dir,
+            max_shard_size=max_shard_size,
         )
 
     def _save_local(
         self,
         state_dict: dict[str, torch.Tensor],
         output_dir: Path,
+        max_shard_size: str = "10GB",
     ):
+        """Model save method to only be called in the main process."""
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save with proper serialization settings
-        torch.save(
-            state_dict,
-            output_dir / "pytorch_model.bin",
-        )
+        # Convert size to bytes
+        max_size_bytes = self._convert_size_to_bytes(max_shard_size)
+
+        # Construct shards and weight map
+        shards, weight_map = self._construct_shards(state_dict, max_size_bytes)
+
+        # Save shards
+        for shard_file, shard_dict in shards.items():
+            torch.save(
+                shard_dict,
+                output_dir / shard_file,
+            )
 
         # Save other files
         self.save_pretrained_config(output_dir)
@@ -403,12 +474,12 @@ class WrappedModel(ABC):
             save_directory=output_dir,
         )
 
-        # Create index file
+        # Create index file with weight map
         with open(output_dir / "pytorch_model.bin.index.json", "w") as f:
             json.dump(
                 {
                     "metadata": {"format": "pt"},
-                    "weight_map": {"": "pytorch_model.bin"},
+                    "weight_map": weight_map,
                 },
                 f,
             )

@@ -231,7 +231,7 @@ def test_save_load_model():
     assert isinstance(model, WrappedModel)
     path = Path("artifacts/test_model")
     dist_rmtree(path)
-    model.save_local(path, retries=3, cooldown_seconds=0.1)
+    model.save_local(path, retries=3, cooldown_seconds=0.1, max_shard_size="7MB")
 
     cfg.name_or_path = str(path)
     loaded_model = WrappedModel.from_config(cfg, accelerator=accelerator)
