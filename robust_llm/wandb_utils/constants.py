@@ -46,9 +46,54 @@ MODEL_SIZES = {
         "qwen": [494034560, 1543717376, 3085942784, 7070626304, 13991476224],
     },
     "gen": {
+        "pythia": [
+            7628800,
+            17616896,
+            44670976,
+            123689472,
+            353822720,
+            908759040,
+            1311625216,
+            2646430720,
+            6650732544,
+            11586549760,
+        ],
         "qwen": [494032768, 1543714304, 7615616512, 3085938688, 14770033664],
     },
 }
 
 
-FINAL_PYTHIA_CHECKPOINT = 143_000
+def estimate_flops_for_training(n_params: int, n_training_tokens: int) -> int:
+    """Estimate training flops using 6ND.
+
+    This estimate is commonly used and appears in
+    https://arxiv.org/pdf/2001.08361#page=9.71
+    """
+    return 6 * n_params * n_training_tokens
+
+
+# Training tokens from https://github.com/EleutherAI/pythia and
+# https://github.com/QwenLM/Qwen2.5
+n_training_tokens = {
+    "pythia": dict.fromkeys(MODEL_NAMES["pythia"], 299_892_736_000),
+    # Since no paper has been published for Qwen2.5 as of 2024-11-29, we
+    # approximate using the same relative training tokens as Qwen2,
+    # and the fact that the max is given as 18T.
+    "qwen": {
+        "0.5B": 18_000_000_000_000,
+        "1.5B": 10_500_000_000_000,
+        "3B": 10_500_000_000_000,
+        "7B": 10_500_000_000_000,
+        "14B": 10_500_000_000_000,
+    },
+}
+
+ESTIMATED_PRETRAIN_COMPUTE = {
+    family: {
+        model_idx: estimate_flops_for_training(
+            n_params, tokens_dict[MODEL_NAMES[family][model_idx]]
+        )
+        for model_idx, n_params in enumerate(MODEL_SIZES["gen"][family])
+    }
+    for family, tokens_dict in n_training_tokens.items()
+}

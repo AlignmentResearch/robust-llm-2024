@@ -26,8 +26,10 @@ def main():
         ("pythia", "gcg_gcg_infix90", "imdb"),
         ("pythia", "gcg_gcg", "spam"),
         ("pythia", "gcg_gcg_infix90", "spam"),
+        ("qwen", "gcg_gcg", "harmless"),
+        ("qwen", "gcg_gcg", "spam"),
     ]:
-        for target_asr in [5]:
+        for target_asr in [1, 2, 5]:
             prepare_offense_defense_data(
                 family=family,
                 attack=attack,

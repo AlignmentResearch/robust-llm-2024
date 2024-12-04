@@ -10,29 +10,35 @@ from robust_llm.metrics.iterations_for_success import compute_all_ifs_metrics
 def main(reverse: bool = False, max_workers: int = 12):
     disable_progress_bar()
     GROUPS = [
-        "oskar_019a_infix_eval_adv_tr_gcg_imdb_small",
-        "oskar_019b_suffix_eval_adv_tr_gcg_imdb_small",
-        "ian_102a_gcg_pythia_harmless",
-        "ian_103a_gcg_pythia_helpful",
-        "ian_104a_rt_pythia_harmless",
-        "ian_105a_rt_pythia_helpful",
-        "ian_106_gcg_pythia_imdb",
-        "ian_107_gcg_pythia_pm",
-        "ian_108_gcg_pythia_wl",
-        "ian_109_gcg_pythia_spam",
-        "ian_110_rt_pythia_imdb",
-        "ian_111_rt_pythia_pm",
-        "ian_112_rt_pythia_wl",
-        "ian_113_rt_pythia_spam",
-        "tom_005a_eval_niki_149_gcg",
-        "tom_006_eval_niki_150_gcg",
-        "tom_007_eval_niki_152_gcg",
-        "tom_007_eval_niki_152a_gcg",
-        "tom_008_eval_niki_152_gcg_infix90",
-        "tom_008_eval_niki_152a_gcg_infix90",
-        "tom_009_eval_niki_170_gcg",
-        "tom_010_eval_niki_170_gcg_infix90",
-        "niki_iki_eval_niki_182_gcg",
+        # "oskar_019a_infix_eval_adv_tr_gcg_imdb_small",
+        # "oskar_019b_suffix_eval_adv_tr_gcg_imdb_small",
+        # "ian_102a_gcg_pythia_harmless",
+        # "ian_103a_gcg_pythia_helpful",
+        # "ian_104a_rt_pythia_harmless",
+        # "ian_105a_rt_pythia_helpful",
+        # "ian_106_gcg_pythia_imdb",
+        # "ian_107_gcg_pythia_pm",
+        # "ian_108_gcg_pythia_wl",
+        # "ian_109_gcg_pythia_spam",
+        # "ian_110_rt_pythia_imdb",
+        # "ian_111_rt_pythia_pm",
+        # "ian_112_rt_pythia_wl",
+        # "ian_113_rt_pythia_spam",
+        # "tom_005a_eval_niki_149_gcg",
+        # "tom_006_eval_niki_150_gcg",
+        # "tom_007_eval_niki_152_gcg",
+        # "tom_007_eval_niki_152a_gcg",
+        # "tom_008_eval_niki_152_gcg_infix90",
+        # "tom_008_eval_niki_152a_gcg_infix90",
+        # "tom_009_eval_niki_170_gcg",
+        # "tom_010_eval_niki_170_gcg_infix90",
+        # "niki_iki_eval_niki_182_gcg",
+        "tom_011_eval_niki_151_gcg",
+        "tom_012_eval_niki_153_gcg",
+        "tom_013_eval_niki_171_gcg",
+        "tom_014_eval_niki_172_gcg",
+        "tom_015_eval_niki_152_gcg_prefix",
+        "tom_015_eval_niki_152a_gcg_prefix",
     ]
     if reverse:
         GROUPS = list(reversed(GROUPS))
@@ -40,7 +46,7 @@ def main(reverse: bool = False, max_workers: int = 12):
     for group in tqdm(GROUPS):
         asr_path = f"cache_csvs/asr_{group}.csv"
         ifs_path = f"cache_csvs/ifs_{group}.csv"
-        if os.path.exists(ifs_path) and os.path.exists(asr_path):
+        if os.path.exists(asr_path):
             print(f"Skipping {ifs_path} & {asr_path}")
             continue
         asr_df, ifs_df = compute_all_ifs_metrics(

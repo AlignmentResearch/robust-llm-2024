@@ -24,6 +24,8 @@ def main():
         ("pythia", "gcg_gcg", "spam"),
         ("pythia", "gcg_gcg", "wl"),
         ("pythia", "gcg_gcg", "pm"),
+        ("qwen", "gcg_gcg", "harmless"),
+        ("qwen", "gcg_gcg", "spam"),
     ]:
         prepare_adv_training_data(
             summary_keys=summary_keys,

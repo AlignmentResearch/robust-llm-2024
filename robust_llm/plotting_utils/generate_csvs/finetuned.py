@@ -39,6 +39,9 @@ FINETUNED_RUNS = [
     "oskar_025a_gcg_eval_qwen25_ft_harmless",
     "oskar_025b_gcg_eval_qwen25_ft_spam",
     "ian_142a_gen_strongreject_gcg_qwen25",
+    "tom_019b_beast_eval_pythia_ft_harmless",
+    "tom_021b_beast_eval_qwen25_ft_harmless",
+    "tom_022b_beast_eval_qwen25_ft_spam",
 ]
 
 

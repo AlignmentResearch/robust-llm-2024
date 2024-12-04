@@ -14,7 +14,7 @@ METRICS = [
     "adversarial_eval/attack_success_rate",
     "flops_per_iteration",
     "attack_flops",
-] + [f"metrics/asr@{i}" for i in list(range(0, 128, 12)) + [128]]
+] + [f"metrics/asr@{i}" for i in list(range(129))]
 ROUNDS = [0, 1e-4, 1e-3, 5e-3, -1]
 
 
@@ -31,6 +31,8 @@ def main():
         ("pythia", "gcg_gcg_prefix", "imdb"),
         ("pythia", "gcg_gcg_prefix", "spam"),
         ("pythia", "gcg_no_ramp_gcg", "imdb"),
+        ("qwen", "gcg_gcg", "harmless"),
+        ("qwen", "gcg_gcg", "spam"),
     ]:
         save_asr_data(
             summary_keys=summary_keys,
@@ -41,7 +43,7 @@ def main():
             n_models=10,
             n_seeds=5,
             check_seeds=False,
-            n_iterations=64 if "infix" in attack else 128,
+            n_iterations=128,
             rounds=ROUNDS,
             **get_run_names(family, attack, dataset),
         )

@@ -28,6 +28,8 @@ def main():
         ("pythia", "gcg_gcg", "spam"),
         ("pythia", "gcg_gcg", "wl"),
         ("pythia", "gcg_gcg", "pm"),
+        ("qwen", "gcg_gcg", "harmless"),
+        ("qwen", "gcg_gcg", "spam"),
     ]:
         save_adv_training_data(
             family=family,
@@ -35,7 +37,6 @@ def main():
             dataset=dataset,
             summary_keys=summary_keys,
             metrics=METRICS,
-            use_group_cache=True,
             **get_run_names(family, attack, dataset),
         )
 

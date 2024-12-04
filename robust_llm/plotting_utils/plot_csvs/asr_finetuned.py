@@ -2,6 +2,7 @@
 
 import argparse
 
+import numpy as np
 import pandas as pd
 
 from robust_llm.plotting_utils.style import set_style
@@ -25,8 +26,14 @@ def plot_asr_for_group(
     y_transform: str = "logit",
     smoothing: int = DEFAULT_SMOOTHING,
     style: str = "paper",
+    datapoints: int = 130,
 ):
     postprocess_attack_compute(df, family, attack, dataset)
+    if df.iteration.nunique() > datapoints:
+        # If datapoints=10, filter out all but empirical deciles
+        df = df.loc[
+            df.iteration.isin(df.iteration.quantile(np.linspace(0, 1, datapoints)))
+        ]
     plot_attack_scaling_base(
         df,
         metadata=metadata,
@@ -45,28 +52,45 @@ def plot_asr_for_group(
 def main(style: str):
     set_style(style)
     family = "pythia"
-    for attack in ("gcg", "rt"):
-        for dataset in ("imdb", "pm", "wl", "spam", "helpful", "harmless"):
-            df, metadata = read_csv_and_metadata(
-                "asr", family, attack, dataset, "finetuned"
-            )
-            for x in ("attack_flops_fraction_pretrain",):
-                for y_transf, y_data in [
-                    ("logit", "asr"),
-                    ("comp_exp", "log_mean_prob"),
-                    ("negative", "mean_log_prob"),
-                ]:
-                    plot_asr_for_group(
-                        df,
-                        metadata=metadata,
-                        family=family,
-                        attack=attack,
-                        dataset=dataset,
-                        x=x,
-                        y_data_name=y_data,
-                        y_transform=y_transf,
-                        style=style,
-                    )
+    for family, attack, dataset in [
+        ("pythia", "gcg", "imdb"),
+        ("pythia", "gcg", "pm"),
+        ("pythia", "gcg", "wl"),
+        ("pythia", "gcg", "spam"),
+        ("pythia", "gcg", "helpful"),
+        ("pythia", "gcg", "harmless"),
+        ("pythia", "rt", "imdb"),
+        ("pythia", "rt", "pm"),
+        ("pythia", "rt", "wl"),
+        ("pythia", "rt", "spam"),
+        ("pythia", "rt", "helpful"),
+        ("pythia", "rt", "harmless"),
+        ("qwen", "gcg", "spam"),
+        ("qwen", "gcg", "harmless"),
+        ("qwen", "beast", "spam"),
+        ("qwen", "beast", "harmless"),
+        ("pythia", "beast", "harmless"),
+    ]:
+        df, metadata = read_csv_and_metadata(
+            "asr", family, attack, dataset, "finetuned"
+        )
+        for x in ("attack_flops_fraction_pretrain",):
+            for y_transf, y_data in [
+                ("logit", "asr"),
+                # ("comp_exp", "log_mean_prob"),
+                # ("negative", "mean_log_prob"),
+            ]:
+                plot_asr_for_group(
+                    df,
+                    metadata=metadata,
+                    family=family,
+                    attack=attack,
+                    dataset=dataset,
+                    x=x,
+                    y_data_name=y_data,
+                    y_transform=y_transf,
+                    style=style,
+                )
 
 
 if __name__ == "__main__":

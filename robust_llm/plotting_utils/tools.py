@@ -2,7 +2,7 @@ import json
 import os
 import re
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from functools import partial
 from pathlib import Path
 
@@ -25,10 +25,12 @@ from robust_llm.plotting_utils.constants import (
     get_fudge_factor,
     get_offense_defense_ylabel_title,
 )
-from robust_llm.plotting_utils.experiments.pretrain_compute_per_model import (
-    ESTIMATED_PRETRAIN_COMPUTE,
+from robust_llm.plotting_utils.style import (
+    name_to_attack,
+    name_to_dataset,
+    name_to_model,
+    set_style,
 )
-from robust_llm.plotting_utils.style import name_to_attack, name_to_dataset, set_style
 from robust_llm.plotting_utils.utils import (
     add_model_idx_inplace,
     drop_duplicates,
@@ -36,16 +38,13 @@ from robust_llm.plotting_utils.utils import (
     merge_adv_and_train_data,
 )
 from robust_llm.wandb_utils.constants import (
-    FINAL_PYTHIA_CHECKPOINT,
+    ESTIMATED_PRETRAIN_COMPUTE,
     METRICS,
     MODEL_NAMES,
     MODEL_SIZES,
     SUMMARY_KEYS,
 )
-from robust_llm.wandb_utils.wandb_api_tools import (
-    get_group_enriched_history,
-    get_save_root,
-)
+from robust_llm.wandb_utils.wandb_api_tools import get_save_root
 
 iter_str = tuple[str, ...] | list[str]
 TRANSFORMS: dict[str, Callable] = {
@@ -302,11 +301,10 @@ def extract_size_from_model_name(name: str | None) -> int | None:
 
 
 def make_finetuned_data(
-    group_names: iter_str,
+    group_names: iter_str | str,
     eval_summary_keys: list[str] | tuple[list[str], ...],
     metrics: list[str] | tuple[list[str], ...],
-    save_as: iter_str | str,
-    use_group_cache: bool = True,
+    save_as: iter_str | str | None = None,
 ) -> pd.DataFrame:
     """
     Create CSV file for use in plotting data for finetuned models.
@@ -316,8 +314,9 @@ def make_finetuned_data(
         eval_summary_keys: The keys to summarize the data by.
         metrics: The metrics to plot.
         save_as: The name to save the plot as.
-        use_group_cache: Whether to use the group cache when pulling data from W&B.
     """
+    if isinstance(group_names, str):
+        group_names = (group_names,)
 
     # Use same metrics for all runs if only one set is provided
     if isinstance(metrics, list):
@@ -335,78 +334,52 @@ def make_finetuned_data(
     for group, metric_list, summary_key_list in zip(
         group_names, metrics, eval_summary_keys
     ):
-        run = get_group_enriched_history(
-            group_name=group,
-            metrics=metric_list,
-            summary_keys=summary_key_list,
-            use_group_cache=use_group_cache,
-        )
-        postprocess_data(run)
-        run_asr = get_unstacked_cached_attack_data(group)
-        run = drop_duplicates(
-            run, ["model_idx", "seed_idx", "adv_training_round"], "wandb_data"
-        )
-        if not run_asr.empty:
-            print("No ASR data found for", group)
-            run = run.merge(
-                run_asr,
-                on=["model_idx", "seed_idx", "adv_training_round"],
-                how="left",
-                validate="1:1",
-                suffixes=("", "_asr"),
-            )
+        run = get_unstacked_cached_attack_data(group)
         runs.append(run)
 
     # Concatenate the runs together
     run = pd.concat(runs, ignore_index=True)
+    assert not run.empty, f"Found no data for {group_names}"
     run.columns = run.columns.str.replace("/", "_").str.replace("@", "_at_")
 
-    export_csv_and_metadata(
-        run,
-        "make_finetuned_data",
-        {
-            "group_names": group_names,
-            "eval_summary_keys": eval_summary_keys,
-            "metrics": metrics,
-            "save_as": save_as,
-            "use_group_cache": use_group_cache,
-        },
-        *save_as,
-    )
+    if save_as is not None:
+        export_csv_and_metadata(
+            run,
+            "make_finetuned_data",
+            {
+                "group_names": group_names,
+                "eval_summary_keys": eval_summary_keys,
+                "metrics": metrics,
+                "save_as": save_as,
+            },
+            *save_as,
+        )
 
     return run
 
 
 def load_flops_data(
     group_names: iter_str | str,
-    use_group_cache: bool = True,
 ):
     if isinstance(group_names, str):
         group_names = (group_names,)
-    data = _prepare_adv_training_data(
-        group_names=group_names,
-        summary_keys=[
-            "experiment_yaml.run_name",
-            "experiment_yaml.model.name_or_path",
-            "experiment_yaml.training.force_name_to_save",
-            "experiment_yaml.training.save_name",
-            "experiment_yaml.training.adversarial.skip_first_training_round",
-            "experiment_yaml.training.seed",
-        ],
-        metrics=[
-            "train/total_flops",
-            "train/flops",
-            "adv_training_round",
-        ],
-        use_group_cache=use_group_cache,
-    )
+    data = pd.concat(
+        [
+            get_cached_asr_logprob_data(
+                group_name=group_name,
+                experiment_type="training",
+            )
+            for group_name in group_names
+        ]
+    ).reset_index(drop=True)
     data["model_key"] = data.training_force_name_to_save.where(
         data.training_force_name_to_save.notnull(), data.training_save_name
     )
     data["mean_train_total_flops"] = data.groupby(["model_idx", "adv_training_round"])[
         "train_total_flops"
     ].transform("mean")
-    data["pretrain_compute"] = data.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
+    family = get_family_from_name(group_names[0])
+    data["pretrain_compute"] = data.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE[family])
     data["defense_flops_fraction_pretrain"] = (
         data.mean_train_total_flops / data.pretrain_compute
     )
@@ -437,7 +410,6 @@ def save_adv_training_data(
     merge_runs: iter_str | str | None = None,
     summary_keys: list[str] | None = None,
     metrics: list[str] | None = None,
-    use_group_cache: bool = True,
 ):
     if isinstance(group_names, str):
         group_names = (group_names,)
@@ -452,7 +424,6 @@ def save_adv_training_data(
         merge_runs=merge_runs,
         summary_keys=summary_keys,
         metrics=metrics,
-        use_group_cache=use_group_cache,
     )
     export_csv_and_metadata(
         data,
@@ -465,7 +436,6 @@ def save_adv_training_data(
             "merge_runs": merge_runs,
             "summary_keys": summary_keys,
             "metrics": metrics,
-            "use_group_cache": use_group_cache,
         },
         "adv_training",
         family,
@@ -550,7 +520,7 @@ def _prepare_adv_training_data(
     metrics: list[str] | None = None,
     save_as: iter_str | str | None = None,
     adjust_flops_for_n_val: bool = False,
-    use_group_cache: bool = True,
+    experiment_type: str = "evaluation",
 ) -> pd.DataFrame:
     assert all(isinstance(name, str) for name in group_names)
     if "experiment_yaml.run_name" not in summary_keys:
@@ -558,11 +528,9 @@ def _prepare_adv_training_data(
     run_info_list = []
 
     for group_name in group_names:
-        run_info = get_group_enriched_history(
+        run_info = get_unstacked_cached_attack_data(
             group_name=group_name,
-            metrics=metrics,
-            summary_keys=summary_keys,
-            use_group_cache=use_group_cache,
+            experiment_type=experiment_type,
         )
         assert (
             isinstance(run_info, pd.DataFrame) and not run_info.empty
@@ -596,59 +564,10 @@ def _prepare_adv_training_data(
                 "metrics": metrics,
                 "save_as": save_as,
                 "adjust_flops_for_n_val": adjust_flops_for_n_val,
-                "use_group_cache": use_group_cache,
             },
             *save_as,
         )
     return run_info_df  # type: ignore
-
-
-def match_ft_seed_to_adv(model_key: str):
-    """Match the fine-tuning seed to the adversarial training seed."""
-    # model_key='clf_imdb_pythia-31m_s-0_adv_tr_gcg_t-4'
-    adv_seed = model_key.split("_t-")[-1]
-    ft_seed = model_key.split("_s-")[1].split("_")[0]
-    return model_key.replace(f"_s-{ft_seed}", f"_s-{adv_seed}")
-
-
-def hack_together_new_evals_old_flops(adv_data, train_data):
-    """Manually edit old flops data to match new evals data.
-
-    Some runs, e.g. https://wandb.ai/farai/robust-llm/runs/7c3lhlpe
-    do not have usable flops data. We can manually edit the old flops data
-    so that it matches the new evals data. The problem is that we logged
-    the flops after each batch, did not log the adversarial training round
-    at all, and on top of that we resumed from checkpoint so the flops data is
-    spread across wandb runs. The FLOPs should be the same as the old runs
-    as it's just a different seed so we use those instead.
-    """
-    if set(adv_data.model_key) == set(train_data.model_key):
-        return train_data
-    matched_seeds_train_data = train_data.copy()
-    matched_seeds_train_data.model_key = matched_seeds_train_data.model_key.apply(
-        match_ft_seed_to_adv
-    )
-    return pd.concat([train_data, matched_seeds_train_data], ignore_index=True)
-
-
-def remove_fake_adv_evals(data: pd.DataFrame) -> pd.DataFrame:
-    """Remove fake adversarial evals data.
-
-    niki-170-adv-tr-gcg-spam-small-0038 saved a model with
-    revision adv-training-round-0 only (so no adversarial training)
-    and we evaluated it in https://wandb.ai/farai/robust-llm/runs/w6insut2/overview
-    but recorded no flops data. It's annoying so we remove such cases.
-    """
-    data["max_adv_training_round"] = data.groupby(["model_key", "seed_idx"])[
-        "adv_training_round"
-    ].transform("max")
-    if data.max_adv_training_round.eq(0).any():
-        print(
-            f"\033[91mWARNING: Dropping {data.max_adv_training_round.eq(0).sum()} "
-            f"evals which are not adversarial\033[0m"
-        )
-        data = data.loc[~data.max_adv_training_round.eq(0)]
-    return data
 
 
 def prepare_adv_training_data(
@@ -658,7 +577,6 @@ def prepare_adv_training_data(
     save_as: iter_str | str | None = None,
     adjust_flops_for_n_val: bool = False,
     merge_runs: iter_str | str | None = None,
-    use_group_cache: bool = True,
 ):
     if isinstance(group_names, str):
         group_names = (group_names,)
@@ -667,16 +585,13 @@ def prepare_adv_training_data(
         summary_keys,
         metrics,
         save_as=save_as,
-        use_group_cache=use_group_cache,
         adjust_flops_for_n_val=adjust_flops_for_n_val,
     )
     if merge_runs is not None:
         adv_data["model_key"] = adv_data.model_name_or_path.str.replace(
             "AlignmentResearch/", ""
         ).str.replace("robust_llm_", "")
-        train_data = load_flops_data(merge_runs, use_group_cache=use_group_cache)
-        train_data = hack_together_new_evals_old_flops(adv_data, train_data)
-        adv_data = remove_fake_adv_evals(adv_data)
+        train_data = load_flops_data(merge_runs)
         adv_data = merge_adv_and_train_data(adv_data, train_data)
         assert_flops_data_not_missing(adv_data, train_data)
     return adv_data
@@ -743,11 +658,15 @@ def _get_n_parameter_updates(data: pd.DataFrame) -> None:
     )
 
 
-def get_color_palette(data: pd.Series | pd.DataFrame, color_data_name: str) -> dict:
+def get_color_palette(
+    data: pd.Series | pd.DataFrame, color_data_name: str, family: str
+) -> dict:
     color_data = data[color_data_name] if isinstance(data, pd.DataFrame) else data
-    if color_data_name == "num_params":
+    if color_data_name == "num_params" and family == "pythia":
         palette_color = "viridis"
-    else:
+    elif family == "pythia":
+        palette_color = "cividis"
+    elif family == "qwen":
         palette_color = "magma"
     palette = sns.color_palette(palette_color, color_data.nunique())  # type: ignore
     palette_dict = dict(zip(sorted(color_data.unique()), palette))
@@ -775,7 +694,6 @@ def get_legend_handles(
                 xdata=[0],
                 ydata=[0],
                 color=palette_dict[name],
-                marker=".",
                 linestyle="-",
                 label=label,
             )
@@ -840,7 +758,10 @@ def _draw_plot_adv_training(
     color_data: pd.Series | None = None,
 ):
     if title is None:
-        title = f"{name_to_attack(attack)}, {name_to_dataset(dataset)}"
+        title = (
+            f"{name_to_model(family)}, {name_to_attack(attack)}, "
+            f"{name_to_dataset(dataset)}"
+        )
     data = data.copy()
     orig_len = len(data)
     data = data.loc[data[y_data_name].notnull()]
@@ -888,7 +809,7 @@ def _draw_plot_adv_training(
     if yscale is not None:
         plt.yscale(yscale)
     palette_dict = get_color_palette(
-        color_data if color_data is not None else data, color_data_name
+        color_data if color_data is not None else data, color_data_name, family=family
     )
 
     plt.title(title)
@@ -927,7 +848,6 @@ def _draw_plot_adv_training(
         plt.plot(
             group[x_data_name],
             group["median"],
-            marker=".",
             label=name,
             color=palette_dict[name],
             alpha=0.8,
@@ -1068,35 +988,6 @@ def create_path_and_savefig(
     return save_path
 
 
-def _maybe_get_custom_xs_and_maybe_ys(
-    relevant_data,
-    mode: str,
-    family: str,
-    custom_ys: list[float] | None,
-    custom_xs_and_ys: list[tuple[float, float]] | None,
-):
-    # Add the custom xs and ys
-    # xs are "num_params"
-    # ys are values
-    if custom_xs_and_ys is not None or custom_ys is not None:
-        assert custom_xs_and_ys is None or custom_ys is None
-        print("Adding custom data to the plot")
-        if custom_ys is not None:
-            xs = MODEL_SIZES[mode][family][-len(custom_ys) :]
-        elif custom_xs_and_ys is not None:
-            xs, custom_ys = zip(*custom_xs_and_ys)  # type: ignore
-        else:
-            raise ValueError("should not happen")
-
-        new_data = pd.DataFrame(
-            {"num_params": xs, "adversarial_eval_attack_success_rate": custom_ys}
-        )
-        new_data = new_data[relevant_data.columns]
-        relevant_data = pd.concat([relevant_data, new_data], ignore_index=True)
-
-    return relevant_data
-
-
 def _get_seed_from_name(name: str) -> int:
     # name_or_path=AlignmentResearch/robust_llm_pythia-31m_niki-045_pm_random-token-1280_seed-0
     # or 'AlignmentResearch/robust_llm_clf_imdb_pythia-14m_s-0_adv_tr_rt_t-0'
@@ -1194,8 +1085,6 @@ def draw_min_max_median_plot(
     attack: str,
     dataset: str,
     mode: str = "clf",
-    custom_ys=None,
-    custom_xs_and_ys=None,
     legend: bool = False,
     check_seeds: int | None = None,
     ylim: tuple[float, float] | None = None,
@@ -1227,10 +1116,6 @@ def draw_min_max_median_plot(
     plt.ylabel(AXIS_LABELS[y_transf_data_name])
 
     relevant_data = data[["num_params", "y_value", "model_name_or_path"]]
-
-    relevant_data = _maybe_get_custom_xs_and_maybe_ys(
-        relevant_data, mode, family, custom_ys, custom_xs_and_ys
-    )
 
     if check_seeds is not None:
         _check_correct_num_seeds(
@@ -1299,8 +1184,6 @@ def draw_min_max_median_plot_by_round(
     attack: str,
     dataset: str,
     mode: str = "clf",
-    custom_ys=None,
-    custom_xs_and_ys=None,
     legend: bool = True,
     check_seeds: int | None = None,
     ylim: tuple[float, float] | None = None,
@@ -1341,10 +1224,6 @@ def draw_min_max_median_plot_by_round(
     ]
     if check_seeds is not None:
         _check_correct_num_seeds(relevant_data, num_seeds=check_seeds, adversarial=True)
-
-    relevant_data = _maybe_get_custom_xs_and_maybe_ys(
-        relevant_data, mode, family, custom_ys, custom_xs_and_ys
-    )
 
     # Group by num_params and adv_training_round then calculate min, max, and median
     grouped = (
@@ -1453,8 +1332,6 @@ def draw_min_max_median_plot_by_dataset(
     attack: str,
     datasets: str = "all",
     mode: str = "clf",
-    custom_ys=None,
-    custom_xs_and_ys=None,
     legend: bool = True,
     check_seeds: int | None = None,
     ylim: tuple[float, float] | None = None,
@@ -1489,10 +1366,6 @@ def draw_min_max_median_plot_by_dataset(
     relevant_data = data[["num_params", "y_value", "dataset"]]
     if check_seeds is not None:
         _check_correct_num_seeds(relevant_data, num_seeds=check_seeds, adversarial=True)
-
-    relevant_data = _maybe_get_custom_xs_and_maybe_ys(
-        relevant_data, mode, family, custom_ys, custom_xs_and_ys
-    )
 
     # Group by num_params and adv_training_round then calculate min, max, and median
     grouped = (
@@ -1578,7 +1451,202 @@ def draw_min_max_median_plot_by_dataset(
         set_yticks_for_logit(ax)
 
     # Adjust layout to prevent cutoff
-    plt.tight_layout()
+    # Niki commented this to have plots be the same size
+    # plt.tight_layout()
+
+    create_path_and_savefig(
+        fig,
+        style,
+        "post_adv_training" if adversarial else "finetuned",
+        family,
+        attack,
+        datasets,
+        "num_params",
+        y_transf_data_name,
+        f"smoothing-{smoothing}",
+        "legend" if legend else "no_legend",
+        data=grouped if legend else None,
+        metadata=metadata if legend else None,
+    )
+
+
+def draw_min_max_median_and_wilson_plot_by_dataset(
+    orig_data: pd.DataFrame,
+    metadata: PlotMetadata | None,
+    successes_name: str,
+    trials_name: str,
+    title: str,
+    adversarial: bool,
+    family: str,
+    attack: str,
+    datasets: str = "all",
+    mode: str = "clf",
+    legend: bool = True,
+    check_seeds: int | None = None,
+    ylim: tuple[float, float] | None = None,
+    ytransform: str | None = None,
+    y_data_name: str = "adversarial_eval_attack_success_rate",
+    smoothing: int = DEFAULT_SMOOTHING,
+    legend_loc: str = "lower left",
+    style: str = "paper",
+):
+    data = orig_data.copy()
+    data = data.loc[data[y_data_name].notnull()]
+    print("Found", len(data), "runs to use for the plot from", len(orig_data), "total")
+
+    if smoothing != 0:
+        apply_laplace_smoothing(data, y_data_name, smoothing)
+
+    fig, ax = plt.subplots()
+
+    plt.xscale("log")
+    plt.title(title)
+    if ytransform is None:
+        data["y_value"] = data[y_data_name]
+        y_transf_data_name = y_data_name
+    else:
+        data["y_value"] = TRANSFORMS[ytransform](data[y_data_name])
+        y_transf_data_name = name_transformed_data(y_data_name, ytransform)
+    plt.xlabel(AXIS_LABELS["num_params"])
+    plt.ylabel(AXIS_LABELS[y_transf_data_name])
+    if ylim is not None:
+        plt.ylim(ylim)
+
+    relevant_data = data[
+        [
+            "num_params",
+            "y_value",
+            "dataset",
+            "adversarial_eval_n_correct_pre_attack",
+            "adversarial_eval_n_incorrect_post_attack",
+        ]
+    ]
+    if check_seeds is not None:
+        _check_correct_num_seeds(relevant_data, num_seeds=check_seeds, adversarial=True)
+
+    # Group by num_params and adv_training_round then calculate min, max, and median
+    grouped = (
+        relevant_data.groupby(["num_params", "dataset"])
+        .agg(
+            {
+                "y_value": ["min", "max", "median"],
+                "adversarial_eval_n_correct_pre_attack": "median",
+                "adversarial_eval_n_incorrect_post_attack": "median",
+            }
+        )
+        .reset_index()
+    )
+    grouped.columns = [
+        "num_params",
+        "dataset",
+        "y_min",
+        "y_max",
+        "y_median",
+        "n_correct_pre_attack",
+        "n_incorrect_post_attack",
+    ]
+
+    # Color palette for different datasets
+    datasets_to_color = [
+        ds
+        for ds in ["spam", "imdb", "pm", "wl", "helpful", "harmless", "strongreject"]
+        if ds in data["dataset"].unique()
+    ]
+    pretty_datasets = [name_to_dataset(ds) for ds in datasets_to_color]
+    colors = sns.color_palette(n_colors=len(datasets_to_color))
+    color_map = dict(zip(datasets_to_color, colors))
+
+    for i, dataset in enumerate(datasets_to_color):
+        round_data = grouped[grouped["dataset"] == dataset]
+
+        if dataset == "strongreject":
+            round_data = get_wilson_score_interval(
+                round_data, successes_col=successes_name, trials_col=trials_name
+            )
+            original_xlim = plt.xlim()
+            # Plot the Wilson score interval as error bars
+            lower_error = round_data["y_median"] - round_data["lower_bound"]
+            upper_error = round_data["upper_bound"] - round_data["y_median"]
+            plt.errorbar(
+                round_data["num_params"],
+                round_data["y_median"],
+                yerr=[lower_error, upper_error],
+                fmt="none",
+                ecolor=colors[i],
+                alpha=0.5,
+                elinewidth=1,
+                capsize=2,
+                capthick=1,
+                label="95% Wilson Score Interval",
+            )
+            plt.xlim(original_xlim)
+        else:
+            # Plot the band between the min and max values
+            plt.fill_between(
+                round_data["num_params"],
+                round_data["y_min"],
+                round_data["y_max"],
+                alpha=0.2,
+                label="Round {} Min-Max".format(pretty_datasets[i]),
+                color=colors[i],
+            )
+
+        # Plot the median values
+        sns.lineplot(
+            x=round_data["num_params"],
+            y=round_data["y_median"],
+            label="{} Median".format(pretty_datasets[i]),
+            marker="o",
+            color=colors[i],
+            alpha=0.7,
+            zorder=5,
+            legend=False,
+        )
+        # plt.xlim(original_xlim)
+
+    set_up_paper_plot(fig, ax, style=style)
+
+    # Adjust legend
+    if legend:
+        # Create legend elements
+        dataset_legend = [
+            Line2D(
+                [0], [0], color=color_map[d], lw=2, label=name_to_dataset(d), alpha=0.7
+            )
+            for d in datasets_to_color
+        ]
+        style_legend = [
+            Line2D(
+                [0],
+                [0],
+                color="gray",
+                marker="o",
+                linestyle="",
+                markersize=5,
+                label="Median",
+            ),
+            plt.Rectangle(  # type: ignore
+                (0, 0), 1, 1, fc="gray", alpha=0.2, label="Min-Max Range"
+            ),
+        ]
+
+        # Combine all legend elements
+        all_legend_elements = dataset_legend + style_legend
+
+        # Create a single, compact legend
+        plt.legend(
+            handles=all_legend_elements,
+            loc=legend_loc,
+            ncol=1,
+            fontsize="xx-small",
+        )
+
+    if ytransform == "logit":
+        set_yticks_for_logit(ax)
+
+    # Adjust layout to prevent cutoff
+    # Niki commented this to have plots be the same size
+    # plt.tight_layout()
 
     create_path_and_savefig(
         fig,
@@ -1606,8 +1674,6 @@ def draw_wilson_score_interval_plot(
     family: str,
     attack: str,
     dataset: str,
-    custom_ys=None,
-    custom_xs_and_ys=None,
     legend: bool = False,
     check_seeds: int | None = None,
     ylim: tuple[float, float] | None = None,
@@ -1650,10 +1716,6 @@ def draw_wilson_score_interval_plot(
         ["num_params", "y_value", "model_name_or_path", "lower_bound", "upper_bound"]
     ]
 
-    relevant_data = _maybe_get_custom_xs_and_maybe_ys(
-        relevant_data, mode, family, custom_ys, custom_xs_and_ys
-    )
-
     if check_seeds is not None:
         _check_correct_num_seeds(
             relevant_data, num_seeds=check_seeds, adversarial=False
@@ -1661,24 +1723,34 @@ def draw_wilson_score_interval_plot(
 
     sns_blue = sns.color_palette()[0]
 
-    # Plot the band between the min and max values
-    plt.fill_between(
-        relevant_data["num_params"],
-        relevant_data["lower_bound"],
-        relevant_data["upper_bound"],
-        alpha=0.2,
-        label="95% Wilson Score Interval",
-        color=sns_blue,
-    )
     # Plot the median values
     sns.lineplot(
         x=relevant_data["num_params"],
         y=relevant_data["y_value"],
         label="Attack Success Rate",
         color=sns_blue,
+        marker="o",
         alpha=0.5,
         zorder=5,
     )
+    original_xlim = plt.xlim()
+
+    # Plot the Wilson score interval as error bars
+    lower_error = relevant_data["y_value"] - relevant_data["lower_bound"]
+    upper_error = relevant_data["upper_bound"] - relevant_data["y_value"]
+    plt.errorbar(
+        relevant_data["num_params"],
+        relevant_data["y_value"],
+        yerr=[lower_error, upper_error],
+        fmt="none",
+        ecolor=sns_blue,
+        alpha=0.5,
+        elinewidth=1,
+        capsize=2,
+        capthick=1,
+        label="95% Wilson Score Interval",
+    )
+    plt.xlim(original_xlim)
 
     set_up_paper_plot(fig, ax, style=style)
     if ytransform == "logit":
@@ -1761,6 +1833,8 @@ def get_attack_from_name(name: str) -> str:
         return "gcg"
     elif "_rt_" in name:
         return "rt"
+    elif "beast" in name:
+        return "beast"
     else:
         return _get_attack_from_group(name)
 
@@ -1786,33 +1860,44 @@ def get_dataset_from_name(name: str) -> str:
 
 def _get_family_from_group(group: str) -> str:
     for family, family_dict in RUN_NAMES.items():
+        assert isinstance(family_dict, dict)
         for _, attack_dict in family_dict.items():
             assert isinstance(attack_dict, dict)
             for _, dataset_dict in attack_dict.items():
                 assert isinstance(dataset_dict, dict)
-                if group in dataset_dict["group_names"]:
+                if (
+                    group in dataset_dict["group_names"]
+                    or group in dataset_dict["merge_runs"]
+                ):
                     return family
     raise ValueError(f"Couldn't find family for {group}")
 
 
 def _get_attack_from_group(group: str) -> str:
     for _, model_dict in RUN_NAMES.items():
+        assert isinstance(model_dict, dict)
         for attack, attack_dict in model_dict.items():
             assert isinstance(attack_dict, dict)
             for _, dataset_dict in attack_dict.items():
                 assert isinstance(dataset_dict, dict)
                 if group in dataset_dict["group_names"]:
-                    return attack
+                    return attack.split("_")[0]
+                if group in dataset_dict["merge_runs"]:
+                    return attack.split("_")[1]
     raise ValueError(f"Couldn't find attack for {group}")
 
 
 def _get_dataset_from_group(group: str) -> str:
     for _, model_dict in RUN_NAMES.items():
+        assert isinstance(model_dict, dict)
         for _, attack_dict in model_dict.items():
             assert isinstance(attack_dict, dict)
             for dataset, dataset_dict in attack_dict.items():
                 assert isinstance(dataset_dict, dict)
-                if group in dataset_dict["group_names"]:
+                if (
+                    group in dataset_dict["group_names"]
+                    or group in dataset_dict["merge_runs"]
+                ):
                     return dataset
     raise ValueError(f"Couldn't find dataset for {group}")
 
@@ -1823,18 +1908,6 @@ def _get_num_params_from_name(name: str, mode: str = "clf") -> int:
     sizes_in_name = [i for i, size in enumerate(model_names) if size in name]
     assert len(sizes_in_name) == 1, f"Found {sizes_in_name} in {name}"
     return model_sizes[sizes_in_name[0]]
-
-
-def _get_pretraining_fraction(name: str) -> float:
-    # get checkpoint number
-    index = name.rfind("-ch-")
-    if index == -1:
-        checkpoint = FINAL_PYTHIA_CHECKPOINT
-    else:
-        index += len("-ch-")
-        checkpoint = int(name[index:])
-    fraction = checkpoint / FINAL_PYTHIA_CHECKPOINT
-    return fraction
 
 
 def _update_model_sizes_as_necessary(df: pd.DataFrame) -> None:
@@ -1900,8 +1973,6 @@ def postprocess_data(df: pd.DataFrame, adjust_flops_for_n_val: bool = False):
     if "seed_idx" in df:
         df.seed_idx = df.seed_idx.astype(int)
 
-    df["pretraining_fraction"] = df["model_name_or_path"].map(_get_pretraining_fraction)
-
     # We only need to do this if it's an eval run, not a training run
     if "adversarial_eval/n_correct_post_attack" in df:
         assert "adversarial_eval/n_examples" in df
@@ -1914,7 +1985,8 @@ def postprocess_data(df: pd.DataFrame, adjust_flops_for_n_val: bool = False):
 def prepare_asr_data(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
-    asr_columns = [col for col in data.columns if col.startswith("metrics_asr_at")]
+    assert not data.empty
+    asr_columns = [col for col in data.columns if col.startswith("asr_at")]
     other_columns = [
         col
         for col in data.columns
@@ -1928,6 +2000,7 @@ def prepare_asr_data(
         value_name="asr",
     )
     melted_df["iteration"] = melted_df["iteration"].str.split("_").str[-1].astype(int)
+    assert not melted_df.empty
     return melted_df
 
 
@@ -1942,7 +2015,7 @@ def restrict_asr_to_round(
     check_seeds: bool = True,
 ) -> pd.DataFrame:
     df = orig_df.copy()
-    add_columns_for_attack_scaling(df)
+    add_columns_for_attack_scaling(df, family=family)
     if "model_idx" not in df:
         df = add_model_idx_inplace(df, reference_col="model_size")
     if "seed_idx" not in df and "model_name_or_path" in df:
@@ -2001,15 +2074,13 @@ def round_to_str(round: int | float | None) -> str:
         return "all_rounds"
 
 
-def add_columns_for_attack_scaling(
-    data: pd.DataFrame,
-):
+def add_columns_for_attack_scaling(data: pd.DataFrame, family: str):
     data["iteration_x_params"] = data.iteration * data.num_params
     data["mean_flops_per_iteration"] = data.groupby(["model_idx", "iteration"])[
         "flops_per_iteration"
     ].transform("mean")
     data["iteration_flops"] = data.iteration * data.mean_flops_per_iteration
-    data["pretrain_compute"] = data.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
+    data["pretrain_compute"] = data.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE[family])
     data["attack_flops_fraction_pretrain"] = (
         data.iteration_flops / data.pretrain_compute
     )
@@ -2036,13 +2107,13 @@ def plot_attack_scaling_base(
         apply_laplace_smoothing(df, "asr", smoothing)
     if "flops" in x_data_name or "prob" in y_data_name:
         df = df.loc[df.iteration.gt(0)]
-    add_columns_for_attack_scaling(df)
+    add_columns_for_attack_scaling(df, family=family)
     y_transf_data_name = name_transformed_data(y_data_name, y_transform)
     df[y_transf_data_name] = TRANSFORMS[y_transform](df[y_data_name])
 
     fig, ax = plt.subplots()
     set_up_paper_plot(fig, ax, style=style)
-    palette = get_color_palette(df, color_data_name)
+    palette = get_color_palette(df, color_data_name, family=family)
     sns.lineplot(
         data=df,
         x=x_data_name,
@@ -2082,15 +2153,15 @@ def plot_attack_scaling_base(
         bps = int(round_info.split("_")[-2])
         round_pretty = round_pretty.replace(f"{bps}_bps", f"{bps / 100}%")
 
+    base_title = (
+        f"{name_to_model(family)}, {name_to_attack(attack)}, {name_to_dataset(dataset)}"
+    )
     if round_pretty == "finetuned":
         # HACK: avoid '(finetuned)' in title
-        fig.suptitle(f"{name_to_dataset(dataset)}, {name_to_attack(attack)} Attack")
+        fig.suptitle(base_title)
     else:
         fig.suptitle(
-            f"{name_to_dataset(dataset)}, {name_to_attack(attack)} Attack"
-            + " ("
-            + round_pretty.replace("_", " ").title()
-            + ")"
+            base_title + "\n(" + round_pretty.replace("_", " ").title() + ")", y=1.05
         )
     create_path_and_savefig(
         fig,
@@ -2126,70 +2197,52 @@ def plot_attack_scaling_base(
     )
 
 
-def get_cached_asr_data(
-    group_name: str, for_offense_defense: bool = False, mode: str = "clf"
+def get_cached_asr_logprob_data(
+    group_name: str,
+    for_offense_defense: bool = False,
+    experiment_type: str = "evaluation",
 ) -> pd.DataFrame:
     root = compute_repo_path()
-    path = os.path.join(root, "cache_csvs", f"asr_{group_name}.csv")
+    path = os.path.join(root, "cache_csvs", experiment_type, f"{group_name}.csv")
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_csv(path)
+    df = df.loc[:, ~df.columns.str.startswith("Unnamed:")]
+    df = drop_duplicates(df, name="cache_csv_data")
+
+    assert set(df.columns.tolist()) > set(["model_idx", "seed_idx"])
+
+    if experiment_type == "evaluation":
+        assert set(df.columns.tolist()) > set(["model_size", "asr", "iteration"])
+        df["num_params"] = df.model_size
+        df["iteration_x_params"] = df.iteration * df.num_params
 
     if for_offense_defense:
-        assert set(df.columns.tolist()) > set(
-            ["model_idx", "seed_idx", "asr", "iteration", "adv_training_round"]
-        )
-    else:
-        assert set(df.columns.tolist()) > set(
-            ["model_idx", "seed_idx", "asr", "iteration"]
-        )
-    family = get_family_from_name(group_name)
-    df["num_params"] = df.model_idx.apply(lambda x: MODEL_SIZES[mode][family][x])
-    df["iteration_x_params"] = df.iteration * df.num_params
+        assert "adv_training_round" in df
     df.sort_values("model_idx", inplace=True)
     return df
 
 
-def get_cached_logprob_data(group_name: str) -> pd.DataFrame:
-    root = compute_repo_path()
-    path = os.path.join(root, "cache_csvs", f"logprob_{group_name}.csv")
-    if os.path.exists(path):
-        return pd.read_csv(path)
-    else:
-        return pd.DataFrame()
-
-
-def get_cached_asr_logprob_data(
-    group_name: str, for_offense_defense: bool = False
-) -> pd.DataFrame:
-    asr_data = get_cached_asr_data(group_name, for_offense_defense)
-    logprob_data = get_cached_logprob_data(group_name)
-    if logprob_data.empty:
-        return asr_data
-    logprob_data.iteration += 1
-    df = asr_data.merge(
-        logprob_data,
-        on=["model_idx", "seed_idx", "iteration"],
-        validate="1:1",
-        suffixes=("", "_logprob"),
-    )
-    return df
-
-
 def get_unstacked_cached_attack_data(
-    group_name: str, for_offense_defense: bool = False
+    group_name: str,
+    for_offense_defense: bool = False,
+    metrics: Iterable[str] = ("asr", "log_mean_prob", "mean_log_prob"),
+    keys: Iterable[str] = ("model_size", "seed_idx", "adv_training_round", "model_idx"),
+    experiment_type: str = "evaluation",
 ):
-    df = get_cached_asr_logprob_data(group_name, for_offense_defense)
+    df = get_cached_asr_logprob_data(
+        group_name,
+        for_offense_defense=for_offense_defense,
+        experiment_type=experiment_type,
+    )
     if df.empty:
         warnings.warn(f"No cached ASR data found for {group_name}")
         return df
     unstacked_data = []
-    for field in ("asr", "log_mean_prob", "mean_log_prob"):
+    for field in metrics:
         if field not in df:
             continue
-        unstacked = df.set_index(
-            ["model_size", "seed_idx", "adv_training_round", "model_idx", "iteration"]
-        )[field].unstack()
+        unstacked = df.set_index(list(keys) + ["iteration"])[field].unstack()
 
         # Rename the columns to the desired format
         unstacked.columns = [f"{field}_at_{col}" for col in unstacked.columns]
@@ -2197,8 +2250,26 @@ def get_unstacked_cached_attack_data(
         unstacked_data.append(unstacked)
     df_unstacked = pd.concat(unstacked_data, axis=1)
 
-    # Reset the index to bring back the other columns as regular columns
+    # Reset the index to bring back the key columns as regular columns
     df_unstacked = df_unstacked.reset_index()
+
+    other_columns = [
+        col
+        for col in df.columns
+        if col not in df_unstacked.columns
+        and col not in list(keys) + list(metrics) + ["iteration", "iteration_x_params"]
+    ]
+    other_df = df[list(keys) + other_columns].drop_duplicates()
+    if other_columns:
+        df_unstacked = df_unstacked.merge(
+            other_df,
+            on=list(keys),
+            validate="m:1",
+        )
+        assert (
+            "flops_per_iteration" in df_unstacked
+            and df_unstacked.flops_per_iteration.notnull().all()
+        )
 
     return df_unstacked
 
@@ -2229,13 +2300,6 @@ def save_asr_data(
     )
 
     asr_data = prepare_asr_data(adv_data)
-    if asr_data.iteration.max() > n_iterations:
-        warnings.warn(
-            f"Found iterations higher than {n_iterations}. Dropping those rows. "
-            f"Groups: {group_names}, attack: {attack}, dataset: {dataset}."
-        )
-        asr_data = asr_data.loc[asr_data.iteration.le(n_iterations)]
-    assert not asr_data.asr.isnull().any()
     for round in rounds:
         round_df = restrict_asr_to_round(
             asr_data,
@@ -2279,14 +2343,14 @@ def load_and_plot_asr(
     y: str = "asr",
     y_transform: str = "logit",
     smoothing: int = DEFAULT_SMOOTHING,
-    datapoints: int | None = None,
+    datapoints: int = 130,
     style: str = "paper",
 ):
     for round in rounds:
         asr_data, metadata = read_csv_and_metadata(
             "asr", family, attack, dataset, round_to_str(round)
         )
-        if datapoints is not None and asr_data.iteration.nunique() > datapoints:
+        if asr_data.iteration.nunique() > datapoints:
             # If datapoints=10, filter out all but empirical deciles
             asr_data = asr_data.loc[
                 asr_data.iteration.isin(
@@ -2318,7 +2382,6 @@ def prepare_offense_defense_data(
     summary_keys: list[str] | None = None,
     metrics: list[str] | None = None,
     target_asr: int = 5,
-    use_group_cache: bool = True,
 ):
     if isinstance(group_names, str):
         group_names = (group_names,)
@@ -2333,12 +2396,14 @@ def prepare_offense_defense_data(
         merge_runs=merge_runs,
         summary_keys=summary_keys,
         metrics=metrics,
-        use_group_cache=use_group_cache,
         adjust_flops_for_n_val=True,
     )
 
     asr_data = pd.concat(
-        [get_cached_asr_data(name, for_offense_defense=True) for name in group_names],
+        [
+            get_cached_asr_logprob_data(name, for_offense_defense=True)
+            for name in group_names
+        ],
         ignore_index=True,
     )
     # HACK: reset model_idx based on model_size because if we merged runs, the model_idx
@@ -2354,7 +2419,7 @@ def prepare_offense_defense_data(
     df["mean_train_total_flops"] = df.groupby(["model_idx", "adv_training_round"])[
         "train_total_flops"
     ].transform("mean")
-    df["pretrain_compute"] = df.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
+    df["pretrain_compute"] = df.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE[family])
     df["defense_flops_fraction_pretrain"] = (
         df.mean_train_total_flops / df.pretrain_compute
     )
@@ -2408,7 +2473,9 @@ def prepare_offense_defense_data(
     adv_data[interp_flops_column] = (
         adv_data[interp_column] * adv_data["mean_flops_per_iteration"]
     )
-    adv_data["pretrain_compute"] = adv_data.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
+    adv_data["pretrain_compute"] = adv_data.model_idx.map(
+        ESTIMATED_PRETRAIN_COMPUTE[family]
+    )
     # The pretrain compute values are too large to be represented as even as int64
     adv_data["pretrain_compute"] = adv_data["pretrain_compute"].astype(np.float64)
     adv_data[f"{interp_flops_column}_fraction_pretrain"] = (
@@ -2426,12 +2493,12 @@ def prepare_offense_defense_data(
             "summary_keys": summary_keys,
             "metrics": metrics,
             "target_asr": target_asr,
-            "use_group_cache": use_group_cache,
         },
         "offense_defense",
         family,
         attack,
         dataset,
+        f"target_asr_{target_asr}_percent",
     )
 
 
@@ -2439,8 +2506,8 @@ def load_and_plot_offense_defense_plots(
     family: str,
     attack: str,
     dataset: str,
-    x_data_name: str = "train_total_flops",
-    y_data_name: str = "iteration_x_flops",
+    x_data_name: str = "defense_flops_fraction_pretrain",
+    y_data_name: str = "interpolated_iteration_for_5_percent_flops_fraction_pretrain",
     color_data_name: str = "num_params",
     xlim: tuple[float, float] | None = None,
     ylim: tuple[float, float] | None = None,
@@ -2454,8 +2521,15 @@ def load_and_plot_offense_defense_plots(
     diagonal_gridlines: bool = False,
     style: str = "paper",
 ):
+    target_asr_match = re.search(r"_(\d+)_percent", y_data_name)
+    assert target_asr_match is not None
+    target_asr = target_asr_match.group(1)
     adv_data, metadata = read_csv_and_metadata(
-        "offense_defense", family, attack, dataset
+        "offense_defense",
+        family,
+        attack,
+        dataset,
+        f"target_asr_{target_asr}_percent",
     )
     draw_plot_adv_training(
         data=adv_data,
@@ -2491,7 +2565,7 @@ def postprocess_attack_compute(
     # flops.
     fudge_factor = get_fudge_factor(family, attack, dataset)
     df.loc[df.model_idx == 9, "flops_per_iteration"] *= fudge_factor
-    df["pretrain_compute"] = df.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE)
+    df["pretrain_compute"] = df.model_idx.map(ESTIMATED_PRETRAIN_COMPUTE[family])
 
     assert df.flops_per_iteration.notnull().all()
     df.flops_per_iteration = df.groupby(

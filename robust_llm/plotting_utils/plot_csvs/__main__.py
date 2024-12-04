@@ -24,7 +24,6 @@ PLOTS = [
     "asr_finetuned",
     "asr_slopes",
     "finetuned",
-    "finetuned_qwen",
     "offense_defense",
     "post_adv_training",
 ]

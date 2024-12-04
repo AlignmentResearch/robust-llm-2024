@@ -11,12 +11,18 @@ def name_to_model(name: str) -> str:
 
 
 def name_to_attack(name: str) -> str:
-    if "gcg" in name and "rt" not in name:
+    if "infix" in name:
+        return "GCG (Infix)"
+    elif "prefix" in name:
+        return "GCG (Prefix)"
+    elif "gcg" in name and "rt" not in name:
         return "GCG"
     elif "rt" in name and "gcg" not in name:
         return "RandomToken"
     elif "gcg" in name and "rt" in name:
         return "RandomToken"
+    elif "beast" in name:
+        return "BEAST"
     else:
         raise ValueError(f"Unknown attack name: {name}")
 

@@ -69,24 +69,26 @@ AXIS_LABELS = {
     "attack_flops_fraction_pretrain": "Attack Compute\n(Proportion of Pretraining)",
     "defense_flops_fraction_pretrain": "Adversarial Training Compute\n(Proportion of Pretraining)",  # noqa: E501
     "logit_attack_success_rate": "Attack Success Rate",
-    "metrics_asr_at_2": "Attack Success Rate",
-    "metrics_asr_at_12": "Attack Success Rate",
-    "metrics_asr_at_60": "Attack Success Rate",
-    "metrics_asr_at_72": "Attack Success Rate",
-    "metrics_asr_at_120": "Attack Success Rate",
-    "metrics_asr_at_128": "Attack Success Rate ",
+    "asr_at_2": "Attack Success Rate",
+    "asr_at_12": "Attack Success Rate",
+    "asr_at_60": "Attack Success Rate",
+    "asr_at_72": "Attack Success Rate",
+    "asr_at_120": "Attack Success Rate",
+    "asr_at_128": "Attack Success Rate ",
+    "logit_asr_at_2": "Attack Success Rate",
+    "logit_asr_at_5": "Attack Success Rate",
+    "logit_asr_at_12": "Attack Success Rate",
+    "logit_asr_at_25": "Attack Success Rate",
+    "logit_asr_at_60": "Attack Success Rate",
+    "logit_asr_at_72": "Attack Success Rate",
+    "logit_asr_at_120": "Attack Success Rate",
+    "logit_asr_at_128": "Attack Success Rate",
     "logit_asr_at_2": "Attack Success Rate",
     "logit_asr_at_12": "Attack Success Rate",
     "logit_asr_at_60": "Attack Success Rate",
     "logit_asr_at_72": "Attack Success Rate",
     "logit_asr_at_120": "Attack Success Rate",
     "logit_asr_at_128": "Attack Success Rate",
-    "logit_metrics_asr_at_2": "Attack Success Rate",
-    "logit_metrics_asr_at_12": "Attack Success Rate",
-    "logit_metrics_asr_at_60": "Attack Success Rate",
-    "logit_metrics_asr_at_72": "Attack Success Rate",
-    "logit_metrics_asr_at_120": "Attack Success Rate",
-    "logit_metrics_asr_at_128": "Attack Success Rate",
     "mean_log_prob": "Mean Log Probability",
     "log_mean_prob": "log(Mean Probability)",
     "mean_logit_prob": "Mean Log Probability (Logit)",
@@ -214,7 +216,25 @@ RUN_NAMES = {
                 "merge_runs": "niki_182_adv_tr_no_ramp_small",
             },
         },
-    }
+    },
+    "qwen": {
+        "gcg_gcg": {
+            "spam": {
+                "group_names": "oskar_026a_gcg_eval_qwen25_adv_spam",
+                "merge_runs": "oskar_024b_adv_tr_qwen25_gcg_spam",
+            },
+            "harmless": {
+                "group_names": "oskar_026b_gcg_eval_qwen25_adv_harmless",
+                "merge_runs": "oskar_024a_adv_tr_qwen25_gcg_harmless",
+            },
+        },
+        "gcg_beast": {
+            "harmless": {
+                "group_names": "tom_025b_beast_eval_qwen25_adv_gcg_harmless",
+                "merge_runs": "oskar_024a_adv_tr_qwen25_gcg_harmless",
+            },
+        },
+    },
 }
 
 

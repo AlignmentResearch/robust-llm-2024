@@ -9,7 +9,6 @@ from robust_llm.plotting_utils.tools import (
     get_cached_asr_logprob_data,
     get_dataset_from_name,
     get_family_from_name,
-    prepare_adv_training_data,
 )
 
 GROUPS = [
@@ -27,6 +26,9 @@ GROUPS = [
     "ian_113_rt_pythia_spam",
     "oskar_025a_gcg_eval_qwen25_ft_harmless",
     "oskar_025b_gcg_eval_qwen25_ft_spam",
+    "tom_021b_beast_eval_qwen25_ft_harmless",
+    "tom_022b_beast_eval_qwen25_ft_spam",
+    "tom_019b_beast_eval_pythia_ft_harmless",
 ]
 
 
@@ -37,27 +39,6 @@ def save_asr_for_group(
     family = get_family_from_name(group_name)
     attack = get_attack_from_name(group_name)
     dataset = get_dataset_from_name(group_name)
-
-    flop_data = prepare_adv_training_data(
-        (group_name,),
-        summary_keys=[
-            "experiment_yaml.model.name_or_path",
-            "experiment_yaml.dataset.n_val",
-            "model_size",
-            "experiment_yaml.model.revision",
-        ],
-        metrics=[
-            "flops_per_iteration",
-        ],
-    )
-
-    df = df.merge(
-        flop_data,
-        on=["model_idx", "seed_idx"],
-        how="left",
-        validate="m:1",
-        suffixes=("", "_flop"),
-    )
 
     export_csv_and_metadata(
         df,

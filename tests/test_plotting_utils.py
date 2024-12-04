@@ -4,7 +4,6 @@ import pytest
 
 from robust_llm.plotting_utils.tools import (
     _get_num_params_from_name,
-    _get_pretraining_fraction,
     create_legend,
     extract_size_from_model_name,
     get_color_palette,
@@ -12,7 +11,6 @@ from robust_llm.plotting_utils.tools import (
     postprocess_data,
     set_up_paper_plot,
 )
-from robust_llm.wandb_utils.constants import FINAL_PYTHIA_CHECKPOINT
 
 
 def test_set_up_paper_plot():
@@ -35,11 +33,11 @@ def test_get_color_palette():
         {"num_params": [1e6, 1e7, 1e8], "other_column": ["A", "B", "C"]}
     )
 
-    palette_dict = get_color_palette(data, "num_params")
+    palette_dict = get_color_palette(data, "num_params", family="pythia")
     assert len(palette_dict) == 3
     assert all(isinstance(color, tuple) for color in palette_dict.values())
 
-    palette_dict = get_color_palette(data, "other_column")
+    palette_dict = get_color_palette(data, "other_column", family="pythia")
     assert len(palette_dict) == 3
     assert all(isinstance(color, tuple) for color in palette_dict.values())
 
@@ -109,18 +107,12 @@ def sample_data():
 def test_postprocess_data(sample_data):
     postprocess_data(sample_data)
     assert "num_params" in sample_data.columns
-    assert "pretraining_fraction" in sample_data.columns
 
 
 def test_get_num_params_from_name():
     assert _get_num_params_from_name("pythia-70m") == 44_672_000
     with pytest.raises(ValueError):
         _get_num_params_from_name("invalid_model_name")
-
-
-def test_get_pretraining_fraction():
-    assert _get_pretraining_fraction("model-ch-1000") == 1000 / FINAL_PYTHIA_CHECKPOINT
-    assert _get_pretraining_fraction("model-no-checkpoint") == 1.0
 
 
 def test_extract_size_from_model_name():

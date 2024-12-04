@@ -9,16 +9,28 @@ summary_keys = [
     "experiment_yaml.model.name_or_path",
     "experiment_yaml.model.revision",
 ]
-METRICS = [
-    "metrics/asr@12",
-    "metrics/asr@60",
-    "metrics/asr@72",
-    "metrics/asr@120",
-    "metrics/asr@128",
-    "adversarial_eval/pre_attack_accuracy",
-    "adversarial_eval/n_correct_post_attack",
-    "adversarial_eval/n_examples",
-]
+METRICS = {
+    "gcg": [
+        "metrics/asr@12",
+        "metrics/asr@60",
+        "metrics/asr@72",
+        "metrics/asr@120",
+        "metrics/asr@128",
+        "adversarial_eval/pre_attack_accuracy",
+        "adversarial_eval/n_correct_post_attack",
+        "adversarial_eval/n_examples",
+    ],
+    "beast": [
+        "metrics/asr@5",
+        "metrics/asr@10",
+        "metrics/asr@15",
+        "metrics/asr@20",
+        "metrics/asr@25",
+        "adversarial_eval/pre_attack_accuracy",
+        "adversarial_eval/n_correct_post_attack",
+        "adversarial_eval/n_examples",
+    ],
+}
 
 
 def main():
@@ -33,14 +45,15 @@ def main():
         ("pythia", "gcg_gcg_prefix", "imdb"),
         ("pythia", "gcg_gcg_prefix", "spam"),
         ("pythia", "gcg_no_ramp_gcg", "imdb"),
+        ("qwen", "gcg_beast", "harmless"),
     ):
+
         save_adv_training_data(
             family=family,
             attack=attack,
             dataset=dataset,
             summary_keys=summary_keys,
-            metrics=METRICS,
-            use_group_cache=True,
+            metrics=METRICS["beast" if "beast" in attack else "gcg"],
             **get_run_names(family, attack, dataset),
         )
 

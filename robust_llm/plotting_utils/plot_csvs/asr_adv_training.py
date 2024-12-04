@@ -23,6 +23,8 @@ def main(style):
         ("pythia", "gcg_gcg_prefix", "imdb"),
         ("pythia", "gcg_gcg_prefix", "spam"),
         ("pythia", "gcg_no_ramp_gcg", "imdb"),
+        ("qwen", "gcg_gcg", "harmless"),
+        ("qwen", "gcg_gcg", "spam"),
     ]:
         for x in ("attack_flops_fraction_pretrain",):
             load_and_plot_asr(

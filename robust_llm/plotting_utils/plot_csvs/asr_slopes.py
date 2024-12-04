@@ -9,7 +9,12 @@ import seaborn as sns
 import statsmodels.formula.api as smf
 
 from robust_llm.plotting_utils.constants import AXIS_LABELS
-from robust_llm.plotting_utils.style import name_to_attack, name_to_dataset, set_style
+from robust_llm.plotting_utils.style import (
+    name_to_attack,
+    name_to_dataset,
+    name_to_model,
+    set_style,
+)
 from robust_llm.plotting_utils.tools import (
     create_path_and_savefig,
     postprocess_attack_compute,
@@ -52,7 +57,7 @@ def regress_attack_scaling(
         r"$\log_{10}$(Attack Compute)"
     )
     fig.suptitle(
-        f"{name_to_attack(attack)}/{name_to_dataset(dataset)} "
+        f"{name_to_model(family)}, {name_to_attack(attack)}/{name_to_dataset(dataset)} "
         + f"Regression slopes of {description}, "
         "split by model size ",
         fontsize=8,

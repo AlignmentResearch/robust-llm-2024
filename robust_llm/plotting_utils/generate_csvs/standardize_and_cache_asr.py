@@ -53,7 +53,11 @@ def maybe_download_asr_data(group: str) -> None:
             "main", "adv-training-round-0"
         ).str.extract(r"adv-training-round-(\d+)", expand=False)
         dfs.append(df)
-    concat_df = pd.concat(dfs)
+    try:
+        concat_df = pd.concat(dfs)
+    except ValueError:
+        print(f"Failed to concatenate {group}.")
+        raise ValueError("Are you sure the experiment name is correct?")
     concat_df = add_model_idx_inplace(concat_df, reference_col="model_size")
     concat_df.drop_duplicates(
         inplace=True,
@@ -66,6 +70,12 @@ def main():
     GROUPS = [
         "oskar_025a_gcg_eval_qwen25_ft_harmless",
         "oskar_025b_gcg_eval_qwen25_ft_spam",
+        "oskar_026a_gcg_eval_qwen25_adv_spam",
+        "oskar_026b_gcg_eval_qwen25_adv_harmless",
+        "tom_019b_beast_eval_pythia_ft_harmless",
+        "tom_021b_beast_eval_qwen25_ft_harmless",
+        "tom_022b_beast_eval_qwen25_ft_spam",
+        "tom_025b_beast_eval_qwen25_adv_gcg_harmless",
     ]
     os.makedirs("outputs", exist_ok=True)
     for group in tqdm(GROUPS):

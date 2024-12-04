@@ -12,6 +12,7 @@ from robust_llm.plotting_utils.style import (
     set_style,
 )
 from robust_llm.plotting_utils.tools import (
+    draw_min_max_median_and_wilson_plot_by_dataset,
     draw_min_max_median_plot,
     draw_min_max_median_plot_by_dataset,
     draw_wilson_score_interval_plot,
@@ -19,22 +20,21 @@ from robust_llm.plotting_utils.tools import (
 )
 
 
-def pick_attack_iterations(df, attack, dataset):
+def pick_attack_iterations(df, attack, dataset, family: str = "pythia") -> None:
     # We handle strongreject separately
-    if dataset in [
-        "strongreject",
-    ]:
+    if dataset in ["strongreject"]:
         # In strongreject, we only calculated the ASR for the final attack iteration.
-        df["asr"] = df["adversarial_eval_attack_success_rate"]
+        # For Qwen, we use the last iteration.
+        df["asr"] = df.asr_at_128
         return
 
     for field in ("asr",):  # Other options:  "mean_log_prob", "log_mean_prob"
         if not df.columns.str.contains(f"{field}_at_").any():
             print(f"Missing {field}_at_ for {attack} {dataset}")
             continue
-        elif dataset in ["pm", "imdb", "spam"] and attack == "gcg":
+        elif dataset in ["pm", "imdb", "spam"] and attack in ["gcg", "beast"]:
             df[field] = df[f"{field}_at_10"]
-        elif dataset in ["helpful", "harmless", "wl"] and attack == "gcg":
+        elif dataset in ["helpful", "harmless", "wl"] and attack in ["gcg", "beast"]:
             df[field] = df[f"{field}_at_2"]
         elif (
             dataset in ["pm", "imdb", "spam", "helpful", "harmless", "wl"]
@@ -81,7 +81,7 @@ def _plot_strongreject(style: str) -> None:
                 ytransform=ytransform,
                 style=style,
                 smoothing=0 if "prob" in y_data_name else 1,
-                ylim=(0, 1) if ytransform is None else None,
+                ylim=(-0.025, 1.025) if ytransform is None else None,
             )
 
     # Pre attack accuracy
@@ -102,7 +102,7 @@ def _plot_strongreject(style: str) -> None:
         legend=True,
         style=style,
         smoothing=1,
-        ylim=(0, 1),
+        ylim=(-0.025, 1.025),
     )
 
     # Post attack accuracy
@@ -126,11 +126,11 @@ def _plot_strongreject(style: str) -> None:
             legend=True,
             style=style,
             smoothing=1,
-            ylim=(0, 1),
+            ylim=(-0.025, 1.025),
         )
 
 
-def _plot_other_datasets(style: str) -> None:
+def _plot_pythia_clf(style: str) -> None:
     all_data = []
     metadata = None
     for family, attack, dataset in [
@@ -148,24 +148,30 @@ def _plot_other_datasets(style: str) -> None:
         ("pythia", "rt", "harmless"),
         ("qwen", "gcg", "spam"),
         ("qwen", "gcg", "harmless"),
+        ("qwen", "beast", "harmless"),
+        ("qwen", "beast", "spam"),
+        ("pythia", "beast", "harmless"),
     ]:
         save_as = ("finetuned", family, attack, dataset)
         data, metadata = read_csv_and_metadata(*save_as)
-        pick_attack_iterations(data, attack, dataset)
+        pick_attack_iterations(df=data, attack=attack, dataset=dataset, family=family)
         for legend in (True, False):
             for y_data_name, ytransform in [
-                ("asr", "logit"),
+                # ("asr", "logit"),
                 ("asr", None),
-                ("mean_log_prob", "negative"),
-                ("log_mean_prob", "comp_exp"),
+                # ("mean_log_prob", "negative"),
+                # ("log_mean_prob", "comp_exp"),
             ]:
                 if y_data_name not in data.columns:
                     continue
                 draw_min_max_median_plot(
                     data,
                     metadata=metadata,
-                    title=f"{name_to_dataset(dataset)}, "
-                    f"{name_to_attack(attack)} Attack",
+                    title=(
+                        f"{name_to_model(family)}, "
+                        f"{name_to_dataset(dataset)}, "
+                        f"{name_to_attack(attack)} Attack"
+                    ),
                     legend=legend,
                     y_data_name=y_data_name,
                     ytransform=ytransform,
@@ -174,12 +180,14 @@ def _plot_other_datasets(style: str) -> None:
                     dataset=dataset,
                     style=style,
                     smoothing=0 if "prob" in y_data_name else 1,
+                    ylim=(-0.025, 1.025) if ytransform is None else None,
                 )
             data["family"] = family
             data["attack"] = attack
             data["dataset"] = dataset
             all_data.append(data)
     concat_data = pd.concat(all_data)
+    # concat_data["asr"] = concat_data["adversarial_eval_attack_success_rate"]
     assert not concat_data.asr.isnull().any()
     for (family, attack), attack_df in concat_data.groupby(["family", "attack"]):  # type: ignore # noqa
         assert isinstance(family, str)
@@ -194,7 +202,7 @@ def _plot_other_datasets(style: str) -> None:
                 draw_min_max_median_plot_by_dataset(
                     attack_df,
                     metadata=metadata,
-                    title=f"{name_to_attack(attack)} Attack on All Tasks",
+                    title=(f"{name_to_model(family)}, {name_to_attack(attack)}"),
                     y_data_name=y_data_name,
                     ytransform=ytransform,
                     adversarial=False,
@@ -203,11 +211,12 @@ def _plot_other_datasets(style: str) -> None:
                     legend=legend,
                     style=style,
                     smoothing=0 if "prob" in y_data_name else 1,
+                    ylim=(-0.025, 1.025) if ytransform is None else None,
                 )
                 draw_min_max_median_plot_by_dataset(
                     attack_df.loc[attack_df.dataset.ne("wl")],
                     metadata=metadata,
-                    title=f"{name_to_attack(attack)} Attack on All Tasks",
+                    title=f"{name_to_model(family)}, {name_to_attack(attack)}",
                     y_data_name=y_data_name,
                     ytransform=ytransform,
                     adversarial=False,
@@ -217,9 +226,10 @@ def _plot_other_datasets(style: str) -> None:
                     legend=legend,
                     style=style,
                     smoothing=0 if "prob" in y_data_name else 1,
+                    ylim=(-0.025, 1.025) if ytransform is None else None,
                 )
 
-    for family in ["pythia", "qwen"]:
+    for family in ["pythia"]:
         attack = "gcg"
         # Pre attack accuracy
         gcg_dataset = concat_data.loc[concat_data.attack.eq(attack)]
@@ -236,7 +246,7 @@ def _plot_other_datasets(style: str) -> None:
             legend=True,
             style=style,
             smoothing=1,
-            ylim=(0, 1),
+            ylim=(-0.025, 1.025),
         )
 
         # Post attack accuracy
@@ -256,14 +266,76 @@ def _plot_other_datasets(style: str) -> None:
                 legend_loc="upper left",
                 style=style,
                 smoothing=1,
-                ylim=(0, 1),
+                ylim=(-0.025, 1.025),
             )
+
+
+def _plot_qwen_gen_and_clf(style: str) -> None:
+    all_data = []
+    metadata = None
+    for family, attack, dataset in [
+        ("qwen", "gcg", "spam"),
+        ("qwen", "gcg", "harmless"),
+        ("qwen", "gcg", "strongreject"),
+    ]:
+        save_as = ("finetuned", family, attack, dataset)
+        data, metadata = read_csv_and_metadata(*save_as)
+        pick_attack_iterations(data, attack, dataset, family)
+        data["family"] = family
+        data["attack"] = attack
+        data["dataset"] = dataset
+        all_data.append(data)
+    concat_data = pd.concat(all_data)
+    assert not concat_data.asr.isnull().any()
+    for (family, attack), attack_df in concat_data.groupby(["family", "attack"]):  # type: ignore # noqa
+        assert isinstance(family, str)
+        assert isinstance(attack, str)
+        for legend in (True, False):
+            for y_data_name, ytransform in [
+                ("asr", None),
+            ]:
+                draw_min_max_median_and_wilson_plot_by_dataset(
+                    attack_df,
+                    metadata=metadata,
+                    title=f"{name_to_model(family)}, {name_to_attack(attack)}",
+                    y_data_name=y_data_name,
+                    successes_name="n_incorrect_post_attack",
+                    trials_name="n_correct_pre_attack",
+                    ytransform=ytransform,
+                    adversarial=False,
+                    family=family,
+                    attack=attack,
+                    legend=legend,
+                    style=style,
+                    smoothing=0 if "prob" in y_data_name else 1,
+                    ylim=(-0.025, 1.025),
+                )
+
+        # Delete the strongreject dataset before plotting pre-attack accuracy
+        # Keep the classification tasks
+        attack_df = attack_df.loc[attack_df.dataset.ne("strongreject")]
+        draw_min_max_median_plot_by_dataset(
+            attack_df,
+            metadata=metadata,
+            title=f"{name_to_model(family)} Pre-Attack Accuracy",
+            y_data_name="adversarial_eval_pre_attack_accuracy",
+            ytransform="none",
+            adversarial=False,
+            family=family,
+            attack=attack,
+            datasets="all",
+            legend=True,
+            style=style,
+            smoothing=1,
+            ylim=(-0.025, 1.025),
+        )
 
 
 def main(style):
     set_style(style)
     _plot_strongreject(style)
-    _plot_other_datasets(style)
+    _plot_pythia_clf(style)
+    _plot_qwen_gen_and_clf(style)
 
 
 if __name__ == "__main__":

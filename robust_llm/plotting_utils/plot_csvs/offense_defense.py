@@ -29,7 +29,7 @@ def main(style):
     # Set the plot style
     set_style(style)
 
-    for x_data_name, xscale, y_data_name, yscale in (
+    for x_template, xscale, y_template, yscale in (
         (
             "train_total_flops",
             "log",
@@ -43,26 +43,32 @@ def main(style):
             "log",
         ),
     ):
-        for target_asr in [5]:
-            x_data_name = x_data_name.format(target_asr=target_asr)
-            y_data_name = y_data_name.format(target_asr=target_asr)
-            add_parity_line = False
-            if x_data_name.endswith("pretrain") and y_data_name.endswith("pretrain"):
-                diagonal_gridlines = True
-            elif x_data_name.endswith("flops") and y_data_name.endswith("flops"):
-                diagonal_gridlines = True
-            else:
-                diagonal_gridlines = False
+        for family, attack, dataset in [
+            ("pythia", "rt_gcg", "imdb"),
+            ("pythia", "rt_gcg", "spam"),
+            ("pythia", "gcg_gcg", "imdb"),
+            ("pythia", "gcg_gcg_infix90", "imdb"),
+            ("pythia", "gcg_gcg", "spam"),
+            ("pythia", "gcg_gcg_infix90", "spam"),
+            ("qwen", "gcg_gcg", "harmless"),
+            ("qwen", "gcg_gcg", "spam"),
+        ]:
+            target_asrs = [5] if family == "pythia" else [2]
+            for target_asr in target_asrs:
+                x_data_name = x_template.format(target_asr=target_asr)
+                y_data_name = y_template.format(target_asr=target_asr)
+                add_parity_line = False
+                if x_data_name.endswith("pretrain") and y_data_name.endswith(
+                    "pretrain"
+                ):
+                    diagonal_gridlines = True
+                elif x_data_name.endswith("flops") and y_data_name.endswith("flops"):
+                    diagonal_gridlines = True
+                else:
+                    diagonal_gridlines = False
 
-            for legend in (True, False):
-                for family, attack, dataset in [
-                    ("pythia", "rt_gcg", "imdb"),
-                    ("pythia", "rt_gcg", "spam"),
-                    ("pythia", "gcg_gcg", "imdb"),
-                    ("pythia", "gcg_gcg_infix90", "imdb"),
-                    ("pythia", "gcg_gcg", "spam"),
-                    ("pythia", "gcg_gcg_infix90", "spam"),
-                ]:
+                for legend in (True, False):
+
                     load_and_plot_offense_defense_plots(
                         family=family,
                         attack=attack,
