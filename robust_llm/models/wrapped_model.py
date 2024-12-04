@@ -566,33 +566,6 @@ class WrappedModel(ABC):
             )
         except OSError as e:
             error_list.append(e)
-
-        # note(ian): I accidentally uploaded some models as AlignmentResearch/clf_[...]
-        # instead of AlignmentResearch/robust_llm_clf_[...]. Thus to avoid keeping
-        # track of which is which, we try both and return the first one that
-        # works.
-        new_name = None
-        if config.name_or_path.startswith("AlignmentResearch/robust_llm_"):
-            new_name = config.name_or_path.replace(
-                "AlignmentResearch/robust_llm_",
-                "AlignmentResearch/",
-            )
-        elif config.name_or_path.startswith("AlignmentResearch/"):
-            new_name = config.name_or_path.replace(
-                "AlignmentResearch/",
-                "AlignmentResearch/robust_llm_",
-            )
-        if new_name is not None:
-            new_config = dataclasses.replace(config, name_or_path=new_name)
-            try:
-                return cls._from_config(
-                    new_config,
-                    accelerator,
-                    num_classes=num_classes,
-                    **kwargs,
-                )
-            except OSError as e:
-                error_list.append(e)
         logger.warning("Failed to load model from HFHub.")
 
         # HF Hub failed. Let's try loading from disk in case we saved the model

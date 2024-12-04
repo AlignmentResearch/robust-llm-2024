@@ -767,16 +767,6 @@ def _get_tracking_data_for_run(run: WandbRun) -> dict[str, Any]:
         else None
     )
     if match is None:
-        # Handle model misnaming issue (GH #921)
-        match = (
-            re.match(
-                r"AlignmentResearch/clf_(.*)_pythia-(.*)_s-(.*)_adv_tr_(.*)_t-(.*)",  # noqa: E501
-                hub_model_id,
-            )
-            if hub_model_id is not None
-            else None
-        )
-    if match is None:
         dataset, base_model, ft_seed, attack, adv_seed = [None] * 5
     else:
         dataset, base_model, ft_seed, attack, adv_seed = match.groups()
