@@ -13,11 +13,9 @@ evaluation:
 
 training:
   optimizer: "adafactor"
-  save_name: null
   num_train_epochs: 1
   learning_rate: 1e-5
   lr_scheduler_type: "constant"  # TODO: see if this works ok
-  save_to: "NONE"
   adversarial:
     num_examples_to_generate_each_round: 10
     max_augmented_data_size: 10

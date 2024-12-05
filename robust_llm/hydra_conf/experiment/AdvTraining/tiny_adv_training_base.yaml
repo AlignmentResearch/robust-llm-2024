@@ -10,7 +10,6 @@ dataset:
   n_val: 10
 
 training:
-  save_to: BOTH
   num_train_epochs: 1
   learning_rate: 1e-5
   optimizer: "adafactor"

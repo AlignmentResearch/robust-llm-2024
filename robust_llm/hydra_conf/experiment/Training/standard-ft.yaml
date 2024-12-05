@@ -5,7 +5,6 @@ defaults:
 
 training:
   optimizer: "adafactor"
-  save_to: DISK
   num_train_epochs: 3
   learning_rate: 1e-5
   lr_scheduler_type: "linear"

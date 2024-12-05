@@ -52,8 +52,6 @@ def run_train_loop(
     resume_mode = config.environment.resume_mode
     save_checkpoints = config.environment.allow_checkpointing
 
-    base_path = Path(config.environment.save_root)
-    models_path = base_path / "models"
     state = get_first_state(
         config,
         accelerator,
@@ -62,7 +60,7 @@ def run_train_loop(
 
     # Handle the case of resuming from the final checkpoint.
     if state.training_is_finished() and state.should_save_trained_model():
-        state.save_trained_model(models_path)
+        state.save_trained_model()
         return state
 
     while not state.training_is_finished():
@@ -71,10 +69,9 @@ def run_train_loop(
 
         if save_checkpoints:
             state.save()
-            state.cleanup_checkpoints()
 
         if state.should_save_trained_model():
-            state.save_trained_model(models_path)
+            state.save_trained_model()
 
         # This is mostly for debugging, since we usually won't want to reload
         # the state every time.
@@ -83,6 +80,7 @@ def run_train_loop(
                 config=config,
                 accelerator=accelerator,
             )
+    state.mark_as_finished()
     return state
 
 

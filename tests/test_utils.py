@@ -12,7 +12,6 @@ from robust_llm.config.configs import (
     EnvironmentConfig,
     EvaluationConfig,
     ExperimentConfig,
-    SaveTo,
     TrainingConfig,
 )
 from robust_llm.config.dataset_configs import DatasetConfig
@@ -216,7 +215,6 @@ def test_hash():
             n_val=2,
         ),
         training=TrainingConfig(
-            save_to=SaveTo.NONE,
             save_name="TEST_SAVE_NAME",
             # TODO(GH#990): Make lr scheduler configurable.
             lr_scheduler_type="constant",

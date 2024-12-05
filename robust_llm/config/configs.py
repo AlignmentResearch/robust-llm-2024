@@ -1,6 +1,5 @@
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -140,20 +139,6 @@ class AdversarialTrainingConfig:
         assert 0 <= self.loss_rank_weight <= 1, "loss_rank_weight should be in [0, 1]."
 
 
-class SaveTo(Enum):
-    # Save to HF hub.
-    HF = "hf"
-    # Save to disk.
-    DISK = "disk"
-    # Save to both HF hub and disk.
-    BOTH = "both"
-    # Save to HF hub. If that fails, save to disk instead and mark it as needing
-    # to be uploaded to HF.
-    HF_ELSE_DISK = "hf_else_disk"
-    # Model is not saved.
-    NONE = "none"
-
-
 @dataclass
 class TrainingConfig:
     """Configs used across different training procedures.
@@ -168,11 +153,8 @@ class TrainingConfig:
             Full list here:
             At https://github.com/huggingface/transformers/blob/main/src/transformers/trainer_utils.py#L410
         optimizer: The optimizer to use in training.
-        save_total_limit: The maximum number of checkpoints to keep. If more than
-            save_total_limit checkpoints are saved, the oldest ones are deleted.
-        save_name: The name to use for saving checkpoints. If None, the name will be
-            automatically generated.
-        save_to: Where to save the model after running the trainer.
+        save_name: The name to write to the model checkpoints, useful for naming the model when
+            uploading to HuggingFace. If None, the name will be automatically generated.
         seed: seed to use for training. It will be set at the beginning of huggingface
             Trainer's training. In particular, it may affect random initialization
             (if any).
@@ -190,12 +172,8 @@ class TrainingConfig:
     # group_by_length: bool = False
     # eval_steps: Optional[int] = None
     # logging_steps: int = 500
-    # save_strategy: str = "steps"
-    # save_steps: int = 500
-    save_total_limit: int = 2
     # log_full_datasets_to_wandb: bool = False
-    save_name: Optional[str] = None
-    save_to: SaveTo = SaveTo.BOTH
+    save_name: str = SI("${model.name_or_path}_${run_name}")
     seed: int = 0
     upload_retries: int = 5
     upload_cooldown: float = 10

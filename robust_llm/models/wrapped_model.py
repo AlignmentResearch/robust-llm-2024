@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import dataclasses
 import json
-import tempfile
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
@@ -35,10 +34,8 @@ from robust_llm.dist_utils import (
     broadcast_int,
     broadcast_int128,
     is_main_process,
-    rmtree_if_exists,
     try_except_main_process_loop,
 )
-from robust_llm.logging_utils import log
 from robust_llm.models.model_disk_utils import (
     get_model_load_path,
     mark_model_save_as_finished,
@@ -323,33 +320,6 @@ class WrappedModel(ABC):
         finally:
             self._skip_hooks = False
 
-    @print_time()
-    def push_to_hub(
-        self,
-        repo_id: str,
-        revision: Optional[str],
-        retries: int,
-        cooldown_seconds: float,
-        local_dir: Path | None = None,
-    ):
-        """Pushes the model and tokenizer to the hub with retries."""
-        save_dir = local_dir or Path(tempfile.mkdtemp())
-        self.save_local(save_dir, retries=retries, cooldown_seconds=cooldown_seconds)
-
-        assert self.accelerator is not None
-        try_except_main_process_loop(
-            retries=retries,
-            cooldown_seconds=cooldown_seconds,
-            accelerator=self.accelerator,
-            func=self._push_to_hub_once,
-            repo_id=repo_id,
-            revision=revision,
-            save_dir=save_dir,
-            # cleanup files if not using a permanent directory
-            cleanup=local_dir is None,
-        )
-        log("DEBUG: Pushed model to hub.", main_process_only=False)
-
     def _convert_size_to_bytes(self, size_str: str) -> int:
         """Convert human readable size string to bytes.
 
@@ -489,42 +459,6 @@ class WrappedModel(ABC):
         # TODO(GH#1103): Weird hack taken from PreTrainedModel.save_pretrained
         self.model.config._attn_implementation_autoset = False
         self.model.config.save_pretrained(output_dir)
-
-    @print_time()
-    def _push_to_hub_once(
-        self,
-        repo_id: str,
-        revision: Optional[str],
-        save_dir: Path,
-        cleanup: bool = True,
-    ):
-        """Makes one attempt to push the model and tokenizer to the hub.
-
-        Args:
-            repo_id: The ID of the huggingface hub repo to push to.
-            revision: The revision to push to.
-            save_dir: The directory to save the model and tokenizer to.
-            cleanup: If this is True, we will delete the save_dir
-        """
-        # Now separately push to hub, using an internal transformers
-        # function. We have to use an internal function because both
-        # `push_to_hub` and `save_pretrained` do not give enough flexibility
-        # when using FSDP: `push_to_hub` doesn't let you pass in a
-        # state_dict and `save_pretrained` doesn't let you pass in a
-        # tag/revision for the repo.
-        repo_id = self.model._create_repo(repo_id)
-        revision = revision or "main"
-        self.model._upload_modified_files(
-            working_dir=save_dir,
-            repo_id=repo_id,
-            files_timestamps=dict(),
-            commit_message="Pushing model and tokenizer to hub",
-            revision=revision,  # type: ignore  # bad hinting in transformers
-        )
-        # Only clean up if we didn't want to keep the local directory.
-        if cleanup:
-            logger.debug(f"Removing temp directory: {save_dir}")
-            rmtree_if_exists(save_dir)
 
     @classmethod
     def register_subclass(cls, name):

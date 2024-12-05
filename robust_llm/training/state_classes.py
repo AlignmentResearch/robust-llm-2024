@@ -11,7 +11,6 @@ from venv import logger
 
 import numpy as np
 import torch
-import wandb
 from accelerate import Accelerator
 from datasets import Dataset
 from torch.optim.adamw import AdamW
@@ -25,18 +24,13 @@ from robust_llm.attacks.attack import AttackOutput
 from robust_llm.attacks.attack_utils import create_attack
 from robust_llm.batch_job_utils import zero_pad
 from robust_llm.config.callback_configs import CallbackConfig
-from robust_llm.config.configs import ExperimentConfig, SaveTo, get_checkpoint_path
+from robust_llm.config.configs import ExperimentConfig, get_checkpoint_path
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
-from robust_llm.dist_utils import (
-    assert_same_data_between_processes,
-    rmtree_if_exists,
-    try_except_main_process_loop,
-)
+from robust_llm.dist_utils import assert_same_data_between_processes, rmtree_if_exists
 from robust_llm.evaluation import do_adversarial_evaluation
 from robust_llm.logging_utils import log, wandb_log
 from robust_llm.metrics.metrics import maybe_compute_robustness_metrics
-from robust_llm.models.model_disk_utils import generate_model_save_path
 from robust_llm.models.model_utils import compute_batch_sizes_from_config
 from robust_llm.models.wrapped_model import WrappedModel
 from robust_llm.rllm_datasets.dataset_utils import cast_and_concatenate
@@ -51,7 +45,6 @@ from robust_llm.training.training_utils import (
     AttackSchedule,
     construct_combined_dataset,
     find_most_recent_checkpoint,
-    get_sorted_checkpoints,
 )
 from robust_llm.utils import print_time
 
@@ -411,56 +404,6 @@ class TrainingPipelineState:
                 f.write("")
         self.accelerator.wait_for_everyone()
 
-    def _cleanup_checkpoints(self):
-        """Delete old checkpoints to save disk space.
-
-        The process is: iterate in reverse order through the checkpoints, and
-        once we have found save_total_limit checkpoints that are safely saved,
-        we delete all older checkpoints.
-        """
-        checkpoint_path = get_checkpoint_path(self.config)
-        if not checkpoint_path.exists():
-            return
-
-        save_total_limit = self.training_config.save_total_limit
-        safe_checkpoint_epochs: list[str] = []
-        log(f"Cleaning up checkpoints in {checkpoint_path}", main_process_only=False)
-        for subdir in get_sorted_checkpoints(checkpoint_path):
-            if len(safe_checkpoint_epochs) >= save_total_limit:
-                assert checkpoint_path in subdir.parents
-                assert subdir.name not in safe_checkpoint_epochs
-                rmtree_if_exists(subdir)
-            elif (subdir / "save_complete").exists():
-                safe_checkpoint_epochs.append(subdir.name)
-            else:
-                log(
-                    f"Deleting incomplete checkpoint: {subdir}",
-                    main_process_only=False,
-                )
-                assert checkpoint_path in subdir.parents
-                assert subdir.name not in safe_checkpoint_epochs
-                rmtree_if_exists(subdir)
-        log(
-            f"Keeping checkpoints: {safe_checkpoint_epochs}",
-            main_process_only=False,
-        )
-
-    def cleanup_checkpoints(self):
-        try:
-            return try_except_main_process_loop(
-                retries=self.training_config.upload_retries,
-                cooldown_seconds=self.training_config.upload_cooldown,
-                accelerator=self.accelerator,
-                func=self._cleanup_checkpoints,
-            )
-        except RuntimeError as e:
-            log(
-                f"Error cleaning up checkpoints: {e}",
-                main_process_only=False,
-                level="warning",
-            )
-            log("Continuing after checkpoint deletion error", main_process_only=False)
-
     @print_time()
     def augment_dataset(self):
         """This is a placeholder for subclasses to override."""
@@ -569,63 +512,45 @@ class TrainingPipelineState:
         return "main"
 
     @print_time()
-    def save_trained_model(self, models_path: Path) -> None:
+    def save_trained_model(self) -> None:
         # Make sure everything is in sync before saving.
         self.accelerator.wait_for_everyone()
 
-        save_to = self.training_config.save_to
+        epoch = self.epoch
+        checkpoint_path = get_checkpoint_path(self.config)
+        epoch_path = checkpoint_path / f"epoch_{zero_pad(epoch)}"
+        model_path = epoch_path / "model"
+        if not model_path.exists():
+            log(
+                f"Expected model at path {model_path} doesn't exist!",
+                level="warning",
+            )
+            return
+        done_saving = model_path / "done-saving"
+        if not done_saving.exists():
+            log(
+                f"Model at path {model_path} isn't done saving!",
+                level="warning",
+            )
+            return
         model_name = self.training_config.save_name
         revision = self.get_revision()
-        if save_to == SaveTo.NONE:
-            logger.info("Not saving the model/tokenizer since save_to=none")
-            return
-        assert model_name is not None
-        if save_to in (SaveTo.DISK, SaveTo.BOTH):
-            self._save_model_to_disk(models_path, model_name, revision)
-        if save_to in (SaveTo.HF, SaveTo.BOTH):
-            self._save_model_to_hf(model_name, revision)
-        if save_to == SaveTo.HF_ELSE_DISK:
-            try:
-                self._save_model_to_hf(model_name, revision)
-            except Exception as error:
-                logger.error(
-                    "Failed to save to HuggingFace, saving to disk instead: %s", error
-                )
-                self._save_model_to_disk(models_path, model_name, revision)
+        with open(model_path / ".gitignore", "a") as f:
+            f.write("\nmodel_name.txt\nrevision.txt")
+        with open(model_path / "model_name.txt", "w") as f:
+            f.write(model_name)
+        with open(model_path / "revision.txt", "w") as f:
+            f.write(revision)
 
-    def _save_model_to_disk(self, models_path: Path, model_name: str, revision: str):
-        output_dir = generate_model_save_path(
-            models_path=models_path,
-            model_name=model_name,
-            revision=revision,
-        )
-        if wandb.run is not None:
-            wandb.run.summary["saved_dir"] = str(output_dir)
-
-        logger.info("Saving the model/tokenizer to %s", output_dir)
-        self.model_state.wrapped_model.save_local(
-            output_dir=output_dir,
-            retries=self.training_config.upload_retries,
-            cooldown_seconds=self.training_config.upload_cooldown,
-        )
-
-    def _save_model_to_hf(self, model_name: str, revision: str) -> None:
-        hf_name = f"AlignmentResearch/robust_llm_{model_name}"
-        self.model_state.wrapped_model.push_to_hub(
-            repo_id=hf_name,
-            revision=revision,
-            retries=self.training_config.upload_retries,
-            cooldown_seconds=self.training_config.upload_cooldown,
-        )
-
-        # Record the saving on wandb.
-        logger.info(
-            "Saving the model/tokenizer to HuggingFace as %s, revision %s",
-            hf_name,
-            revision,
-        )
-        if wandb.run is not None:
-            wandb.run.summary["saved_hf_name"] = hf_name
+    def mark_as_finished(self) -> None:
+        epoch = self.epoch
+        checkpoint_path = get_checkpoint_path(self.config)
+        epoch_path = checkpoint_path / f"epoch_{zero_pad(epoch)}"
+        model_path = epoch_path / "model"
+        with open(model_path / ".gitignore", "a") as f:
+            f.write("\ndone-training")
+        with open(model_path / "done-training", "w") as f:
+            pass
 
     def log_epoch(self):
         wandb_log({"epoch": self.epoch}, commit=False)

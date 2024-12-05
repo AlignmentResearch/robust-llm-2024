@@ -13,7 +13,6 @@ from robust_llm.config.configs import (
     EnvironmentConfig,
     EvaluationConfig,
     ExperimentConfig,
-    SaveTo,
     TrainingConfig,
 )
 from robust_llm.config.model_configs import ModelConfig
@@ -186,7 +185,6 @@ def test_training_pipeline_state_and_resume(capsys: pytest.CaptureFixture):
             n_val=2,
         ),
         training=TrainingConfig(
-            save_to=SaveTo.NONE,
             save_name="TEST_SAVE_NAME",
             # TODO(GH#990): Make lr scheduler configurable.
             lr_scheduler_type="constant",
@@ -260,8 +258,6 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
             n_val=5,
         ),
         training=TrainingConfig(
-            save_to=SaveTo.DISK,
-            save_total_limit=3,
             save_name="TEST_SAVE_NAME",
             num_train_epochs=2,
             adversarial=AdversarialTrainingConfig(
@@ -358,7 +354,7 @@ def test_adv_training_pipeline_state_and_resumption(capsys: pytest.CaptureFixtur
     # Remove all but the first checkpoint
     assert checkpoint_dir.exists()
     completed_checkpoints = find_completed_checkpoints(checkpoint_dir)
-    for subdir in completed_checkpoints[:-1]:
+    for subdir in completed_checkpoints[:2]:
         dist_rmtree(subdir)
 
     # Rerun from the previous checkpoint
