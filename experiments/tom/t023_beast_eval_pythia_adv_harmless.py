@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from robust_llm.batch_job_utils import run_multiple
-from robust_llm.experiment_utils import QWEN_EVAL_ROUNDS, get_all_n_rounds_to_evaluate
+from robust_llm.experiment_utils import QWEN_EVAL_ROUNDS
 
 # (model size, gpus, memory, cluster, n_parallel)
 MODEL_SETTINGS: dict[str, list[tuple[str, int, str, str, int]]] = {
@@ -25,6 +25,35 @@ MODEL_SETTINGS: dict[str, list[tuple[str, int, str, str, int]]] = {
         ("7B", 1, "100G", "h100", 1),
         ("14B", 1, "110G", "h100", 1),
     ],
+}
+
+
+# Result of experiment_utils.get_rounds_to_evaluate("pythia", "gcg") prior to a
+# bug fix.
+PYTHIA_ROUNDS_TO_EVAL = [
+    [1, 2, 3, 4, 6, 9, 15, 24, 38, 60],
+    [1, 2, 3, 4, 6, 9, 15, 24, 38, 60],
+    [1, 2, 3, 4, 6, 9, 15, 24, 38, 60],
+    [1, 2, 3, 4, 6, 9, 15, 23, 37, 59],
+    [1, 2, 3, 4, 5, 6, 7, 10, 14, 21],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [1, 2, 3, 4, 5, 6, 7],
+    [1, 2, 3, 4, 5, 6],
+    [1, 2, 3, 4, 5, 6],
+    [1, 2, 3, 4, 5, 6],
+]
+# Buggy points in PYTHIA_ROUNDS_TO_EVAL.
+PYTHIA_ROUNDS_TO_SKIP = {
+    "14m": [],
+    "31m": [],
+    "70m": [],
+    "160m": [],
+    "410m": [],
+    "1b": [9],
+    "1.4b": [7],
+    "2.8b": [6],
+    "6.9b": [6],
+    "12b": [6],
 }
 
 
@@ -55,7 +84,11 @@ def launch_adv_eval(
         model_family_config_str = "pythia"
         model_sizes = [x[0] for x in MODEL_SETTINGS[model_family]]
         rounds_by_model_size = dict(
-            zip(model_sizes, get_all_n_rounds_to_evaluate(adv_tr_attack), strict=True)
+            zip(
+                model_sizes,
+                PYTHIA_ROUNDS_TO_EVAL,
+                strict=True,
+            )
         )
     elif model_family == "qwen25":
         model_family_config_str = "Qwen2.5"
@@ -120,7 +153,9 @@ def launch_adv_eval(
 
     rounds_to_skip = set(rounds_to_skip)
     skip_runs_mask = [
-        bit or int(ov["model.revision"].split("-")[-1]) in rounds_to_skip  # type: ignore [attr-defined]  # noqa: E501
+        bit
+        or int(ov["model.revision"].split("-")[-1]) in rounds_to_skip  # type: ignore [attr-defined]  # noqa: E501
+        or int(ov["model.revision"].split("-")[-1]) in PYTHIA_ROUNDS_TO_SKIP[ov["+model"].split("-")[-2]]  # type: ignore [attr-defined]  # noqa: E501
         for bit, ov in zip(skip_runs_mask, override_args_list)
     ]
 

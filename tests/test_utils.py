@@ -1,7 +1,6 @@
 import dataclasses
 from unittest.mock import patch
 
-import numpy as np
 import pytest
 import torch
 from hypothesis import assume, given
@@ -17,7 +16,11 @@ from robust_llm.config.configs import (
 from robust_llm.config.dataset_configs import DatasetConfig
 from robust_llm.config.model_configs import ModelConfig
 from robust_llm.dist_utils import dist_rmtree
-from robust_llm.experiment_utils import get_all_n_rounds_to_evaluate_pythia
+from robust_llm.experiment_utils import (
+    _get_rounds_to_evaluate_pythia,
+    get_n_adv_tr_rounds,
+    get_rounds_to_evaluate,
+)
 from robust_llm.utils import (
     BalancedSampler,
     deterministic_hash,
@@ -158,33 +161,27 @@ def test_nested_list_to_tuple():
     assert nested_list_to_tuple(nested) == ((1, 2), (3, 4))
 
 
-@pytest.mark.parametrize(
-    "attack, start_rounds, middle_rounds, end_rounds",
-    [
-        ("rt", 1, 9, 0),
-        ("gcg", 1, 9, 0),
-        ("rt", 0, 10, 0),
-        ("gcg", 0, 10, 0),
-        ("rt", 10, 8, 5),
-        ("gcg", 10, 8, 5),
-    ],
-)
-def test_get_all_n_rounds_to_evaluate(attack, start_rounds, middle_rounds, end_rounds):
-    n_rounds = get_all_n_rounds_to_evaluate_pythia(
-        attack, start_rounds, middle_rounds, end_rounds
-    )
-    assert len(n_rounds) == 10
-    max_adv_tr_rounds = 250 if attack == "rt" else 60
-    n_adv_tr_rounds = [
-        np.clip(x, 5, max_adv_tr_rounds) + 1
-        for x in [953, 413, 163, 59, 21, 8, 6, 3, 1, 1]
-    ]
-    for i, rounds in enumerate(n_rounds):
+@pytest.mark.parametrize("attack", ["rt", "gcg"])
+def test_get_rounds_to_evaluate_is_valid(attack):
+    EXPECTED_NUM_MODEL_SIZES = 10
+    EXPECTED_NUM_ROUNDS_TO_EVALUATE = 10
+
+    n_rounds = get_rounds_to_evaluate("pythia", attack)
+    num_model_sizes = len(n_rounds)
+    assert num_model_sizes == EXPECTED_NUM_MODEL_SIZES
+
+    n_adv_tr_rounds = get_n_adv_tr_rounds(attack)
+    for i, rounds in enumerate(n_rounds.values()):
         assert len(rounds) == len(set(rounds))
         assert all(0 < round <= n_adv_tr_rounds[i] for round in rounds)
-        assert len(rounds) == min(
-            start_rounds + middle_rounds + end_rounds, n_adv_tr_rounds[i]
-        )
+        assert len(rounds) == min(EXPECTED_NUM_ROUNDS_TO_EVALUATE, n_adv_tr_rounds[i])
+
+
+@pytest.mark.parametrize("attack", ["rt", "gcg"])
+def test_get_rounds_to_evaluate_pythia_exactly_matches(attack):
+    assert list(
+        get_rounds_to_evaluate("pythia", attack).values()
+    ) == _get_rounds_to_evaluate_pythia(attack)
 
 
 def test_hash():

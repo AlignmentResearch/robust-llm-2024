@@ -1,5 +1,33 @@
 import numpy as np
 
+# These Pythia rounds are the result of _get_rounds_to_evaluate_pythia(),
+# but we copy them in full here for transparency.
+PYTHIA_GCG_EVAL_ROUNDS = {
+    "14m": [1, 2, 3, 4, 6, 9, 15, 24, 38, 60],
+    "31m": [1, 2, 3, 4, 6, 9, 15, 24, 38, 60],
+    "70m": [1, 2, 3, 4, 6, 9, 15, 24, 38, 60],
+    "160m": [1, 2, 3, 4, 6, 9, 15, 23, 37, 59],
+    "410m": [1, 2, 3, 4, 5, 6, 7, 10, 14, 21],
+    "1b": [1, 2, 3, 4, 5, 6, 7, 8],
+    "1.4b": [1, 2, 3, 4, 5, 6],
+    "2.8b": [1, 2, 3, 4, 5],
+    "6.9b": [1, 2, 3, 4, 5],
+    "12b": [1, 2, 3, 4, 5],
+}
+
+PYTHIA_RT_EVAL_ROUNDS = {
+    "14m": [1, 2, 3, 6, 11, 21, 39, 73, 135, 250],
+    "31m": [1, 2, 3, 6, 11, 21, 39, 73, 135, 250],
+    "70m": [1, 2, 3, 5, 9, 16, 29, 52, 92, 163],
+    "160m": [1, 2, 3, 4, 6, 9, 15, 23, 37, 59],
+    "410m": [1, 2, 3, 4, 5, 6, 7, 10, 14, 21],
+    "1b": [1, 2, 3, 4, 5, 6, 7, 8],
+    "1.4b": [1, 2, 3, 4, 5, 6],
+    "2.8b": [1, 2, 3, 4, 5],
+    "6.9b": [1, 2, 3, 4, 5],
+    "12b": [1, 2, 3, 4, 5],
+}
+
 QWEN_ROUNDS = {
     "0.5B": 22,
     "1.5B": 10,
@@ -25,16 +53,12 @@ def get_n_adv_tr_rounds(attack: str) -> list[int]:
     n_adv_tr_rounds = [
         np.clip(x, 5, max_adv_tr_rounds) for x in [953, 413, 163, 59, 21, 8, 6, 3, 1, 1]
     ]
-    n_adv_tr_rounds = [x + 1 for x in n_adv_tr_rounds]
     return n_adv_tr_rounds
 
 
-def _concatenate_and_pad(
-    arrays: list[np.ndarray], start: int, stop: int, num: int
-) -> np.ndarray:
-    points = np.concatenate(arrays)
+def _pad_rounds(points: np.ndarray, stop: int, num: int) -> np.ndarray:
     # If we have too few points, add the smallest available integers
-    all_possible = np.arange(start, stop + 1, dtype=int)
+    all_possible = np.arange(1, stop + 1, dtype=int)
     if len(points) < num:
         # Get all possible integers in the range
         # Find integers not already in our sequence
@@ -50,19 +74,17 @@ def _concatenate_and_pad(
     return points
 
 
-def get_all_n_rounds_to_evaluate_pythia(
+def _get_rounds_to_evaluate_pythia(
     attack: str,
-    start_rounds: int = 0,
-    middle_rounds: int = 10,
-    end_rounds: int = 0,
+    num_rounds_to_eval: int = 10,
 ) -> list[list[int]]:
-    """Get the adversarial training rounds to evaluate for each model size.
+    """Get the adversarial training rounds to evaluate for each Pythia model size.
+
+    Prefer using get_rounds_to_evaluate() instead.
 
     Args:
         attack: The attack to use. Either "rt" or "gcg".
-        start_rounds: The number of rounds to evaluate at the start.
-        middle_rounds: The number of rounds to evaluate in the middle.
-        end_rounds: The number of rounds to evaluate at the end.
+        num_rounds_to_eval: The number of rounds to evaluate.
 
     Returns:
         [n_models, n_rounds] list of adversarial training rounds to evaluate.
@@ -70,57 +92,44 @@ def get_all_n_rounds_to_evaluate_pythia(
         the number of rounds that were trained and the sum of start_rounds,
         middle_rounds, and end_rounds.
     """
-    total_rounds = start_rounds + middle_rounds + end_rounds
     n_adv_tr_rounds = get_n_adv_tr_rounds(attack)
-
-    # If there are insufficient rounds available, take first from the start, then
-    # the end, then the middle.
-    all_start_rounds = [min(n_rounds, start_rounds) for n_rounds in n_adv_tr_rounds]
-    all_end_rounds = [
-        min(n_rounds - s_rounds, end_rounds)
-        for s_rounds, n_rounds in zip(all_start_rounds, n_adv_tr_rounds, strict=True)
-    ]
-    all_middle_rounds = [
-        min(n_rounds - s_rounds - e_rounds, middle_rounds)
-        for s_rounds, e_rounds, n_rounds in zip(
-            all_start_rounds, all_end_rounds, n_adv_tr_rounds
-        )
-    ]
-
-    # Construct lists of rounds for concatenation, splitting up into steps for debugging
-    all_start_rounds_list = [
-        np.arange(1, s_rounds + 1) for s_rounds in all_start_rounds
-    ]
-    all_middle_rounds_list = [
-        np.unique(
-            np.geomspace(
-                start=s_rounds + 1,
-                stop=max(n_rounds - 1 - e_rounds, s_rounds + 1),
-                num=m_rounds,
-                dtype=int,
+    return [
+        list(
+            _pad_rounds(
+                np.unique(
+                    np.geomspace(
+                        start=1,
+                        stop=n_rounds,
+                        num=num_rounds_to_eval,
+                        dtype=int,
+                    )
+                ),
+                stop=n_rounds,
+                num=num_rounds_to_eval,
             )
         )
-        for s_rounds, m_rounds, e_rounds, n_rounds in zip(
-            all_start_rounds, all_middle_rounds, all_end_rounds, n_adv_tr_rounds
-        )
-    ]
-    all_end_rounds_list = [
-        np.arange(max(n_rounds - e_rounds, s_rounds + m_rounds + 1), n_rounds)
-        for s_rounds, m_rounds, e_rounds, n_rounds in zip(
-            all_start_rounds, all_middle_rounds, all_end_rounds, n_adv_tr_rounds
-        )
+        for n_rounds in n_adv_tr_rounds
     ]
 
-    concatenated_rounds = [
-        sorted(
-            list(set(_concatenate_and_pad([start, middle, end], 1, n, total_rounds)))
-        )
-        for start, middle, end, n in zip(
-            all_start_rounds_list,
-            all_middle_rounds_list,
-            all_end_rounds_list,
-            n_adv_tr_rounds,
-            strict=True,
-        )
-    ]
-    return concatenated_rounds
+
+def get_rounds_to_evaluate(
+    model_family: str,
+    training_attack: str,
+) -> dict[str, list[int]]:
+    """Get the adversarial training rounds to evaluate for each model size.
+
+    Returns:
+        A dictionary mapping model size to the adversarial training rounds to
+        evaluate.
+    """
+    if model_family == "pythia":
+        match training_attack:
+            case "rt":
+                return PYTHIA_RT_EVAL_ROUNDS
+            case "gcg":
+                return PYTHIA_GCG_EVAL_ROUNDS
+            case _:
+                raise ValueError(f"Invalid attack: {training_attack}")
+    if "qwen" in model_family.lower():
+        return QWEN_EVAL_ROUNDS
+    raise ValueError(f"Invalid model family: {model_family}")
