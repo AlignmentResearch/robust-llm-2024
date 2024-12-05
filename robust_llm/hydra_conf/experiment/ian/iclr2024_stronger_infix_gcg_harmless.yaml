@@ -1,0 +1,18 @@
+# @package _global_
+defaults:
+- /dataset: Harmless/stable
+- /evaluation: DEFAULT
+- /attack@evaluation.evaluation_attack: GCG
+- _self_
+
+dataset:
+  n_train: 0
+  n_val: 500
+
+evaluation:
+  num_iterations: 64
+  evaluation_attack:
+    perturb_position_min: 0.9
+    perturb_position_max: 0.9
+
+experiment_type: "evaluation"
