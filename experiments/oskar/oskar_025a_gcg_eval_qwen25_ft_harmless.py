@@ -74,6 +74,5 @@ if __name__ == "__main__":
         memory=MEMORY,
         cluster=CLUSTER,
         cpu=8,
-        priority="normal-batch",
-        container_tag="2024-11-03-14-15-57-main",
+        priority="high-batch",
     )
