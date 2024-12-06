@@ -76,7 +76,6 @@ def run_multiple(
     gpu: int | list[int] = 1,
     priority: str | list[str] = "normal-batch",
     cluster: str | Sequence[str | None] | None = None,
-    only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     skip_runs_mask: Sequence[bool] | None = None,
     use_cluster_storage: bool = True,
     wandb_mode: str = "online",
@@ -105,9 +104,6 @@ def run_multiple(
         priority: K8s priority (can set globally or one per run).
         cluster: K8s cluster to use (can set globally or one per run). As of
             2024/08/24, options are "a6k" and "h100".
-        only_jobs_with_starting_indices: if not None, only jobs with starting indices
-            contained in this list will be launched. Useful for rerunning a small subset
-            of jobs from an experiment (for example, if a few jobs failed).
         skip_runs_mask: Mask of runs to skip. Useful for running a subset of
             jobs.
         use_cluster_storage: Mounts cluster storage to the job if true.
@@ -156,6 +152,7 @@ def run_multiple(
                 experiment_name=experiment_name,
                 unique_identifier=unique_identifier,
                 run_name=f"{hyphened_name}-{zero_pad(i)}",
+                run_index=i,
                 override_args=override_args,
                 n_max_parallel=n_max_parallel[i],
                 CONTAINER_TAG=container_tag,
@@ -173,7 +170,6 @@ def run_multiple(
     launch_jobs(
         runs,
         experiment_name=experiment_name,
-        only_jobs_with_starting_indices=only_jobs_with_starting_indices,
         use_cluster_storage=use_cluster_storage,
         wandb_mode=wandb_mode,
         dry_run=dry_run,
@@ -200,6 +196,7 @@ class FlamingoRun:
     experiment_name: str
     unique_identifier: str
     run_name: str
+    run_index: int
     override_args: dict
     CLUSTER: str
     n_max_parallel: int = 1
@@ -292,23 +289,27 @@ def get_job_args_from_runs(runs: Sequence[FlamingoRun]) -> dict[str, Union[str, 
 def create_job_for_multiple_runs(
     runs: Sequence[FlamingoRun],
     name: str,
-    index: int,
     launch_id: str,
     project: str,
     entity: str,
     wandb_mode: str,
     use_cluster_storage: bool = True,
 ) -> str:
+    if len(runs) > 1:
+        # TODO(ian): Relax this sequential constraint, it's just to make the job
+        # naming easier.
+        assert all(run.run_index == runs[0].run_index + i for i, run in enumerate(runs))
     # K8s job/pod names should be short for readability (hence cutting the name).
     unique_identifier = runs[0].unique_identifier
     assert all(run.unique_identifier == unique_identifier for run in runs)
     exp_name_prefix = get_exp_name_prefix(name)
     k8s_name_prefix = f"rllm-{exp_name_prefix}-{unique_identifier}"
-    k8s_job_name = (
-        f"{k8s_name_prefix}-{zero_pad(index)}"
-        if len(runs) == 1
-        else f"{k8s_name_prefix}-{zero_pad(index)}-{zero_pad(index+len(runs)-1)}"
-    )
+    if len(runs) == 1:
+        k8s_job_name = f"{k8s_name_prefix}-{zero_pad(runs[0].run_index)}"
+    else:
+        start_index = zero_pad(runs[0].run_index)
+        end_index = zero_pad(runs[-1].run_index)
+        k8s_job_name = f"{k8s_name_prefix}-{start_index}-{end_index}"
     k8s_job_name = k8s_job_name.lower()  # K8s requires lowercase names
 
     single_commands = []
@@ -377,7 +378,6 @@ def create_jobs(
     entity: str = "farai",
     wandb_mode: str = "online",
     experiment_name: Optional[str] = None,
-    only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     use_cluster_storage: bool = True,
 ) -> tuple[dict[str, list[str]], str]:
     launch_id = generate_name(style="hyphen")
@@ -387,35 +387,26 @@ def create_jobs(
 
     runs_by_containers = organize_by_containers(runs)
 
-    index = 0
     for runs in runs_by_containers:
-        # If only_jobs_with_starting_indices is specified, we only launch jobs with
-        # a starting index in this list.
-        if (
-            only_jobs_with_starting_indices is None
-            or index in only_jobs_with_starting_indices
-        ):
-            # Check that there are actually runs to run
-            if len(runs) == 0:
-                raise ValueError(
-                    "No runs passed the filters. Have you checked "
-                    "wandb to see if the run already exists?"
-                )
-
-            cluster = runs[0].CLUSTER
-            jobs_by_cluster[cluster].append(
-                create_job_for_multiple_runs(
-                    runs,
-                    name,
-                    index,
-                    launch_id,
-                    project,
-                    entity,
-                    wandb_mode,
-                    use_cluster_storage,
-                )
+        # Check that there are actually runs to run
+        if len(runs) == 0:
+            raise ValueError(
+                "No runs passed the filters. Have you checked "
+                "wandb to see if the run already exists?"
             )
-        index += len(runs)
+
+        cluster = runs[0].CLUSTER
+        jobs_by_cluster[cluster].append(
+            create_job_for_multiple_runs(
+                runs,
+                name,
+                launch_id,
+                project,
+                entity,
+                wandb_mode,
+                use_cluster_storage,
+            )
+        )
 
     return jobs_by_cluster, launch_id
 
@@ -426,7 +417,6 @@ def launch_jobs(
     entity: str = "farai",
     wandb_mode: str = "online",
     experiment_name: Optional[str] = None,
-    only_jobs_with_starting_indices: Optional[Sequence[int]] = None,
     use_cluster_storage: bool = True,
     dry_run: bool = False,
     skip_git_checks: bool = False,
@@ -439,9 +429,6 @@ def launch_jobs(
         entity: wandb entity to use.
         wandb_mode: Value to give WANDB_MODE environment variable.
         experiment_name: descriptive name of the experiment, used to set wandb group.
-        only_jobs_with_starting_indices: if not None, only jobs with starting indices
-            contained in this list will be launched. Useful for rerunning a small subset
-            of jobs from an experiment.
         use_cluster_storage: Mounts storage to the job if true.
         dry_run: if True, only print the k8s job yaml files without launching them.
         skip_git_checks: if True, skip the remote push and the check for dirty git repo.
@@ -472,7 +459,6 @@ def launch_jobs(
         entity=entity,
         wandb_mode=wandb_mode,
         experiment_name=experiment_name,
-        only_jobs_with_starting_indices=only_jobs_with_starting_indices,
         use_cluster_storage=use_cluster_storage,
     )
     yamls_by_cluster = {
