@@ -139,7 +139,6 @@ class SearchBasedAttack(Attack):
             with victim.flop_count_context() as flop_count:
                 final_attack_string, example_info = runner.run()
             example_flops = flop_count.flops
-            final_attack_string, example_info = runner.run()
 
         iteration_texts = [
             prompt_template.build_prompt(attack_text=a)
