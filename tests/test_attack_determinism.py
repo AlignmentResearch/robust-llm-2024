@@ -142,7 +142,7 @@ def test_random_token_checkpoint_determinism(
     logging_context = LoggingContext(
         args=exp_config,
     )
-    logging_context.setup()
+    logging_context.setup_logging()
     checkpoint_dir = get_checkpoint_path(exp_config)
     dist_rmtree(checkpoint_dir)
     initial_texts = _get_attacked_texts(exp_config, victim_model, validation_set)
@@ -203,7 +203,7 @@ def test_gcg_checkpoint_determinism(
     logging_context = LoggingContext(
         args=exp_config,
     )
-    logging_context.setup()
+    logging_context.setup_logging()
     checkpoint_dir = get_checkpoint_path(exp_config)
     dist_rmtree(checkpoint_dir)
     initial_texts = _get_attacked_texts(exp_config, victim_model, validation_set)
@@ -348,7 +348,7 @@ def test_beast_checkpoint_determinism(
     logging_context = LoggingContext(
         args=exp_config,
     )
-    logging_context.setup()
+    logging_context.setup_logging()
     checkpoint_dir = get_checkpoint_path(exp_config)
     dist_rmtree(checkpoint_dir)
     initial_texts = _get_attacked_texts(exp_config, victim_model, validation_set)

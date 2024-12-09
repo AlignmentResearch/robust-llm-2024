@@ -102,7 +102,7 @@ def run(cfg: ExperimentConfig):
         args=cfg,
         set_up_step_metrics=set_up_step_metrics,
     )
-    logging_context.setup()
+    logging_context.setup_logging()
 
     logger.info("Configuration arguments:\n")
     logger.info("%s\n", OmegaConf.to_yaml(cfg))

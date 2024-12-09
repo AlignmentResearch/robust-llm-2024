@@ -224,7 +224,7 @@ class LoggingContext:
             if isinstance(handler, logging.FileHandler):
                 handler.flush()
 
-    def _setup_logging(self) -> None:
+    def setup_logging(self) -> None:
         logging_level = self.args.environment.logging_level
         # Create logger and formatter
         self.logger.propagate = False
@@ -244,7 +244,7 @@ class LoggingContext:
         # Add handler to logger
         self.logger.addHandler(console_handler)
 
-    def wandb_initialize(self) -> None:
+    def wandb_initialize(self, run_id: str | None = None) -> str:
         """Initializes wandb run and does appropriate setup.
 
         In the training pipeline, unlike in the evaluation pipeline,
@@ -262,6 +262,8 @@ class LoggingContext:
             name=config.run_name,
             # default if not in test_mode
             mode="disabled" if config.environment.test_mode else None,
+            resume="allow",
+            id=run_id,
         )
         assert run is not None
         if self.set_up_step_metrics:
@@ -283,6 +285,7 @@ class LoggingContext:
                 f.write(
                     json.dumps({"wandb_run_name": run.name, "wandb_run_id": run.id})
                 )
+        return run.id
 
     def maybe_log_model_info(self, model_family: str, model_size: int) -> None:
         """Logs model info to wandb for use in plots.
@@ -298,11 +301,6 @@ class LoggingContext:
         wandb_set_really_finished()
         wandb.summary["finish_reason"] = "completed"
         wandb.finish()
-
-    def setup(self) -> None:
-        if is_main_process():
-            self.wandb_initialize()
-        self._setup_logging()
 
     def cleanup(self) -> None:
         self.save_logs()
@@ -453,7 +451,7 @@ def format_time(seconds: float) -> str:
     minutes = seconds / 60
     if minutes < 60:
         return f"{int(minutes)}m {int(seconds % 60)}s"
-    return f"{int(minutes/60)}h {int(minutes%60)}m"
+    return f"{int(minutes/60)}h {int(minutes % 60)}m"
 
 
 def format_training_status(

@@ -296,6 +296,7 @@ class TrainingPipelineState:
     training_state: TrainingState
     rng_state: RNGState
     flops: float
+    run_id: str
 
     def __post_init__(self):
         # To avoid issues in type checking, assert that the training config is
@@ -387,6 +388,7 @@ class TrainingPipelineState:
             state_dict = {
                 "epoch": epoch,
                 "flops": self.flops,
+                "run_id": self.run_id,
                 # Save the config as a dictionary. We don't load this config
                 # since subclasses are lost, it's just here for debugging.
                 # We use default=str to serialize enums and other objects, since
@@ -474,6 +476,7 @@ class TrainingPipelineState:
 
         epoch = state_dict["epoch"]
         flops = state_dict["flops"]
+        run_id = state_dict.get("run_id", None)
         assert zero_pad(epoch) == subdir.name.split("_")[-1]
 
         model_state = ModelState.load(subdir, process_index, config.model, accelerator)
@@ -506,6 +509,7 @@ class TrainingPipelineState:
             training_state=training_state,
             rng_state=rng_state,
             flops=flops,
+            run_id=run_id,
         )
 
     def get_revision(self) -> str:

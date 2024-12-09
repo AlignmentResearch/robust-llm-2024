@@ -13,6 +13,7 @@ from robust_llm.config.configs import ExperimentConfig
 from robust_llm.dist_utils import DistributedRNG, pad_batch_across_processes
 from robust_llm.logging_utils import (
     TRAIN_LOG_INTERVAL_SECS,
+    LoggingContext,
     format_training_status,
     log,
     wandb_log,
@@ -57,6 +58,8 @@ def run_train_loop(
         accelerator,
         resume_from_checkpoint,
     )
+    logging_context = LoggingContext.get_instance(config, set_up_step_metrics=False)
+    state.run_id = logging_context.wandb_initialize(state.run_id)
 
     # Handle the case of resuming from the final checkpoint.
     if state.training_is_finished() and state.should_save_trained_model():
@@ -173,6 +176,8 @@ def initialize_state(
         # already shuffled.
         clean_index_map={i: i for i in range(len(clean_dataset))},
     )
+    logging_context = LoggingContext.get_instance(config, set_up_step_metrics=False)
+    run_id = logging_context.wandb_initialize()
 
     return get_state_subclass(config)(
         epoch=0,
@@ -183,6 +188,7 @@ def initialize_state(
         training_state=training_state,
         rng_state=rng_state,
         flops=0,
+        run_id=run_id,
     )
 
 

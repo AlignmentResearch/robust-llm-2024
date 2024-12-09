@@ -25,6 +25,7 @@ def run_evaluation_pipeline(args: ExperimentConfig, accelerator) -> dict[str, fl
         model_size=victim.n_params,
         model_family=victim.family,
     )
+    logging_context.wandb_initialize()
 
     attack = create_attack(
         exp_config=args,

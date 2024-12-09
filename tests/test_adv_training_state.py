@@ -100,6 +100,7 @@ def state(config, accelerator, wrapped_model):
         training_state=MagicMock(),
         rng_state=MagicMock(),
         flops=0,
+        run_id="test_run",
     )
     state.dataset_state.append_to_adv_dataset = MagicMock()  # type: ignore
     state.dataset_state.append_to_adv_dataset.return_value = state.dataset_state
