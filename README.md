@@ -154,53 +154,6 @@ This line overrides whatever value `dataset.n_val` had before (which was `0`, fr
     - When we want to override a default value with a _config_ (like `ModelConfig`), not just a _value_ (like `model_family`), if the default value comes from the `dataclass` and was not set using the [Defaults List](https://hydra.cc/docs/advanced/defaults_list/), then we have to [prepend a `+`](https://hydra.cc/docs/1.2/advanced/override_grammar/basic/#modifying-the-defaults-list) to the override string to add it to the Defaults List.
     - An example of this is given in `experiments/_example/example_004_Eval_pm_random-token_and_gcg.py`.
 
-### Running a single batch job
-
-If you have your hydra config prepared and want to run an experiment on the cluster in batch mode, you can use the `run_batch_job.py` script. To use it, make sure you check out the correct git commit that you want in your experiment, and that all the relevant changes are committed. The container will first set up a code directory with the commit matching your current repo, and then run the experiment. Usage:
-
-```
-python run_batch_job.py --hydra_config=<HYDRA_CONFIG_NAME> [--experiment_name=<EXP_NAME> --job_type=<JOB_TYPE> --container_tag=<TAG>]
-```
-
-As a requirement, you have to set up `docker` ([instructions](https://github.com/AlignmentResearch/flamingo/wiki/Docker-tutorial:-secure-credentials-and-basic-use#read-only-credentials-for-your-cluster-account)), `github-credentials` ([instructions](https://github.com/AlignmentResearch/flamingo/wiki/Build-Docker-images-on-the-cluster:-Kaniko#authentication-1-pulling-from-your-private-github-repo)), `wandb`, and `huggingface` kubernetes secrets.
-
-For `wandb`, [get your API key](https://wandb.ai/authorize) and run the following command:
-
-```
-kubectl create secret generic wandb --from-literal=api-key=<YOUR_WANDB_API_KEY>
-```
-
-For `huggingface`, [create an access token](https://huggingface.co/settings/tokens). In order to run the evaluation pipeline, the minimal permissions needed are "Read access to contents of all public gated repos you can access", and for the training pipeline, you further need "Write access to contents/settings of all repos in selected organizations" for the FAR AI org. Then run the following command:
-```
-kubectl create secret generic huggingface --from-literal=token=<YOUR_HF_TOKEN>
-```
-
-If you want to run `ScoringCallback`s based on `StrongREJECT` or other parts of the codebase that use the OpenAI API, you'll need to create an OpenAI API key. Ask an admin for access to the OpenAI organization and make a project API key with `Write` access to `Model capabilities`. Then run the following command:
-```
-kubectl create secret generic openai-api-key --from-literal=key=<YOUR_OPENAI_API_KEY>
-```
-
-You also need to ask a Flamingo admin to give you access to the `robust-llm` drive on the cluster.
-
-### Running multiple batch jobs at once
-
-For defining "serious" experiments that contain multiple k8s jobs inside (e.g. grid search), we use Python
-files that are stored under `experiments/` directory.
-
-For example, take a look at `experiments/mz/experiments/mz/mz_007_pythia_adv_eval_ta_tensor_trust.py`. We use the following naming convention:
-
-- experiments by Jay Doe go into an `experiments/jd` or `experiments/jay` directory (choose one and stick with it),
-- the experiment name is `jd_<NUMBER>_<SHORT_DESCRIPTION>`, where `NUMBER` is manually
-increased; prepend with zeros until the number has three digits, so that the experiments are shown in order when sorted lexicographically (for example, 002, 031, or 155),
-- we commit experiments to the repository. Once committed, the experiment should not be
-modified under normal circumstances. This way we maintain a history of experiments.
-
-To run an experiment (i.e. schedule multiple jobs on a k8s cluster), just run the Python file. **Please do not just randomly run other people's configs; it can mess up their wandb structure.** If you want to run a similar experiment, just copy the config into your directory, rename, modify, and run.
-
-The experiments are defined by starting with some Hydra config and then modifying it with dictionaries with overrides.
-
-If you want to just see the generated configs and not actually run the experiments on cluster, add `dry_run=True` to the `run_multiple()` call inside the Python file that defines the experiment.
-
 ### Running with `accelerate`
 
 We use [accelerate](https://huggingface.co/docs/accelerate/en/index) for multi-GPU runs with [FSDP](https://huggingface.co/docs/accelerate/en/usage_guides/fsdp). This is because some models (e.g. 12B Pythia) are too big to do fine-tuning or run attacks against them using only 1 GPU. FSDP spreads model parameters across multiple GPUs.
@@ -266,50 +219,6 @@ Currently, we use the following datasets in our experiments:
 
 [More info](robust_llm/rllm_datasets/README.md).
 
-### Tomita [DEPRECATED]
-
-We currently do not use Tomita.
-
-Tomita datasets must be pregenerated as files in order to be used in training.
-
-They can be generated by running `robust_llm/dataset_management/tomita/tomita_dataset_generator.py`. You can edit the file's `__main__` function call to extend the range of examples to generate for training.
-
 ## Fine-tuned models
 
 We store our fine-tuned models on HuggingFace. You can find up-to-date IDs of the models [here](https://docs.google.com/document/d/1fsNqlQRlv4TGJ_tK3PhFNesEmBUV2_i_EI5llsuHcFA).
-
-## Logs
-
-We store experiments logs in wandb under the [farai/robust-llm](https://wandb.ai/farai/robust-llm) project. We have been using some ad-hoc Colab code to process results beyond just standard wandb plots if needed; see e.g. [here](https://colab.research.google.com/drive/1tZdK1k4hZMZHZxY07ahY4vFt1X8GoLtK).
-
-## Building Docker images
-
-Docker images of the repo can be built using Kaniko. The first time you do so, you must follow the setup described [here](https://github.com/AlignmentResearch/flamingo/wiki/Build-Docker-images-on-the-cluster:-Kaniko), particularly setting up the Kubernetes secrets named `docker` and `github-credentials`.
-
-To build a Docker image from the `main` branch at head, you can run:
-
-```
-kubectl create -f k8s/kaniko-build.yaml
-```
-
-If you wish to build a Docker image from a different branch, you should edit the `BRANCH_NAME` value in `k8s/kaniko-build.yaml` and then run the command above. More details can be found in the Flamingo wiki article on Kaniko, and the Kaniko docs themselves.
-
-Kaniko will push the Docker image to a tag formed of a timestamp followed by the branch name `YYYY-MM-DD-hh-mm-ss-<BRANCH_NAME>`. To make this the new default Docker image:
-  1. Update `DEFAULT_CONTAINER_TAG` in [batch_job_utils.py](https://github.com/AlignmentResearch/robust-llm/blob/main/robust_llm/batch_job_utils.py). We specify the fully qualified tag in the code to enable replicating old experiments, avoid disrupting existing experiments (that might depend on a specific experiment), and to ensure new experiments pull the latest container.
-  2. Update the `latest` tag by running `docker pull ghcr.io/alignmentresearch/robust-llm:$TAG && docker tag ghcr.io/alignmentresearch/robust-llm:$TAG ghcr.io/alignmentresearch/robust-llm:latest && docker push ghcr.io/alignmentresearch/robust-llm:latest`. The `latest` tag should not be used for experiments, but may be used for interactive development.
-
-## Working in a devbox
-The most convenient way to create a devbox is to run `make devbox` which will use `k8s/auto-devbox.yaml` and you can pass various arguments to this, e.g. CPU, GPU and MEMORY. For example, `make devbox CPU=4 MEMORY=80G`. See the Makefile for the different options.
-
-We have shortcuts for a cpu-only devbox and a 2 GPU devbox, which can be run with `make cpu devbox` and `make large devbox`.
-All this can be combined with making your own customized `auto-devbox.yaml`, like `auto-devbox-ian.yaml`; then you can do things like `make ian devbox` or even `make cpu ian devbox`.
-
-Using the VSCode Kubernetes extension, you can then right click the pod and select "Attach VS Code".
-
-It is recommended to add extensions in your user settings JSON so that they are loaded automatically, e.g. in "~/.config/Code/User/settings.json" in Ubuntu, add
-```
-"dev.containers.defaultExtensionsIfInstalledLocally": [
-    "ms-python.debugpy",
-    "ms-python.python"
-]
-```
