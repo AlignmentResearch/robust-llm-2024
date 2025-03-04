@@ -222,3 +222,16 @@ Currently, we use the following datasets in our experiments:
 ## Fine-tuned models
 
 We store our fine-tuned models on HuggingFace. You can find up-to-date IDs of the models [here](https://docs.google.com/document/d/1fsNqlQRlv4TGJ_tK3PhFNesEmBUV2_i_EI5llsuHcFA).
+
+## Citation
+```
+@misc{howe2025scalingtrendslanguagemodel,
+      title={Scaling Trends in Language Model Robustness}, 
+      author={Nikolaus Howe and Ian McKenzie and Oskar Hollinsworth and Michał Zajac and Tom Tseng and Aaron Tucker and Pierre-Luc Bacon and Adam Gleave},
+      year={2025},
+      eprint={2407.18213},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2407.18213}, 
+}
+```
