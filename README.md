@@ -1,4 +1,4 @@
-# robust-llm
+# [Scaling Trends in Language Model Robustness](https://arxiv.org/abs/2407.18213) accompanying code
 
 ## Simple installation
 
